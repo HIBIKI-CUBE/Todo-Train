@@ -44,7 +44,8 @@ struct QuickAddBar: View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
                     Text(headerTitle)
-                        .font(.subheadline.weight(.semibold))
+                        .font(.subheadline.weight(.bold))
+                        .foregroundStyle(TrainTheme.ink)
                     Spacer()
                     Button("完了") {
                         if awaitingTags {
@@ -53,7 +54,8 @@ struct QuickAddBar: View {
                             close()
                         }
                     }
-                    .font(.subheadline)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(TrainTheme.rail)
                 }
 
                 if awaitingTags {
@@ -135,7 +137,22 @@ struct QuickAddBar: View {
                 }
             }
             .padding(16)
-            .background(.regularMaterial)
+            .background(
+                UnevenRoundedRectangle(
+                    topLeadingRadius: 18,
+                    bottomLeadingRadius: 0,
+                    bottomTrailingRadius: 0,
+                    topTrailingRadius: 18
+                )
+                .fill(TrainTheme.platform)
+                .shadow(color: .black.opacity(0.12), radius: 16, y: -4)
+                .overlay(alignment: .top) {
+                    Capsule()
+                        .fill(TrainTheme.track)
+                        .frame(width: 36, height: 4)
+                        .padding(.top, 8)
+                }
+            )
         }
         .onAppear {
             titleFocused = true

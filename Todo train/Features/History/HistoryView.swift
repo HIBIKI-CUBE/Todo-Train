@@ -31,33 +31,41 @@ struct HistoryView: View {
     }
 
     var body: some View {
-        List {
-            if filteredSessions.isEmpty {
-                Text(isSearching
-                    ? "一致する履歴がありません。"
-                    : "まだ履歴がありません。発車して到着・途中下車するとここに残ります。")
-                    .foregroundStyle(.secondary)
-            } else if isSearching {
-                ForEach(filteredSessions, id: \.id) { session in
-                    HistorySessionRow(session: session, onReissue: reissue)
-                }
-            } else {
-                ForEach(groups, id: \.dayKey) { group in
-                    Section {
-                        ForEach(group.sessions, id: \.id) { session in
-                            HistorySessionRow(session: session, onReissue: reissue)
+        ZStack {
+            PlatformBackground()
+            List {
+                if filteredSessions.isEmpty {
+                    Text(isSearching
+                        ? "一致する履歴がありません。"
+                        : "まだ履歴がありません。発車して到着・途中下車するとここに残ります。")
+                        .foregroundStyle(TrainTheme.muted)
+                        .listRowBackground(Color.clear)
+                } else if isSearching {
+                    ForEach(filteredSessions, id: \.id) { session in
+                        HistorySessionRow(session: session, onReissue: reissue)
+                            .listRowBackground(Color.white.opacity(0.88))
+                    }
+                } else {
+                    ForEach(groups, id: \.dayKey) { group in
+                        Section {
+                            ForEach(group.sessions, id: \.id) { session in
+                                HistorySessionRow(session: session, onReissue: reissue)
+                                    .listRowBackground(Color.white.opacity(0.88))
+                            }
+                        } header: {
+                            DailyStatsHeader(
+                                dayKey: group.dayKey,
+                                aggregate: HistoryStats.aggregate(sessions: group.sessions)
+                            )
                         }
-                    } header: {
-                        DailyStatsHeader(
-                            dayKey: group.dayKey,
-                            aggregate: HistoryStats.aggregate(sessions: group.sessions)
-                        )
                     }
                 }
             }
+            .scrollContentBackground(.hidden)
         }
         .navigationTitle("履歴")
         .navigationBarTitleDisplayMode(.inline)
+        .tint(TrainTheme.rail)
         .searchable(text: $searchText, prompt: "切符名で検索")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {

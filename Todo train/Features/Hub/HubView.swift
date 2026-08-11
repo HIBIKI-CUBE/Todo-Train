@@ -29,6 +29,8 @@ struct HubView: View {
 
     var body: some View {
         ZStack {
+            PlatformBackground()
+
             List {
                 Section {
                     ServiceSummaryBar(
@@ -43,97 +45,79 @@ struct HubView: View {
                 }
 
                 if !sessionManager.pausedSessions.isEmpty {
-                    Section("停車中") {
+                    Section {
                         ForEach(sessionManager.pausedSessions, id: \.id) { session in
                             if let ticket = session.ticket {
-                                HStack {
-                                    VStack(alignment: .leading) {
+                                HStack(spacing: TrainTheme.Space.md) {
+                                    VStack(alignment: .leading, spacing: 4) {
                                         Text(ticket.title)
+                                            .font(TrainTheme.TypeScale.ticketTitle())
+                                            .foregroundStyle(TrainTheme.ink)
                                         Text("残り \(formatRemaining(session))")
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
+                                            .font(TrainTheme.TypeScale.meta())
+                                            .foregroundStyle(TrainTheme.signalAmber)
+                                            .monospacedDigit()
                                     }
                                     Spacer()
                                     Button("再開") {
                                         board(ticket)
                                     }
-                                    .buttonStyle(.borderedProminent)
-                                    .controlSize(.small)
+                                    .buttonStyle(DepartButtonStyle(enabled: canBoardGenerally))
                                     .disabled(!canBoardGenerally)
                                 }
+                                .ticketSurface(emphasized: true)
+                                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                                .listRowBackground(Color.clear)
                             }
                         }
+                    } header: {
+                        sectionHeader("停車中", accent: TrainTheme.signalAmber)
                     }
                 }
 
-                Section("切符") {
+                Section {
                     if openTickets.isEmpty {
-                        Text("切符がありません。＋ から掃き出しましょう。")
-                            .foregroundStyle(.secondary)
+                        VStack(alignment: .leading, spacing: TrainTheme.Space.sm) {
+                            Text("切符がありません")
+                                .font(TrainTheme.TypeScale.ticketTitle())
+                                .foregroundStyle(TrainTheme.ink)
+                            Text("右下の ＋ から掃き出しましょう。")
+                                .font(.subheadline)
+                                .foregroundStyle(TrainTheme.muted)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .ticketSurface()
+                        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                        .listRowBackground(Color.clear)
                     } else {
                         ForEach(openTickets, id: \.id) { ticket in
-                            HStack(spacing: 8) {
-                                NavigationLink {
-                                    TicketDetailView(ticket: ticket)
-                                } label: {
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(ticket.title)
-                                            .font(.body.weight(.medium))
-                                            .lineLimit(1)
-                                        HStack(spacing: 8) {
-                                            Text("\(ticket.estimatedSeconds / 60)分")
-                                                .font(.caption)
-                                                .foregroundStyle(.secondary)
-                                            if let dueDate = ticket.dueDate {
-                                                Text(dueDateLabel(dueDate))
-                                                    .font(.caption2)
-                                                    .padding(.horizontal, 6)
-                                                    .padding(.vertical, 2)
-                                                    .background(Color.blue.opacity(0.12), in: Capsule())
-                                                    .foregroundStyle(.blue)
-                                            }
-                                            if isPaused(ticket) {
-                                                Text("停車中")
-                                                    .font(.caption.weight(.semibold))
-                                                    .padding(.horizontal, 6)
-                                                    .padding(.vertical, 2)
-                                                    .background(Color.orange.opacity(0.2), in: Capsule())
-                                                    .foregroundStyle(.orange)
-                                            }
-                                        }
-                                        if !ticket.tags.isEmpty {
-                                            TagChipRow(tags: ticket.tags)
-                                        }
-                                    }
-                                }
-
-                                Button("発車") {
-                                    board(ticket)
-                                }
-                                .buttonStyle(.borderedProminent)
-                                .controlSize(.small)
-                                .disabled(!canBoardGenerally)
-                            }
+                            TicketCardView(
+                                ticket: ticket,
+                                isPaused: isPaused(ticket),
+                                canBoard: canBoardGenerally,
+                                onBoard: { board(ticket) }
+                            )
+                            .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                            .listRowBackground(Color.clear)
                         }
                         .onMove(perform: moveTickets)
                     }
+                } header: {
+                    sectionHeader("切符", accent: TrainTheme.rail)
                 }
             }
+            .scrollContentBackground(.hidden)
+            .listStyle(.plain)
 
             if !showQuickAdd {
                 VStack {
                     Spacer()
                     HStack {
                         Spacer()
-                        Button {
-                            showQuickAdd = true
-                        } label: {
-                            Image(systemName: "plus")
-                                .font(.title2.weight(.semibold))
-                                .foregroundStyle(.white)
-                                .frame(width: 56, height: 56)
-                                .background(Color.accentColor, in: Circle())
-                                .shadow(radius: 4, y: 2)
+                        TrainFAB {
+                            withAnimation(TrainTheme.Motion.spring) {
+                                showQuickAdd = true
+                            }
                         }
                         .padding(20)
                     }
@@ -141,16 +125,21 @@ struct HubView: View {
             }
 
             if showQuickAdd {
-                Color.black.opacity(0.2)
+                Color.black.opacity(0.28)
                     .ignoresSafeArea()
                     .onTapGesture {
-                        showQuickAdd = false
+                        withAnimation(TrainTheme.Motion.soft) {
+                            showQuickAdd = false
+                        }
                     }
 
                 QuickAddBar(isPresented: $showQuickAdd)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
         .navigationTitle("Todo train")
+        .navigationBarTitleDisplayMode(.large)
+        .toolbarBackground(TrainTheme.platform.opacity(0.92), for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 NavigationLink("タグ") {
@@ -178,6 +167,7 @@ struct HubView: View {
                 EditButton()
             }
         }
+        .tint(TrainTheme.rail)
         .alert("エラー", isPresented: $showError) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -188,6 +178,18 @@ struct HubView: View {
                 errorMessage = message
                 showError = true
             }
+        }
+    }
+
+    private func sectionHeader(_ title: String, accent: Color) -> some View {
+        HStack(spacing: 6) {
+            Capsule()
+                .fill(accent)
+                .frame(width: 3, height: 12)
+            Text(title)
+                .font(.caption.weight(.bold))
+                .foregroundStyle(TrainTheme.muted)
+                .textCase(nil)
         }
     }
 
@@ -231,12 +233,6 @@ struct HubView: View {
         let absTotal = abs(remaining)
         let prefix = remaining < 0 ? "超過 " : ""
         return "\(prefix)\(absTotal / 60):\(String(format: "%02d", absTotal % 60))"
-    }
-
-    private func dueDateLabel(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "M/d"
-        return formatter.string(from: date)
     }
 }
 

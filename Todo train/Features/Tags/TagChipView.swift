@@ -18,12 +18,12 @@ struct TagChipView: View {
             .padding(.vertical, 3)
             .foregroundStyle(isSelected ? Color.white : TagPalette.color(hex: colorHex))
             .background(
-                Capsule()
+                RoundedRectangle(cornerRadius: TrainTheme.Radius.badge)
                     .fill(isSelected ? TagPalette.color(hex: colorHex) : TagPalette.color(hex: colorHex).opacity(0.15))
             )
             .overlay {
                 if isHighlighted && !isSelected {
-                    Capsule()
+                    RoundedRectangle(cornerRadius: TrainTheme.Radius.badge)
                         .strokeBorder(TagPalette.color(hex: colorHex), lineWidth: 1.5)
                 }
             }

@@ -35,19 +35,37 @@ struct EstimateChips: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 10) {
                 ForEach(minutesOptions, id: \.self) { minutes in
+                    let highlighted = highlightedMinutes == minutes
                     let label: String = {
                         switch style {
                         case .extendPrefix: "+\(minutes)分"
                         case .plainMinutes: "\(minutes)分"
                         }
                     }()
-                    Button(label) {
+                    Button {
                         onSelect(minutes)
+                    } label: {
+                        Text(label)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(highlighted ? .white : TrainTheme.ink)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
+                            .background(
+                                RoundedRectangle(cornerRadius: TrainTheme.Radius.control)
+                                    .fill(highlighted ? TrainTheme.rail : Color.white.opacity(0.9))
+                            )
+                            .overlay {
+                                RoundedRectangle(cornerRadius: TrainTheme.Radius.control)
+                                    .strokeBorder(
+                                        highlighted ? Color.clear : TrainTheme.track,
+                                        lineWidth: 1
+                                    )
+                            }
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(highlightedMinutes == minutes ? Color.accentColor : Color.secondary.opacity(0.35))
+                    .buttonStyle(.plain)
                 }
             }
+            .padding(.vertical, 2)
         }
     }
 }

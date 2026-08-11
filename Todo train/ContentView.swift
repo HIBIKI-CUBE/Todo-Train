@@ -18,6 +18,7 @@ struct ContentView: View {
         NavigationStack {
             HubView()
         }
+        .tint(TrainTheme.rail)
         .onAppear {
             recover()
             syncFocusPresentation()

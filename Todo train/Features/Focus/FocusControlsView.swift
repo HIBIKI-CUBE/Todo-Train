@@ -12,26 +12,19 @@ struct FocusControlsView: View {
     let onExtendMenu: () -> Void
 
     var body: some View {
-        VStack(spacing: 12) {
-            HStack(spacing: 16) {
+        VStack(spacing: TrainTheme.Space.sm) {
+            Button("到着", action: onArrive)
+                .buttonStyle(FocusPrimaryButtonStyle())
+
+            HStack(spacing: TrainTheme.Space.sm) {
                 Button("停車", action: onPause)
-                    .buttonStyle(.bordered)
-                    .controlSize(.large)
-
-                Button("到着", action: onArrive)
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-            }
-
-            HStack(spacing: 16) {
-                Button("途中下車", action: onPartialDisembark)
-                    .buttonStyle(.bordered)
-                    .controlSize(.large)
-
+                    .buttonStyle(FocusSecondaryButtonStyle(tint: TrainTheme.signalAmber))
                 Button("+延長", action: onExtendMenu)
-                    .buttonStyle(.bordered)
-                    .controlSize(.large)
+                    .buttonStyle(FocusSecondaryButtonStyle())
             }
+
+            Button("途中下車", action: onPartialDisembark)
+                .buttonStyle(FocusSecondaryButtonStyle(tint: TrainTheme.cabinInk.opacity(0.75)))
         }
     }
 }

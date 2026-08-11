@@ -20,32 +20,44 @@ struct ReorderView: View {
     }
 
     var body: some View {
-        List {
-            Section("フィルタ（強調のみ）") {
-                Picker("タグ", selection: $selectedTagID) {
-                    Text("すべて").tag(UUID?.none)
-                    ForEach(allTags, id: \.id) { tag in
-                        Text(tag.name).tag(Optional(tag.id))
+        ZStack {
+            PlatformBackground()
+            List {
+                Section {
+                    Picker("タグ", selection: $selectedTagID) {
+                        Text("すべて").tag(UUID?.none)
+                        ForEach(allTags, id: \.id) { tag in
+                            Text(tag.name).tag(Optional(tag.id))
+                        }
                     }
+
+                    Stepper("最短 \(minMinutes) 分", value: $minMinutes, in: 1...60)
+                    Stepper("最長 \(maxMinutes) 分", value: $maxMinutes, in: 1...60)
+
+                    Text("一致しない切符は薄く表示されます。並べ替えは全行で可能です。自動ソートはありません。")
+                        .font(.caption)
+                        .foregroundStyle(TrainTheme.muted)
+                } header: {
+                    Text("フィルタ（強調のみ）")
                 }
+                .listRowBackground(Color.white.opacity(0.9))
 
-                Stepper("最短 \(minMinutes) 分", value: $minMinutes, in: 1...60)
-                Stepper("最長 \(maxMinutes) 分", value: $maxMinutes, in: 1...60)
-
-                Text("一致しない切符は薄く表示されます。並べ替えは全行で可能です。")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Section("切符") {
-                ForEach(openTickets, id: \.id) { ticket in
-                    reorderRow(ticket)
+                Section {
+                    ForEach(openTickets, id: \.id) { ticket in
+                        reorderRow(ticket)
+                            .listRowBackground(Color.clear)
+                            .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                    }
+                    .onMove(perform: moveTickets)
+                } header: {
+                    Text("切符")
                 }
-                .onMove(perform: moveTickets)
             }
+            .scrollContentBackground(.hidden)
         }
         .navigationTitle("並べ替え")
         .navigationBarTitleDisplayMode(.inline)
+        .tint(TrainTheme.rail)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 EditButton()
@@ -65,18 +77,14 @@ struct ReorderView: View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
                 Text(ticket.title)
-                    .font(.body.weight(.medium))
+                    .font(TrainTheme.TypeScale.ticketTitle())
+                    .foregroundStyle(TrainTheme.ink)
                 HStack(spacing: 8) {
                     Text("\(ticket.estimatedSeconds / 60)分")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(TrainTheme.TypeScale.meta())
+                        .foregroundStyle(TrainTheme.muted)
                     if let dueDate = ticket.dueDate {
-                        Text(dueDateLabel(dueDate))
-                            .font(.caption2)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Color.blue.opacity(0.12), in: Capsule())
-                            .foregroundStyle(.blue)
+                        SignalBadge(kind: .due, customLabel: dueDateLabel(dueDate))
                     }
                 }
                 if !ticket.tags.isEmpty {
@@ -86,17 +94,11 @@ struct ReorderView: View {
             Spacer()
             if !matches {
                 Image(systemName: "line.3.horizontal.decrease.circle")
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(TrainTheme.track)
             }
         }
-        .opacity(matches ? 1 : 0.45)
-        .overlay {
-            if matches {
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(Color.accentColor.opacity(0.35), lineWidth: 1)
-            }
-        }
-        .padding(.vertical, 2)
+        .opacity(matches ? 1 : 0.42)
+        .ticketSurface(emphasized: matches && (selectedTagID != nil || minMinutes > 1 || maxMinutes < 60))
     }
 
     private func matchesFilter(_ ticket: Ticket) -> Bool {
