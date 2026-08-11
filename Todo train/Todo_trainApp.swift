@@ -21,8 +21,12 @@ struct Todo_trainApp: App {
             // SessionManager needs a long-lived context bound to this container.
             let context = container.mainContext
             _sessionManager = State(
-                initialValue: SessionManager(modelContext: context)
+                initialValue: SessionManager(
+                    modelContext: context,
+                    overtimeNotifier: OvertimeNotifier.shared
+                )
             )
+            OvertimeNotifier.shared.configure()
         } catch {
             fatalError("Could not create ModelContainer: \(error)")
         }

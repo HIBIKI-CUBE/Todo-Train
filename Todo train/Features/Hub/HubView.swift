@@ -87,6 +87,9 @@ struct HubView: View {
                                                     .foregroundStyle(.orange)
                                             }
                                         }
+                                        if !ticket.tags.isEmpty {
+                                            TagChipRow(tags: ticket.tags)
+                                        }
                                     }
                                 }
 
@@ -135,6 +138,11 @@ struct HubView: View {
         }
         .navigationTitle("Todo train")
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                NavigationLink("タグ") {
+                    TagManagerView()
+                }
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 NavigationLink("履歴") {
                     HistoryView()

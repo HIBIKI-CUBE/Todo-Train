@@ -19,17 +19,20 @@ final class SessionManager {
     private let clock: any SessionClock
     private let calendar: Calendar
     private let pauseLimit: Int
+    private let overtimeNotifier: any OvertimeNotifying
 
     init(
         modelContext: ModelContext,
         clock: any SessionClock = SystemSessionClock(),
         calendar: Calendar = .current,
-        pauseLimit: Int = PauseLimitGuard.defaultLimit
+        pauseLimit: Int = PauseLimitGuard.defaultLimit,
+        overtimeNotifier: (any OvertimeNotifying)? = nil
     ) {
         self.modelContext = modelContext
         self.clock = clock
         self.calendar = calendar
         self.pauseLimit = pauseLimit
+        self.overtimeNotifier = overtimeNotifier ?? NoOpOvertimeNotifier()
     }
 
     var elapsedSeconds: TimeInterval {
@@ -77,6 +80,7 @@ final class SessionManager {
         activeServiceDay = day
         needsServiceDayEndPrompt = false
         try save()
+        overtimeNotifier.requestAuthorizationIfNeeded()
         reconcile(now: now)
     }
 
@@ -102,6 +106,7 @@ final class SessionManager {
             activeSession = nil
             phase = .idle
         }
+        overtimeNotifier.cancelAll()
         try save()
         reconcile(now: now)
     }
@@ -139,6 +144,7 @@ final class SessionManager {
         phase = .running
         try save()
         reconcile(now: now)
+        refreshOvertimeNotification(for: session, now: now)
     }
 
     func pause(now: Date? = nil) throws {
@@ -162,6 +168,7 @@ final class SessionManager {
         session.segmentStartedAt = nil
         session.pausedAt = now
         phase = .paused
+        overtimeNotifier.cancel(sessionID: session.id)
         try save()
         reconcile(now: now)
     }
@@ -180,6 +187,7 @@ final class SessionManager {
         phase = .running
         try save()
         reconcile(now: now)
+        refreshOvertimeNotification(for: session, now: now)
     }
 
     func extend(by seconds: TimeInterval, now: Date? = nil) throws {
@@ -195,6 +203,7 @@ final class SessionManager {
         session.budgetSecondsAtStart += Int(seconds.rounded())
         try save()
         reconcile(now: now)
+        refreshOvertimeNotification(for: session, now: now)
     }
 
     func arrive(now: Date? = nil) throws {
@@ -260,6 +269,7 @@ final class SessionManager {
             activeSession = nil
             phase = .idle
         }
+        overtimeNotifier.cancel(sessionID: session.id)
         try save()
         reconcile(now: now)
     }
@@ -338,9 +348,30 @@ final class SessionManager {
 
         try save()
         reconcile(now: now)
+        if let session = activeSession, session.isOpen, !session.isPaused {
+            refreshOvertimeNotification(for: session, now: now)
+        }
     }
 
     // MARK: - Queries
+
+    private func refreshOvertimeNotification(for session: WorkSession, now: Date) {
+        guard session.isOpen, !session.isPaused else {
+            overtimeNotifier.cancel(sessionID: session.id)
+            return
+        }
+        let elapsed = session.elapsedSeconds(at: now)
+        guard let fireAt = OvertimeSchedule.fireAt(
+            budgetSeconds: session.budgetSecondsAtStart,
+            elapsedSeconds: elapsed,
+            now: now
+        ) else {
+            overtimeNotifier.cancel(sessionID: session.id)
+            return
+        }
+        let title = session.ticket?.title ?? "切符"
+        overtimeNotifier.schedule(sessionID: session.id, ticketTitle: title, fireAt: fireAt)
+    }
 
     private func ensureServiceAllowsBoarding(at now: Date) throws {
         let todayKey = ServiceDay.dayKey(for: now, calendar: calendar)

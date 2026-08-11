@@ -8,11 +8,19 @@ import SwiftData
 
 struct QuickAddBar: View {
     @Environment(\.modelContext) private var modelContext
+    @Query(sort: \Tag.sortOrder) private var allTags: [Tag]
     @Binding var isPresented: Bool
 
     @State private var title = ""
     @State private var awaitingEstimate = false
+    @State private var awaitingTags = false
+    @State private var pendingMinutes = 30
+    @State private var selectedTagIDs: Set<UUID> = []
     @FocusState private var titleFocused: Bool
+
+    private var defaultTag: Tag? {
+        allTags.first
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -20,16 +28,51 @@ struct QuickAddBar: View {
 
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    Text(awaitingEstimate ? "見積もりを選ぶ" : "新しい切符")
+                    Text(headerTitle)
                         .font(.subheadline.weight(.semibold))
                     Spacer()
                     Button("完了") {
-                        close()
+                        if awaitingTags {
+                            finishWithTags()
+                        } else {
+                            close()
+                        }
                     }
                     .font(.subheadline)
                 }
 
-                if awaitingEstimate {
+                if awaitingTags {
+                    Text(title)
+                        .font(.body)
+                    Text("見積もり \(pendingMinutes)分")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    if allTags.isEmpty {
+                        Text("タグはスキップできます（タグ管理で追加）")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        FlowTagPicker(
+                            tags: allTags,
+                            selectedIDs: $selectedTagIDs,
+                            highlightedID: defaultTag?.id
+                        )
+                    }
+
+                    HStack {
+                        Button("スキップ") {
+                            selectedTagIDs = []
+                            finishWithTags()
+                        }
+                        .buttonStyle(.bordered)
+
+                        Button("追加") {
+                            finishWithTags()
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+                } else if awaitingEstimate {
                     Text(title)
                         .font(.body)
                     EstimateChips(
@@ -37,7 +80,9 @@ struct QuickAddBar: View {
                         style: .plainMinutes,
                         highlightedMinutes: 30
                     ) { minutes in
-                        createTicket(minutes: minutes)
+                        pendingMinutes = minutes
+                        awaitingEstimate = false
+                        awaitingTags = true
                     }
                 } else {
                     TextField("何をする？", text: $title)
@@ -57,13 +102,18 @@ struct QuickAddBar: View {
         }
         .onChange(of: isPresented) { _, presented in
             if presented {
-                title = ""
-                awaitingEstimate = false
+                resetDraft()
                 DispatchQueue.main.async {
                     titleFocused = true
                 }
             }
         }
+    }
+
+    private var headerTitle: String {
+        if awaitingTags { return "タグ（任意）" }
+        if awaitingEstimate { return "見積もりを選ぶ" }
+        return "新しい切符"
     }
 
     private func submitTitle() {
@@ -76,18 +126,19 @@ struct QuickAddBar: View {
         awaitingEstimate = true
     }
 
-    private func createTicket(minutes: Int) {
+    private func finishWithTags() {
         let nextOrder = nextSortOrder()
         let ticket = Ticket(
             title: title,
-            estimatedSeconds: minutes * 60,
+            estimatedSeconds: pendingMinutes * 60,
             sortOrder: nextOrder
         )
+        let chosen = allTags.filter { selectedTagIDs.contains($0.id) }
+        ticket.tags = chosen
         modelContext.insert(ticket)
         try? modelContext.save()
 
-        title = ""
-        awaitingEstimate = false
+        resetDraft()
         titleFocused = true
     }
 
@@ -100,10 +151,62 @@ struct QuickAddBar: View {
         return maxOrder + 1
     }
 
-    private func close() {
+    private func resetDraft() {
         title = ""
         awaitingEstimate = false
+        awaitingTags = false
+        pendingMinutes = 30
+        selectedTagIDs = []
         titleFocused = false
+    }
+
+    private func close() {
+        resetDraft()
         isPresented = false
+    }
+}
+
+private struct FlowTagPicker: View {
+    let tags: [Tag]
+    @Binding var selectedIDs: Set<UUID>
+    var highlightedID: UUID?
+
+    var body: some View {
+        FlexibleTagWrap(tags: tags) { tag in
+            Button {
+                if selectedIDs.contains(tag.id) {
+                    selectedIDs.remove(tag.id)
+                } else {
+                    selectedIDs.insert(tag.id)
+                }
+            } label: {
+                TagChipView(
+                    name: tag.name,
+                    colorHex: tag.colorHex,
+                    isSelected: selectedIDs.contains(tag.id),
+                    isHighlighted: tag.id == highlightedID
+                )
+            }
+            .buttonStyle(.plain)
+        }
+    }
+}
+
+/// Simple wrapping layout for tag chips without external deps.
+private struct FlexibleTagWrap<Content: View>: View {
+    let tags: [Tag]
+    @ViewBuilder var content: (Tag) -> Content
+
+    var body: some View {
+        // Use LazyVGrid for predictable wrapping on compact widths.
+        LazyVGrid(
+            columns: [GridItem(.adaptive(minimum: 72), spacing: 8)],
+            alignment: .leading,
+            spacing: 8
+        ) {
+            ForEach(tags, id: \.id) { tag in
+                content(tag)
+            }
+        }
     }
 }

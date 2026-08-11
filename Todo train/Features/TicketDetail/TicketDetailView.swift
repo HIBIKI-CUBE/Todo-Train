@@ -11,6 +11,8 @@ struct TicketDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @Bindable var ticket: Ticket
 
+    @Query(sort: \Tag.sortOrder) private var allTags: [Tag]
+
     @State private var errorMessage = ""
     @State private var showError = false
 
@@ -64,6 +66,38 @@ struct TicketDetailView: View {
                 if isPaused {
                     Text("停車中")
                         .foregroundStyle(.orange)
+                }
+            }
+
+            if ticket.isOpen || !ticket.tags.isEmpty {
+                Section("タグ") {
+                    if allTags.isEmpty && ticket.isOpen {
+                        Text("タグ管理から作成できます")
+                            .foregroundStyle(.secondary)
+                    } else if ticket.isOpen {
+                        ForEach(allTags, id: \.id) { tag in
+                            Button {
+                                toggleTag(tag)
+                            } label: {
+                                HStack {
+                                    TagChipView(
+                                        name: tag.name,
+                                        colorHex: tag.colorHex,
+                                        isSelected: ticket.tags.contains(where: { $0.id == tag.id }),
+                                        isHighlighted: tag.sortOrder == 0
+                                    )
+                                    Spacer()
+                                    if ticket.tags.contains(where: { $0.id == tag.id }) {
+                                        Image(systemName: "checkmark")
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    } else {
+                        TagChipRow(tags: ticket.tags, maxVisible: 8)
+                    }
                 }
             }
 
@@ -154,6 +188,15 @@ struct TicketDetailView: View {
             errorMessage = error.localizedDescription
             showError = true
         }
+    }
+
+    private func toggleTag(_ tag: Tag) {
+        if let index = ticket.tags.firstIndex(where: { $0.id == tag.id }) {
+            ticket.tags.remove(at: index)
+        } else {
+            ticket.tags.append(tag)
+        }
+        try? modelContext.save()
     }
 
     private func closureLabel(_ kind: ClosureKind) -> String {
