@@ -34,6 +34,18 @@
 		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		B6EE2E8B302B4E730022EBAD /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			dstPath = "";
+			dstSubfolder = PlugIns;
+			files = (
+				B6EE2E8C302B4E730022EBAD /* TodoTrainWidget.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
 		B6EE2E52302B4E710022EBAD /* Todo train.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Todo train.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		B6EE2E63302B4E730022EBAD /* Todo trainTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Todo trainTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -61,6 +73,7 @@
 		B6EE2E8A302B4E730022EBAD /* Exceptions for "TodoTrainWidget" folder in "Todo train" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				Assets.xcassets,
 				Info.plist,
 				README.md,
 				TodoTrainAlarmLiveActivity.swift,
@@ -93,8 +106,8 @@
 		B6EE2E81302B4E730022EBAD /* TodoTrainWidget */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				B6EE2E89302B4E730022EBAD /* Exceptions for "TodoTrainWidget" folder in "TodoTrainWidget" target */,
 				B6EE2E8A302B4E730022EBAD /* Exceptions for "TodoTrainWidget" folder in "Todo train" target */,
+				B6EE2E89302B4E730022EBAD /* Exceptions for "TodoTrainWidget" folder in "TodoTrainWidget" target */,
 			);
 			path = TodoTrainWidget;
 			sourceTree = "<group>";
@@ -280,20 +293,6 @@
 			);
 		};
 /* End PBXProject section */
-
-/* Begin PBXCopyFilesBuildPhase section */
-		B6EE2E8B302B4E730022EBAD /* Embed Foundation Extensions */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = "";
-			dstSubfolderSpec = 13;
-			files = (
-				B6EE2E8C302B4E730022EBAD /* TodoTrainWidget.appex in Embed Foundation Extensions */,
-			);
-			name = "Embed Foundation Extensions";
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXResourcesBuildPhase section */
 		B6EE2E50302B4E710022EBAD /* Resources */ = {

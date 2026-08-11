@@ -20,7 +20,7 @@ Widget Extension（`TodoTrainWidget`）:
 |----|------|
 | Session Live Activity（v1） | 発車中の残時間表示（別 Attributes・未配線可） |
 | AlarmKit 終了ベル（v2） | 見積もり到達の強制通知（Focus/Silent 突破） |
-| Alarm Live Activity | StandBy / ロック画面のカウントダウン（`AlarmAttributes`） |
+| Alarm Live Activity | StandBy / ロック画面のカウントダウン + 停車/再乗車（`AlarmAttributes`） |
 
 ## 3. Widget Extension（現状）
 
@@ -29,28 +29,53 @@ Widget Extension（`TodoTrainWidget`）:
 | ファイル | 役割 |
 |----------|------|
 | `TodoTrainWidgetBundle.swift` | `@main` — Alarm LA のみ束ねる |
-| `TodoTrainAlarmLiveActivity.swift` | `AlarmAttributes<TodoTrainAlarmMetadata>` の UI（countdown / paused / alert） |
-| `TodoTrainAlarmMetadata.swift` | App + Extension 共有（両方のターゲットでコンパイル） |
+| `TodoTrainAlarmLiveActivity.swift` | 大タイマー + Intent 操作ボタン + 細い compact |
+| `EndBellIntents.swift` | App + Extension 共有（停車 / 再乗車 / キャンセル / Stop） |
+| `TodoTrainAlarmMetadata.swift` | App + Extension 共有（`sessionID` + `ticketTitle`） |
+| `Assets.xcassets/AccentColor` | rail tint（App と同色） |
 | `TodoTrainWidget.swift` | ホーム画面 Widget（**未接続**・後続） |
 
-ホーム画面 Widget を足すときは `TodoTrainWidgetBundle` に追加し、ターゲット membership を更新してください。
+## 4. 操作（カスタム LA + AlarmPresentation）
 
-## 4. 設定
+**重要:** `AlarmPresentation` の `pauseButton` / `resumeButton` は **システムテンプレート UI（フォールバック）用**です。カスタム `ActivityConfiguration` を出しているときは、**LA 内に `Button(intent:)` を自分で置く**必要があります（WWDC25）。
+
+| 状態 | LA ボタン（Intent） | セッション同期 |
+|------|---------------------|----------------|
+| Countdown | **停車** `EndBellPauseIntent` / **キャンセル** `EndBellCancelIntent` | pause → `pauseFromAlarmKit` / cancel → `suppressEndBell` |
+| Paused | **再乗車** `EndBellResumeIntent` / キャンセル | resume → `resumeFromAlarmKit` |
+| Alert | システム Stop + `EndBellStopIntent` | 到着は自動にしない |
+
+Intent は `TodoTrainWidget/EndBellIntents.swift`（App + Extension 共有）。
+
+Focus からの停車は AlarmKit を **cancel せず pause**。再乗車は `resume`、失敗時のみ再 schedule。
+
+停車上限到達時に StandBy から停車した場合は **臨時停車**として記録し、Alarm と DB を揃える（分裂させない）。
+
+`AlarmKitScheduler.bind(sessionManager:)` が `alarmUpdates` を購読し双方向同期します。ユーザーがキャンセルしたベルは `suppressEndBell` で記憶し、前景復帰で復活させません（延長時は再 schedule）。
+
+## 5. 設定
 
 Hub → 設定 → **終了ベル（AlarmKit）** を ON にすると、発車中セッションの予定終了時刻に AlarmKit タイマーがスケジュールされます。
 
-- 停車 / 到着 / 途中下車 / 放棄 / 延長で再スケジュールまたはキャンセル
+- 停車 → pause / 再乗車 → resume / 到着・途中下車・放棄 → cancel
+- キャンセル（StandBy）→ suppress（走行継続、ベルなし）
+- 延長 → 再 schedule（suppress 解除）
 - AlarmKit 拒否時もセッションは `SessionManager` + DB が真実源
 
-## 5. Mac 検証チェックリスト
+## 6. Mac 検証チェックリスト
 
 - [ ] AlarmKit 権限プロンプト
-- [ ] 発車 → StandBy / ロック画面 / Dynamic Island でカウントダウン
-- [ ] 予定終了でベル（Silent 時も）
-- [ ] 延長でタイマー更新
-- [ ] 停車でキャンセル
+- [ ] 発車 → StandBy / LS で大タイマー + 横 Progress + **停車/キャンセル操作**
+- [ ] Dynamic Island compact が狭い（円 Progress のみ）
+- [ ] StandBy で **停車** / **再乗車** がタップできる
+- [ ] StandBy 停車 → アプリ側セッションが停車中；再乗車で復帰
+- [ ] 停車上限満杯 + StandBy 停車 → 臨時停車として整合（Alarm/DB 分裂なし）
+- [ ] StandBy キャンセル → 前景復帰でもベルが復活しない
+- [ ] Focus 停車でも Alarm が消えず pause される
+- [ ] 予定終了でベル；Stop で止まる（到着自動なし）
+- [ ] 到着 / 放棄で Alarm が消える
 - [ ] v1 Session Live Activity と競合しないこと（現状 Session LA Widget UI は未実装）
 
-## 6. ブランチ
+## 7. ブランチ
 
-表示配線の作業ブランチ: `feature/alarmkit-display`
+`feature/alarmkit-display`

@@ -9,21 +9,13 @@ Xcode ターゲット `TodoTrainWidget`（Widget Extension）がプロジェク�
 | ファイル | ターゲット | 内容 |
 |----------|------------|------|
 | `TodoTrainWidgetBundle.swift` | Extension | `@main` WidgetBundle |
-| `TodoTrainAlarmLiveActivity.swift` | Extension | Lock Screen / Dynamic Island / StandBy |
-| `TodoTrainAlarmMetadata.swift` | **App + Extension** | 共有 metadata |
+| `TodoTrainAlarmLiveActivity.swift` | Extension | タイマー UI + Intent 操作ボタン |
+| `EndBellIntents.swift` | **App + Extension** | 停車 / 再乗車 / キャンセル / Stop |
+| `TodoTrainAlarmMetadata.swift` | **App + Extension** | `sessionID` + `ticketTitle` |
+| `Assets.xcassets` | Extension | AccentColor（rail tint） |
 | `Info.plist` | Extension | WidgetKit + Live Activities |
 | `TodoTrainWidget.swift` | （未接続） | ホーム画面 Widget プレースホルダ |
-| `README.md` | （除外） | 本ファイル |
 
-手順の詳細は [docs/11-v2-alarmkit-setup.md](../docs/11-v2-alarmkit-setup.md)。
+**操作:** カスタム LA では `Button(intent:)` が必須。`AlarmPresentation` の pause/resume はシステムテンプレート用フォールバックです。
 
-## ホーム画面 Widget（後続）
-
-1. `TodoTrainWidget.swift` を Extension ターゲットの membership に戻す
-2. `TodoTrainWidgetBundle` に `TodoTrainWidget()` を追加
-3. App Group + `WidgetCenter.reloadTimelines` で実データ接続
-
-## v1 表示（予定）
-
-- 小: 運行中 / 運休、停車 n 件
-- 中: 上記 + 今日の集中ざっくり（プレースホルダ）
+手順: [docs/11-v2-alarmkit-setup.md](../docs/11-v2-alarmkit-setup.md)。

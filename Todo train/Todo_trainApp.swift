@@ -27,15 +27,17 @@ struct Todo_trainApp: App {
             #else
             let alarmScheduler: any AlarmScheduling = NoOpAlarmScheduler()
             #endif
-            _sessionManager = State(
-                initialValue: SessionManager(
-                    modelContext: context,
-                    settings: AppSettings.shared,
-                    overtimeNotifier: OvertimeNotifier.shared,
-                    liveActivityManager: liveActivity,
-                    alarmScheduler: alarmScheduler
-                )
+            let manager = SessionManager(
+                modelContext: context,
+                settings: AppSettings.shared,
+                overtimeNotifier: OvertimeNotifier.shared,
+                liveActivityManager: liveActivity,
+                alarmScheduler: alarmScheduler
             )
+            _sessionManager = State(initialValue: manager)
+            #if canImport(AlarmKit)
+            AlarmKitScheduler.shared.bind(sessionManager: manager)
+            #endif
             OvertimeNotifier.shared.configure()
         } catch {
             fatalError("Could not create ModelContainer: \(error)")

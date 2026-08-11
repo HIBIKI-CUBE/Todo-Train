@@ -25,7 +25,7 @@
 | 項目 | 状態 |
 |------|------|
 | AlarmKit 終了ベル | コード済（`AlarmScheduling` + Settings トグル） |
-| StandBy カウントダウン LA | **Extension 配線済**（`TodoTrainWidget` + Alarm LA）。実機表示は Mac 検証待ち（[11-v2-alarmkit-setup.md](11-v2-alarmkit-setup.md)） |
+| StandBy カウントダウン LA | **操作付き polish + 同期安定化済**（停車/再乗車/キャンセル抑制・上限時臨時停車）。実機検証待ち（[11-v2-alarmkit-setup.md](11-v2-alarmkit-setup.md)） |
 | 週次レポート | `WeeklyReportView` + 純関数テスト |
 
 **ブランチ:** `feature/alarmkit-display`（UI polish は `feature/ios-native-ui`）。

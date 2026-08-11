@@ -70,7 +70,7 @@ final class AppSettings {
         }
     }
 
-    static func clampPauseLimit(_ value: Int) -> Int {
+    nonisolated static func clampPauseLimit(_ value: Int) -> Int {
         value == 3 ? 3 : PauseLimitGuard.defaultLimit
     }
 }

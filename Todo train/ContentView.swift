@@ -13,6 +13,7 @@ struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
 
     @State private var isFocusPresented = false
+    @State private var didRecoverOnLaunch = false
 
     var body: some View {
         TabView {
@@ -36,12 +37,19 @@ struct ContentView: View {
         }
         .tint(TrainTheme.rail)
         .onAppear {
-            recover()
+            if !didRecoverOnLaunch {
+                recoverOnLaunch()
+                didRecoverOnLaunch = true
+            } else {
+                sessionManager.reconcile()
+            }
             syncFocusPresentation()
         }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
-                recover()
+                // Foreground: recompute Date-based phase only.
+                // Do not re-run recoverOnLaunch (would re-schedule cancelled end bells).
+                sessionManager.reconcile()
                 syncFocusPresentation()
             }
         }
@@ -62,7 +70,7 @@ struct ContentView: View {
         }
     }
 
-    private func recover() {
+    private func recoverOnLaunch() {
         do {
             try sessionManager.recoverOnLaunch()
         } catch {

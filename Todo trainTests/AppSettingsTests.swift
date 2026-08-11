@@ -6,6 +6,7 @@
 import Testing
 @testable import Todo_train
 
+@MainActor
 struct AppSettingsTests {
     @Test func clampPauseLimit_onlyTwoOrThree() {
         #expect(AppSettings.clampPauseLimit(2) == 2)

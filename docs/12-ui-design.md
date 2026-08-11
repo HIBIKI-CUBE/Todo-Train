@@ -57,6 +57,20 @@
 - ボタン: 可能な限り `.bordered` / `.borderedProminent` / `role: .destructive`。
 - Focus: 縦一列。操作は下部。cabin 専用スタイルのみ例外。
 
+## AlarmKit / StandBy（終了ベル LA）
+
+HIG とシステム Alarm UI を骨格にし、列車メタファは **アクセントのみ**。
+
+| 面 | 方針 |
+|----|------|
+| 視線（カスタム LA） | 中央の大タイマー + 横 Progress + `tram.fill` + 切符タイトル |
+| 操作 | **LA 内 `Button(intent: LiveActivityIntent)`**（停車 / 再乗車 / キャンセル）。`AlarmPresentation` のボタンはテンプレートフォールバック用 |
+| compact DI | アイコン + **小さな円形 Progress のみ**（長い `timerInterval` テキストで幅を取らない） |
+| 色 | `AccentColor`（rail）を tint。cabin 没入・グラデ禁止 |
+| 用語 | 停車 / 停車中 / 再乗車（「一時停止」は使わない） |
+
+詳細手順は [11-v2-alarmkit-setup.md](11-v2-alarmkit-setup.md)。
+
 ## モーション（意図的に 2–3）
 
 1. **発車**: Focus 出現はシステムフルスクリーン。内部タイマーは 1 秒 tick のみ。

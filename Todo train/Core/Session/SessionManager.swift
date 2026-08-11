@@ -27,6 +27,10 @@ final class SessionManager {
     /// Today's temporary-pause override count (for UI).
     private(set) var todayOverrideCount: Int = 0
 
+    /// Session IDs whose end bell was dismissed by the user (StandBy cancel).
+    /// Prevents recover / foreground from silently re-scheduling the same bell.
+    private var suppressedEndBellSessionIDs: Set<UUID> = []
+
     var pauseLimit: Int { settings.pauseLimit }
 
     init(
@@ -205,7 +209,7 @@ final class SessionManager {
         return todayOverrideCount
     }
 
-    private func applyPause(session: WorkSession, now: Date) throws {
+    private func applyPause(session: WorkSession, now: Date, syncAlarm: Bool = true) throws {
         if let segmentStartedAt = session.segmentStartedAt {
             session.accumulatedActiveSeconds += now.timeIntervalSince(segmentStartedAt)
         }
@@ -214,9 +218,36 @@ final class SessionManager {
         phase = .paused
         overtimeNotifier.cancel(sessionID: session.id)
         liveActivityManager.end()
-        alarmScheduler.cancel(sessionID: session.id)
+        if syncAlarm {
+            if settings.endBellEnabled {
+                alarmScheduler.pause(sessionID: session.id)
+            } else {
+                alarmScheduler.cancel(sessionID: session.id)
+            }
+        }
         try save()
         reconcile(now: now)
+    }
+
+    /// StandBy / system AlarmKit pause → mirror into the open session (no AlarmKit echo).
+    /// When pause limit is full, records a temporary pause (臨時停車) so Alarm and DB stay aligned.
+    func pauseFromAlarmKit(now: Date? = nil) throws {
+        let now = now ?? clock.now
+        guard let session = activeSession, session.isOpen, !session.isPaused else { return }
+        let pausedCount = pausedTicketCount
+        if PauseLimitGuard.canPause(currentPausedCount: pausedCount, limit: settings.pauseLimit) {
+            try applyPause(session: session, now: now, syncAlarm: false)
+        } else {
+            try applyPause(session: session, now: now, syncAlarm: false)
+            let dayKey = ServiceDay.dayKey(for: now, calendar: calendar)
+            todayOverrideCount = overrideCounter.increment(forDayKey: dayKey)
+        }
+    }
+
+    /// StandBy dismiss / cancel of the end bell — keep the ride running, do not reschedule.
+    func suppressEndBell(sessionID: UUID) {
+        suppressedEndBellSessionIDs.insert(sessionID)
+        alarmScheduler.cancel(sessionID: sessionID)
     }
 
     func resume(now: Date? = nil) throws {
@@ -235,7 +266,28 @@ final class SessionManager {
         reconcile(now: now)
         refreshOvertimeNotification(for: session, now: now)
         refreshLiveActivity(for: session, now: now)
-        refreshEndBell(for: session, now: now)
+        if settings.endBellEnabled {
+            let resumed = alarmScheduler.resume(sessionID: session.id)
+            if !resumed {
+                refreshEndBell(for: session, now: now)
+            }
+        } else {
+            alarmScheduler.cancel(sessionID: session.id)
+        }
+    }
+
+    /// StandBy / system AlarmKit resume → mirror into the open session (no AlarmKit echo).
+    func resumeFromAlarmKit(now: Date? = nil) throws {
+        let now = now ?? clock.now
+        guard let session = activeSession, session.isOpen, session.isPaused else { return }
+        session.pausedAt = nil
+        session.segmentStartedAt = now
+        phase = .running
+        try save()
+        reconcile(now: now)
+        refreshOvertimeNotification(for: session, now: now)
+        refreshLiveActivity(for: session, now: now)
+        // AlarmKit already resumed the countdown; do not reschedule.
     }
 
     func extend(by seconds: TimeInterval, now: Date? = nil) throws {
@@ -249,6 +301,7 @@ final class SessionManager {
         guard seconds > 0 else { return }
 
         session.budgetSecondsAtStart += Int(seconds.rounded())
+        suppressedEndBellSessionIDs.remove(session.id)
         try save()
         reconcile(now: now)
         refreshOvertimeNotification(for: session, now: now)
@@ -322,6 +375,7 @@ final class SessionManager {
         overtimeNotifier.cancel(sessionID: session.id)
         liveActivityManager.end()
         alarmScheduler.cancel(sessionID: session.id)
+        suppressedEndBellSessionIDs.remove(session.id)
         try save()
         reconcile(now: now)
     }
@@ -404,6 +458,10 @@ final class SessionManager {
             refreshOvertimeNotification(for: session, now: now)
             refreshLiveActivity(for: session, now: now)
             refreshEndBell(for: session, now: now)
+        } else if let session = activeSession, session.isOpen, session.isPaused {
+            // Keep a paused AlarmKit countdown; only end Session Live Activity.
+            liveActivityManager.end()
+            overtimeNotifier.cancel(sessionID: session.id)
         } else {
             liveActivityManager.end()
             alarmScheduler.cancelAll()
@@ -438,10 +496,14 @@ final class SessionManager {
             alarmScheduler.cancel(sessionID: session.id)
             return
         }
-        guard session.isOpen, !session.isPaused else {
+        guard session.isOpen else {
             alarmScheduler.cancel(sessionID: session.id)
             return
         }
+        // User dismissed the bell from StandBy — do not resurrect it.
+        guard !suppressedEndBellSessionIDs.contains(session.id) else { return }
+        // Leave a paused AlarmKit countdown intact so StandBy 再乗車 can resume it.
+        guard !session.isPaused else { return }
         let elapsed = session.elapsedSeconds(at: now)
         guard let fireAt = SessionEndSchedule.fireAt(
             budgetSeconds: session.budgetSecondsAtStart,
