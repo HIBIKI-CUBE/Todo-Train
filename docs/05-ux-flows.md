@@ -12,10 +12,10 @@
 | Overtime | ✅ | 超過 3 択 |
 | Pause Limit Sheet | ✅ | 停車中解決優先 |
 | Remaining Tickets Canvas | ✅ | 到着整理（掃き出し、ウィザードなし） |
-| History | ✅ 基本 / v1 強化 | タイムライン、乗り継ぎリンク。検索・今日に追加は v1 |
+| History | ✅ + v1 強化予定 | タイムライン、乗り継ぎ。検索・今日に追加は v1 |
 | Reorder View | v1 | 全表示 + フィルタ強調、手動 D&D |
-| Emergency Override | v0.5 | セーフティカバー + スライドホールド |
-| Settings | ✅ 最小 | 停車上限 2/3、音 ON/OFF 等 |
+| Emergency Override | ✅ | セーフティカバー + スライドホールド（MVP 済） |
+| Settings | v1 | 停車上限 2/3、音 ON/OFF（[09](09-v1-implementation.md) WP-A） |
 
 ## Hub
 
