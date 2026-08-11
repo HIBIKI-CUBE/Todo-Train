@@ -22,6 +22,7 @@ final class SessionManager {
     private let overtimeNotifier: any OvertimeNotifying
     private let overrideCounter: any OverrideCounting
     private let liveActivityManager: any LiveActivityManaging
+    private let alarmScheduler: any AlarmScheduling
 
     /// Today's temporary-pause override count (for UI).
     private(set) var todayOverrideCount: Int = 0
@@ -35,7 +36,8 @@ final class SessionManager {
         settings: AppSettings = .shared,
         overtimeNotifier: (any OvertimeNotifying)? = nil,
         overrideCounter: (any OverrideCounting)? = nil,
-        liveActivityManager: (any LiveActivityManaging)? = nil
+        liveActivityManager: (any LiveActivityManaging)? = nil,
+        alarmScheduler: (any AlarmScheduling)? = nil
     ) {
         self.modelContext = modelContext
         self.clock = clock
@@ -44,6 +46,7 @@ final class SessionManager {
         self.overtimeNotifier = overtimeNotifier ?? NoOpOvertimeNotifier()
         self.overrideCounter = overrideCounter ?? OverrideCounter.shared
         self.liveActivityManager = liveActivityManager ?? NoOpLiveActivityManager()
+        self.alarmScheduler = alarmScheduler ?? NoOpAlarmScheduler()
         self.todayOverrideCount = self.overrideCounter.count(
             forDayKey: ServiceDay.dayKey(for: clock.now, calendar: calendar)
         )
@@ -95,6 +98,7 @@ final class SessionManager {
         needsServiceDayEndPrompt = false
         try save()
         overtimeNotifier.requestAuthorizationIfNeeded()
+        alarmScheduler.requestAuthorizationIfNeeded()
         refreshTodayOverrideCount(at: now)
         reconcile(now: now)
     }
@@ -122,6 +126,7 @@ final class SessionManager {
             phase = .idle
         }
         overtimeNotifier.cancelAll()
+        alarmScheduler.cancelAll()
         try save()
         reconcile(now: now)
     }
@@ -161,6 +166,7 @@ final class SessionManager {
         reconcile(now: now)
         refreshOvertimeNotification(for: session, now: now)
         refreshLiveActivity(for: session, now: now)
+        refreshEndBell(for: session, now: now)
     }
 
     func pause(now: Date? = nil) throws {
@@ -208,6 +214,7 @@ final class SessionManager {
         phase = .paused
         overtimeNotifier.cancel(sessionID: session.id)
         liveActivityManager.end()
+        alarmScheduler.cancel(sessionID: session.id)
         try save()
         reconcile(now: now)
     }
@@ -228,6 +235,7 @@ final class SessionManager {
         reconcile(now: now)
         refreshOvertimeNotification(for: session, now: now)
         refreshLiveActivity(for: session, now: now)
+        refreshEndBell(for: session, now: now)
     }
 
     func extend(by seconds: TimeInterval, now: Date? = nil) throws {
@@ -245,6 +253,7 @@ final class SessionManager {
         reconcile(now: now)
         refreshOvertimeNotification(for: session, now: now)
         refreshLiveActivity(for: session, now: now)
+        refreshEndBell(for: session, now: now)
     }
 
     func arrive(now: Date? = nil) throws {
@@ -312,6 +321,7 @@ final class SessionManager {
         }
         overtimeNotifier.cancel(sessionID: session.id)
         liveActivityManager.end()
+        alarmScheduler.cancel(sessionID: session.id)
         try save()
         reconcile(now: now)
     }
@@ -393,8 +403,10 @@ final class SessionManager {
         if let session = activeSession, session.isOpen, !session.isPaused {
             refreshOvertimeNotification(for: session, now: now)
             refreshLiveActivity(for: session, now: now)
+            refreshEndBell(for: session, now: now)
         } else {
             liveActivityManager.end()
+            alarmScheduler.cancelAll()
         }
         refreshTodayOverrideCount(at: now)
     }
@@ -419,6 +431,28 @@ final class SessionManager {
             deadline: deadline,
             isOvertime: session.remainingSeconds(at: now) <= 0
         )
+    }
+
+    private func refreshEndBell(for session: WorkSession, now: Date) {
+        guard settings.endBellEnabled else {
+            alarmScheduler.cancel(sessionID: session.id)
+            return
+        }
+        guard session.isOpen, !session.isPaused else {
+            alarmScheduler.cancel(sessionID: session.id)
+            return
+        }
+        let elapsed = session.elapsedSeconds(at: now)
+        guard let fireAt = SessionEndSchedule.fireAt(
+            budgetSeconds: session.budgetSecondsAtStart,
+            elapsedSeconds: elapsed,
+            now: now
+        ) else {
+            alarmScheduler.cancel(sessionID: session.id)
+            return
+        }
+        let title = session.ticket?.title ?? "切符"
+        alarmScheduler.scheduleEndBell(sessionID: session.id, ticketTitle: title, fireAt: fireAt)
     }
 
     private func refreshOvertimeNotification(for session: WorkSession, now: Date) {

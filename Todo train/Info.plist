@@ -4,6 +4,8 @@
 <dict>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
+	<key>NSAlarmKitUsageDescription</key>
+	<string>見積もり時間の終了を知らせる終了ベルを鳴らすために使います。</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>

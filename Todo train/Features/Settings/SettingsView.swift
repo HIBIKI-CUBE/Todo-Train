@@ -39,6 +39,19 @@ struct SettingsView: View {
             } header: {
                 Text("超過")
             }
+
+            Section {
+                Toggle("終了ベル（AlarmKit）", isOn: Binding(
+                    get: { settings.endBellEnabled },
+                    set: { settings.endBellEnabled = $0 }
+                ))
+
+                Text("見積もり到達時に AlarmKit で強制通知します（Silent / Focus を突破）。StandBy のカウントダウン表示にも使われます。拒否された場合はローカル通知のみです。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } header: {
+                Text("終了ベル")
+            }
         }
         .navigationTitle("設定")
         .navigationBarTitleDisplayMode(.inline)

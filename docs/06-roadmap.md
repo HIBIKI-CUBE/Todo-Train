@@ -7,7 +7,7 @@
 | **MVP** | 運行 + 掃き出し + 発車 + 停車/到着/延長 + 履歴 + タグ + 通知 + Override + Heuristic + 運行終了整理 | **完了**（Sprint 1–10） |
 | **v0.5** | （臨時停車 UI 等） | MVP に吸収済み |
 | **v1** | Settings、履歴検索・今日に追加、並べ替えビュー、dueDate、カスタム見積、LA、Widget、AI stub、CloudKit | **次** → [09-v1-implementation.md](09-v1-implementation.md) |
-| **v2** | AlarmKit + StandBy、週次レポート、iPad 等 | 未着手 |
+| **v2** | AlarmKit + StandBy、週次レポート、iPad 等 | **実装中**（AlarmKit 境界 + 週次レポート） |
 
 ## MVP（完了チェック）
 

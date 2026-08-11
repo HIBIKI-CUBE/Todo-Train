@@ -20,6 +20,16 @@
 | WP-H AI / PCC | stub 済 | `CoachingEngine` + Heuristic |
 | WP-I CloudKit | 未着手 | 独立 PR 推奨 |
 
+### v2 進捗（AlarmKit PR）
+
+| 項目 | 状態 |
+|------|------|
+| AlarmKit 終了ベル | コード済（`AlarmScheduling` + Settings トグル） |
+| StandBy カウントダウン LA | Widget ソース済（Mac で Extension 要） |
+| 週次レポート | `WeeklyReportView` + 純関数テスト |
+
+**注意:** v1 PR（#2）の Mac 検証前にマージする場合、SessionManager / LA 配線の前提が未確認です。
+
 ## MVP 完了マップ（Sprint 1–10）
 
 | Sprint | 内容 | 主な成果物 |

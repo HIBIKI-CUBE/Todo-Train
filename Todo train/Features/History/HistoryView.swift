@@ -59,6 +59,13 @@ struct HistoryView: View {
         .navigationTitle("履歴")
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $searchText, prompt: "切符名で検索")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                NavigationLink("週次") {
+                    WeeklyReportView()
+                }
+            }
+        }
     }
 
     private func reissue(from ticket: Ticket) {

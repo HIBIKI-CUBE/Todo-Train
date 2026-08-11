@@ -14,6 +14,7 @@ final class AppSettings {
     private enum Keys {
         static let pauseLimit = "settings.pauseLimit"
         static let overtimeSoundEnabled = "settings.overtimeSoundEnabled"
+        static let endBellEnabled = "settings.endBellEnabled"
     }
 
     var pauseLimit: Int {
@@ -33,13 +34,22 @@ final class AppSettings {
         }
     }
 
+    /// AlarmKit end bell at session budget (v2). Default OFF until user opts in.
+    var endBellEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(endBellEnabled, forKey: Keys.endBellEnabled)
+        }
+    }
+
     static func makeForTesting(
         pauseLimit: Int = PauseLimitGuard.defaultLimit,
-        overtimeSoundEnabled: Bool = true
+        overtimeSoundEnabled: Bool = true,
+        endBellEnabled: Bool = false
     ) -> AppSettings {
         let settings = AppSettings()
         settings.pauseLimit = Self.clampPauseLimit(pauseLimit)
         settings.overtimeSoundEnabled = overtimeSoundEnabled
+        settings.endBellEnabled = endBellEnabled
         return settings
     }
 
@@ -51,6 +61,12 @@ final class AppSettings {
             overtimeSoundEnabled = true
         } else {
             overtimeSoundEnabled = UserDefaults.standard.bool(forKey: Keys.overtimeSoundEnabled)
+        }
+
+        if UserDefaults.standard.object(forKey: Keys.endBellEnabled) == nil {
+            endBellEnabled = false
+        } else {
+            endBellEnabled = UserDefaults.standard.bool(forKey: Keys.endBellEnabled)
         }
     }
 

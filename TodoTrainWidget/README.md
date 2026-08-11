@@ -14,3 +14,7 @@
 - 中: 上記 + 今日の集中ざっくり（プレースホルダ）
 
 実データ連携は App Group + `WidgetCenter.reloadTimelines` を後続で接続してください。
+
+## AlarmKit カウントダウン（v2）
+
+`TodoTrainAlarmLiveActivity.swift` を同じ Extension に追加し、Widget Bundle で束ねてください。手順は [docs/11-v2-alarmkit-setup.md](../docs/11-v2-alarmkit-setup.md) を参照。

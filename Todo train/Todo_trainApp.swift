@@ -2,8 +2,6 @@
 //  Todo_trainApp.swift
 //  Todo train
 //
-//  Created by HIBIKI CUBE on 2026/08/11.
-//
 
 import SwiftUI
 import SwiftData
@@ -24,12 +22,18 @@ struct Todo_trainApp: App {
             #else
             let liveActivity: any LiveActivityManaging = NoOpLiveActivityManager()
             #endif
+            #if canImport(AlarmKit)
+            let alarmScheduler: any AlarmScheduling = AlarmKitScheduler.shared
+            #else
+            let alarmScheduler: any AlarmScheduling = NoOpAlarmScheduler()
+            #endif
             _sessionManager = State(
                 initialValue: SessionManager(
                     modelContext: context,
                     settings: AppSettings.shared,
                     overtimeNotifier: OvertimeNotifier.shared,
-                    liveActivityManager: liveActivity
+                    liveActivityManager: liveActivity,
+                    alarmScheduler: alarmScheduler
                 )
             )
             OvertimeNotifier.shared.configure()

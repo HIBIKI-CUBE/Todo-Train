@@ -13,19 +13,26 @@ struct SessionManagerTests {
     private func makeHarness(
         now: Date = Date(timeIntervalSince1970: 1_700_000_000),
         pauseLimit: Int = PauseLimitGuard.defaultLimit,
-        overrideCounter: (any OverrideCounting)? = nil
-    ) throws -> (SessionManager, ModelContext, FixedSessionClock) {
+        endBellEnabled: Bool = false,
+        overrideCounter: (any OverrideCounting)? = nil,
+        alarmScheduler: InMemoryAlarmScheduler? = nil
+    ) throws -> (SessionManager, ModelContext, FixedSessionClock, InMemoryAlarmScheduler) {
         let container = try AppModelContainer.make(inMemory: true)
         let context = ModelContext(container)
         let clock = FixedSessionClock(now)
-        let settings = AppSettings.makeForTesting(pauseLimit: pauseLimit)
+        let settings = AppSettings.makeForTesting(
+            pauseLimit: pauseLimit,
+            endBellEnabled: endBellEnabled
+        )
+        let scheduler = alarmScheduler ?? InMemoryAlarmScheduler()
         let manager = SessionManager(
             modelContext: context,
             clock: clock,
             settings: settings,
-            overrideCounter: overrideCounter ?? InMemoryOverrideCounter()
+            overrideCounter: overrideCounter ?? InMemoryOverrideCounter(),
+            alarmScheduler: scheduler
         )
-        return (manager, context, clock)
+        return (manager, context, clock, scheduler)
     }
 
     private func makeTicket(
@@ -40,7 +47,7 @@ struct SessionManagerTests {
     }
 
     @Test func startService_thenBoard_setsRunning() throws {
-        let (manager, context, _) = try makeHarness()
+        let (manager, context, _, _) = try makeHarness()
         try manager.startService()
         let ticket = try makeTicket(context)
 
@@ -52,7 +59,7 @@ struct SessionManagerTests {
     }
 
     @Test func cannotBoard_withoutService() throws {
-        let (manager, context, _) = try makeHarness()
+        let (manager, context, _, _) = try makeHarness()
         let ticket = try makeTicket(context)
 
         #expect(throws: SessionError.noActiveService) {
@@ -61,7 +68,7 @@ struct SessionManagerTests {
     }
 
     @Test func cannotBoard_secondTicket_whileRunning() throws {
-        let (manager, context, _) = try makeHarness()
+        let (manager, context, _, _) = try makeHarness()
         try manager.startService()
         let a = try makeTicket(context, title: "A")
         let b = try makeTicket(context, title: "B")
@@ -74,7 +81,7 @@ struct SessionManagerTests {
     }
 
     @Test func pause_accumulatesElapsed_andStopsGrowth() throws {
-        let (manager, context, clock) = try makeHarness()
+        let (manager, context, clock, _) = try makeHarness()
         try manager.startService()
         let ticket = try makeTicket(context, seconds: 600)
 
@@ -93,7 +100,7 @@ struct SessionManagerTests {
     }
 
     @Test func resume_continuesFromPaused() throws {
-        let (manager, context, clock) = try makeHarness()
+        let (manager, context, clock, _) = try makeHarness()
         try manager.startService()
         let ticket = try makeTicket(context, seconds: 600)
 
@@ -110,7 +117,7 @@ struct SessionManagerTests {
     }
 
     @Test func pause_blocked_whenTwoPaused() throws {
-        let (manager, context, _) = try makeHarness()
+        let (manager, context, _, _) = try makeHarness()
         try manager.startService()
         let a = try makeTicket(context, title: "A")
         let b = try makeTicket(context, title: "B")
@@ -131,7 +138,7 @@ struct SessionManagerTests {
     }
 
     @Test func pause_allowed_whenLimitIsThree() throws {
-        let (manager, context, _) = try makeHarness(pauseLimit: 3)
+        let (manager, context, _, _) = try makeHarness(pauseLimit: 3)
         try manager.startService()
         let a = try makeTicket(context, title: "A")
         let b = try makeTicket(context, title: "B")
@@ -153,7 +160,7 @@ struct SessionManagerTests {
     }
 
     @Test func arrive_closesSessionAndTicket() throws {
-        let (manager, context, clock) = try makeHarness()
+        let (manager, context, clock, _) = try makeHarness()
         try manager.startService()
         let ticket = try makeTicket(context)
 
@@ -170,7 +177,7 @@ struct SessionManagerTests {
     }
 
     @Test func overtime_whenPastBudget() throws {
-        let (manager, context, clock) = try makeHarness()
+        let (manager, context, clock, _) = try makeHarness()
         try manager.startService()
         let ticket = try makeTicket(context, seconds: 60)
 
@@ -203,7 +210,7 @@ struct SessionManagerTests {
     }
 
     @Test func endService_throwsWhileRunning() throws {
-        let (manager, context, _) = try makeHarness()
+        let (manager, context, _, _) = try makeHarness()
         try manager.startService()
         let ticket = try makeTicket(context)
         try manager.board(ticket: ticket)
@@ -214,7 +221,7 @@ struct SessionManagerTests {
     }
 
     @Test func endService_succeeds_withPausedSessionsCarriedOver() throws {
-        let (manager, context, _) = try makeHarness()
+        let (manager, context, _, _) = try makeHarness()
         try manager.startService()
         let a = try makeTicket(context, title: "A")
         try manager.board(ticket: a)
@@ -229,7 +236,7 @@ struct SessionManagerTests {
     }
 
     @Test func endService_succeeds_afterResolvingPaused() throws {
-        let (manager, context, _) = try makeHarness()
+        let (manager, context, _, _) = try makeHarness()
         try manager.startService()
         let a = try makeTicket(context, title: "A")
         try manager.board(ticket: a)
@@ -245,7 +252,7 @@ struct SessionManagerTests {
     }
 
     @Test func extend_increasesBudget_andLeavesOvertime() throws {
-        let (manager, context, clock) = try makeHarness()
+        let (manager, context, clock, _) = try makeHarness()
         try manager.startService()
         let ticket = try makeTicket(context, seconds: 60)
 
@@ -263,7 +270,7 @@ struct SessionManagerTests {
     }
 
     @Test func partialDisembark_closesTicketWithPartialKind() throws {
-        let (manager, context, _) = try makeHarness()
+        let (manager, context, _, _) = try makeHarness()
         try manager.startService()
         let ticket = try makeTicket(context)
 
@@ -277,7 +284,7 @@ struct SessionManagerTests {
     }
 
     @Test func abandon_closesTicket() throws {
-        let (manager, context, _) = try makeHarness()
+        let (manager, context, _, _) = try makeHarness()
         try manager.startService()
         let ticket = try makeTicket(context)
 
@@ -290,7 +297,7 @@ struct SessionManagerTests {
     }
 
     @Test func pause_succeeds_afterAbandoningPaused() throws {
-        let (manager, context, _) = try makeHarness()
+        let (manager, context, _, _) = try makeHarness()
         try manager.startService()
         let a = try makeTicket(context, title: "A")
         let b = try makeTicket(context, title: "B")
@@ -315,7 +322,7 @@ struct SessionManagerTests {
 
     @Test func forcePause_bypassesLimit_andIncrementsCount() throws {
         let counter = InMemoryOverrideCounter()
-        let (manager, context, _) = try makeHarness(overrideCounter: counter)
+        let (manager, context, _, _) = try makeHarness(overrideCounter: counter)
         try manager.startService()
         let a = try makeTicket(context, title: "A")
         let b = try makeTicket(context, title: "B")
@@ -378,5 +385,62 @@ struct SessionManagerTests {
         #expect(manager2.todayOverrideCount == 0)
         #expect(counter.count(forDayKey: ServiceDay.dayKey(for: day1, calendar: calendar)) == 1)
         #expect(counter.count(forDayKey: ServiceDay.dayKey(for: day2, calendar: calendar)) == 0)
+    }
+
+    @Test func endBell_scheduledWhenEnabledOnBoard() throws {
+        let scheduler = InMemoryAlarmScheduler()
+        let (manager, context, clock, _) = try makeHarness(
+            endBellEnabled: true,
+            alarmScheduler: scheduler
+        )
+        try manager.startService()
+        let ticket = try makeTicket(context, seconds: 600)
+        try manager.board(ticket: ticket)
+
+        #expect(scheduler.requests.count == 1)
+        #expect(scheduler.requests.first?.ticketTitle == ticket.title)
+        #expect(scheduler.requests.first?.sessionID == manager.activeSession?.id)
+    }
+
+    @Test func endBell_notScheduledWhenDisabled() throws {
+        let scheduler = InMemoryAlarmScheduler()
+        let (manager, context, _, _) = try makeHarness(
+            endBellEnabled: false,
+            alarmScheduler: scheduler
+        )
+        try manager.startService()
+        let ticket = try makeTicket(context)
+        try manager.board(ticket: ticket)
+
+        #expect(scheduler.requests.isEmpty)
+    }
+
+    @Test func endBell_cancelledOnPause() throws {
+        let scheduler = InMemoryAlarmScheduler()
+        let (manager, context, _, _) = try makeHarness(
+            endBellEnabled: true,
+            alarmScheduler: scheduler
+        )
+        try manager.startService()
+        let ticket = try makeTicket(context)
+        try manager.board(ticket: ticket)
+        try manager.pause()
+
+        #expect(scheduler.cancelledSessionIDs.contains(manager.activeSession?.id ?? UUID()))
+    }
+
+    @Test func endBell_rescheduledOnExtend() throws {
+        let scheduler = InMemoryAlarmScheduler()
+        let (manager, context, clock, _) = try makeHarness(
+            endBellEnabled: true,
+            alarmScheduler: scheduler
+        )
+        try manager.startService()
+        let ticket = try makeTicket(context, seconds: 600)
+        try manager.board(ticket: ticket)
+        clock.advance(by: 60)
+        try manager.extend(by: 300)
+
+        #expect(scheduler.requests.count >= 2)
     }
 }

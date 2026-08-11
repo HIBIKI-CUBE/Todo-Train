@@ -15,6 +15,7 @@
 | [08-current-status.md](08-current-status.md) | **MVP 完了時点の実装マップ** |
 | [09-v1-implementation.md](09-v1-implementation.md) | **v1 一括実装ハンドオフ（Cloud Agent 向け）** |
 | [10-live-activity-setup.md](10-live-activity-setup.md) | Live Activity Xcode セットアップ |
+| [11-v2-alarmkit-setup.md](11-v2-alarmkit-setup.md) | AlarmKit / StandBy セットアップ（v2） |
 
 ルートの [AGENTS.md](../AGENTS.md) が作業開始時の短い入口です。
 
