@@ -43,7 +43,12 @@ final class SessionManager {
     }
 
     var pausedTicketCount: Int {
-        openPausedSessions().count
+        pausedSessions.count
+    }
+
+    /// Open sessions that are currently paused (for Hub resume UI).
+    var pausedSessions: [WorkSession] {
+        openPausedSessions()
     }
 
     var isInService: Bool {
@@ -265,11 +270,12 @@ final class SessionManager {
             needsServiceDayEndPrompt = false
         }
 
-        let openSessions = fetchOpenSessions()
-        if openSessions.count > 1 {
-            let sorted = openSessions.sorted { $0.startedAt > $1.startedAt }
+        // Only collapse duplicate *running* sessions. Multiple paused sessions are allowed.
+        let runningSessions = fetchOpenSessions().filter { !$0.isPaused }
+        if runningSessions.count > 1 {
+            let sorted = runningSessions.sorted { $0.startedAt > $1.startedAt }
             for stale in sorted.dropFirst() {
-                if !stale.isPaused, let segmentStartedAt = stale.segmentStartedAt {
+                if let segmentStartedAt = stale.segmentStartedAt {
                     stale.accumulatedActiveSeconds += now.timeIntervalSince(segmentStartedAt)
                     stale.segmentStartedAt = nil
                 }
