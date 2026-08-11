@@ -9,6 +9,7 @@ import SwiftData
 struct QuickAddBar: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Tag.sortOrder) private var allTags: [Tag]
+    @Query private var allSessions: [WorkSession]
     @Binding var isPresented: Bool
 
     @State private var title = ""
@@ -20,6 +21,19 @@ struct QuickAddBar: View {
 
     private var defaultTag: Tag? {
         allTags.first
+    }
+
+    private var estimateSuggestion: (minutes: Int, sampleCount: Int)? {
+        let tagIDs: Set<UUID>? = defaultTag.map { [$0.id] }
+        let samples = EstimateHeuristic.arrivedSamples(
+            from: Array(allSessions),
+            matchingAnyTagIDs: tagIDs
+        )
+        return EstimateHeuristic.suggestion(from: samples)
+    }
+
+    private var highlightedEstimateMinutes: Int {
+        estimateSuggestion?.minutes ?? EstimateHeuristic.defaultHighlightMinutes
     }
 
     var body: some View {
@@ -75,10 +89,18 @@ struct QuickAddBar: View {
                 } else if awaitingEstimate {
                     Text(title)
                         .font(.body)
+                    if let suggestion = estimateSuggestion {
+                        Text(EstimateHeuristic.caption(
+                            minutes: suggestion.minutes,
+                            sampleCount: suggestion.sampleCount
+                        ))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    }
                     EstimateChips(
                         minutesOptions: EstimateChips.ticketPresets,
                         style: .plainMinutes,
-                        highlightedMinutes: 30
+                        highlightedMinutes: highlightedEstimateMinutes
                     ) { minutes in
                         pendingMinutes = minutes
                         awaitingEstimate = false

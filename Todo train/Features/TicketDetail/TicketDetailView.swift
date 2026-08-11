@@ -12,6 +12,7 @@ struct TicketDetailView: View {
     @Bindable var ticket: Ticket
 
     @Query(sort: \Tag.sortOrder) private var allTags: [Tag]
+    @Query private var allSessions: [WorkSession]
 
     @State private var errorMessage = ""
     @State private var showError = false
@@ -39,6 +40,15 @@ struct TicketDetailView: View {
         ticket.sessions.sorted { ($0.endedAt ?? $0.startedAt) > ($1.endedAt ?? $1.startedAt) }
     }
 
+    private var estimateSuggestion: (minutes: Int, sampleCount: Int)? {
+        let tagIDs = Set(ticket.tags.map(\.id))
+        let samples = EstimateHeuristic.arrivedSamples(
+            from: Array(allSessions),
+            matchingAnyTagIDs: tagIDs.isEmpty ? nil : tagIDs
+        )
+        return EstimateHeuristic.suggestion(from: samples)
+    }
+
     var body: some View {
         Form {
             Section("切符") {
@@ -52,6 +62,14 @@ struct TicketDetailView: View {
                         ),
                         in: 1...60
                     )
+                    if let suggestion = estimateSuggestion {
+                        Text(EstimateHeuristic.caption(
+                            minutes: suggestion.minutes,
+                            sampleCount: suggestion.sampleCount
+                        ))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    }
                 } else {
                     Text(ticket.title)
                         .font(.body.weight(.medium))
