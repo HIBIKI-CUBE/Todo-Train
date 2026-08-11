@@ -4,9 +4,11 @@
 //
 
 import SwiftUI
+import SwiftData
 
 struct SettingsView: View {
     @Environment(AppSettings.self) private var settings
+    @Environment(SessionManager.self) private var sessionManager
 
     var body: some View {
         Form {
@@ -46,6 +48,9 @@ struct SettingsView: View {
             } footer: {
                 Text("見積もり到達時に AlarmKit で強制通知します（Silent / Focus を突破）。StandBy のカウントダウン表示にも使われます。拒否された場合はローカル通知のみです。")
             }
+            .onChange(of: settings.endBellEnabled) { _, _ in
+                sessionManager.syncEndBellWithSettings()
+            }
 
             Section {
                 NavigationLink {
@@ -62,8 +67,12 @@ struct SettingsView: View {
 }
 
 #Preview {
-    NavigationStack {
+    let container = try! AppModelContainer.make(inMemory: true)
+    let manager = SessionManager(modelContext: container.mainContext)
+    return NavigationStack {
         SettingsView()
             .environment(AppSettings.shared)
+            .environment(manager)
+            .modelContainer(container)
     }
 }

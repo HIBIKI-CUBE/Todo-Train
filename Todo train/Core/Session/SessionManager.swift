@@ -120,11 +120,14 @@ final class SessionManager {
             activeSession = running
             throw SessionError.cannotEndServiceWhileRunning
         }
+        // Spec S-04: paused tickets must be resolved (途中下車→乗り継ぎ or 放棄). No silent carry-over.
+        if !openPausedSessions().isEmpty {
+            throw SessionError.unresolvedPausedTickets
+        }
 
         day.endedAt = now
         activeServiceDay = nil
         needsServiceDayEndPrompt = false
-        // Paused open sessions remain for transfer UI in a later sprint.
         if activeSession?.isPaused == true {
             activeSession = nil
             phase = .idle
@@ -420,6 +423,15 @@ final class SessionManager {
         let now = clock.now
         let todayKey = ServiceDay.dayKey(for: now, calendar: calendar)
 
+        let openDays = fetchOpenServiceDays()
+        if openDays.count > 1 {
+            // Keep the newest open day; close stale duplicates.
+            let sorted = openDays.sorted { $0.startedAt > $1.startedAt }
+            for stale in sorted.dropFirst() {
+                stale.endedAt = now
+            }
+        }
+
         if let openDay = fetchOpenServiceDay() {
             activeServiceDay = openDay
             needsServiceDayEndPrompt = openDay.calendarDayKey != todayKey
@@ -467,6 +479,21 @@ final class SessionManager {
             alarmScheduler.cancelAll()
         }
         refreshTodayOverrideCount(at: now)
+    }
+
+    /// Settings toggle for end bell — apply immediately to the active ride.
+    func syncEndBellWithSettings(now: Date? = nil) {
+        let now = now ?? clock.now
+        guard let session = activeSession, session.isOpen else {
+            alarmScheduler.cancelAll()
+            return
+        }
+        if settings.endBellEnabled {
+            refreshEndBell(for: session, now: now)
+        } else {
+            alarmScheduler.cancel(sessionID: session.id)
+            suppressedEndBellSessionIDs.remove(session.id)
+        }
     }
 
     // MARK: - Queries
@@ -550,11 +577,15 @@ final class SessionManager {
     }
 
     private func fetchOpenServiceDay() -> ServiceDay? {
+        fetchOpenServiceDays().first
+    }
+
+    private func fetchOpenServiceDays() -> [ServiceDay] {
         let descriptor = FetchDescriptor<ServiceDay>(
             predicate: #Predicate { $0.endedAt == nil },
             sortBy: [SortDescriptor(\.startedAt, order: .reverse)]
         )
-        return try? modelContext.fetch(descriptor).first
+        return (try? modelContext.fetch(descriptor)) ?? []
     }
 
     private func fetchOpenSessions() -> [WorkSession] {
