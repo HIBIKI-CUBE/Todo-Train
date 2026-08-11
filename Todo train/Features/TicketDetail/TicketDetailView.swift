@@ -25,21 +25,80 @@ struct TicketDetailView: View {
         sessionManager.pausedSessions.contains { $0.ticket?.id == ticket.id }
     }
 
+    private var parentTickets: [Ticket] {
+        ticket.parentLineages.compactMap(\.parent)
+    }
+
+    private var childTickets: [Ticket] {
+        ticket.childLineages.compactMap(\.child)
+    }
+
+    private var sortedSessions: [WorkSession] {
+        ticket.sessions.sorted { ($0.endedAt ?? $0.startedAt) > ($1.endedAt ?? $1.startedAt) }
+    }
+
     var body: some View {
         Form {
             Section("切符") {
-                TextField("タイトル", text: $ticket.title)
-                Stepper(
-                    "見積もり \(ticket.estimatedSeconds / 60) 分",
-                    value: Binding(
-                        get: { ticket.estimatedSeconds / 60 },
-                        set: { ticket.estimatedSeconds = min(max($0, 1), 60) * 60 }
-                    ),
-                    in: 1...60
-                )
+                if ticket.isOpen {
+                    TextField("タイトル", text: $ticket.title)
+                    Stepper(
+                        "見積もり \(ticket.estimatedSeconds / 60) 分",
+                        value: Binding(
+                            get: { ticket.estimatedSeconds / 60 },
+                            set: { ticket.estimatedSeconds = min(max($0, 1), 60) * 60 }
+                        ),
+                        in: 1...60
+                    )
+                } else {
+                    Text(ticket.title)
+                        .font(.body.weight(.medium))
+                    Text("見積もり \(ticket.estimatedSeconds / 60) 分")
+                        .foregroundStyle(.secondary)
+                    if let kind = ticket.closureKind {
+                        Text(closureLabel(kind))
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(closureColor(kind))
+                    }
+                }
                 if isPaused {
                     Text("停車中")
                         .foregroundStyle(.orange)
+                }
+            }
+
+            if !parentTickets.isEmpty || !childTickets.isEmpty {
+                Section("乗り継ぎ") {
+                    ForEach(parentTickets, id: \.id) { parent in
+                        NavigationLink {
+                            TicketDetailView(ticket: parent)
+                        } label: {
+                            Label {
+                                Text(parent.title)
+                            } icon: {
+                                Image(systemName: "arrow.uturn.backward")
+                            }
+                        }
+                    }
+                    ForEach(childTickets, id: \.id) { child in
+                        NavigationLink {
+                            TicketDetailView(ticket: child)
+                        } label: {
+                            HStack {
+                                Label {
+                                    Text(child.title)
+                                } icon: {
+                                    Image(systemName: "arrow.right")
+                                }
+                                if child.isOpen {
+                                    Spacer()
+                                    Text("開")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
@@ -50,13 +109,30 @@ struct TicketDetailView: View {
                 }
                 Text("累計アクティブ \(Int(total / 60)) 分")
                     .foregroundStyle(.secondary)
+
+                ForEach(sortedSessions, id: \.id) { session in
+                    HStack {
+                        Text(HistoryStats.outcomeLabel(session.outcome))
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 56, alignment: .leading)
+                        Text(sessionTimeLabel(session))
+                            .font(.caption.monospacedDigit())
+                        Spacer()
+                        Text("\(Int(session.accumulatedActiveSeconds / 60))分")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
 
-            Section {
-                Button(isPaused ? "再開" : "発車") {
-                    board()
+            if ticket.isOpen {
+                Section {
+                    Button(isPaused ? "再開" : "発車") {
+                        board()
+                    }
+                    .disabled(!canBoard && !isPaused)
                 }
-                .disabled(!canBoard && !isPaused)
             }
         }
         .navigationTitle("切符の詳細")
@@ -78,5 +154,28 @@ struct TicketDetailView: View {
             errorMessage = error.localizedDescription
             showError = true
         }
+    }
+
+    private func closureLabel(_ kind: ClosureKind) -> String {
+        switch kind {
+        case .arrived: "到着"
+        case .partialDisembark: "途中下車"
+        case .abandoned: "放棄"
+        }
+    }
+
+    private func closureColor(_ kind: ClosureKind) -> Color {
+        switch kind {
+        case .arrived: .green
+        case .partialDisembark: .orange
+        case .abandoned: .red
+        }
+    }
+
+    private func sessionTimeLabel(_ session: WorkSession) -> String {
+        let date = session.endedAt ?? session.startedAt
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MM/dd HH:mm"
+        return formatter.string(from: date)
     }
 }

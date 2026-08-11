@@ -135,7 +135,14 @@ struct HubView: View {
         }
         .navigationTitle("Todo train")
         .toolbar {
-            EditButton()
+            ToolbarItem(placement: .topBarTrailing) {
+                NavigationLink("履歴") {
+                    HistoryView()
+                }
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                EditButton()
+            }
         }
         .alert("エラー", isPresented: $showError) {
             Button("OK", role: .cancel) {}
