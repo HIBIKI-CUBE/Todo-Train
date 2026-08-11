@@ -17,49 +17,41 @@ struct TicketCardView: View {
             NavigationLink {
                 TicketDetailView(ticket: ticket)
             } label: {
-                HStack(alignment: .center, spacing: TrainTheme.Space.md) {
-                    Capsule()
-                        .fill(isPaused ? TrainTheme.signalAmber : TrainTheme.rail.opacity(0.35))
-                        .frame(width: 4, height: 36)
+                VStack(alignment: .leading, spacing: TrainTheme.Space.xs) {
+                    Text(ticket.title)
+                        .font(TrainTheme.TypeScale.ticketTitle())
+                        .foregroundStyle(.primary)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
 
-                    VStack(alignment: .leading, spacing: TrainTheme.Space.xs) {
-                        Text(ticket.title)
-                            .font(TrainTheme.TypeScale.ticketTitle())
-                            .foregroundStyle(TrainTheme.ink)
-                            .lineLimit(2)
-                            .multilineTextAlignment(.leading)
+                    HStack(spacing: TrainTheme.Space.sm) {
+                        Text("\(ticket.estimatedSeconds / 60)分")
+                            .font(TrainTheme.TypeScale.meta())
+                            .foregroundStyle(.secondary)
 
-                        HStack(spacing: TrainTheme.Space.sm) {
-                            Text("\(ticket.estimatedSeconds / 60)分")
-                                .font(TrainTheme.TypeScale.meta())
-                                .foregroundStyle(TrainTheme.muted)
-
-                            if let dueDate = ticket.dueDate {
-                                SignalBadge(kind: .due, customLabel: dueDateLabel(dueDate))
-                            }
-
-                            if isPaused {
-                                SignalBadge(kind: .paused)
-                            }
+                        if let dueDate = ticket.dueDate {
+                            SignalBadge(kind: .due, customLabel: dueDateLabel(dueDate))
                         }
 
-                        if showsTags, !ticket.tags.isEmpty {
-                            TagChipRow(tags: ticket.tags)
+                        if isPaused {
+                            SignalBadge(kind: .paused)
                         }
                     }
 
-                    Spacer(minLength: 0)
+                    if showsTags, !ticket.tags.isEmpty {
+                        TagChipRow(tags: ticket.tags)
+                    }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .buttonStyle(.plain)
 
             Button("発車") {
                 onBoard()
             }
-            .buttonStyle(DepartButtonStyle(enabled: canBoard))
+            .buttonStyle(.borderedProminent)
+            .tint(TrainTheme.rail)
             .disabled(!canBoard)
         }
-        .ticketSurface(emphasized: isPaused)
     }
 
     private func dueDateLabel(_ date: Date) -> String {

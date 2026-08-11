@@ -34,8 +34,10 @@
 
 | 項目 | 状態 |
 |------|------|
-| Design tokens | `TrainTheme` / `TrainChrome` |
-| Hub / Focus / History / Settings / Reorder | テーマ適用済 |
+| Design tokens | adaptive `TrainTheme` / Focus 用 `TrainChrome` |
+| Tab ナビ | 切符 / 履歴 / 設定 |
+| Quick Add | シート + Form（`QuickAddSheet`） |
+| Hub / History / Settings / Reorder | 標準 List/Form、ダーク対応 |
 | 方針ドキュメント | [12-ui-design.md](12-ui-design.md) |
 
 ## MVP 完了マップ（Sprint 1–10）
@@ -58,20 +60,22 @@
 ```
 Todo train/
   App/AppModelContainer.swift
+  ContentView.swift   TabView（切符 / 履歴 / 設定）+ Focus cover
   Core/
     Session/     SessionManager, Clock, PauseLimitGuard, OverrideCounter
     Notifications/ OvertimeNotifier, OvertimeSchedule
     Estimate/    EstimateHeuristic
   Models/        Ticket, WorkSession, ServiceDay, Tag, TaskLineage, Enums
   Features/
-    Hub/         HubView, QuickAddBar, ServiceSummaryBar, TicketCardView(未接続)
+    Hub/         HubView, QuickAddSheet, ServiceSummaryBar, TicketCardView
     Focus/       FocusView, FocusControls, OvertimeOverlay
     Arrival/     PauseLimitSheet, RemainingTicketsCanvas, TicketLineageService, SafetyLock*
     History/     HistoryView, HistorySessionRow, DailyStatsHeader, HistoryStats
     Tags/        TagManager, TagEditor, TagChip, TagPalette
     TicketDetail/
     Service/     ServiceEndSheet
-  DesignSystem/  EstimateChips
+    Settings/    SettingsView
+  DesignSystem/  EstimateChips, TrainTheme, TrainChrome
 Todo trainTests/  SessionManager, HistoryStats, Tag, Overtime, Override, EstimateHeuristic, Lineage
 ```
 

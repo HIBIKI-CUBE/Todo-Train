@@ -1,72 +1,84 @@
-# 12 — UI / ビジュアル方針（列車テーマ）
+# 12 — UI / ビジュアル方針
 
-機能優先で育った UI を、**道具としての美しさ**に揃えるための方針。  
+機能優先で育った UI を、**Apple プラットフォームの道具**として整える。  
 スコープ: 色・タイポ・レイアウト・インタラクション。コーチング UI やウィザードは増やさない。
 
 ## コンセプト
 
-**「駅の案内板 × 車内乗務」**
+**HIG を骨格に、列車メタファはアクセント**
 
-| 面 | 気分 |
+| 面 | 方針 |
 |----|------|
-| Hub / 履歴 / 設定 | ホームの案内板。明るく、情報密度は時間割風に整理 |
-| Focus | 車内乗務。インク深い没入。タイマーが主役 |
-| 超過 / 臨時停車 | 信号機。注意色は意味を持たせる |
+| Hub / 履歴 / 設定 | 標準の `List` / `Form`（`.insetGrouped`）。システム背景・セマンティック色 |
+| Focus | 車内乗務の没入。システム外観に依存しない cabin。タイマーが主役 |
+| 超過 / 臨時停車 | 信号色は意味を持たせる（緑・琥珀・赤） |
 
-道具であること（`01-vision.md`）を崩さない。装飾のためのカード乱立・バッジ祭りはしない。
+道具であること（`01-vision.md`）を崩さない。カスタムカード乱立・グラデ背景・FAB 祭りはしない。
 
-## カラー（シグナル）
+## ナビゲーション
 
-| 役割 | 意味 | 使い方 |
+| 要素 | 置き場所 |
+|------|----------|
+| 切符（Hub） / 履歴 / 設定 | **TabView**（下部タブ） |
+| 切符追加 | Hub ツールバー `＋` → **シート**（`QuickAddSheet`） |
+| タグ / 並べ替え | Hub の `…` メニュー、または設定内リンク |
+| Focus | 発車時のフルスクリーンカバー（既存） |
+
+上部ツールバーに主要導線を詰めない。
+
+## カラー
+
+| 役割 | 実装 | 使い方 |
 |------|------|--------|
-| **Ink** | 本文・見出し | ほぼすべて |
-| **Rail** | ブランドアクセント（紺） | 発車 CTA、運行中、ナビ強調 |
-| **Signal Green** | 到着・発車可 | 到着ボタン、運行中ドット |
-| **Signal Amber** | 停車・注意 | 停車中、前日未終了 |
-| **Signal Red** | 超過・放棄・危険 | 超過タイマー、放棄 |
-| **Platform** | Hub 背景 | 暖色寄りの薄い石色（クリーム系の定番パレットは避ける） |
-| **Cabin** | Focus 背景 | 深いインク紺〜スレート |
+| **Ink / Muted** | `Color.primary` / `.secondary` | 本文・メタ（ダーク自動対応） |
+| **Platform / Surface** | `systemGroupedBackground` 系 | List / Form のキャンバス |
+| **Rail** | `AccentColor`（ライト紺 / ダークは明るめ） | CTA・タブ強調 |
+| **Signal Green / Amber / Red** | adaptive UIColor | 到着・停車・超過 |
+| **Cabin** | 固定ダーク | Focus のみ |
 
-システム `Color.accentColor` は **Rail** に合わせる。
+ハードコードした白カード・クリームグラデは使わない。
 
 ## タイポグラフィ
 
 | 用途 | 指定 |
 |------|------|
-| 画面タイトル | `.title2` / `.title3` + medium（日本語可読優先） |
+| 画面タイトル | システム `navigationTitle`（large / inline） |
 | 切符タイトル | `.body` + semibold |
 | タイマー | **超大・rounded + monospacedDigit**（Focus の主役） |
-| メタ（分・タグ・日付） | `.caption` / `.caption2`、secondary |
-| 運行ステータス | `.subheadline` + semibold、シグナル色 |
+| メタ | `.caption`、`.secondary` |
+| 運行ステータス | `.subheadline` + semibold |
 
-装飾用セリフや新聞調カラムは使わない。
+装飾用セリフや新聞調は使わない。
 
-## レイアウト
+## レイアウトとコントロール
 
-- Hub: List を「案内板セクション」として余白を揃える。切符行は **TicketCardView** に統一。
-- Focus: 縦一列。タイトル → タイマー → メタ → 操作。操作は下部固定感。
-- 履歴: 日ヘッダを小さく強く。検索中は sticky 簡略（既存方針）。
-- カード: **操作単位でのみ**。Hub 行全体をカード化しすぎない（枠線・薄い面で区別）。
+- Hub: `List` + 標準行。`TicketCardView` はリスト行（枠カードにしない）。
+- 追加 UI: **シート + Form**。タイトル即フォーカス、見積もり・タグを同面、連続追加後もキーボード維持。
+- ボタン: 可能な限り `.bordered` / `.borderedProminent` / `role: .destructive`。
+- Focus: 縦一列。操作は下部。cabin 専用スタイルのみ例外。
 
 ## モーション（意図的に 2–3）
 
 1. **発車**: Focus 出現はシステムフルスクリーン。内部タイマーは 1 秒 tick のみ。
 2. **超過突入**: タイマー色を amber→red へ、軽いスケールパルス 1 回。
-3. **FAB / 発車ボタン**: 短い spring（overshoot 控えめ）。
+3. **シート**: システム presentation（detents medium/large）。過剰な spring は避ける。
 
 ノイズになるパララックス・常時グローは禁止。
 
 ## やらないこと
 
 - 紫グラデ / 汎用 SaaS ダーク / クリーム×テラコッタ×セリフ
+- カスタム FAB・半透明オーバーレイのボトムバー追加 UI
 - 絵文字アイコンの多用
 - コーチング吹き出し
-- 自動ソートを暗示する「おすすめ並び」UI
+- Web / Flutter 風の独自カードグリッドを「ブランド」にする行為
 
 ## 実装マップ
 
 | ファイル | 役割 |
 |----------|------|
-| `DesignSystem/TrainTheme.swift` | 色・型・余白・アニメ定数 |
-| `DesignSystem/TrainChrome.swift` | 背景・バッジ・主ボタン |
-| 各 Feature | テーマ適用 |
+| `DesignSystem/TrainTheme.swift` | adaptive 色・余白・型 |
+| `DesignSystem/TrainChrome.swift` | Focus cabin・SignalBadge・Focus ボタン |
+| `ContentView.swift` | TabView + Focus cover |
+| `Features/Hub/QuickAddBar.swift` | `QuickAddSheet` |
+| 各 Feature | 標準 List / Form |

@@ -15,21 +15,16 @@ struct ServiceSummaryBar: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: TrainTheme.Space.sm) {
+        VStack(alignment: .leading, spacing: TrainTheme.Space.md) {
             if sessionManager.needsServiceDayEndPrompt {
-                HStack(alignment: .top, spacing: TrainTheme.Space.sm) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(TrainTheme.signalAmber)
+                Label {
                     Text("昨日の運行が未終了です。終了してから今日の運行を開始してください。")
                         .font(.footnote)
-                        .foregroundStyle(TrainTheme.ink)
+                } icon: {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(TrainTheme.signalAmber)
                 }
-                .padding(TrainTheme.Space.md)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
-                    RoundedRectangle(cornerRadius: TrainTheme.Radius.control)
-                        .fill(TrainTheme.signalAmber.opacity(0.12))
-                )
+                .foregroundStyle(.primary)
             }
 
             HStack(alignment: .center, spacing: TrainTheme.Space.md) {
@@ -40,69 +35,53 @@ struct ServiceSummaryBar: View {
                             .frame(width: 8, height: 8)
                         Text(statusTitle)
                             .font(TrainTheme.TypeScale.status())
-                            .foregroundStyle(TrainTheme.ink)
                     }
 
                     if let key = sessionManager.activeServiceDay?.calendarDayKey,
                        sessionManager.activeServiceDay?.isOpen == true {
                         Text(key)
                             .font(TrainTheme.TypeScale.meta())
-                            .foregroundStyle(TrainTheme.muted)
+                            .foregroundStyle(.secondary)
                     }
                 }
 
-                Spacer()
+                Spacer(minLength: 8)
 
                 VStack(alignment: .trailing, spacing: 2) {
                     Text("停車")
                         .font(.caption2)
-                        .foregroundStyle(TrainTheme.muted)
+                        .foregroundStyle(.secondary)
                     Text("\(sessionManager.pausedTicketCount)/\(sessionManager.pauseLimit)")
                         .font(.title3.weight(.semibold).monospacedDigit())
                         .foregroundStyle(
                             sessionManager.pausedTicketCount >= sessionManager.pauseLimit
                                 ? TrainTheme.signalAmber
-                                : TrainTheme.ink
+                                : .primary
                         )
                 }
-
-                if canEndOpenService {
-                    Button(
-                        sessionManager.needsServiceDayEndPrompt ? "昨日を終了" : "運行終了"
-                    ) {
-                        onRequestEndService()
-                    }
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(TrainTheme.signalRed)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(
-                        RoundedRectangle(cornerRadius: TrainTheme.Radius.control)
-                            .strokeBorder(TrainTheme.signalRed.opacity(0.4), lineWidth: 1)
-                    )
-                } else {
-                    Button("運行開始") {
-                        do {
-                            try sessionManager.startService()
-                        } catch {
-                            onError(error.localizedDescription)
-                        }
-                    }
-                    .buttonStyle(DepartButtonStyle(enabled: true))
-                }
             }
-            .padding(TrainTheme.Space.md)
-            .background(
-                RoundedRectangle(cornerRadius: TrainTheme.Radius.ticket)
-                    .fill(Color.white.opacity(0.92))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: TrainTheme.Radius.ticket)
-                            .strokeBorder(TrainTheme.track.opacity(0.8), lineWidth: 1)
+
+            if canEndOpenService {
+                Button(
+                    sessionManager.needsServiceDayEndPrompt ? "昨日を終了" : "運行終了",
+                    role: .destructive,
+                    action: onRequestEndService
+                )
+                .frame(maxWidth: .infinity)
+            } else {
+                Button("運行開始") {
+                    do {
+                        try sessionManager.startService()
+                    } catch {
+                        onError(error.localizedDescription)
                     }
-            )
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(TrainTheme.rail)
+                .frame(maxWidth: .infinity)
+            }
         }
-        .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
-        .listRowBackground(Color.clear)
+        .padding(.vertical, 4)
     }
 
     private var statusTitle: String {

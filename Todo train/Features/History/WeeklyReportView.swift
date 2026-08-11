@@ -15,46 +15,43 @@ struct WeeklyReportView: View {
     }
 
     var body: some View {
-        ZStack {
-            PlatformBackground()
-            List {
-                if groups.isEmpty {
-                    Text("週次データはまだありません。")
-                        .foregroundStyle(TrainTheme.muted)
-                        .listRowBackground(Color.clear)
-                } else {
-                    ForEach(groups, id: \.weekStart) { group in
-                        Section {
-                            let aggregate = WeeklyReport.aggregate(
-                                sessions: group.sessions,
-                                weekContaining: group.weekStart
-                            )
-                            LabeledContent("集中") {
-                                Text("\(aggregate.focusMinutes) 分")
-                                    .font(.body.monospacedDigit())
-                            }
-                            LabeledContent("到着") {
-                                Text("\(aggregate.arrived) 件")
-                            }
-                            LabeledContent("途中下車") {
-                                Text("\(aggregate.partialDisembark) 件")
-                            }
-                            LabeledContent("放棄") {
-                                Text("\(aggregate.abandoned) 件")
-                                    .foregroundStyle(aggregate.abandoned > 0 ? TrainTheme.signalRed : TrainTheme.ink)
-                            }
-                        } header: {
-                            Text(WeeklyReport.weekTitle(for: group.weekStart))
+        List {
+            if groups.isEmpty {
+                ContentUnavailableView {
+                    Label("週次データはまだありません", systemImage: "chart.bar")
+                } description: {
+                    Text("到着や途中下車が溜まると週ごとに集計されます。")
+                }
+            } else {
+                ForEach(groups, id: \.weekStart) { group in
+                    Section {
+                        let aggregate = WeeklyReport.aggregate(
+                            sessions: group.sessions,
+                            weekContaining: group.weekStart
+                        )
+                        LabeledContent("集中") {
+                            Text("\(aggregate.focusMinutes) 分")
+                                .font(.body.monospacedDigit())
                         }
-                        .listRowBackground(Color.white.opacity(0.9))
+                        LabeledContent("到着") {
+                            Text("\(aggregate.arrived) 件")
+                        }
+                        LabeledContent("途中下車") {
+                            Text("\(aggregate.partialDisembark) 件")
+                        }
+                        LabeledContent("放棄") {
+                            Text("\(aggregate.abandoned) 件")
+                                .foregroundStyle(aggregate.abandoned > 0 ? TrainTheme.signalRed : .primary)
+                        }
+                    } header: {
+                        Text(WeeklyReport.weekTitle(for: group.weekStart))
                     }
                 }
             }
-            .scrollContentBackground(.hidden)
         }
+        .listStyle(.insetGrouped)
         .navigationTitle("週次レポート")
         .navigationBarTitleDisplayMode(.inline)
-        .tint(TrainTheme.rail)
     }
 }
 

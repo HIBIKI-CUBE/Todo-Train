@@ -13,7 +13,6 @@ struct DailyStatsHeader: View {
         VStack(alignment: .leading, spacing: TrainTheme.Space.xs) {
             Text(displayDay)
                 .font(.headline.weight(.semibold))
-                .foregroundStyle(TrainTheme.ink)
 
             HStack(spacing: TrainTheme.Space.md) {
                 meta("集中", "\(aggregate.focusMinutes)分")
@@ -25,14 +24,14 @@ struct DailyStatsHeader: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.vertical, 4)
+        .padding(.vertical, 2)
     }
 
-    private func meta(_ label: String, _ value: String, color: Color = TrainTheme.muted) -> some View {
+    private func meta(_ label: String, _ value: String, color: Color = .secondary) -> some View {
         VStack(alignment: .leading, spacing: 1) {
             Text(label)
                 .font(.caption2)
-                .foregroundStyle(TrainTheme.muted)
+                .foregroundStyle(.secondary)
             Text(value)
                 .font(.caption.weight(.semibold).monospacedDigit())
                 .foregroundStyle(color)

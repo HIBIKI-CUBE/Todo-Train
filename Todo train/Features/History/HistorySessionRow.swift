@@ -18,20 +18,19 @@ struct HistorySessionRow: View {
             HStack(alignment: .firstTextBaseline) {
                 Text(timeLabel)
                     .font(.caption.weight(.semibold).monospacedDigit())
-                    .foregroundStyle(TrainTheme.muted)
+                    .foregroundStyle(.secondary)
                     .frame(width: 44, alignment: .leading)
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(session.ticket?.title ?? "不明な切符")
                         .font(TrainTheme.TypeScale.ticketTitle())
-                        .foregroundStyle(TrainTheme.ink)
                         .lineLimit(1)
 
                     HStack(spacing: TrainTheme.Space.sm) {
                         outcomeBadge
                         Text(durationLabel)
                             .font(TrainTheme.TypeScale.meta())
-                            .foregroundStyle(TrainTheme.muted)
+                            .foregroundStyle(.secondary)
                     }
                 }
 
@@ -43,7 +42,7 @@ struct HistorySessionRow: View {
                     } label: {
                         Image(systemName: "chevron.right")
                             .font(.caption.weight(.semibold))
-                            .foregroundStyle(TrainTheme.track)
+                            .foregroundStyle(.tertiary)
                     }
                 }
             }
@@ -52,14 +51,9 @@ struct HistorySessionRow: View {
                 Button("今日に追加") {
                     onReissue(ticket)
                 }
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(TrainTheme.rail)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(
-                    RoundedRectangle(cornerRadius: TrainTheme.Radius.badge)
-                        .fill(TrainTheme.railSoft)
-                )
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .tint(TrainTheme.rail)
                 .padding(.leading, 44)
             }
 
@@ -72,13 +66,13 @@ struct HistorySessionRow: View {
                             HStack(spacing: 6) {
                                 Image(systemName: "arrow.turn.down.right")
                                     .font(.caption2)
-                                    .foregroundStyle(TrainTheme.muted)
+                                    .foregroundStyle(.secondary)
                                 Text("乗り継ぎ")
                                     .font(.caption2)
-                                    .foregroundStyle(TrainTheme.muted)
+                                    .foregroundStyle(.secondary)
                                 Text(child.title)
                                     .font(.caption.weight(.medium))
-                                    .foregroundStyle(TrainTheme.ink)
+                                    .foregroundStyle(.primary)
                                     .lineLimit(1)
                                 if child.isOpen {
                                     SignalBadge(kind: .inService, customLabel: "Hub")

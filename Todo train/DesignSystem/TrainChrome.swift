@@ -5,22 +5,7 @@
 
 import SwiftUI
 
-// MARK: - Backgrounds
-
-struct PlatformBackground: View {
-    var body: some View {
-        LinearGradient(
-            colors: [
-                TrainTheme.platform,
-                TrainTheme.platformDeep.opacity(0.85),
-                TrainTheme.platform
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-        .ignoresSafeArea()
-    }
-}
+// MARK: - Focus cabin (immersive; not used on Hub / History)
 
 struct CabinBackground: View {
     var overtime: Bool = false
@@ -30,22 +15,13 @@ struct CabinBackground: View {
             TrainTheme.cabin
             RadialGradient(
                 colors: [
-                    (overtime ? TrainTheme.signalRed : TrainTheme.rail).opacity(0.28),
+                    (overtime ? TrainTheme.signalRed : TrainTheme.rail).opacity(0.22),
                     .clear
                 ],
                 center: .top,
                 startRadius: 20,
                 endRadius: 420
             )
-            // Soft track lines — atmosphere, not chrome noise.
-            VStack(spacing: 28) {
-                ForEach(0..<8, id: \.self) { _ in
-                    Rectangle()
-                        .fill(TrainTheme.cabinInk.opacity(0.03))
-                        .frame(height: 1)
-                }
-            }
-            .offset(y: 40)
         }
         .ignoresSafeArea()
     }
@@ -90,35 +66,15 @@ struct SignalBadge: View {
 
     var body: some View {
         Text(customLabel ?? kind.label)
-            .font(.caption2.weight(.bold))
-            .tracking(0.4)
+            .font(.caption2.weight(.semibold))
             .foregroundStyle(kind.color)
-            .padding(.horizontal, 8)
+            .padding(.horizontal, 7)
             .padding(.vertical, 3)
-            .background(kind.color.opacity(0.14), in: RoundedRectangle(cornerRadius: TrainTheme.Radius.badge))
+            .background(kind.color.opacity(0.15), in: Capsule())
     }
 }
 
-// MARK: - Buttons
-
-struct DepartButtonStyle: ButtonStyle {
-    var enabled: Bool = true
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.subheadline.weight(.bold))
-            .foregroundStyle(.white.opacity(enabled ? 1 : 0.55))
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .background(
-                RoundedRectangle(cornerRadius: TrainTheme.Radius.control)
-                    .fill(enabled ? TrainTheme.rail : TrainTheme.muted.opacity(0.35))
-            )
-            .scaleEffect(configuration.isPressed && enabled ? 0.96 : 1)
-            .animation(TrainTheme.Motion.spring, value: configuration.isPressed)
-            .opacity(enabled ? 1 : 0.7)
-    }
-}
+// MARK: - Focus controls (cabin-only)
 
 struct FocusPrimaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
@@ -128,10 +84,10 @@ struct FocusPrimaryButtonStyle: ButtonStyle {
             .padding(.vertical, 14)
             .foregroundStyle(TrainTheme.cabin)
             .background(
-                RoundedRectangle(cornerRadius: TrainTheme.Radius.control)
+                RoundedRectangle(cornerRadius: TrainTheme.Radius.control, style: .continuous)
                     .fill(TrainTheme.signalGreen)
             )
-            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .opacity(configuration.isPressed ? 0.88 : 1)
             .animation(TrainTheme.Motion.spring, value: configuration.isPressed)
     }
 }
@@ -146,63 +102,14 @@ struct FocusSecondaryButtonStyle: ButtonStyle {
             .padding(.vertical, 14)
             .foregroundStyle(tint)
             .background(
-                RoundedRectangle(cornerRadius: TrainTheme.Radius.control)
-                    .strokeBorder(tint.opacity(0.45), lineWidth: 1.2)
-                    .background(
-                        RoundedRectangle(cornerRadius: TrainTheme.Radius.control)
-                            .fill(TrainTheme.cabinLift.opacity(0.65))
-                    )
+                RoundedRectangle(cornerRadius: TrainTheme.Radius.control, style: .continuous)
+                    .fill(TrainTheme.cabinLift.opacity(0.9))
             )
-            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .overlay {
+                RoundedRectangle(cornerRadius: TrainTheme.Radius.control, style: .continuous)
+                    .strokeBorder(tint.opacity(0.35), lineWidth: 1)
+            }
+            .opacity(configuration.isPressed ? 0.88 : 1)
             .animation(TrainTheme.Motion.spring, value: configuration.isPressed)
-    }
-}
-
-struct TrainFAB: View {
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: "plus")
-                .font(.title2.weight(.semibold))
-                .foregroundStyle(.white)
-                .frame(width: 58, height: 58)
-                .background(
-                    Circle()
-                        .fill(TrainTheme.rail)
-                        .shadow(color: TrainTheme.rail.opacity(0.35), radius: 10, y: 4)
-                )
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("切符を追加")
-    }
-}
-
-// MARK: - Ticket surface
-
-struct TicketSurface: ViewModifier {
-    var emphasized: Bool = false
-
-    func body(content: Content) -> some View {
-        content
-            .padding(.horizontal, TrainTheme.Space.md)
-            .padding(.vertical, TrainTheme.Space.md)
-            .background(
-                RoundedRectangle(cornerRadius: TrainTheme.Radius.ticket)
-                    .fill(Color.white.opacity(0.92))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: TrainTheme.Radius.ticket)
-                            .strokeBorder(
-                                emphasized ? TrainTheme.rail.opacity(0.45) : TrainTheme.track.opacity(0.7),
-                                lineWidth: emphasized ? 1.5 : 1
-                            )
-                    }
-            )
-    }
-}
-
-extension View {
-    func ticketSurface(emphasized: Bool = false) -> some View {
-        modifier(TicketSurface(emphasized: emphasized))
     }
 }

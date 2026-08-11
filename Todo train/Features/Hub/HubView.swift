@@ -14,8 +14,16 @@ struct HubView: View {
 
     @State private var showQuickAdd = false
     @State private var showServiceEndSheet = false
+    @State private var hubDestination: HubDestination?
     @State private var errorMessage = ""
     @State private var showError = false
+
+    private enum HubDestination: Hashable, Identifiable {
+        case tags
+        case reorder
+
+        var id: Self { self }
+    }
 
     private var openTickets: [Ticket] {
         allTickets.filter(\.isOpen)
@@ -28,168 +36,126 @@ struct HubView: View {
     }
 
     var body: some View {
-        ZStack {
-            PlatformBackground()
-
-            List {
-                Section {
-                    ServiceSummaryBar(
-                        onError: { message in
-                            errorMessage = message
-                            showError = true
-                        },
-                        onRequestEndService: {
-                            requestEndService()
-                        }
-                    )
-                }
-
-                if !sessionManager.pausedSessions.isEmpty {
-                    Section {
-                        ForEach(sessionManager.pausedSessions, id: \.id) { session in
-                            if let ticket = session.ticket {
-                                HStack(spacing: TrainTheme.Space.md) {
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(ticket.title)
-                                            .font(TrainTheme.TypeScale.ticketTitle())
-                                            .foregroundStyle(TrainTheme.ink)
-                                        Text("残り \(formatRemaining(session))")
-                                            .font(TrainTheme.TypeScale.meta())
-                                            .foregroundStyle(TrainTheme.signalAmber)
-                                            .monospacedDigit()
-                                    }
-                                    Spacer()
-                                    Button("再開") {
-                                        board(ticket)
-                                    }
-                                    .buttonStyle(DepartButtonStyle(enabled: canBoardGenerally))
-                                    .disabled(!canBoardGenerally)
-                                }
-                                .ticketSurface(emphasized: true)
-                                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
-                                .listRowBackground(Color.clear)
-                            }
-                        }
-                    } header: {
-                        sectionHeader("停車中", accent: TrainTheme.signalAmber)
+        List {
+            Section {
+                ServiceSummaryBar(
+                    onError: { message in
+                        errorMessage = message
+                        showError = true
+                    },
+                    onRequestEndService: {
+                        requestEndService()
                     }
-                }
+                )
+            }
 
+            if !sessionManager.pausedSessions.isEmpty {
                 Section {
-                    if openTickets.isEmpty {
-                        VStack(alignment: .leading, spacing: TrainTheme.Space.sm) {
-                            Text("切符がありません")
-                                .font(TrainTheme.TypeScale.ticketTitle())
-                                .foregroundStyle(TrainTheme.ink)
-                            Text("右下の ＋ から掃き出しましょう。")
-                                .font(.subheadline)
-                                .foregroundStyle(TrainTheme.muted)
+                    ForEach(sessionManager.pausedSessions, id: \.id) { session in
+                        if let ticket = session.ticket {
+                            HStack(spacing: TrainTheme.Space.md) {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(ticket.title)
+                                        .font(TrainTheme.TypeScale.ticketTitle())
+                                    Text("残り \(formatRemaining(session))")
+                                        .font(TrainTheme.TypeScale.meta())
+                                        .foregroundStyle(TrainTheme.signalAmber)
+                                        .monospacedDigit()
+                                }
+                                Spacer(minLength: 8)
+                                Button("再開") {
+                                    board(ticket)
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .tint(TrainTheme.rail)
+                                .disabled(!canBoardGenerally)
+                            }
+                            .accessibilityElement(children: .combine)
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .ticketSurface()
-                        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
-                        .listRowBackground(Color.clear)
-                    } else {
-                        ForEach(openTickets, id: \.id) { ticket in
-                            TicketCardView(
-                                ticket: ticket,
-                                isPaused: isPaused(ticket),
-                                canBoard: canBoardGenerally,
-                                onBoard: { board(ticket) }
-                            )
-                            .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
-                            .listRowBackground(Color.clear)
-                        }
-                        .onMove(perform: moveTickets)
                     }
                 } header: {
-                    sectionHeader("切符", accent: TrainTheme.rail)
-                }
-            }
-            .scrollContentBackground(.hidden)
-            .listStyle(.plain)
-
-            if !showQuickAdd {
-                VStack {
-                    Spacer()
-                    HStack {
-                        Spacer()
-                        TrainFAB {
-                            withAnimation(TrainTheme.Motion.spring) {
-                                showQuickAdd = true
-                            }
-                        }
-                        .padding(20)
-                    }
+                    Text("停車中")
                 }
             }
 
-            if showQuickAdd {
-                Color.black.opacity(0.28)
-                    .ignoresSafeArea()
-                    .onTapGesture {
-                        withAnimation(TrainTheme.Motion.soft) {
-                            showQuickAdd = false
-                        }
+            Section {
+                if openTickets.isEmpty {
+                    ContentUnavailableView {
+                        Label("切符がありません", systemImage: "tram")
+                    } description: {
+                        Text("右上の ＋ から掃き出しましょう。")
                     }
-
-                QuickAddBar(isPresented: $showQuickAdd)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 24)
+                } else {
+                    ForEach(openTickets, id: \.id) { ticket in
+                        TicketCardView(
+                            ticket: ticket,
+                            isPaused: isPaused(ticket),
+                            canBoard: canBoardGenerally,
+                            onBoard: { board(ticket) }
+                        )
+                    }
+                    .onMove(perform: moveTickets)
+                }
+            } header: {
+                Text("切符")
             }
         }
+        .listStyle(.insetGrouped)
         .navigationTitle("Todo train")
         .navigationBarTitleDisplayMode(.large)
-        .toolbarBackground(TrainTheme.platform.opacity(0.92), for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
-                NavigationLink("タグ") {
-                    TagManagerView()
-                }
-            }
-            ToolbarItem(placement: .topBarLeading) {
-                NavigationLink("並べ替え") {
-                    ReorderView()
-                }
-            }
-            ToolbarItem(placement: .topBarTrailing) {
-                NavigationLink {
-                    SettingsView()
-                } label: {
-                    Image(systemName: "gearshape")
-                }
-            }
-            ToolbarItem(placement: .topBarTrailing) {
-                NavigationLink("履歴") {
-                    HistoryView()
-                }
-            }
-            ToolbarItem(placement: .topBarTrailing) {
                 EditButton()
             }
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Button {
+                        hubDestination = .tags
+                    } label: {
+                        Label("タグ", systemImage: "tag")
+                    }
+                    Button {
+                        hubDestination = .reorder
+                    } label: {
+                        Label("並べ替え", systemImage: "arrow.up.arrow.down")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+                .accessibilityLabel("その他")
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showQuickAdd = true
+                } label: {
+                    Image(systemName: "plus")
+                }
+                .accessibilityLabel("切符を追加")
+            }
         }
-        .tint(TrainTheme.rail)
+        .navigationDestination(item: $hubDestination) { destination in
+            switch destination {
+            case .tags:
+                TagManagerView()
+            case .reorder:
+                ReorderView()
+            }
+        }
         .alert("エラー", isPresented: $showError) {
             Button("OK", role: .cancel) {}
         } message: {
             Text(errorMessage)
+        }
+        .sheet(isPresented: $showQuickAdd) {
+            QuickAddSheet()
         }
         .sheet(isPresented: $showServiceEndSheet) {
             ServiceEndSheet { message in
                 errorMessage = message
                 showError = true
             }
-        }
-    }
-
-    private func sectionHeader(_ title: String, accent: Color) -> some View {
-        HStack(spacing: 6) {
-            Capsule()
-                .fill(accent)
-                .frame(width: 3, height: 12)
-            Text(title)
-                .font(.caption.weight(.bold))
-                .foregroundStyle(TrainTheme.muted)
-                .textCase(nil)
         }
     }
 

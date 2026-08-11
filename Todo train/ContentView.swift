@@ -2,7 +2,7 @@
 //  ContentView.swift
 //  Todo train
 //
-//  Hub host + Focus fullScreenCover.
+//  Tab host + Focus fullScreenCover.
 //
 
 import SwiftUI
@@ -15,8 +15,24 @@ struct ContentView: View {
     @State private var isFocusPresented = false
 
     var body: some View {
-        NavigationStack {
-            HubView()
+        TabView {
+            Tab("切符", systemImage: "tram.fill") {
+                NavigationStack {
+                    HubView()
+                }
+            }
+
+            Tab("履歴", systemImage: "clock") {
+                NavigationStack {
+                    HistoryView()
+                }
+            }
+
+            Tab("設定", systemImage: "gearshape") {
+                NavigationStack {
+                    SettingsView()
+                }
+            }
         }
         .tint(TrainTheme.rail)
         .onAppear {
