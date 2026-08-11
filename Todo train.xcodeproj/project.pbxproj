@@ -1,0 +1,571 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 110;
+	objects = {
+
+/* Begin PBXContainerItemProxy section */
+		B6EE2E64302B4E730022EBAD /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = B6EE2E4A302B4E710022EBAD /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B6EE2E51302B4E710022EBAD;
+			remoteInfo = "Todo train";
+		};
+		B6EE2E6E302B4E730022EBAD /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = B6EE2E4A302B4E710022EBAD /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B6EE2E51302B4E710022EBAD;
+			remoteInfo = "Todo train";
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		B6EE2E52302B4E710022EBAD /* Todo train.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Todo train.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		B6EE2E63302B4E730022EBAD /* Todo trainTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Todo trainTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		B6EE2E6D302B4E730022EBAD /* Todo trainUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Todo trainUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		B6EE2E73302B4E730022EBAD /* Exceptions for "Todo train" folder in "Todo train" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = B6EE2E51302B4E710022EBAD /* Todo train */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		B6EE2E54302B4E710022EBAD /* Todo train */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				B6EE2E73302B4E730022EBAD /* Exceptions for "Todo train" folder in "Todo train" target */,
+			);
+			path = "Todo train";
+			sourceTree = "<group>";
+		};
+		B6EE2E66302B4E730022EBAD /* Todo trainTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "Todo trainTests";
+			sourceTree = "<group>";
+		};
+		B6EE2E70302B4E730022EBAD /* Todo trainUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "Todo trainUITests";
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		B6EE2E4F302B4E710022EBAD /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+			);
+		};
+		B6EE2E60302B4E730022EBAD /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+			);
+		};
+		B6EE2E6A302B4E730022EBAD /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+			);
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		B6EE2E49302B4E710022EBAD = {
+			isa = PBXGroup;
+			children = (
+				B6EE2E54302B4E710022EBAD /* Todo train */,
+				B6EE2E66302B4E730022EBAD /* Todo trainTests */,
+				B6EE2E70302B4E730022EBAD /* Todo trainUITests */,
+				B6EE2E53302B4E710022EBAD /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		B6EE2E53302B4E710022EBAD /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				B6EE2E52302B4E710022EBAD /* Todo train.app */,
+				B6EE2E63302B4E730022EBAD /* Todo trainTests.xctest */,
+				B6EE2E6D302B4E730022EBAD /* Todo trainUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		B6EE2E51302B4E710022EBAD /* Todo train */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B6EE2E74302B4E730022EBAD /* Build configuration list for PBXNativeTarget "Todo train" */;
+			buildPhases = (
+				B6EE2E4E302B4E710022EBAD /* Sources */,
+				B6EE2E4F302B4E710022EBAD /* Frameworks */,
+				B6EE2E50302B4E710022EBAD /* Resources */,
+			);
+			buildRules = (
+			);
+			fileSystemSynchronizedGroups = (
+				B6EE2E54302B4E710022EBAD /* Todo train */,
+			);
+			name = "Todo train";
+			productName = "Todo train";
+			productReference = B6EE2E52302B4E710022EBAD /* Todo train.app */;
+			productType = "com.apple.product-type.application";
+		};
+		B6EE2E62302B4E730022EBAD /* Todo trainTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B6EE2E79302B4E730022EBAD /* Build configuration list for PBXNativeTarget "Todo trainTests" */;
+			buildPhases = (
+				B6EE2E5F302B4E730022EBAD /* Sources */,
+				B6EE2E60302B4E730022EBAD /* Frameworks */,
+				B6EE2E61302B4E730022EBAD /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				B6EE2E65302B4E730022EBAD /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				B6EE2E66302B4E730022EBAD /* Todo trainTests */,
+			);
+			name = "Todo trainTests";
+			productName = "Todo trainTests";
+			productReference = B6EE2E63302B4E730022EBAD /* Todo trainTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		B6EE2E6C302B4E730022EBAD /* Todo trainUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B6EE2E7C302B4E730022EBAD /* Build configuration list for PBXNativeTarget "Todo trainUITests" */;
+			buildPhases = (
+				B6EE2E69302B4E730022EBAD /* Sources */,
+				B6EE2E6A302B4E730022EBAD /* Frameworks */,
+				B6EE2E6B302B4E730022EBAD /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				B6EE2E6F302B4E730022EBAD /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				B6EE2E70302B4E730022EBAD /* Todo trainUITests */,
+			);
+			name = "Todo trainUITests";
+			productName = "Todo trainUITests";
+			productReference = B6EE2E6D302B4E730022EBAD /* Todo trainUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		B6EE2E4A302B4E710022EBAD /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2700;
+				LastUpgradeCheck = 2700;
+				TargetAttributes = {
+					B6EE2E51302B4E710022EBAD = {
+						CreatedOnToolsVersion = 27.0;
+					};
+					B6EE2E62302B4E730022EBAD = {
+						CreatedOnToolsVersion = 27.0;
+						TestTargetID = B6EE2E51302B4E710022EBAD;
+					};
+					B6EE2E6C302B4E730022EBAD = {
+						CreatedOnToolsVersion = 27.0;
+						TestTargetID = B6EE2E51302B4E710022EBAD;
+					};
+				};
+			};
+			buildConfigurationList = B6EE2E4D302B4E710022EBAD /* Build configuration list for PBXProject "Todo train" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = B6EE2E49302B4E710022EBAD;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = B6EE2E53302B4E710022EBAD /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				B6EE2E51302B4E710022EBAD /* Todo train */,
+				B6EE2E62302B4E730022EBAD /* Todo trainTests */,
+				B6EE2E6C302B4E730022EBAD /* Todo trainUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		B6EE2E50302B4E710022EBAD /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+			);
+		};
+		B6EE2E61302B4E730022EBAD /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+			);
+		};
+		B6EE2E6B302B4E730022EBAD /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+			);
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		B6EE2E4E302B4E710022EBAD /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+			);
+		};
+		B6EE2E5F302B4E730022EBAD /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+			);
+		};
+		B6EE2E69302B4E730022EBAD /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+			);
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		B6EE2E65302B4E730022EBAD /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B6EE2E51302B4E710022EBAD /* Todo train */;
+			targetProxy = B6EE2E64302B4E730022EBAD /* PBXContainerItemProxy */;
+		};
+		B6EE2E6F302B4E730022EBAD /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B6EE2E51302B4E710022EBAD /* Todo train */;
+			targetProxy = B6EE2E6E302B4E730022EBAD /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		B6EE2E75302B4E730022EBAD /* Debug configuration for PBXNativeTarget "Todo train" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "Todo train/Todo_train.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = NPSM864R9U;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Todo train/Info.plist";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "dev.hibiki-cube.Todo-train";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		B6EE2E76302B4E730022EBAD /* Release configuration for PBXNativeTarget "Todo train" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "Todo train/Todo_train.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = NPSM864R9U;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Todo train/Info.plist";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "dev.hibiki-cube.Todo-train";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		B6EE2E77302B4E730022EBAD /* Debug configuration for PBXProject "Todo train" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = NPSM864R9U;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		B6EE2E78302B4E730022EBAD /* Release configuration for PBXProject "Todo train" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = NPSM864R9U;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		B6EE2E7A302B4E730022EBAD /* Debug configuration for PBXNativeTarget "Todo trainTests" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = NPSM864R9U;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "dev.hibiki-cube.Todo-trainTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Todo train.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Todo train";
+			};
+			name = Debug;
+		};
+		B6EE2E7B302B4E730022EBAD /* Release configuration for PBXNativeTarget "Todo trainTests" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = NPSM864R9U;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "dev.hibiki-cube.Todo-trainTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Todo train.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Todo train";
+			};
+			name = Release;
+		};
+		B6EE2E7D302B4E730022EBAD /* Debug configuration for PBXNativeTarget "Todo trainUITests" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = NPSM864R9U;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "dev.hibiki-cube.Todo-trainUITests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = "Todo train";
+			};
+			name = Debug;
+		};
+		B6EE2E7E302B4E730022EBAD /* Release configuration for PBXNativeTarget "Todo trainUITests" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = NPSM864R9U;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "dev.hibiki-cube.Todo-trainUITests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = "Todo train";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		B6EE2E4D302B4E710022EBAD /* Build configuration list for PBXProject "Todo train" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B6EE2E77302B4E730022EBAD /* Debug configuration for PBXProject "Todo train" */,
+				B6EE2E78302B4E730022EBAD /* Release configuration for PBXProject "Todo train" */,
+			);
+			defaultConfigurationName = Release;
+		};
+		B6EE2E74302B4E730022EBAD /* Build configuration list for PBXNativeTarget "Todo train" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B6EE2E75302B4E730022EBAD /* Debug configuration for PBXNativeTarget "Todo train" */,
+				B6EE2E76302B4E730022EBAD /* Release configuration for PBXNativeTarget "Todo train" */,
+			);
+			defaultConfigurationName = Release;
+		};
+		B6EE2E79302B4E730022EBAD /* Build configuration list for PBXNativeTarget "Todo trainTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B6EE2E7A302B4E730022EBAD /* Debug configuration for PBXNativeTarget "Todo trainTests" */,
+				B6EE2E7B302B4E730022EBAD /* Release configuration for PBXNativeTarget "Todo trainTests" */,
+			);
+			defaultConfigurationName = Release;
+		};
+		B6EE2E7C302B4E730022EBAD /* Build configuration list for PBXNativeTarget "Todo trainUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B6EE2E7D302B4E730022EBAD /* Debug configuration for PBXNativeTarget "Todo trainUITests" */,
+				B6EE2E7E302B4E730022EBAD /* Release configuration for PBXNativeTarget "Todo trainUITests" */,
+			);
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = B6EE2E4A302B4E710022EBAD /* Project object */;
+	validationLevel = 1;
+}
