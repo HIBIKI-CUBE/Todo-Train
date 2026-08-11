@@ -13,6 +13,7 @@ struct HubView: View {
     @Query(sort: \Ticket.sortOrder) private var allTickets: [Ticket]
 
     @State private var showQuickAdd = false
+    @State private var showServiceEndSheet = false
     @State private var errorMessage = ""
     @State private var showError = false
 
@@ -30,10 +31,15 @@ struct HubView: View {
         ZStack {
             List {
                 Section {
-                    ServiceSummaryBar { message in
-                        errorMessage = message
-                        showError = true
-                    }
+                    ServiceSummaryBar(
+                        onError: { message in
+                            errorMessage = message
+                            showError = true
+                        },
+                        onRequestEndService: {
+                            requestEndService()
+                        }
+                    )
                 }
 
                 if !sessionManager.pausedSessions.isEmpty {
@@ -156,6 +162,25 @@ struct HubView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text(errorMessage)
+        }
+        .sheet(isPresented: $showServiceEndSheet) {
+            ServiceEndSheet { message in
+                errorMessage = message
+                showError = true
+            }
+        }
+    }
+
+    private func requestEndService() {
+        if sessionManager.pausedTicketCount == 0 {
+            do {
+                try sessionManager.endService()
+            } catch {
+                errorMessage = error.localizedDescription
+                showError = true
+            }
+        } else {
+            showServiceEndSheet = true
         }
     }
 

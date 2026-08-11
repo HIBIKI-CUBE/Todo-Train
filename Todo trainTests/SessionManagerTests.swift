@@ -188,6 +188,37 @@ struct SessionManagerTests {
         }
     }
 
+    @Test func endService_succeeds_withPausedSessionsCarriedOver() throws {
+        let (manager, context, _) = try makeHarness()
+        try manager.startService()
+        let a = try makeTicket(context, title: "A")
+        try manager.board(ticket: a)
+        try manager.pause()
+
+        try manager.endService()
+
+        #expect(manager.isInService == false)
+        #expect(manager.pausedTicketCount == 1)
+        #expect(a.isOpen)
+        #expect(manager.pausedSessions.first?.ticket?.id == a.id)
+    }
+
+    @Test func endService_succeeds_afterResolvingPaused() throws {
+        let (manager, context, _) = try makeHarness()
+        try manager.startService()
+        let a = try makeTicket(context, title: "A")
+        try manager.board(ticket: a)
+        try manager.pause()
+
+        let paused = try #require(manager.pausedSessions.first)
+        try manager.abandon(session: paused)
+        try manager.endService()
+
+        #expect(manager.isInService == false)
+        #expect(manager.pausedTicketCount == 0)
+        #expect(a.closureKind == .abandoned)
+    }
+
     @Test func extend_increasesBudget_andLeavesOvertime() throws {
         let (manager, context, clock) = try makeHarness()
         try manager.startService()

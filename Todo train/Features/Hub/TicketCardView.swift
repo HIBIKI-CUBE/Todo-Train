@@ -4,7 +4,6 @@
 //
 
 import SwiftUI
-
 struct TicketCardView: View {
     let ticket: Ticket
     let isPaused: Bool

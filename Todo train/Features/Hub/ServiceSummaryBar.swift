@@ -8,6 +8,11 @@ import SwiftUI
 struct ServiceSummaryBar: View {
     @Environment(SessionManager.self) private var sessionManager
     let onError: (String) -> Void
+    let onRequestEndService: () -> Void
+
+    private var canEndOpenService: Bool {
+        sessionManager.isInService || sessionManager.needsServiceDayEndPrompt
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -19,9 +24,10 @@ struct ServiceSummaryBar: View {
 
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(sessionManager.isInService ? "運行中" : "運休")
+                    Text(statusTitle)
                         .font(.headline)
-                    if let key = sessionManager.activeServiceDay?.calendarDayKey, sessionManager.activeServiceDay?.isOpen == true {
+                    if let key = sessionManager.activeServiceDay?.calendarDayKey,
+                       sessionManager.activeServiceDay?.isOpen == true {
                         Text(key)
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -34,13 +40,12 @@ struct ServiceSummaryBar: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
 
-                if sessionManager.isInService {
-                    Button("運行終了", role: .destructive) {
-                        do {
-                            try sessionManager.endService()
-                        } catch {
-                            onError(error.localizedDescription)
-                        }
+                if canEndOpenService {
+                    Button(
+                        sessionManager.needsServiceDayEndPrompt ? "昨日の運行を終了" : "運行終了",
+                        role: .destructive
+                    ) {
+                        onRequestEndService()
                     }
                     .buttonStyle(.bordered)
                 } else {
@@ -56,5 +61,12 @@ struct ServiceSummaryBar: View {
             }
         }
         .padding(.vertical, 4)
+    }
+
+    private var statusTitle: String {
+        if sessionManager.needsServiceDayEndPrompt {
+            return "前日の運行が未終了"
+        }
+        return sessionManager.isInService ? "運行中" : "運休"
     }
 }
