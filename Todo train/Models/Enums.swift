@@ -25,6 +25,12 @@ enum SessionOutcome: String, Codable, Sendable {
     case recoveryConflict
 }
 
+/// How the user answered the overtime prompt when arriving.
+enum OvertimeResolution: String, Codable, Sendable {
+    case alreadyDone
+    case justFinished
+}
+
 enum LineageKind: String, Codable, Sendable {
     case continuation
     case split
