@@ -9,11 +9,7 @@ import Testing
 @testable import Todo_train
 
 struct Todo_trainTests {
-
-    @Test func example() async throws {
-        // Write your test here and use APIs like `#expect(...)` to check expected conditions.
-        // Swift Testing Documentation
-        // https://developer.apple.com/documentation/testing
+    @Test func moduleLoads() {
+        #expect(PauseLimitGuard.defaultLimit == 2)
     }
-
 }

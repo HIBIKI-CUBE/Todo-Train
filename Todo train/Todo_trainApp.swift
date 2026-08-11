@@ -10,23 +10,29 @@ import SwiftData
 
 @main
 struct Todo_trainApp: App {
-    var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            Item.self,
-        ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+    private let container: ModelContainer
+    @State private var sessionManager: SessionManager
 
+    init() {
         do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
+            let container = try AppModelContainer.make(inMemory: false)
+            self.container = container
+            // Use the same ModelContext the views will share via environment...
+            // SessionManager needs a long-lived context bound to this container.
+            let context = container.mainContext
+            _sessionManager = State(
+                initialValue: SessionManager(modelContext: context)
+            )
         } catch {
             fatalError("Could not create ModelContainer: \(error)")
         }
-    }()
+    }
 
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environment(sessionManager)
+                .modelContainer(container)
         }
-        .modelContainer(sharedModelContainer)
     }
 }
