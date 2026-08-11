@@ -84,6 +84,14 @@ struct HubView: View {
                                             Text("\(ticket.estimatedSeconds / 60)分")
                                                 .font(.caption)
                                                 .foregroundStyle(.secondary)
+                                            if let dueDate = ticket.dueDate {
+                                                Text(dueDateLabel(dueDate))
+                                                    .font(.caption2)
+                                                    .padding(.horizontal, 6)
+                                                    .padding(.vertical, 2)
+                                                    .background(Color.blue.opacity(0.12), in: Capsule())
+                                                    .foregroundStyle(.blue)
+                                            }
                                             if isPaused(ticket) {
                                                 Text("停車中")
                                                     .font(.caption.weight(.semibold))
@@ -149,6 +157,18 @@ struct HubView: View {
                     TagManagerView()
                 }
             }
+            ToolbarItem(placement: .topBarLeading) {
+                NavigationLink("並べ替え") {
+                    ReorderView()
+                }
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                NavigationLink {
+                    SettingsView()
+                } label: {
+                    Image(systemName: "gearshape")
+                }
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 NavigationLink("履歴") {
                     HistoryView()
@@ -212,6 +232,12 @@ struct HubView: View {
         let prefix = remaining < 0 ? "超過 " : ""
         return "\(prefix)\(absTotal / 60):\(String(format: "%02d", absTotal % 60))"
     }
+
+    private func dueDateLabel(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "M/d"
+        return formatter.string(from: date)
+    }
 }
 
 #Preview {
@@ -220,6 +246,7 @@ struct HubView: View {
     return NavigationStack {
         HubView()
             .environment(manager)
+            .environment(AppSettings.shared)
             .modelContainer(container)
     }
 }

@@ -30,7 +30,7 @@ struct PauseLimitSheet: View {
         NavigationStack {
             List {
                 Section {
-                    Text("停車枠がいっぱいです（\(sessionManager.pausedTicketCount)/\(PauseLimitGuard.defaultLimit)）")
+                    Text("停車枠がいっぱいです（\(sessionManager.pausedTicketCount)/\(sessionManager.pauseLimit)）")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -72,7 +72,7 @@ struct PauseLimitSheet: View {
                     }
                 }
 
-                if sessionManager.pausedTicketCount < PauseLimitGuard.defaultLimit,
+                if sessionManager.pausedTicketCount < sessionManager.pauseLimit,
                    sessionManager.phase == .running || sessionManager.phase == .overtime {
                     Section {
                         Button("このまま停車") {
@@ -83,7 +83,7 @@ struct PauseLimitSheet: View {
                     }
                 }
 
-                if sessionManager.pausedTicketCount >= PauseLimitGuard.defaultLimit,
+                if sessionManager.pausedTicketCount >= sessionManager.pauseLimit,
                    sessionManager.phase == .running || sessionManager.phase == .overtime {
                     Section("臨時停車") {
                         SafetyLockOverrideControl(

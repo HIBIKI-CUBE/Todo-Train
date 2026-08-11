@@ -60,5 +60,6 @@ struct ContentView: View {
     let manager = SessionManager(modelContext: container.mainContext)
     return ContentView()
         .environment(manager)
+        .environment(AppSettings.shared)
         .modelContainer(container)
 }

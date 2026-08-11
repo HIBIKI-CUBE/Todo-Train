@@ -8,6 +8,7 @@ import SwiftUI
 
 struct FocusView: View {
     @Environment(SessionManager.self) private var sessionManager
+    @Environment(AppSettings.self) private var settings
 
     @State private var showExtendChips = false
     @State private var showPauseLimitSheet = false
@@ -147,6 +148,7 @@ struct FocusView: View {
     }
 
     private func handleOvertimeSound() {
+        guard settings.overtimeSoundEnabled else { return }
         guard sessionManager.phase == .overtime, !didPlayOvertimeSound else { return }
         didPlayOvertimeSound = true
         OvertimeOverlay.playAlertSound()
@@ -186,4 +188,5 @@ struct FocusView: View {
     try! manager.board(ticket: ticket)
     return FocusView()
         .environment(manager)
+        .environment(AppSettings.shared)
 }

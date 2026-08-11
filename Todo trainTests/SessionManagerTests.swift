@@ -12,14 +12,17 @@ import Testing
 struct SessionManagerTests {
     private func makeHarness(
         now: Date = Date(timeIntervalSince1970: 1_700_000_000),
+        pauseLimit: Int = PauseLimitGuard.defaultLimit,
         overrideCounter: (any OverrideCounting)? = nil
     ) throws -> (SessionManager, ModelContext, FixedSessionClock) {
         let container = try AppModelContainer.make(inMemory: true)
         let context = ModelContext(container)
         let clock = FixedSessionClock(now)
+        let settings = AppSettings.makeForTesting(pauseLimit: pauseLimit)
         let manager = SessionManager(
             modelContext: context,
             clock: clock,
+            settings: settings,
             overrideCounter: overrideCounter ?? InMemoryOverrideCounter()
         )
         return (manager, context, clock)
@@ -122,6 +125,28 @@ struct SessionManagerTests {
         try manager.board(ticket: c)
         #expect(manager.phase == .running)
 
+        #expect(throws: SessionError.pauseLimitReached) {
+            try manager.pause()
+        }
+    }
+
+    @Test func pause_allowed_whenLimitIsThree() throws {
+        let (manager, context, _) = try makeHarness(pauseLimit: 3)
+        try manager.startService()
+        let a = try makeTicket(context, title: "A")
+        let b = try makeTicket(context, title: "B")
+        let c = try makeTicket(context, title: "C")
+        let d = try makeTicket(context, title: "D")
+
+        try manager.board(ticket: a)
+        try manager.pause()
+        try manager.board(ticket: b)
+        try manager.pause()
+        try manager.board(ticket: c)
+        try manager.pause()
+        #expect(manager.pausedTicketCount == 3)
+
+        try manager.board(ticket: d)
         #expect(throws: SessionError.pauseLimitReached) {
             try manager.pause()
         }

@@ -1,12 +1,26 @@
-# 08 — 現状ステータス（MVP 完了）
+# 08 — 現状ステータス
 
-最終更新: 2026-08-12（Sprint 10 完了後）
+最終更新: 2026-08-12（v1 実装中）
 
 ## 結論
 
-**MVP（Sprint 1–10）は実装完了**。次は **v1**（[09-v1-implementation.md](09-v1-implementation.md)）。
+**MVP（Sprint 1–10）は実装完了**。**v1** を実装中（[09-v1-implementation.md](09-v1-implementation.md)）。
 
-## 完了したスプリント
+### v1 進捗（Cloud Agent）
+
+| WP | 状態 | 備考 |
+|----|------|------|
+| WP-A Settings | 実装済 | 停車上限 2/3、超過音 ON/OFF |
+| WP-B History | 実装済 | 検索 + 今日に追加 |
+| WP-C Reorder | 実装済 | フィルタ強調 + D&D |
+| WP-D dueDate | 実装済 | 任意期限、自動ソートなし |
+| WP-E Custom estimate | 実装済 | 1–60 分任意入力 |
+| WP-F Live Activity | コード済 | Mac でターゲット/Capability 要確認（[10-live-activity-setup.md](10-live-activity-setup.md)） |
+| WP-G Widget | ソース済 | `TodoTrainWidget/` + README |
+| WP-H AI / PCC | stub 済 | `CoachingEngine` + Heuristic |
+| WP-I CloudKit | 未着手 | 独立 PR 推奨 |
+
+## MVP 完了マップ（Sprint 1–10）
 
 | Sprint | 内容 | 主な成果物 |
 |--------|------|------------|

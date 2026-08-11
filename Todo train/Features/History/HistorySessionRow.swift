@@ -7,6 +7,7 @@ import SwiftUI
 
 struct HistorySessionRow: View {
     let session: WorkSession
+    var onReissue: ((Ticket) -> Void)?
 
     private var children: [Ticket] {
         session.ticket?.childLineages.compactMap(\.child) ?? []
@@ -47,6 +48,15 @@ struct HistorySessionRow: View {
                             .foregroundStyle(.tertiary)
                     }
                 }
+            }
+
+            if let ticket = session.ticket, let onReissue {
+                Button("今日に追加") {
+                    onReissue(ticket)
+                }
+                .font(.caption)
+                .buttonStyle(.bordered)
+                .padding(.leading, 44)
             }
 
             if session.outcome == .partialDisembark, !children.isEmpty {

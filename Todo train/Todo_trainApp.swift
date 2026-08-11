@@ -12,18 +12,24 @@ import SwiftData
 struct Todo_trainApp: App {
     private let container: ModelContainer
     @State private var sessionManager: SessionManager
+    @State private var settings = AppSettings.shared
 
     init() {
         do {
             let container = try AppModelContainer.make(inMemory: false)
             self.container = container
-            // Use the same ModelContext the views will share via environment...
-            // SessionManager needs a long-lived context bound to this container.
             let context = container.mainContext
+            #if canImport(ActivityKit)
+            let liveActivity: any LiveActivityManaging = LiveActivityManager.shared
+            #else
+            let liveActivity: any LiveActivityManaging = NoOpLiveActivityManager()
+            #endif
             _sessionManager = State(
                 initialValue: SessionManager(
                     modelContext: context,
-                    overtimeNotifier: OvertimeNotifier.shared
+                    settings: AppSettings.shared,
+                    overtimeNotifier: OvertimeNotifier.shared,
+                    liveActivityManager: liveActivity
                 )
             )
             OvertimeNotifier.shared.configure()
@@ -36,6 +42,7 @@ struct Todo_trainApp: App {
         WindowGroup {
             ContentView()
                 .environment(sessionManager)
+                .environment(settings)
                 .modelContainer(container)
         }
     }

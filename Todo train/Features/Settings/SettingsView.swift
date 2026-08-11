@@ -1,0 +1,53 @@
+//
+//  SettingsView.swift
+//  Todo train
+//
+
+import SwiftUI
+
+struct SettingsView: View {
+    @Environment(AppSettings.self) private var settings
+
+    var body: some View {
+        Form {
+            Section {
+                Picker("停車上限", selection: Binding(
+                    get: { settings.pauseLimit },
+                    set: { settings.pauseLimit = $0 }
+                )) {
+                    Text("2 枚").tag(2)
+                    Text("3 枚").tag(3)
+                }
+                .pickerStyle(.segmented)
+
+                Text("停車中に置いておける切符の枚数です。4 枚目は整理シートが開きます。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } header: {
+                Text("停車")
+            }
+
+            Section {
+                Toggle("超過時のシステム音", isOn: Binding(
+                    get: { settings.overtimeSoundEnabled },
+                    set: { settings.overtimeSoundEnabled = $0 }
+                ))
+
+                Text("見積もりを過ぎたとき、一度だけアラート音を鳴らします。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } header: {
+                Text("超過")
+            }
+        }
+        .navigationTitle("設定")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+#Preview {
+    NavigationStack {
+        SettingsView()
+            .environment(AppSettings.shared)
+    }
+}

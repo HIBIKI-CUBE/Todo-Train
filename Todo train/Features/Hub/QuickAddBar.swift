@@ -16,6 +16,7 @@ struct QuickAddBar: View {
     @State private var awaitingEstimate = false
     @State private var awaitingTags = false
     @State private var pendingMinutes = 30
+    @State private var showCustomEstimate = false
     @State private var selectedTagIDs: Set<UUID> = []
     @FocusState private var titleFocused: Bool
 
@@ -106,6 +107,23 @@ struct QuickAddBar: View {
                         awaitingEstimate = false
                         awaitingTags = true
                     }
+
+                    Button(showCustomEstimate ? "プリセットに戻る" : "任意の分を入力") {
+                        showCustomEstimate.toggle()
+                    }
+                    .font(.caption)
+
+                    if showCustomEstimate {
+                        CustomEstimateInput(
+                            minutes: $pendingMinutes,
+                            highlightedMinutes: highlightedEstimateMinutes
+                        )
+                        Button("この見積もりで続ける") {
+                            awaitingEstimate = false
+                            awaitingTags = true
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
                 } else {
                     TextField("何をする？", text: $title)
                         .textFieldStyle(.roundedBorder)
@@ -178,6 +196,7 @@ struct QuickAddBar: View {
         awaitingEstimate = false
         awaitingTags = false
         pendingMinutes = 30
+        showCustomEstimate = false
         selectedTagIDs = []
         titleFocused = false
     }

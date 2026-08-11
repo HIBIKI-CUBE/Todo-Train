@@ -58,10 +58,30 @@ struct TicketDetailView: View {
                         "見積もり \(ticket.estimatedSeconds / 60) 分",
                         value: Binding(
                             get: { ticket.estimatedSeconds / 60 },
-                            set: { ticket.estimatedSeconds = min(max($0, 1), 60) * 60 }
+                            set: { ticket.estimatedSeconds = CustomEstimate.clampMinutes($0) * 60 }
                         ),
-                        in: 1...60
+                        in: CustomEstimate.minMinutes...CustomEstimate.maxMinutes
                     )
+                    CustomEstimateInput(
+                        minutes: Binding(
+                            get: { ticket.estimatedSeconds / 60 },
+                            set: { ticket.estimatedSeconds = CustomEstimate.clampMinutes($0) * 60 }
+                        ),
+                        highlightedMinutes: estimateSuggestion?.minutes
+                    )
+                    DatePicker(
+                        "期限（任意）",
+                        selection: Binding(
+                            get: { ticket.dueDate ?? Date() },
+                            set: { ticket.dueDate = $0 }
+                        ),
+                        displayedComponents: .date
+                    )
+                    if ticket.dueDate != nil {
+                        Button("期限をクリア", role: .destructive) {
+                            ticket.dueDate = nil
+                        }
+                    }
                     if let suggestion = estimateSuggestion {
                         Text(EstimateHeuristic.caption(
                             minutes: suggestion.minutes,
@@ -75,6 +95,10 @@ struct TicketDetailView: View {
                         .font(.body.weight(.medium))
                     Text("見積もり \(ticket.estimatedSeconds / 60) 分")
                         .foregroundStyle(.secondary)
+                    if let dueDate = ticket.dueDate {
+                        Text("期限 \(dueDateLabel(dueDate))")
+                            .foregroundStyle(.secondary)
+                    }
                     if let kind = ticket.closureKind {
                         Text(closureLabel(kind))
                             .font(.subheadline.weight(.semibold))
@@ -237,6 +261,13 @@ struct TicketDetailView: View {
         let date = session.endedAt ?? session.startedAt
         let formatter = DateFormatter()
         formatter.dateFormat = "MM/dd HH:mm"
+        return formatter.string(from: date)
+    }
+
+    private func dueDateLabel(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .none
         return formatter.string(from: date)
     }
 }

@@ -18,27 +18,32 @@ final class SessionManager {
     private let modelContext: ModelContext
     private let clock: any SessionClock
     private let calendar: Calendar
-    private let pauseLimit: Int
+    private let settings: AppSettings
     private let overtimeNotifier: any OvertimeNotifying
     private let overrideCounter: any OverrideCounting
+    private let liveActivityManager: any LiveActivityManaging
 
     /// Today's temporary-pause override count (for UI).
     private(set) var todayOverrideCount: Int = 0
+
+    var pauseLimit: Int { settings.pauseLimit }
 
     init(
         modelContext: ModelContext,
         clock: any SessionClock = SystemSessionClock(),
         calendar: Calendar = .current,
-        pauseLimit: Int = PauseLimitGuard.defaultLimit,
+        settings: AppSettings = .shared,
         overtimeNotifier: (any OvertimeNotifying)? = nil,
-        overrideCounter: (any OverrideCounting)? = nil
+        overrideCounter: (any OverrideCounting)? = nil,
+        liveActivityManager: (any LiveActivityManaging)? = nil
     ) {
         self.modelContext = modelContext
         self.clock = clock
         self.calendar = calendar
-        self.pauseLimit = pauseLimit
+        self.settings = settings
         self.overtimeNotifier = overtimeNotifier ?? NoOpOvertimeNotifier()
         self.overrideCounter = overrideCounter ?? OverrideCounter.shared
+        self.liveActivityManager = liveActivityManager ?? NoOpLiveActivityManager()
         self.todayOverrideCount = self.overrideCounter.count(
             forDayKey: ServiceDay.dayKey(for: clock.now, calendar: calendar)
         )
@@ -155,6 +160,7 @@ final class SessionManager {
         try save()
         reconcile(now: now)
         refreshOvertimeNotification(for: session, now: now)
+        refreshLiveActivity(for: session, now: now)
     }
 
     func pause(now: Date? = nil) throws {
@@ -168,7 +174,7 @@ final class SessionManager {
         }
 
         let pausedCount = pausedTicketCount
-        guard PauseLimitGuard.canPause(currentPausedCount: pausedCount, limit: pauseLimit) else {
+        guard PauseLimitGuard.canPause(currentPausedCount: pausedCount, limit: settings.pauseLimit) else {
             throw SessionError.pauseLimitReached
         }
 
@@ -201,6 +207,7 @@ final class SessionManager {
         session.pausedAt = now
         phase = .paused
         overtimeNotifier.cancel(sessionID: session.id)
+        liveActivityManager.end()
         try save()
         reconcile(now: now)
     }
@@ -220,6 +227,7 @@ final class SessionManager {
         try save()
         reconcile(now: now)
         refreshOvertimeNotification(for: session, now: now)
+        refreshLiveActivity(for: session, now: now)
     }
 
     func extend(by seconds: TimeInterval, now: Date? = nil) throws {
@@ -236,6 +244,7 @@ final class SessionManager {
         try save()
         reconcile(now: now)
         refreshOvertimeNotification(for: session, now: now)
+        refreshLiveActivity(for: session, now: now)
     }
 
     func arrive(now: Date? = nil) throws {
@@ -302,6 +311,7 @@ final class SessionManager {
             phase = .idle
         }
         overtimeNotifier.cancel(sessionID: session.id)
+        liveActivityManager.end()
         try save()
         reconcile(now: now)
     }
@@ -382,6 +392,9 @@ final class SessionManager {
         reconcile(now: now)
         if let session = activeSession, session.isOpen, !session.isPaused {
             refreshOvertimeNotification(for: session, now: now)
+            refreshLiveActivity(for: session, now: now)
+        } else {
+            liveActivityManager.end()
         }
         refreshTodayOverrideCount(at: now)
     }
@@ -391,6 +404,21 @@ final class SessionManager {
     private func refreshTodayOverrideCount(at now: Date) {
         let dayKey = ServiceDay.dayKey(for: now, calendar: calendar)
         todayOverrideCount = overrideCounter.count(forDayKey: dayKey)
+    }
+
+    private func refreshLiveActivity(for session: WorkSession, now: Date) {
+        guard session.isOpen, !session.isPaused else {
+            liveActivityManager.end()
+            return
+        }
+        let title = session.ticket?.title ?? "切符"
+        let deadline = now.addingTimeInterval(session.remainingSeconds(at: now))
+        liveActivityManager.startOrUpdate(
+            sessionID: session.id,
+            title: title,
+            deadline: deadline,
+            isOvertime: session.remainingSeconds(at: now) <= 0
+        )
     }
 
     private func refreshOvertimeNotification(for session: WorkSession, now: Date) {
