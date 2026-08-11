@@ -11,12 +11,17 @@ import Testing
 @MainActor
 struct SessionManagerTests {
     private func makeHarness(
-        now: Date = Date(timeIntervalSince1970: 1_700_000_000)
+        now: Date = Date(timeIntervalSince1970: 1_700_000_000),
+        overrideCounter: (any OverrideCounting)? = nil
     ) throws -> (SessionManager, ModelContext, FixedSessionClock) {
         let container = try AppModelContainer.make(inMemory: true)
         let context = ModelContext(container)
         let clock = FixedSessionClock(now)
-        let manager = SessionManager(modelContext: context, clock: clock)
+        let manager = SessionManager(
+            modelContext: context,
+            clock: clock,
+            overrideCounter: overrideCounter ?? InMemoryOverrideCounter()
+        )
         return (manager, context, clock)
     }
 
@@ -250,5 +255,72 @@ struct SessionManagerTests {
         try manager.pause()
         #expect(manager.phase == .paused)
         #expect(manager.pausedTicketCount == 2)
+    }
+
+    @Test func forcePause_bypassesLimit_andIncrementsCount() throws {
+        let counter = InMemoryOverrideCounter()
+        let (manager, context, _) = try makeHarness(overrideCounter: counter)
+        try manager.startService()
+        let a = try makeTicket(context, title: "A")
+        let b = try makeTicket(context, title: "B")
+        let c = try makeTicket(context, title: "C")
+
+        try manager.board(ticket: a)
+        try manager.pause()
+        try manager.board(ticket: b)
+        try manager.pause()
+        try manager.board(ticket: c)
+
+        #expect(throws: SessionError.pauseLimitReached) {
+            try manager.pause()
+        }
+
+        let count = try manager.forcePause()
+        #expect(count == 1)
+        #expect(manager.todayOverrideCount == 1)
+        #expect(manager.phase == .paused)
+        #expect(manager.pausedTicketCount == 3)
+    }
+
+    @Test func forcePause_countResetsOnNewDay() throws {
+        let counter = InMemoryOverrideCounter()
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+
+        let day1 = calendar.date(from: DateComponents(year: 2026, month: 8, day: 11, hour: 12))!
+        let container = try AppModelContainer.make(inMemory: true)
+        let context = ModelContext(container)
+        let clock = FixedSessionClock(day1)
+        let manager = SessionManager(
+            modelContext: context,
+            clock: clock,
+            calendar: calendar,
+            overrideCounter: counter
+        )
+
+        try manager.startService()
+        let a = try makeTicket(context, title: "A")
+        let b = try makeTicket(context, title: "B")
+        let c = try makeTicket(context, title: "C")
+        try manager.board(ticket: a)
+        try manager.pause()
+        try manager.board(ticket: b)
+        try manager.pause()
+        try manager.board(ticket: c)
+        _ = try manager.forcePause()
+        #expect(manager.todayOverrideCount == 1)
+
+        // New calendar day — count for that day starts at 0.
+        let day2 = calendar.date(from: DateComponents(year: 2026, month: 8, day: 12, hour: 9))!
+        clock.advance(by: day2.timeIntervalSince(day1))
+        let manager2 = SessionManager(
+            modelContext: context,
+            clock: clock,
+            calendar: calendar,
+            overrideCounter: counter
+        )
+        #expect(manager2.todayOverrideCount == 0)
+        #expect(counter.count(forDayKey: ServiceDay.dayKey(for: day1, calendar: calendar)) == 1)
+        #expect(counter.count(forDayKey: ServiceDay.dayKey(for: day2, calendar: calendar)) == 0)
     }
 }

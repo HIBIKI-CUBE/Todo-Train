@@ -82,6 +82,18 @@ struct PauseLimitSheet: View {
                         .buttonStyle(.borderedProminent)
                     }
                 }
+
+                if sessionManager.pausedTicketCount >= PauseLimitGuard.defaultLimit,
+                   sessionManager.phase == .running || sessionManager.phase == .overtime {
+                    Section("臨時停車") {
+                        SafetyLockOverrideControl(
+                            todayCount: sessionManager.todayOverrideCount
+                        ) {
+                            forcePauseCurrent()
+                        }
+                        .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16))
+                    }
+                }
             }
             .navigationTitle("停車の整理")
             .navigationBarTitleDisplayMode(.inline)
@@ -134,6 +146,15 @@ struct PauseLimitSheet: View {
     private func abandonCurrent() {
         do {
             try sessionManager.abandon()
+            dismiss()
+        } catch {
+            // Keep sheet open.
+        }
+    }
+
+    private func forcePauseCurrent() {
+        do {
+            _ = try sessionManager.forcePause()
             dismiss()
         } catch {
             // Keep sheet open.

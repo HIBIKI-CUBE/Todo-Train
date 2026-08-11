@@ -20,19 +20,28 @@ final class SessionManager {
     private let calendar: Calendar
     private let pauseLimit: Int
     private let overtimeNotifier: any OvertimeNotifying
+    private let overrideCounter: any OverrideCounting
+
+    /// Today's temporary-pause override count (for UI).
+    private(set) var todayOverrideCount: Int = 0
 
     init(
         modelContext: ModelContext,
         clock: any SessionClock = SystemSessionClock(),
         calendar: Calendar = .current,
         pauseLimit: Int = PauseLimitGuard.defaultLimit,
-        overtimeNotifier: (any OvertimeNotifying)? = nil
+        overtimeNotifier: (any OvertimeNotifying)? = nil,
+        overrideCounter: (any OverrideCounting)? = nil
     ) {
         self.modelContext = modelContext
         self.clock = clock
         self.calendar = calendar
         self.pauseLimit = pauseLimit
         self.overtimeNotifier = overtimeNotifier ?? NoOpOvertimeNotifier()
+        self.overrideCounter = overrideCounter ?? OverrideCounter.shared
+        self.todayOverrideCount = self.overrideCounter.count(
+            forDayKey: ServiceDay.dayKey(for: clock.now, calendar: calendar)
+        )
     }
 
     var elapsedSeconds: TimeInterval {
@@ -81,6 +90,7 @@ final class SessionManager {
         needsServiceDayEndPrompt = false
         try save()
         overtimeNotifier.requestAuthorizationIfNeeded()
+        refreshTodayOverrideCount(at: now)
         reconcile(now: now)
     }
 
@@ -162,6 +172,28 @@ final class SessionManager {
             throw SessionError.pauseLimitReached
         }
 
+        try applyPause(session: session, now: now)
+    }
+
+    /// Bypass pause limit (臨時停車). Increments today's override count. No hard cap.
+    @discardableResult
+    func forcePause(now: Date? = nil) throws -> Int {
+        let now = now ?? clock.now
+        guard let session = activeSession, session.isOpen else {
+            throw SessionError.noActiveSession
+        }
+        guard !session.isPaused else {
+            phase = .paused
+            return todayOverrideCount
+        }
+
+        try applyPause(session: session, now: now)
+        let dayKey = ServiceDay.dayKey(for: now, calendar: calendar)
+        todayOverrideCount = overrideCounter.increment(forDayKey: dayKey)
+        return todayOverrideCount
+    }
+
+    private func applyPause(session: WorkSession, now: Date) throws {
         if let segmentStartedAt = session.segmentStartedAt {
             session.accumulatedActiveSeconds += now.timeIntervalSince(segmentStartedAt)
         }
@@ -351,9 +383,15 @@ final class SessionManager {
         if let session = activeSession, session.isOpen, !session.isPaused {
             refreshOvertimeNotification(for: session, now: now)
         }
+        refreshTodayOverrideCount(at: now)
     }
 
     // MARK: - Queries
+
+    private func refreshTodayOverrideCount(at now: Date) {
+        let dayKey = ServiceDay.dayKey(for: now, calendar: calendar)
+        todayOverrideCount = overrideCounter.count(forDayKey: dayKey)
+    }
 
     private func refreshOvertimeNotification(for session: WorkSession, now: Date) {
         guard session.isOpen, !session.isPaused else {
