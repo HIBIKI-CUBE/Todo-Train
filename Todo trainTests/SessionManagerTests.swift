@@ -200,4 +200,55 @@ struct SessionManagerTests {
         #expect(manager.activeSession?.budgetSecondsAtStart == 180)
         #expect(manager.remainingSeconds > 0)
     }
+
+    @Test func partialDisembark_closesTicketWithPartialKind() throws {
+        let (manager, context, _) = try makeHarness()
+        try manager.startService()
+        let ticket = try makeTicket(context)
+
+        try manager.board(ticket: ticket)
+        try manager.partialDisembark()
+
+        #expect(manager.phase == .idle)
+        #expect(ticket.closureKind == .partialDisembark)
+        #expect(ticket.closedAt != nil)
+        #expect(ticket.sessions.first?.outcome == .partialDisembark)
+    }
+
+    @Test func abandon_closesTicket() throws {
+        let (manager, context, _) = try makeHarness()
+        try manager.startService()
+        let ticket = try makeTicket(context)
+
+        try manager.board(ticket: ticket)
+        try manager.abandon()
+
+        #expect(manager.phase == .idle)
+        #expect(ticket.closureKind == .abandoned)
+        #expect(ticket.closedAt != nil)
+    }
+
+    @Test func pause_succeeds_afterAbandoningPaused() throws {
+        let (manager, context, _) = try makeHarness()
+        try manager.startService()
+        let a = try makeTicket(context, title: "A")
+        let b = try makeTicket(context, title: "B")
+        let c = try makeTicket(context, title: "C")
+
+        try manager.board(ticket: a)
+        try manager.pause()
+        try manager.board(ticket: b)
+        try manager.pause()
+        #expect(manager.pausedTicketCount == 2)
+
+        try manager.board(ticket: c)
+        let pausedA = manager.pausedSessions.first { $0.ticket?.id == a.id }
+        #expect(pausedA != nil)
+        try manager.abandon(session: pausedA!)
+
+        #expect(manager.pausedTicketCount == 1)
+        try manager.pause()
+        #expect(manager.phase == .paused)
+        #expect(manager.pausedTicketCount == 2)
+    }
 }

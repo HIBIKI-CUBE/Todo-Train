@@ -10,9 +10,17 @@ struct FocusView: View {
     @Environment(SessionManager.self) private var sessionManager
 
     @State private var showExtendChips = false
-    @State private var pauseLimitAlert = false
+    @State private var showPauseLimitSheet = false
     @State private var errorMessage = ""
+    @State private var showError = false
     @State private var didPlayOvertimeSound = false
+    @State private var canvasLaunch: CanvasLaunch?
+
+    private struct CanvasLaunch: Identifiable {
+        let id = UUID()
+        let parent: Ticket
+        let sessionID: UUID?
+    }
 
     var body: some View {
         ZStack {
@@ -70,6 +78,9 @@ struct FocusView: View {
                             try sessionManager.pause()
                         }
                     },
+                    onPartialDisembark: {
+                        partialDisembarkAndShowCanvas()
+                    },
                     onArrive: {
                         run { try sessionManager.arrive() }
                     },
@@ -90,7 +101,21 @@ struct FocusView: View {
                 )
             }
         }
-        .alert("停車できません", isPresented: $pauseLimitAlert) {
+        .sheet(isPresented: $showPauseLimitSheet) {
+            PauseLimitSheet(
+                onCurrentPartialDisembark: { ticket, sessionID in
+                    canvasLaunch = CanvasLaunch(parent: ticket, sessionID: sessionID)
+                },
+                onSlotFreedTryPause: {
+                    try? sessionManager.pause()
+                }
+            )
+            .environment(sessionManager)
+        }
+        .sheet(item: $canvasLaunch) { launch in
+            RemainingTicketsCanvas(parent: launch.parent, fromSessionID: launch.sessionID)
+        }
+        .alert("エラー", isPresented: $showError) {
             Button("OK", role: .cancel) {}
         } message: {
             Text(errorMessage)
@@ -127,15 +152,26 @@ struct FocusView: View {
         OvertimeOverlay.playAlertSound()
     }
 
+    private func partialDisembarkAndShowCanvas() {
+        guard let ticket = sessionManager.activeSession?.ticket else { return }
+        let sessionID = sessionManager.activeSession?.id
+        do {
+            try sessionManager.partialDisembark()
+            canvasLaunch = CanvasLaunch(parent: ticket, sessionID: sessionID)
+        } catch {
+            errorMessage = error.localizedDescription
+            showError = true
+        }
+    }
+
     private func run(_ body: () throws -> Void) {
         do {
             try body()
         } catch let error as SessionError where error == .pauseLimitReached {
-            errorMessage = error.localizedDescription
-            pauseLimitAlert = true
+            showPauseLimitSheet = true
         } catch {
             errorMessage = error.localizedDescription
-            pauseLimitAlert = true
+            showError = true
         }
     }
 }

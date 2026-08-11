@@ -202,22 +202,64 @@ final class SessionManager {
         guard let session = activeSession, session.isOpen else {
             throw SessionError.noActiveSession
         }
+        try close(session: session, outcome: .arrived, closureKind: .arrived, now: now)
+    }
 
+    func partialDisembark(now: Date? = nil) throws {
+        let now = now ?? clock.now
+        guard let session = activeSession, session.isOpen else {
+            throw SessionError.noActiveSession
+        }
+        try close(session: session, outcome: .partialDisembark, closureKind: .partialDisembark, now: now)
+    }
+
+    func abandon(now: Date? = nil) throws {
+        let now = now ?? clock.now
+        guard let session = activeSession, session.isOpen else {
+            throw SessionError.noActiveSession
+        }
+        try close(session: session, outcome: .abandoned, closureKind: .abandoned, now: now)
+    }
+
+    func partialDisembark(session: WorkSession, now: Date? = nil) throws {
+        let now = now ?? clock.now
+        guard session.isOpen else {
+            throw SessionError.noActiveSession
+        }
+        try close(session: session, outcome: .partialDisembark, closureKind: .partialDisembark, now: now)
+    }
+
+    func abandon(session: WorkSession, now: Date? = nil) throws {
+        let now = now ?? clock.now
+        guard session.isOpen else {
+            throw SessionError.noActiveSession
+        }
+        try close(session: session, outcome: .abandoned, closureKind: .abandoned, now: now)
+    }
+
+    private func close(
+        session: WorkSession,
+        outcome: SessionOutcome,
+        closureKind: ClosureKind,
+        now: Date
+    ) throws {
         if !session.isPaused, let segmentStartedAt = session.segmentStartedAt {
             session.accumulatedActiveSeconds += now.timeIntervalSince(segmentStartedAt)
             session.segmentStartedAt = nil
         }
         session.pausedAt = nil
         session.endedAt = now
-        session.outcome = .arrived
+        session.outcome = outcome
 
         if let ticket = session.ticket {
             ticket.closedAt = now
-            ticket.closureKind = .arrived
+            ticket.closureKind = closureKind
         }
 
-        activeSession = nil
-        phase = .idle
+        if activeSession?.id == session.id {
+            activeSession = nil
+            phase = .idle
+        }
         try save()
         reconcile(now: now)
     }
