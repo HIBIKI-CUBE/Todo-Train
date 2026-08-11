@@ -11,6 +11,7 @@ import SwiftData
 struct QuickAddSheet: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @Query(sort: \Ticket.sortOrder) private var allTickets: [Ticket]
     @Query(sort: \Tag.sortOrder) private var allTags: [Tag]
     @Query private var allSessions: [WorkSession]
 
@@ -18,8 +19,14 @@ struct QuickAddSheet: View {
     @State private var pendingMinutes = 30
     @State private var showCustomEstimate = false
     @State private var selectedTagIDs: Set<UUID> = []
+    @State private var insertionPosition: TicketInsertionPosition = .end
     @State private var didAddOnce = false
+    @State private var addPulse = 0
     @FocusState private var titleFocused: Bool
+
+    private var openTickets: [Ticket] {
+        allTickets.filter(\.isOpen)
+    }
 
     private var trimmedTitle: String {
         title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -61,6 +68,8 @@ struct QuickAddSheet: View {
                         .onSubmit {
                             addTicket(keepOpen: true)
                         }
+                } footer: {
+                    Text("見積もりチップをタップすると、タイトル入力済みならすぐ発行します。")
                 }
 
                 Section {
@@ -72,6 +81,10 @@ struct QuickAddSheet: View {
                     ) { minutes in
                         pendingMinutes = minutes
                         showCustomEstimate = false
+                        // H-03: title ready → chip tap completes add.
+                        if canAdd {
+                            addTicket(keepOpen: true)
+                        }
                     }
 
                     Button(showCustomEstimate ? "プリセットに戻る" : "任意の分を入力") {
@@ -97,9 +110,22 @@ struct QuickAddSheet: View {
                     }
                 }
 
+                if !openTickets.isEmpty {
+                    Section {
+                        InsertPositionPicker(
+                            openTickets: openTickets,
+                            position: $insertionPosition
+                        )
+                    } header: {
+                        Text("挿入位置")
+                    } footer: {
+                        Text("デフォルトは末尾。連続追加のあいだ選択は維持されます。")
+                    }
+                }
+
                 Section {
                     if allTags.isEmpty {
-                        Text("タグはまだありません。設定やタグ管理から追加できます。")
+                        Text("タグはまだありません。Hub の … → タグ から追加できます。")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     } else {
@@ -121,6 +147,7 @@ struct QuickAddSheet: View {
                                     }
                                 }
                             }
+                            .accessibilityAddTraits(selectedTagIDs.contains(tag.id) ? .isSelected : [])
                         }
                     }
                 } header: {
@@ -145,6 +172,7 @@ struct QuickAddSheet: View {
                     .disabled(!canAdd)
                 }
             }
+            .sensoryFeedback(.success, trigger: addPulse)
             .onAppear {
                 pendingMinutes = highlightedEstimateMinutes
                 if let defaultTag {
@@ -157,7 +185,6 @@ struct QuickAddSheet: View {
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
-        .interactiveDismissDisabled(false)
     }
 
     private func toggleTag(_ id: UUID) {
@@ -171,18 +198,40 @@ struct QuickAddSheet: View {
     private func addTicket(keepOpen: Bool) {
         guard canAdd else { return }
 
+        let openOrdered = openTickets
+        var orderedIDs = openOrdered.map(\.id)
+        let insertAt = TicketSortOrdering.insertionIndex(
+            openIDsOrdered: orderedIDs,
+            position: insertionPosition
+        )
+
         let ticket = Ticket(
             title: trimmedTitle,
             estimatedSeconds: pendingMinutes * 60,
-            sortOrder: nextSortOrder()
+            sortOrder: insertAt
         )
         ticket.tags = allTags.filter { selectedTagIDs.contains($0.id) }
         modelContext.insert(ticket)
-        try? modelContext.save()
+
+        orderedIDs.insert(ticket.id, at: insertAt)
+        let orders = TicketSortOrdering.normalizedOrders(forOrderedIDs: orderedIDs)
+        for open in openOrdered {
+            if let order = orders[open.id] {
+                open.sortOrder = order
+            }
+        }
+        ticket.sortOrder = orders[ticket.id] ?? insertAt
+
+        do {
+            try modelContext.save()
+        } catch {
+            // Keep sheet open; user can retry.
+            return
+        }
 
         didAddOnce = true
+        addPulse += 1
         title = ""
-        // Keep estimate + tags for continuous add (掃き出し).
         if keepOpen {
             DispatchQueue.main.async {
                 titleFocused = true
@@ -190,15 +239,6 @@ struct QuickAddSheet: View {
         } else {
             dismiss()
         }
-    }
-
-    private func nextSortOrder() -> Int {
-        let descriptor = FetchDescriptor<Ticket>(
-            predicate: #Predicate { $0.closedAt == nil },
-            sortBy: [SortDescriptor(\.sortOrder, order: .reverse)]
-        )
-        let maxOrder = (try? modelContext.fetch(descriptor).first?.sortOrder) ?? -1
-        return maxOrder + 1
     }
 }
 

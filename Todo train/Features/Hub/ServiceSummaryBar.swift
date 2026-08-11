@@ -39,7 +39,7 @@ struct ServiceSummaryBar: View {
 
                     if let key = sessionManager.activeServiceDay?.calendarDayKey,
                        sessionManager.activeServiceDay?.isOpen == true {
-                        Text(key)
+                        Text(Self.displayDay(from: key))
                             .font(TrainTheme.TypeScale.meta())
                             .foregroundStyle(.secondary)
                     }
@@ -94,5 +94,19 @@ struct ServiceSummaryBar: View {
     private var statusDot: Color {
         if sessionManager.needsServiceDayEndPrompt { return TrainTheme.signalAmber }
         return sessionManager.isInService ? TrainTheme.signalGreen : TrainTheme.muted
+    }
+
+    private static func displayDay(from dayKey: String) -> String {
+        let parts = dayKey.split(separator: "-").compactMap { Int($0) }
+        guard parts.count == 3 else { return dayKey }
+        var components = DateComponents()
+        components.year = parts[0]
+        components.month = parts[1]
+        components.day = parts[2]
+        guard let date = Calendar.current.date(from: components) else { return dayKey }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ja_JP")
+        formatter.dateFormat = "M月d日（E）"
+        return formatter.string(from: date)
     }
 }
