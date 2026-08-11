@@ -25,8 +25,10 @@
 | 項目 | 状態 |
 |------|------|
 | AlarmKit 終了ベル | コード済（`AlarmScheduling` + Settings トグル） |
-| StandBy カウントダウン LA | Widget ソース済（Mac で Extension 要） |
+| StandBy カウントダウン LA | **Extension 配線済**（`TodoTrainWidget` + Alarm LA）。実機表示は Mac 検証待ち（[11-v2-alarmkit-setup.md](11-v2-alarmkit-setup.md)） |
 | 週次レポート | `WeeklyReportView` + 純関数テスト |
+
+**ブランチ:** `feature/alarmkit-display`（UI polish は `feature/ios-native-ui`）。
 
 **注意:** v1 PR（#2）の Mac 検証前にマージする場合、SessionManager / LA 配線の前提が未確認です。
 

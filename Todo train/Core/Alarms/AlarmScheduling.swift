@@ -86,18 +86,14 @@ final class AlarmKitScheduler: AlarmScheduling {
     func cancel(sessionID: UUID) {
         let alarmID = SessionEndSchedule.alarmID(sessionID: sessionID)
         trackedAlarmIDs.remove(alarmID)
-        Task {
-            try? await AlarmManager.shared.cancel(id: alarmID)
-        }
+        try? AlarmManager.shared.cancel(id: alarmID)
     }
 
     func cancelAll() {
         let ids = trackedAlarmIDs
         trackedAlarmIDs.removeAll()
-        Task {
-            for id in ids {
-                try? await AlarmManager.shared.cancel(id: id)
-            }
+        for id in ids {
+            try? AlarmManager.shared.cancel(id: id)
         }
     }
 
@@ -109,26 +105,20 @@ final class AlarmKitScheduler: AlarmScheduling {
 
         let alarmID = SessionEndSchedule.alarmID(sessionID: sessionID)
         trackedAlarmIDs.insert(alarmID)
-        try? await AlarmManager.shared.cancel(id: alarmID)
+        try? AlarmManager.shared.cancel(id: alarmID)
 
-        let remaining = max(1, Int(fireAt.timeIntervalSince(Date()).rounded()))
-        let duration = Alarm.CountdownDuration(preAlert: remaining, postAlert: 0)
+        let remaining = max(1 as TimeInterval, fireAt.timeIntervalSinceNow)
+        let duration = Alarm.CountdownDuration(preAlert: remaining, postAlert: nil)
 
-        let stopButton = AlarmButton(
-            text: "到着",
-            textColor: .white,
-            systemImageName: "checkmark.circle.fill"
-        )
+        // iOS 26.1+: stop is system-provided; custom stopButton is deprecated.
         let alertPresentation = AlarmPresentation.Alert(
-            title: "見積もり終了",
-            stopButton: stopButton
+            title: LocalizedStringResource("見積もり終了")
         )
         let countdownPresentation = AlarmPresentation.Countdown(
-            title: ticketTitle
+            title: LocalizedStringResource(stringLiteral: ticketTitle)
         )
         let metadata = TodoTrainAlarmMetadata(ticketTitle: ticketTitle)
 
-        typealias Configuration = AlarmManager.AlarmConfiguration<TodoTrainAlarmMetadata>
         let attributes = AlarmAttributes<TodoTrainAlarmMetadata>(
             presentation: AlarmPresentation(
                 alert: alertPresentation,
@@ -137,7 +127,7 @@ final class AlarmKitScheduler: AlarmScheduling {
             metadata: metadata,
             tintColor: .orange
         )
-        let configuration = Configuration(
+        let configuration = AlarmManager.AlarmConfiguration<TodoTrainAlarmMetadata>(
             countdownDuration: duration,
             attributes: attributes
         )

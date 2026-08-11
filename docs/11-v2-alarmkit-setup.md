@@ -1,26 +1,39 @@
 # v2 — AlarmKit / StandBy セットアップ
 
-v1 PR（#2）が Mac 検証前でも、AlarmKit 連携のコード境界はこのリポジトリに置いてあります。**実機/シミュレータでの動作確認は必須**です。
+AlarmKit 終了ベルと StandBy / ロック画面カウントダウン用 Live Activity の配線手順。**実機/シミュレータでの動作確認は必須**です。
 
-## 1. Info.plist
+## 1. Info.plist / Capability
 
-メインターゲット `Todo train/Info.plist` に追加済み:
+メインターゲット:
 
-- `NSAlarmKitUsageDescription` — 終了ベルの用途説明
+- `Todo train/Info.plist` — `NSAlarmKitUsageDescription`
+- Build Setting — `INFOPLIST_KEY_NSSupportsLiveActivities = YES`
+
+Widget Extension（`TodoTrainWidget`）:
+
+- `TodoTrainWidget/Info.plist` — `NSExtensionPointIdentifier = com.apple.widgetkit-extension` + `NSSupportsLiveActivities`
+- ターゲットは Xcode プロジェクトに **作成済み**（Embed Foundation Extensions 済み）
 
 ## 2. 役割分離（`07-research.md`）
 
 | 層 | 役割 |
 |----|------|
-| Session Live Activity（v1） | 発車中の残時間表示 |
+| Session Live Activity（v1） | 発車中の残時間表示（別 Attributes・未配線可） |
 | AlarmKit 終了ベル（v2） | 見積もり到達の強制通知（Focus/Silent 突破） |
-| Alarm Live Activity | StandBy / ロック画面のカウントダウン（AlarmAttributes） |
+| Alarm Live Activity | StandBy / ロック画面のカウントダウン（`AlarmAttributes`） |
 
-## 3. Widget Extension
+## 3. Widget Extension（現状）
 
-1. Xcode で Widget Extension を作成（未作成なら `TodoTrainWidget/README.md` 参照）
-2. `TodoTrainAlarmLiveActivity.swift` を Extension ターゲットに追加
-3. `@main` が複数になる場合は、Widget Bundle で `TodoTrainWidget` + `TodoTrainAlarmLiveActivity` を束ねる
+`TodoTrainWidget` ターゲットがリポジトリに含まれています。
+
+| ファイル | 役割 |
+|----------|------|
+| `TodoTrainWidgetBundle.swift` | `@main` — Alarm LA のみ束ねる |
+| `TodoTrainAlarmLiveActivity.swift` | `AlarmAttributes<TodoTrainAlarmMetadata>` の UI（countdown / paused / alert） |
+| `TodoTrainAlarmMetadata.swift` | App + Extension 共有（両方のターゲットでコンパイル） |
+| `TodoTrainWidget.swift` | ホーム画面 Widget（**未接続**・後続） |
+
+ホーム画面 Widget を足すときは `TodoTrainWidgetBundle` に追加し、ターゲット membership を更新してください。
 
 ## 4. 設定
 
@@ -32,12 +45,12 @@ Hub → 設定 → **終了ベル（AlarmKit）** を ON にすると、発車�
 ## 5. Mac 検証チェックリスト
 
 - [ ] AlarmKit 権限プロンプト
-- [ ] 発車 → StandBy / ロック画面でカウントダウン
+- [ ] 発車 → StandBy / ロック画面 / Dynamic Island でカウントダウン
 - [ ] 予定終了でベル（Silent 時も）
 - [ ] 延長でタイマー更新
 - [ ] 停車でキャンセル
-- [ ] v1 Live Activity と競合しないこと
+- [ ] v1 Session Live Activity と競合しないこと（現状 Session LA Widget UI は未実装）
 
-## 6. v1 未検証について
+## 6. ブランチ
 
-v1 の SessionManager / LA 配線が Mac で問題ないことを先に確認してから、AlarmKit の細部（表示文言・Intent）を詰めることを推奨します。
+表示配線の作業ブランチ: `feature/alarmkit-display`
