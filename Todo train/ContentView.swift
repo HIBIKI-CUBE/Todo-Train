@@ -2,7 +2,7 @@
 //  ContentView.swift
 //  Todo train
 //
-//  Temporary debug UI for Sprint 1 SessionManager + 運行コア.
+//  Debug Hub + Focus fullScreenCover (Sprint 2).
 //
 
 import SwiftUI
@@ -16,6 +16,7 @@ struct ContentView: View {
     @State private var ticketTitle = "デバッグ切符"
     @State private var estimateMinutes = 30
     @State private var statusMessage = ""
+    @State private var isFocusPresented = false
 
     var body: some View {
         NavigationStack {
@@ -56,28 +57,19 @@ struct ContentView: View {
                             try sessionManager.board(ticket: ticket)
                         }
                     }
+                    .disabled(!sessionManager.isInService || sessionManager.phase == .running || sessionManager.phase == .overtime)
                 }
 
-                Section("セッション") {
-                    TimelineView(.periodic(from: .now, by: 1)) { context in
-                        let _ = context.date
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("経過 \(format(sessionManager.elapsedSeconds))")
-                            Text("残り \(format(sessionManager.remainingSeconds))")
-                            if let title = sessionManager.activeSession?.ticket?.title {
-                                Text("乗務中: \(title)")
-                            } else {
-                                Text("乗務なし")
-                            }
+                Section("停車中セッション") {
+                    if sessionManager.phase == .paused, let title = sessionManager.activeSession?.ticket?.title {
+                        Text(title)
+                        Button("再開") {
+                            run { try sessionManager.resume() }
                         }
+                    } else {
+                        Text("なし")
+                            .foregroundStyle(.secondary)
                     }
-
-                    Button("停車") { run { try sessionManager.pause() } }
-                    Button("再開") { run { try sessionManager.resume() } }
-                    Button("+5分延長") {
-                        run { try sessionManager.extend(by: 5 * 60) }
-                    }
-                    Button("到着") { run { try sessionManager.arrive() } }
                 }
 
                 if !statusMessage.isEmpty {
@@ -91,12 +83,29 @@ struct ContentView: View {
             .navigationTitle("Todo train Debug")
             .onAppear {
                 recover()
+                syncFocusPresentation()
             }
             .onChange(of: scenePhase) { _, newPhase in
                 if newPhase == .active {
                     recover()
+                    syncFocusPresentation()
                 }
             }
+            .onChange(of: sessionManager.phase) { _, _ in
+                syncFocusPresentation()
+            }
+            .fullScreenCover(isPresented: $isFocusPresented) {
+                FocusView()
+                    .environment(sessionManager)
+                    .interactiveDismissDisabled()
+            }
+        }
+    }
+
+    private func syncFocusPresentation() {
+        let shouldShow = sessionManager.phase == .running || sessionManager.phase == .overtime
+        if isFocusPresented != shouldShow {
+            isFocusPresented = shouldShow
         }
     }
 
@@ -114,18 +123,10 @@ struct ContentView: View {
         do {
             try body()
             statusMessage = "OK / phase=\(sessionManager.phase.rawValue)"
+            syncFocusPresentation()
         } catch {
             statusMessage = error.localizedDescription
         }
-    }
-
-    private func format(_ seconds: TimeInterval) -> String {
-        let total = Int(seconds.rounded())
-        let sign = total < 0 ? "-" : ""
-        let absTotal = abs(total)
-        let m = absTotal / 60
-        let s = absTotal % 60
-        return String(format: "%@%d:%02d", sign, m, s)
     }
 }
 

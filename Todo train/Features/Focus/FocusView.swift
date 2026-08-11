@@ -1,0 +1,153 @@
+//
+//  FocusView.swift
+//  Todo train
+//
+
+import SwiftData
+import SwiftUI
+
+struct FocusView: View {
+    @Environment(SessionManager.self) private var sessionManager
+
+    @State private var showExtendChips = false
+    @State private var pauseLimitAlert = false
+    @State private var errorMessage = ""
+    @State private var didPlayOvertimeSound = false
+
+    var body: some View {
+        ZStack {
+            Color(.systemBackground)
+                .ignoresSafeArea()
+
+            VStack(spacing: 32) {
+                Spacer()
+
+                Text(title)
+                    .font(.title2.weight(.medium))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
+
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    let _ = context.date
+                    let remaining = sessionManager.remainingSeconds
+                    VStack(spacing: 8) {
+                        Text(timerLabel(remaining))
+                            .font(.system(size: 64, weight: .light, design: .rounded))
+                            .monospacedDigit()
+                            .foregroundStyle(remaining < 0 ? Color.orange : Color.primary)
+
+                        if let budget = sessionManager.activeSession?.budgetSecondsAtStart,
+                           let estimate = sessionManager.activeSession?.estimatedSecondsAtStart {
+                            let extensionMinutes = max(0, (budget - estimate) / 60)
+                            Text(
+                                extensionMinutes > 0
+                                    ? "見積もり \(estimate / 60)分 / 延長 +\(extensionMinutes)分"
+                                    : "見積もり \(estimate / 60)分"
+                            )
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        }
+                    }
+                    .onChange(of: context.date) { _, _ in
+                        sessionManager.reconcile()
+                        handleOvertimeSound()
+                    }
+                }
+
+                Spacer()
+
+                if showExtendChips {
+                    EstimateChips { minutes in
+                        run { try sessionManager.extend(by: TimeInterval(minutes * 60)) }
+                        showExtendChips = false
+                    }
+                    .padding(.bottom, 8)
+                }
+
+                FocusControlsView(
+                    onPause: {
+                        run {
+                            try sessionManager.pause()
+                        }
+                    },
+                    onArrive: {
+                        run { try sessionManager.arrive() }
+                    },
+                    onExtendMenu: {
+                        showExtendChips.toggle()
+                    }
+                )
+                .padding(.bottom, 40)
+            }
+
+            if sessionManager.phase == .overtime {
+                OvertimeOverlay(
+                    onAlreadyDone: { run { try sessionManager.arrive() } },
+                    onJustFinished: { run { try sessionManager.arrive() } },
+                    onExtend: { seconds in
+                        run { try sessionManager.extend(by: seconds) }
+                    }
+                )
+            }
+        }
+        .alert("停車できません", isPresented: $pauseLimitAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(errorMessage)
+        }
+        .onAppear {
+            sessionManager.reconcile()
+            handleOvertimeSound()
+        }
+        .onChange(of: sessionManager.phase) { _, newPhase in
+            if newPhase != .overtime {
+                didPlayOvertimeSound = false
+            } else {
+                handleOvertimeSound()
+            }
+        }
+    }
+
+    private var title: String {
+        sessionManager.activeSession?.ticket?.title ?? "乗務中"
+    }
+
+    private func timerLabel(_ remaining: TimeInterval) -> String {
+        let total = Int(remaining.rounded())
+        if total < 0 {
+            let absTotal = abs(total)
+            return String(format: "超過 %d:%02d", absTotal / 60, absTotal % 60)
+        }
+        return String(format: "%d:%02d", total / 60, total % 60)
+    }
+
+    private func handleOvertimeSound() {
+        guard sessionManager.phase == .overtime, !didPlayOvertimeSound else { return }
+        didPlayOvertimeSound = true
+        OvertimeOverlay.playAlertSound()
+    }
+
+    private func run(_ body: () throws -> Void) {
+        do {
+            try body()
+        } catch let error as SessionError where error == .pauseLimitReached {
+            errorMessage = error.localizedDescription
+            pauseLimitAlert = true
+        } catch {
+            errorMessage = error.localizedDescription
+            pauseLimitAlert = true
+        }
+    }
+}
+
+#Preview {
+    let container = try! AppModelContainer.make(inMemory: true)
+    let context = container.mainContext
+    let manager = SessionManager(modelContext: context)
+    try! manager.startService()
+    let ticket = Ticket(title: "プレビュー切符", estimatedSeconds: 90)
+    context.insert(ticket)
+    try! manager.board(ticket: ticket)
+    return FocusView()
+        .environment(manager)
+}

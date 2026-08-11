@@ -182,4 +182,22 @@ struct SessionManagerTests {
             try manager.endService()
         }
     }
+
+    @Test func extend_increasesBudget_andLeavesOvertime() throws {
+        let (manager, context, clock) = try makeHarness()
+        try manager.startService()
+        let ticket = try makeTicket(context, seconds: 60)
+
+        try manager.board(ticket: ticket)
+        clock.advance(by: 61)
+        manager.reconcile()
+        #expect(manager.phase == .overtime)
+
+        try manager.extend(by: 120)
+        manager.reconcile()
+
+        #expect(manager.phase == .running)
+        #expect(manager.activeSession?.budgetSecondsAtStart == 180)
+        #expect(manager.remainingSeconds > 0)
+    }
 }
