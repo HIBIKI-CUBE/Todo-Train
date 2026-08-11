@@ -30,6 +30,14 @@
 
 **注意:** v1 PR（#2）の Mac 検証前にマージする場合、SessionManager / LA 配線の前提が未確認です。
 
+### UI polish（stack PR）
+
+| 項目 | 状態 |
+|------|------|
+| Design tokens | `TrainTheme` / `TrainChrome` |
+| Hub / Focus / History / Settings / Reorder | テーマ適用済 |
+| 方針ドキュメント | [12-ui-design.md](12-ui-design.md) |
+
 ## MVP 完了マップ（Sprint 1–10）
 
 | Sprint | 内容 | 主な成果物 |
