@@ -398,6 +398,7 @@ final class SessionManager {
 
     func reconcile(now: Date? = nil) {
         let now = now ?? clock.now
+        defer { publishWidgetSnapshot(at: now) }
 
         if let day = activeServiceDay ?? fetchOpenServiceDay() {
             activeServiceDay = day
@@ -413,6 +414,7 @@ final class SessionManager {
                 activeSession = running
             } else {
                 phase = .idle
+                liveActivityManager.end()
                 return
             }
             return reconcile(now: now)
@@ -420,13 +422,15 @@ final class SessionManager {
 
         if session.isPaused {
             phase = .paused
+            liveActivityManager.end()
             return
         }
 
-        if session.remainingSeconds(at: now) <= 0 {
-            phase = .overtime
-        } else {
-            phase = .running
+        let nextPhase: SessionPhase = session.remainingSeconds(at: now) <= 0 ? .overtime : .running
+        let crossedIntoOvertime = phase != .overtime && nextPhase == .overtime
+        phase = nextPhase
+        if crossedIntoOvertime {
+            refreshLiveActivity(for: session, now: now)
         }
     }
 
@@ -497,14 +501,20 @@ final class SessionManager {
         let now = now ?? clock.now
         guard let session = activeSession, session.isOpen else {
             alarmScheduler.cancelAll()
+            liveActivityManager.end()
+            publishWidgetSnapshot(at: now)
             return
         }
         if settings.endBellEnabled {
+            // AlarmKit owns StandBy countdown — tear down Session LA.
+            liveActivityManager.end()
             refreshEndBell(for: session, now: now)
         } else {
             alarmScheduler.cancel(sessionID: session.id)
             suppressedEndBellSessionIDs.remove(session.id)
+            refreshLiveActivity(for: session, now: now)
         }
+        publishWidgetSnapshot(at: now)
     }
 
     // MARK: - Queries
@@ -515,6 +525,11 @@ final class SessionManager {
     }
 
     private func refreshLiveActivity(for session: WorkSession, now: Date) {
+        // One LA at a time: AlarmKit StandBy countdown replaces Session LA.
+        if settings.endBellEnabled {
+            liveActivityManager.end()
+            return
+        }
         guard session.isOpen, !session.isPaused else {
             liveActivityManager.end()
             return
@@ -526,6 +541,27 @@ final class SessionManager {
             title: title,
             deadline: deadline,
             isOvertime: session.remainingSeconds(at: now) <= 0
+        )
+    }
+
+    private func publishWidgetSnapshot(at now: Date) {
+        let dayKey = ServiceDay.dayKey(for: now, calendar: calendar)
+        let sessions = (try? modelContext.fetch(FetchDescriptor<WorkSession>())) ?? []
+        var focusSeconds: TimeInterval = 0
+        for session in sessions {
+            let anchor = session.endedAt ?? session.startedAt
+            guard ServiceDay.dayKey(for: anchor, calendar: calendar) == dayKey else { continue }
+            if session.isOpen, !session.isPaused {
+                focusSeconds += session.elapsedSeconds(at: now)
+            } else {
+                focusSeconds += session.accumulatedActiveSeconds
+            }
+        }
+        WidgetSnapshotStore.publish(
+            isInService: isInService,
+            pausedCount: pausedTicketCount,
+            focusMinutesToday: Int((focusSeconds / 60).rounded()),
+            now: now
         )
     }
 

@@ -18,7 +18,7 @@ Widget Extension（`TodoTrainWidget`）:
 
 | 層 | 役割 |
 |----|------|
-| Session Live Activity（v1） | 発車中の残時間表示（別 Attributes・未配線可） |
+| Session Live Activity（v1） | 発車中の残時間（終了ベル OFF 時。ON 時は出さない） |
 | AlarmKit 終了ベル（v2） | 見積もり到達の強制通知（Focus/Silent 突破） |
 | Alarm Live Activity | StandBy / ロック画面のカウントダウン + 停車/再乗車（`AlarmAttributes`） |
 
@@ -28,12 +28,15 @@ Widget Extension（`TodoTrainWidget`）:
 
 | ファイル | 役割 |
 |----------|------|
-| `TodoTrainWidgetBundle.swift` | `@main` — Alarm LA のみ束ねる |
+| `TodoTrainWidgetBundle.swift` | `@main` — Home + Session LA + Alarm LA |
+| `TodoTrainSessionLiveActivity.swift` | 発車中 Session LA |
 | `TodoTrainAlarmLiveActivity.swift` | 大タイマー + Intent 操作ボタン + 細い compact |
+| `TodoTrainActivityAttributes.swift` | App + Extension 共有（Session LA） |
+| `WidgetSnapshot.swift` | App Group スナップショット |
 | `EndBellIntents.swift` | App + Extension 共有（停車 / 再乗車 / キャンセル / Stop） |
 | `TodoTrainAlarmMetadata.swift` | App + Extension 共有（`sessionID` + `ticketTitle`） |
 | `Assets.xcassets/AccentColor` | rail tint（App と同色） |
-| `TodoTrainWidget.swift` | ホーム画面 Widget（**未接続**・後続） |
+| `TodoTrainWidget.swift` | ホーム画面 Widget（App Group 読取） |
 
 ## 4. 操作（カスタム LA + AlarmPresentation）
 
@@ -74,7 +77,7 @@ Hub → 設定 → **終了ベル（AlarmKit）** を ON にすると、発車�
 - [ ] Focus 停車でも Alarm が消えず pause される
 - [ ] 予定終了でベル；Stop で止まる（到着自動なし）
 - [ ] 到着 / 放棄で Alarm が消える
-- [ ] v1 Session Live Activity と競合しないこと（現状 Session LA Widget UI は未実装）
+- [ ] v1 Session Live Activity と競合しないこと（終了ベル ON 時は Session LA を出さない）
 
 ## 7. ブランチ
 
