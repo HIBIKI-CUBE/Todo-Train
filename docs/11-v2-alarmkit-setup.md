@@ -1,18 +1,35 @@
-# v2 — AlarmKit / StandBy セットアップ
+# 11 — Widget / Live Activity / AlarmKit セットアップ
 
-AlarmKit 終了ベルと StandBy / ロック画面カウントダウン用 Live Activity の配線手順。**実機/シミュレータでの動作確認は必須**です。
+Session LA、Home Widget、AlarmKit 終了ベル、StandBy カウントダウン LA の配線と検証手順。**実機/シミュレータでの動作確認は必須**です。
 
 ## 1. Info.plist / Capability
 
-メインターゲット:
+メインターゲット **Signing & Capabilities**:
 
+- **Live Activities**
+- **App Groups** → `group.dev.hibiki-cube.Todo-train`
 - `Todo train/Info.plist` — `NSAlarmKitUsageDescription` + URL scheme `todotrain://`（LA タップ → Focus）
 - Build Setting — `INFOPLIST_KEY_NSSupportsLiveActivities = YES`
 
 Widget Extension（`TodoTrainWidget`）:
 
+- **App Groups** → 同じ ID
 - `TodoTrainWidget/Info.plist` — `NSExtensionPointIdentifier = com.apple.widgetkit-extension` + `NSSupportsLiveActivities`
 - ターゲットは Xcode プロジェクトに **作成済み**（Embed Foundation Extensions 済み）
+
+### 表示の切り替え
+
+| 条件 | 表示 |
+|------|------|
+| 発車中 & 終了ベル OFF | Session LA（タイトル + 残時間 / 超過） |
+| 発車中 & 終了ベル ON | AlarmKit LA のみ（Session LA は終了） |
+| 停車 / 到着 / 途中下車 / 放棄 | LA 終了 |
+
+全日運行の LA は作りません（8 時間制限。`07-research.md` 参照）。
+
+### Home Widget
+
+`SessionManager.reconcile` が App Group にスナップショットを書き、`TodoTrainHomeWidget` が読みます（運行中/運休・停車数・今日の集中分）。
 
 ## 2. 役割分離（`07-research.md`）
 
@@ -144,6 +161,7 @@ Simulator 合格後に限定する。
 - [ ] 予定終了でベル；Stop で止まる（到着自動なし）
 - [ ] 到着 / 放棄で Alarm が消える
 
-## 7. ブランチ
+## 7. 関連
 
-`feature/alarmkit-display`
+- Widget 拡張のファイル一覧: [TodoTrainWidget/README.md](../TodoTrainWidget/README.md)
+- UI 方針: [12-ui-design.md](12-ui-design.md)

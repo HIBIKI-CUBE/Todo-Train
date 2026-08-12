@@ -6,8 +6,9 @@
 |----------|--------|------|
 | **MVP** | 運行 + 掃き出し + 発車 + 停車/到着/延長 + 履歴 + タグ + 通知 + Override + Heuristic + 運行終了整理 | **完了**（Sprint 1–10） |
 | **v0.5** | （臨時停車 UI 等） | MVP に吸収済み |
-| **v1** | Settings、履歴検索・今日に追加、並べ替えビュー、dueDate、カスタム見積、LA、Widget、AI stub、CloudKit | **次** → [09-v1-implementation.md](09-v1-implementation.md) |
-| **v2** | AlarmKit + StandBy、週次レポート、iPad 等 | **実装中**（AlarmKit 境界 + 週次レポート） |
+| **v1** | Settings、履歴検索・今日に追加、並べ替えビュー、dueDate、カスタム見積、LA、Widget、AI stub | **完了**（CloudKit を除く） |
+| **v2** | AlarmKit + StandBy、週次レポート、UI polish、横向き compact | **完了**（iPad 等は未着手） |
+| **次** | CloudKit 同期 | 未着手 |
 
 ## MVP（完了チェック）
 
@@ -25,27 +26,28 @@
 
 詳細マップ: [08-current-status.md](08-current-status.md)
 
-## v1（実装指示は 09）
+## v1（完了）
 
-| WP | 内容 |
-|----|------|
-| A | Settings（停車上限 2/3、音） |
-| B | 履歴検索 + 今日に追加 |
-| C | 並べ替えビュー（全表示 + フィルタ強調） |
-| D | 期限 `dueDate`（任意・自動ソートなし） |
-| E | カスタム見積もり 1–60 |
-| F | Live Activity（**発車中のみ**） |
-| G | Home Widget（運行状態） |
-| H | AI / PCC（タップ起動・フォールバック必須） |
-| I | CloudKit（独立 PR 推奨） |
+| WP | 内容 | 状態 |
+|----|------|------|
+| A | Settings（停車上限 2/3、音） | ✅ |
+| B | 履歴検索 + 今日に追加 | ✅ |
+| C | 並べ替えビュー（全表示 + フィルタ強調） | ✅ |
+| D | 期限 `dueDate`（任意・自動ソートなし） | ✅ |
+| E | カスタム見積もり 1–60 | ✅ |
+| F | Live Activity（**発車中のみ**） | ✅ |
+| G | Home Widget（運行状態） | ✅ |
+| H | AI / PCC（タップ起動・フォールバック必須） | stub 済 |
+| I | CloudKit（独立 PR 推奨） | 未着手 |
 
-含めない: AlarmKit、全日 LA、コーチングウィザード、JSON エクスポート。
+## v2（完了）
 
-## v2
-
-- AlarmKit（終了ベル）+ StandBy 強化
-- App Intents / Siri 拡充
-- 週次レポート、系譜可視化、iPad
+- [x] AlarmKit（終了ベル）+ StandBy LA
+- [x] 週次レポート
+- [x] ダークコックピット Focus / LA UI
+- [x] iPhone 横向き compact レイアウト
+- [ ] App Intents / Siri 拡充
+- [ ] 系譜可視化、iPad
 
 ## 受入の芯（MVP・達成済みの意図）
 

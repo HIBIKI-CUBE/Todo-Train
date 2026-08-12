@@ -1,6 +1,6 @@
 # Todo train ドキュメント索引
 
-計画会話（2026-08-11）と実装（Sprint 1–10 / MVP 完了）を突合した設計資料です。  
+計画会話（2026-08-11）と実装（MVP → v1 → v2）を突合した設計資料です。  
 別 Agent / Cloud Agent / 将来の自分向けの **単一の参照元** として使ってください。
 
 | ファイル | 内容 |
@@ -12,24 +12,23 @@
 | [05-ux-flows.md](05-ux-flows.md) | 画面・操作フロー |
 | [06-roadmap.md](06-roadmap.md) | フェーズ別スコープ・実装順 |
 | [07-research.md](07-research.md) | 研究根拠・Live Activity / AlarmKit 制限 |
-| [08-current-status.md](08-current-status.md) | **MVP 完了時点の実装マップ** |
-| [09-v1-implementation.md](09-v1-implementation.md) | **v1 一括実装ハンドオフ（Cloud Agent 向け）** |
-| [10-live-activity-setup.md](10-live-activity-setup.md) | Live Activity Xcode セットアップ |
-| [11-v2-alarmkit-setup.md](11-v2-alarmkit-setup.md) | AlarmKit / StandBy セットアップ（v2） |
+| [08-current-status.md](08-current-status.md) | **現状の実装マップ・テスト手順** |
+| [11-v2-alarmkit-setup.md](11-v2-alarmkit-setup.md) | Widget / Live Activity / AlarmKit セットアップ・検証 |
 | [12-ui-design.md](12-ui-design.md) | UI / ビジュアル方針（列車テーマ） |
 
 ルートの [AGENTS.md](../AGENTS.md) が作業開始時の短い入口です。
 
-## いま読む順番（v1 実装 Agent）
+## いま読む順番（新規 Agent / 変更着手時）
 
 1. [AGENTS.md](../AGENTS.md)
-2. [08-current-status.md](08-current-status.md)
-3. [09-v1-implementation.md](09-v1-implementation.md) ← 作業指示の本体
-4. 用語・要件で迷ったら [03](03-terminology.md) / [02](02-requirements.md)
+2. [08-current-status.md](08-current-status.md) — いま何があるか
+3. 用語・要件で迷ったら [03](03-terminology.md) / [02](02-requirements.md)
+4. LA / Widget / AlarmKit を触るなら [11](11-v2-alarmkit-setup.md)
+5. UI を触るなら [12](12-ui-design.md)
 
 ## ステータス
 
 - ターゲット: **iPhone 15 Pro Max / iOS 27**
 - スタック: **SwiftUI + SwiftData**
-- **MVP: 完了**（Sprint 1–10）
-- **次: v1**（履歴検索・並べ替えビュー・Settings・LA/Widget 等）
+- **MVP / v1 / v2: `develop` にマージ済み**
+- **次: CloudKit（WP-I）**
