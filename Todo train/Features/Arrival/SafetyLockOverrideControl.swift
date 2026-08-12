@@ -41,47 +41,60 @@ struct SafetyLockOverrideControl: View {
                 }
                 .buttonStyle(.plain)
             } else {
-                ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.orange.opacity(0.15))
-                        .frame(width: trackWidth, height: thumbSize + 8)
+                VStack(alignment: .leading, spacing: 10) {
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(TrainTheme.signalAmber.opacity(0.15))
+                            .frame(width: trackWidth, height: thumbSize + 8)
 
-                    Text("スライドして臨時停車")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity)
+                        Text("スライドして臨時停車")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity)
 
-                    Circle()
-                        .fill(Color.orange)
-                        .frame(width: thumbSize, height: thumbSize)
-                        .overlay {
-                            Image(systemName: "chevron.right.2")
-                                .font(.caption.weight(.bold))
-                                .foregroundStyle(.white)
-                        }
-                        .offset(x: 4 + dragOffset)
-                        .gesture(
-                            DragGesture()
-                                .onChanged { value in
-                                    dragOffset = min(max(0, value.translation.width), maxDrag)
-                                }
-                                .onEnded { _ in
-                                    if dragOffset >= maxDrag * 0.92 {
-                                        dragOffset = maxDrag
-                                        onConfirm()
-                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                                            dragOffset = 0
-                                            coverLifted = false
-                                        }
-                                    } else {
-                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                            dragOffset = 0
+                        Circle()
+                            .fill(TrainTheme.signalAmber)
+                            .frame(width: thumbSize, height: thumbSize)
+                            .overlay {
+                                Image(systemName: "chevron.right.2")
+                                    .font(.caption.weight(.bold))
+                                    .foregroundStyle(.white)
+                            }
+                            .offset(x: 4 + dragOffset)
+                            .gesture(
+                                DragGesture()
+                                    .onChanged { value in
+                                        dragOffset = min(max(0, value.translation.width), maxDrag)
+                                    }
+                                    .onEnded { _ in
+                                        if dragOffset >= maxDrag * 0.92 {
+                                            dragOffset = maxDrag
+                                            onConfirm()
+                                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                                                dragOffset = 0
+                                                coverLifted = false
+                                            }
+                                        } else {
+                                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                                dragOffset = 0
+                                            }
                                         }
                                     }
-                                }
-                        )
+                            )
+                            .accessibilityHidden(true)
+                    }
+                    .frame(width: trackWidth)
+                    .accessibilityHidden(true)
+
+                    Button("臨時停車する", role: .destructive) {
+                        onConfirm()
+                        coverLifted = false
+                        dragOffset = 0
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(TrainTheme.signalAmber)
+                    .accessibilityHint("停車上限を超えて今の切符を停車します")
                 }
-                .frame(width: trackWidth)
             }
         }
     }

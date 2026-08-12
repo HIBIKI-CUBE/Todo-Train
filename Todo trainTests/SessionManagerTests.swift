@@ -316,6 +316,32 @@ struct SessionManagerTests {
         #expect(manager.remainingSeconds > 0)
     }
 
+    @Test func extend_recordsReason() throws {
+        let (manager, context, _, _) = try makeHarness()
+        try manager.startService()
+        let ticket = try makeTicket(context, seconds: 600)
+        try manager.board(ticket: ticket)
+        try manager.extend(by: 300, reason: "割り込みが入った")
+
+        let session = try #require(manager.activeSession)
+        #expect(session.extensions.count == 1)
+        #expect(session.extensions.first?.addedSeconds == 300)
+        #expect(session.extensions.first?.reason == "割り込みが入った")
+    }
+
+    @Test func arrive_recordsOvertimeResolution() throws {
+        let (manager, context, clock, _) = try makeHarness()
+        try manager.startService()
+        let ticket = try makeTicket(context, seconds: 60)
+        try manager.board(ticket: ticket)
+        clock.advance(by: 61)
+        manager.reconcile()
+        try manager.arrive(resolution: .alreadyDone)
+
+        #expect(ticket.sessions.first?.overtimeResolution == .alreadyDone)
+        #expect(ticket.closureKind == .arrived)
+    }
+
     @Test func partialDisembark_closesTicketWithPartialKind() throws {
         let (manager, context, _, _) = try makeHarness()
         try manager.startService()

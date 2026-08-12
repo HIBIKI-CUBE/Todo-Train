@@ -9,6 +9,10 @@ import SwiftUI
 struct FocusView: View {
     @Environment(SessionManager.self) private var sessionManager
     @Environment(AppSettings.self) private var settings
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    @ScaledMetric(relativeTo: .largeTitle) private var timerSize: CGFloat = 64
 
     @State private var showExtendChips = false
     @State private var showPauseLimitSheet = false
@@ -16,7 +20,9 @@ struct FocusView: View {
     @State private var showError = false
     @State private var didPlayOvertimeSound = false
     @State private var overtimePulse = false
+    @State private var overtimeHaptic = 0
     @State private var canvasLaunch: CanvasLaunch?
+    @State private var extendReason: String?
 
     private struct CanvasLaunch: Identifiable {
         let id = UUID()
@@ -24,9 +30,14 @@ struct FocusView: View {
         let sessionID: UUID?
     }
 
+    private let extendReasons = ["見積もりが甘かった", "割り込みが入った", "もう少しで終わる", "その他"]
+
     var body: some View {
         ZStack {
-            CabinBackground(overtime: sessionManager.phase == .overtime)
+            CabinBackground(
+                overtime: sessionManager.phase == .overtime,
+                reduceTransparency: reduceTransparency
+            )
 
             VStack(spacing: TrainTheme.Space.xl) {
                 Spacer()
@@ -36,17 +47,22 @@ struct FocusView: View {
                     .foregroundStyle(TrainTheme.cabinInk)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, TrainTheme.Space.lg)
+                    .accessibilityAddTraits(.isHeader)
 
                 TimelineView(.periodic(from: .now, by: 1)) { context in
                     let _ = context.date
                     let remaining = sessionManager.remainingSeconds
                     VStack(spacing: TrainTheme.Space.sm) {
                         Text(timerLabel(remaining))
-                            .font(TrainTheme.TypeScale.timer())
+                            .font(TrainTheme.TypeScale.timer(size: timerSize))
                             .monospacedDigit()
                             .foregroundStyle(timerColor(remaining))
-                            .scaleEffect(overtimePulse ? 1.03 : 1)
-                            .animation(TrainTheme.Motion.pulse, value: overtimePulse)
+                            .minimumScaleFactor(0.55)
+                            .lineLimit(1)
+                            .scaleEffect((overtimePulse && !reduceMotion) ? 1.03 : 1)
+                            .animation(reduceMotion ? nil : TrainTheme.Motion.pulse, value: overtimePulse)
+                            .accessibilityLabel("残り時間")
+                            .accessibilityValue(timerLabel(remaining))
 
                         if let budget = sessionManager.activeSession?.budgetSecondsAtStart,
                            let estimate = sessionManager.activeSession?.estimatedSecondsAtStart {
@@ -74,8 +90,25 @@ struct FocusView: View {
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(TrainTheme.cabinInk.opacity(0.7))
                         EstimateChips(style: .extendPrefix) { minutes in
-                            run { try sessionManager.extend(by: TimeInterval(minutes * 60)) }
+                            run {
+                                try sessionManager.extend(
+                                    by: TimeInterval(minutes * 60),
+                                    reason: extendReason
+                                )
+                            }
                             showExtendChips = false
+                            extendReason = nil
+                        }
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(extendReasons, id: \.self) { reason in
+                                    Button(reason) {
+                                        extendReason = extendReason == reason ? nil : reason
+                                    }
+                                    .buttonStyle(.bordered)
+                                    .tint(extendReason == reason ? TrainTheme.signalAmber : .secondary)
+                                }
+                            }
                         }
                     }
                     .padding(.horizontal)
@@ -101,18 +134,19 @@ struct FocusView: View {
                     }
                 )
                 .padding(.horizontal, TrainTheme.Space.lg)
-                .padding(.bottom, 36)
+                .safeAreaPadding(.bottom, 12)
             }
 
             if sessionManager.phase == .overtime {
                 OvertimeOverlay(
-                    onAlreadyDone: { run { try sessionManager.arrive() } },
-                    onJustFinished: { run { try sessionManager.arrive() } },
-                    onExtend: { seconds in
-                        run { try sessionManager.extend(by: seconds) }
+                    onAlreadyDone: { run { try sessionManager.arrive(resolution: .alreadyDone) } },
+                    onJustFinished: { run { try sessionManager.arrive(resolution: .justFinished) } },
+                    onExtend: { seconds, reason in
+                        run { try sessionManager.extend(by: seconds, reason: reason) }
                     }
                 )
                 .transition(.opacity)
+                .sensoryFeedback(.warning, trigger: overtimeHaptic)
             }
         }
         .sheet(isPresented: $showPauseLimitSheet) {
@@ -144,6 +178,7 @@ struct FocusView: View {
                 overtimePulse = false
             } else {
                 overtimePulse = true
+                overtimeHaptic += 1
                 handleOvertimeSound()
             }
         }

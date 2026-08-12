@@ -15,6 +15,8 @@ struct PauseLimitSheet: View {
     var onSlotFreedTryPause: () -> Void
 
     @State private var canvasLaunch: CanvasLaunch?
+    @State private var errorMessage = ""
+    @State private var showError = false
 
     private struct CanvasLaunch: Identifiable {
         let id = UUID()
@@ -35,32 +37,26 @@ struct PauseLimitSheet: View {
                         .foregroundStyle(.secondary)
                 }
 
-                Section("先に停車中を解決") {
+                Section {
                     ForEach(sessionManager.pausedSessions, id: \.id) { session in
                         if let ticket = session.ticket {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text(ticket.title)
                                     .font(.body.weight(.medium))
-                                HStack {
-                                    Button("途中下車") {
-                                        disembarkPaused(session, ticket: ticket)
+                                ViewThatFits(in: .horizontal) {
+                                    HStack {
+                                        pauseActions(for: session, ticket: ticket)
                                     }
-                                    .buttonStyle(.bordered)
-
-                                    Button("再乗車") {
-                                        resumePaused(ticket)
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        pauseActions(for: session, ticket: ticket)
                                     }
-                                    .buttonStyle(.borderedProminent)
-
-                                    Button("放棄", role: .destructive) {
-                                        abandonPaused(session)
-                                    }
-                                    .buttonStyle(.bordered)
                                 }
                             }
                             .padding(.vertical, 4)
                         }
                     }
+                } header: {
+                    Text("先に停車中を解決")
                 }
 
                 Section("今の切符「\(currentTitle)」") {
@@ -105,7 +101,35 @@ struct PauseLimitSheet: View {
             .sheet(item: $canvasLaunch) { launch in
                 RemainingTicketsCanvas(parent: launch.parent, fromSessionID: launch.sessionID)
             }
+            .alert("エラー", isPresented: $showError) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(errorMessage)
+            }
         }
+    }
+
+    @ViewBuilder
+    private func pauseActions(for session: WorkSession, ticket: Ticket) -> some View {
+        Button("途中下車") {
+            disembarkPaused(session, ticket: ticket)
+        }
+        .buttonStyle(.bordered)
+
+        Button("再乗車") {
+            resumePaused(ticket)
+        }
+        .buttonStyle(.borderedProminent)
+
+        Button("放棄", role: .destructive) {
+            abandonPaused(session)
+        }
+        .buttonStyle(.bordered)
+    }
+
+    private func present(_ error: Error) {
+        errorMessage = error.localizedDescription
+        showError = true
     }
 
     private func disembarkPaused(_ session: WorkSession, ticket: Ticket) {
@@ -114,7 +138,7 @@ struct PauseLimitSheet: View {
             try sessionManager.partialDisembark(session: session)
             canvasLaunch = CanvasLaunch(parent: ticket, sessionID: sessionID)
         } catch {
-            // Keep sheet open.
+            present(error)
         }
     }
 
@@ -123,12 +147,16 @@ struct PauseLimitSheet: View {
             try sessionManager.board(ticket: ticket)
             dismiss()
         } catch {
-            // Keep sheet open.
+            present(error)
         }
     }
 
     private func abandonPaused(_ session: WorkSession) {
-        try? sessionManager.abandon(session: session)
+        do {
+            try sessionManager.abandon(session: session)
+        } catch {
+            present(error)
+        }
     }
 
     private func disembarkCurrent() {
@@ -139,7 +167,7 @@ struct PauseLimitSheet: View {
             dismiss()
             onCurrentPartialDisembark(ticket, sessionID)
         } catch {
-            // Keep sheet open.
+            present(error)
         }
     }
 
@@ -148,7 +176,7 @@ struct PauseLimitSheet: View {
             try sessionManager.abandon()
             dismiss()
         } catch {
-            // Keep sheet open.
+            present(error)
         }
     }
 
@@ -157,7 +185,7 @@ struct PauseLimitSheet: View {
             _ = try sessionManager.forcePause()
             dismiss()
         } catch {
-            // Keep sheet open.
+            present(error)
         }
     }
 }
