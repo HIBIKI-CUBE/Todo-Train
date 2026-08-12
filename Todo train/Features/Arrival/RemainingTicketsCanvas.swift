@@ -73,7 +73,10 @@ struct RemainingTicketsCanvas: View {
                             }
                         }
                         .padding(.vertical, 4)
-                        .deleteSwipeAction(accessibilityName: rowTitle(row)) {
+                        .deleteSwipeAction(
+                            accessibilityName: rowTitle(row),
+                            needsConfirmation: false
+                        ) {
                             removeRow(id: row.id)
                         }
                     }
@@ -140,16 +143,20 @@ struct RemainingTicketsCanvas: View {
     }
 
     private func removeRow(id: UUID) {
-        rows.removeAll { $0.id == id }
-        if rows.isEmpty {
-            rows = [Row()]
+        withAnimation {
+            rows.removeAll { $0.id == id }
+            if rows.isEmpty {
+                rows = [Row()]
+            }
         }
     }
 
     private func removeRows(at offsets: IndexSet) {
-        rows.remove(atOffsets: offsets)
-        if rows.isEmpty {
-            rows = [Row()]
+        withAnimation {
+            rows.remove(atOffsets: offsets)
+            if rows.isEmpty {
+                rows = [Row()]
+            }
         }
     }
 

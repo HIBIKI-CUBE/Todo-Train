@@ -61,18 +61,18 @@
 
 ### 破壊的操作（物理削除）
 
-取り消しできないので、確認は **中央 Alert**（`confirmationDialog` は使わない）。文言は `TicketDeletion.Prompt` に集約し、結果で変える。
+Undo がないので、[HIG Alerts](https://developer.apple.com/design/human-interface-guidelines/alerts) と [swipeActions](https://developer.apple.com/documentation/swiftui/view/swipeactions(edge:allowsfullswipe:content:)) に合わせる。
 
-| 対象 | 確認で言うこと |
-|------|----------------|
-| 未乗車の切符 | 切符名。履歴には触れない |
-| 履歴あり / 停車中 / 走行中 | 履歴 cascade、停車、フォーカスと終了ベル |
-| 履歴の最後のセッション | 切符も消える |
-| タグ | 切符は残る。使用中なら枚数 |
+| 原則 | 内容 |
+|------|------|
+| フルスワイプしない | Undo がない削除は、スワイプして **削除をタップ** が確認（Apple Forums の HIG 解釈） |
+| Alert は副作用があるときだけ | よくある未乗車切符・未使用タグは Alert なし。履歴 cascade / 停車 / 走行 / 最後の履歴 / 使用中タグは Alert |
+| スワイプの見た目 | `Label("削除", systemImage: "trash")`。確認待ちのボタンに `role: .destructive` を付けない（行が消えて戻る） |
+| Alert は 1 View に 1 つ | エラー Alert は `errorAlert` で別ビューに付ける |
+| タイトルに対象名 | 「〜を削除しますか？」。本文は結果だけ（名前を繰り返さない） |
+| `role: .destructive` | 本当に消える操作だけ（期限クリアには使わない） |
 
-- スワイプは **フルスワイプ可**。安全弁は Alert
-- `role: .destructive` は本当に消える操作だけ（期限クリアには使わない）
-- 実装: `DesignSystem/DeleteConfirmation.swift`
+文言は `TicketDeletion.Prompt`。実装は `DesignSystem/DeleteConfirmation.swift`。
 
 ## 横向き（iPhone compact height）
 
@@ -146,6 +146,7 @@ StandBy は全画面 API ではなく、提案された帯をシステムが拡�
 - 絵文字アイコンの多用
 - コーチング吹き出し
 - Web / Flutter 風の独自カードグリッドを「ブランド」にする行為
+- フルスワイプと Alert の二重確認、同一 View への `.alert` 重ね、確認待ちスワイプへの `role: .destructive`
 
 ## 実装マップ
 

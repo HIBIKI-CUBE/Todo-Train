@@ -49,8 +49,13 @@ struct TagManagerView: View {
                         }
                     }
                     .buttonStyle(.plain)
-                    .deleteSwipeAction(accessibilityName: tag.name) {
-                        tagPendingDelete = tag
+                    .deleteSwipeAction(
+                        accessibilityName: tag.name,
+                        needsConfirmation: TicketDeletion.swipeNeedsAlertForTag(
+                            ticketCount: tag.tickets.count
+                        )
+                    ) {
+                        requestDelete(tag)
                     }
                 }
                 .onMove(perform: moveTags)
@@ -90,6 +95,16 @@ struct TagManagerView: View {
         ordered.move(fromOffsets: source, toOffset: destination)
         TagOrdering.normalizeSortOrders(ordered)
         try? modelContext.save()
+    }
+
+    private func requestDelete(_ tag: Tag) {
+        if TicketDeletion.swipeNeedsAlertForTag(ticketCount: tag.tickets.count) {
+            tagPendingDelete = tag
+        } else {
+            withAnimation {
+                deleteTag(tag)
+            }
+        }
     }
 
     private func deleteTag(_ tag: Tag) {

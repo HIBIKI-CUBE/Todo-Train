@@ -91,18 +91,15 @@ struct HistoryView: View {
         ) { session in
             deleteSession(session)
         }
-        .alert("エラー", isPresented: $showError) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(errorMessage)
-        }
+        .errorAlert(isPresented: $showError, message: errorMessage)
     }
 
     @ViewBuilder
     private func historyRow(_ session: WorkSession) -> some View {
         HistorySessionRow(session: session, onReissue: reissue)
             .deleteSwipeAction(
-                accessibilityName: session.ticket?.title ?? "この履歴"
+                accessibilityName: session.ticket?.title ?? "この履歴",
+                needsConfirmation: true
             ) {
                 sessionPendingDelete = session
             }

@@ -17,8 +17,12 @@ struct TicketDetailView: View {
 
     @State private var errorMessage = ""
     @State private var showError = false
-    @State private var showDeleteConfirm = false
-    @State private var sessionPendingDelete: WorkSession?
+    @State private var pendingDeletion: PendingDeletion?
+
+    private enum PendingDeletion {
+        case ticket
+        case session(WorkSession)
+    }
 
     private var canBoard: Bool {
         sessionManager.isInService
@@ -210,7 +214,7 @@ struct TicketDetailView: View {
 
             Section {
                 Button("切符を削除", role: .destructive) {
-                    showDeleteConfirm = true
+                    pendingDeletion = .ticket
                 }
                 .accessibilityHint(TicketDeletion.ticketDeleteFooter(ride: TicketDeletion.rideState(for: ticket)))
             } footer: {
@@ -222,28 +226,25 @@ struct TicketDetailView: View {
         .onDisappear {
             try? modelContext.save()
         }
-        .alert("エラー", isPresented: $showError) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(errorMessage)
-        }
-        .alert(
-            TicketDeletion.ticketPrompt(for: ticket).title,
-            isPresented: $showDeleteConfirm
-        ) {
-            Button("削除", role: .destructive) {
-                deleteTicket()
-            }
-            Button("キャンセル", role: .cancel) {}
-        } message: {
-            Text(TicketDeletion.ticketPrompt(for: ticket).message)
-        }
         .deletionAlert(
-            item: $sessionPendingDelete,
-            prompt: { TicketDeletion.historySessionPrompt(for: $0) }
-        ) { session in
-            deleteSession(session)
+            item: $pendingDeletion,
+            prompt: { pending in
+                switch pending {
+                case .ticket:
+                    TicketDeletion.ticketPrompt(for: ticket)
+                case .session(let session):
+                    TicketDeletion.historySessionPrompt(for: session)
+                }
+            }
+        ) { pending in
+            switch pending {
+            case .ticket:
+                deleteTicket()
+            case .session(let session):
+                deleteSession(session)
+            }
         }
+        .errorAlert(isPresented: $showError, message: errorMessage)
     }
 
     @ViewBuilder
@@ -261,8 +262,11 @@ struct TicketDetailView: View {
                 .foregroundStyle(.secondary)
         }
         if session.endedAt != nil {
-            row.deleteSwipeAction(accessibilityName: "この乗車記録") {
-                sessionPendingDelete = session
+            row.deleteSwipeAction(
+                accessibilityName: "この乗車記録",
+                needsConfirmation: true
+            ) {
+                pendingDeletion = .session(session)
             }
         } else {
             row

@@ -109,14 +109,10 @@ struct HubView: View {
                 ReorderView()
             }
         }
-        .alert("エラー", isPresented: $showError) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(errorMessage)
-        }
         .deletionAlert(item: $ticketPendingDelete, prompt: { TicketDeletion.ticketPrompt(for: $0) }) { ticket in
             deleteTicket(ticket)
         }
+        .errorAlert(isPresented: $showError, message: errorMessage)
         .sheet(isPresented: $showQuickAdd) {
             QuickAddSheet()
         }
@@ -204,7 +200,10 @@ struct HubView: View {
             ForEach(sessionManager.pausedSessions, id: \.id) { session in
                 if let ticket = session.ticket {
                     pausedTicketRow(ticket: ticket, session: session)
-                        .deleteSwipeAction(accessibilityName: ticket.title) {
+                        .deleteSwipeAction(
+                            accessibilityName: ticket.title,
+                            needsConfirmation: true
+                        ) {
                             ticketPendingDelete = ticket
                         }
                 }
@@ -236,8 +235,13 @@ struct HubView: View {
                         boardDisabledReason: boardDisabledReason,
                         onBoard: { board(ticket) }
                     )
-                    .deleteSwipeAction(accessibilityName: ticket.title) {
-                        ticketPendingDelete = ticket
+                    .deleteSwipeAction(
+                        accessibilityName: ticket.title,
+                        needsConfirmation: TicketDeletion.swipeNeedsAlert(
+                            ride: TicketDeletion.rideState(for: ticket)
+                        )
+                    ) {
+                        requestDelete(ticket)
                     }
                 }
                 .onMove(perform: moveBacklogTickets)
@@ -308,6 +312,16 @@ struct HubView: View {
         } catch {
             errorMessage = error.localizedDescription
             showError = true
+        }
+    }
+
+    private func requestDelete(_ ticket: Ticket) {
+        if TicketDeletion.swipeNeedsAlert(ride: TicketDeletion.rideState(for: ticket)) {
+            ticketPendingDelete = ticket
+        } else {
+            withAnimation {
+                deleteTicket(ticket)
+            }
         }
     }
 

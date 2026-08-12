@@ -14,7 +14,7 @@ struct TagEditorView: View {
 
     @State private var name: String = ""
     @State private var colorHex: String = TagPalette.colors[0].hex
-    @State private var showDeleteConfirm = false
+    @State private var tagPendingDelete: Tag?
 
     var body: some View {
         Form {
@@ -50,7 +50,7 @@ struct TagEditorView: View {
             if existing != nil {
                 Section {
                     Button("タグを削除", role: .destructive) {
-                        showDeleteConfirm = true
+                        tagPendingDelete = existing
                     }
                 } footer: {
                     if let existing {
@@ -76,18 +76,11 @@ struct TagEditorView: View {
                 colorHex = existing.colorHex
             }
         }
-        .alert(
-            existing.map { TicketDeletion.tagPrompt(for: $0).title } ?? "このタグを削除しますか？",
-            isPresented: $showDeleteConfirm
-        ) {
-            Button("削除", role: .destructive) {
-                deleteExisting()
-            }
-            Button("キャンセル", role: .cancel) {}
-        } message: {
-            if let existing {
-                Text(TicketDeletion.tagPrompt(for: existing).message)
-            }
+        .deletionAlert(
+            item: $tagPendingDelete,
+            prompt: { TicketDeletion.tagPrompt(for: $0) }
+        ) { tag in
+            deleteExisting(tag)
         }
     }
 
@@ -107,9 +100,8 @@ struct TagEditorView: View {
         dismiss()
     }
 
-    private func deleteExisting() {
-        guard let existing else { return }
-        modelContext.delete(existing)
+    private func deleteExisting(_ tag: Tag) {
+        modelContext.delete(tag)
         try? modelContext.save()
         let remaining = (try? modelContext.fetch(FetchDescriptor<Tag>(sortBy: [SortDescriptor(\.sortOrder)]))) ?? []
         TagOrdering.normalizeSortOrders(remaining)

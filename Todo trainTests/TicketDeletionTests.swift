@@ -51,35 +51,46 @@ struct TicketDeletionTests {
         )
     }
 
-    @Test func ticketPrompt_emptyTitle_usesFallback() {
-        let prompt = TicketDeletion.ticketPrompt(title: "  ", ride: .unused)
-        #expect(prompt.message.contains("「無題の切符」"))
+    @Test func swipeNeedsAlert_onlyWhenSideEffectsAreUncommon() {
+        #expect(!TicketDeletion.swipeNeedsAlert(ride: .unused))
+        #expect(TicketDeletion.swipeNeedsAlert(ride: .idle))
+        #expect(TicketDeletion.swipeNeedsAlert(ride: .paused))
+        #expect(TicketDeletion.swipeNeedsAlert(ride: .running))
+        #expect(!TicketDeletion.swipeNeedsAlertForTag(ticketCount: 0))
+        #expect(TicketDeletion.swipeNeedsAlertForTag(ticketCount: 1))
     }
 
-    @Test func ticketPrompt_unused_namesTheTicketAndIsIrreversible() {
+    @Test func ticketPrompt_emptyTitle_usesFallbackInTitle() {
+        let prompt = TicketDeletion.ticketPrompt(title: "  ", ride: .unused)
+        #expect(prompt.title.contains("「無題の切符」"))
+        #expect(!prompt.message.contains("「"))
+    }
+
+    @Test func ticketPrompt_putsNameInTitle_notRepeatedInMessage() {
         let prompt = TicketDeletion.ticketPrompt(title: "誤作成", ride: .unused)
-        #expect(prompt.title == "この切符を削除しますか？")
-        #expect(prompt.message.contains("「誤作成」"))
-        #expect(prompt.message.contains("取り消せません"))
+        #expect(prompt.title == "「誤作成」を削除しますか？")
+        #expect(prompt.message == "この操作は取り消せません。")
+        #expect(!prompt.message.contains("誤作成"))
         #expect(!prompt.message.contains("履歴"))
-        #expect(!prompt.message.contains("フォーカス"))
     }
 
     @Test func ticketPrompt_idle_mentionsHistory() {
         let prompt = TicketDeletion.ticketPrompt(title: "報告書", ride: .idle)
-        #expect(prompt.title == "切符と履歴を削除しますか？")
+        #expect(prompt.title == "「報告書」と履歴を削除しますか？")
         #expect(prompt.message.contains("乗車記録"))
+        #expect(prompt.message.contains("取り消せません"))
         #expect(!prompt.message.contains("停車中"))
         #expect(!prompt.message.contains("走行中"))
+        #expect(!prompt.message.contains("「報告書」"))
     }
 
     @Test func ticketPrompt_paused_and_running_explainSideEffects() {
         let paused = TicketDeletion.ticketPrompt(title: "レビュー", ride: .paused)
-        #expect(paused.title == "停車中の切符を削除しますか？")
+        #expect(paused.title == "停車中の「レビュー」を削除しますか？")
         #expect(paused.message.contains("停車中"))
 
         let running = TicketDeletion.ticketPrompt(title: "レビュー", ride: .running)
-        #expect(running.title == "走行中の切符を削除しますか？")
+        #expect(running.title == "走行中の「レビュー」を削除しますか？")
         #expect(running.message.contains("フォーカス"))
         #expect(running.message.contains("終了ベル"))
     }
@@ -104,18 +115,18 @@ struct TicketDeletionTests {
             ticketTitle: "報告書",
             isLastSession: false
         )
-        #expect(keepTicket.title == "この履歴を削除しますか？")
+        #expect(keepTicket.title == "「報告書」のこの履歴を削除しますか？")
         #expect(keepTicket.message.contains("この乗車記録だけ"))
         #expect(keepTicket.message.contains("切符と他の履歴は残ります"))
-        #expect(!keepTicket.message.contains("両方"))
+        #expect(!keepTicket.message.contains("最後"))
 
         let last = TicketDeletion.historySessionPrompt(
             ticketTitle: "報告書",
             isLastSession: true
         )
-        #expect(last.title == "履歴と切符を削除しますか？")
+        #expect(last.title == "「報告書」の履歴と切符を削除しますか？")
         #expect(last.message.contains("最後の記録"))
-        #expect(last.message.contains("履歴と切符の両方"))
+        #expect(last.message.contains("切符も削除"))
         #expect(last.message.contains("取り消せません"))
     }
 
@@ -130,10 +141,12 @@ struct TicketDeletionTests {
 
     @Test func tagPrompt_unusedVersusInUse() {
         let unused = TicketDeletion.tagPrompt(name: "仕事", ticketCount: 0)
-        #expect(unused.title == "このタグを削除しますか？")
+        #expect(unused.title == "「仕事」を削除しますか？")
         #expect(unused.message.contains("切符には影響しません"))
+        #expect(!unused.message.contains("仕事"))
 
         let inUse = TicketDeletion.tagPrompt(name: "仕事", ticketCount: 3)
+        #expect(inUse.title == unused.title)
         #expect(inUse.message.contains("3 枚の切符からこのタグが外れます"))
         #expect(inUse.message.contains("切符自体は残ります"))
     }
