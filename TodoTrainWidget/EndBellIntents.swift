@@ -99,4 +99,52 @@ struct EndBellStopIntent: LiveActivityIntent {
         .result()
     }
 }
+
+/// Opens the app so the user can arrive from Focus (overtime keeps the 3-choice UI).
+struct EndBellArriveIntent: LiveActivityIntent {
+    static var title: LocalizedStringResource = "到着"
+    static var description = IntentDescription("アプリを開いて到着します。")
+    static var openAppWhenRun: Bool = true
+
+    @Parameter(title: "Session ID")
+    var sessionID: String
+
+    init() { sessionID = "" }
+
+    init(sessionID: UUID) {
+        self.sessionID = sessionID.uuidString
+    }
+
+    func perform() async throws -> some IntentResult {
+        guard let id = UUID(uuidString: sessionID) else { return .result() }
+        FocusPendingActionStore.enqueue(
+            FocusPendingAction(kind: .arrive, sessionID: id, createdAt: .now)
+        )
+        return .result()
+    }
+}
+
+/// Opens Focus with the extend panel (inline extend would desync Alarm vs DB).
+struct EndBellExtendIntent: LiveActivityIntent {
+    static var title: LocalizedStringResource = "延長"
+    static var description = IntentDescription("アプリを開いて延長します。")
+    static var openAppWhenRun: Bool = true
+
+    @Parameter(title: "Session ID")
+    var sessionID: String
+
+    init() { sessionID = "" }
+
+    init(sessionID: UUID) {
+        self.sessionID = sessionID.uuidString
+    }
+
+    func perform() async throws -> some IntentResult {
+        guard let id = UUID(uuidString: sessionID) else { return .result() }
+        FocusPendingActionStore.enqueue(
+            FocusPendingAction(kind: .extend, sessionID: id, createdAt: .now)
+        )
+        return .result()
+    }
+}
 #endif

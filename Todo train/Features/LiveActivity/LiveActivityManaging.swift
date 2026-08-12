@@ -54,10 +54,13 @@ final class LiveActivityManager: LiveActivityManaging {
             budgetSeconds: max(budgetSeconds, 1)
         )
 
+        // Become stale shortly after the deadline if we never push an overtime update.
+        let staleDate = isOvertime ? nil : deadline.addingTimeInterval(30)
+
         if currentSessionID == sessionID,
            let activity = Activity<TodoTrainActivityAttributes>.activities.first {
             Task {
-                await activity.update(ActivityContent(state: state, staleDate: nil))
+                await activity.update(ActivityContent(state: state, staleDate: staleDate))
             }
             return
         }
@@ -69,7 +72,7 @@ final class LiveActivityManager: LiveActivityManaging {
         do {
             _ = try Activity.request(
                 attributes: attributes,
-                content: ActivityContent(state: state, staleDate: nil),
+                content: ActivityContent(state: state, staleDate: staleDate),
                 pushType: nil
             )
         } catch {

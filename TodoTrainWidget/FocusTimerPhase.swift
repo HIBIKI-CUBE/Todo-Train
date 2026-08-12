@@ -73,6 +73,39 @@ enum CockpitColors {
     static let green = Color(red: 0.35, green: 0.78, blue: 0.52)
 }
 
+/// How the primary clock should render (system-driven when counting down).
+enum CockpitClockStyle: Equatable {
+    case countdown(end: Date)
+    case paused(remaining: TimeInterval)
+    case alert
+    case overtime
+    case stale
+}
+
+enum CockpitPresentation {
+    static func deadlineLabel(from snapshot: CockpitInstrumentSnapshot) -> String {
+        if snapshot.headerState == "更新待ち" {
+            return "予定の確認中"
+        }
+        return CockpitFormat.deadlineLabel(remaining: snapshot.remaining, deadline: snapshot.deadline)
+    }
+}
+
+enum CockpitTimerInterval {
+    /// `Text(timerInterval:)` / `ProgressView(timerInterval:)` crash if lowerBound > upperBound.
+    static func countdown(to end: Date, from start: Date = .now) -> ClosedRange<Date> {
+        if end >= start { return start...end }
+        return start...start
+    }
+
+    static func progress(end: Date, budgetSeconds: Int) -> ClosedRange<Date> {
+        let budget = TimeInterval(max(budgetSeconds, 1))
+        let start = end.addingTimeInterval(-budget)
+        if end >= start { return start...end }
+        return end...end
+    }
+}
+
 enum CockpitFormat {
     static func timerLabel(remaining: TimeInterval) -> String {
         let total = Int(remaining.rounded())
@@ -81,6 +114,17 @@ enum CockpitFormat {
             return String(format: "%d:%02d", absTotal / 60, absTotal % 60)
         }
         return String(format: "%d:%02d", total / 60, total % 60)
+    }
+
+    /// Compact / width-limited Dynamic Island — drop seconds below 10 minutes when needed.
+    static func shortTimerLabel(remaining: TimeInterval, limitedWidth: Bool) -> String {
+        let total = max(0, Int(remaining.rounded()))
+        let minutes = total / 60
+        let seconds = total % 60
+        if limitedWidth, minutes >= 10 {
+            return "\(minutes)分"
+        }
+        return String(format: "%d:%02d", minutes, seconds)
     }
 
     static func deadlineLabel(remaining: TimeInterval, deadline: Date?) -> String {
@@ -96,6 +140,66 @@ enum CockpitFormat {
         let denom = max(budget, 1)
         return min(max(elapsed / denom, 0), 1)
     }
+
+    static func accessibilityTimerValue(remaining: TimeInterval, isStale: Bool, isOvertime: Bool) -> String {
+        if isStale { return "表示の更新を待っています" }
+        if isOvertime || remaining < 0 { return "予定を超過" }
+        let total = max(0, Int(remaining.rounded()))
+        return "残り\(total / 60)分\(total % 60)秒"
+    }
+}
+
+/// Shared glanceable model for Session LA and Alarm LA.
+struct CockpitDisplayModel: Equatable {
+    var title: String
+    var clock: CockpitClockStyle
+    var phase: FocusTimerPhase
+    var headerState: String?
+    var deadlineLabel: String
+    var budgetSeconds: Int
+    var pausedProgress: Double?
+    var isStale: Bool
+    var accessibilityTimer: String
+
+    static func session(
+        title: String,
+        deadline: Date,
+        budgetSeconds: Int,
+        isOvertime: Bool,
+        isStale: Bool,
+        now: Date = .now
+    ) -> CockpitDisplayModel {
+        let snapshot = CockpitInstrumentSnapshot.session(
+            deadline: deadline,
+            budgetSeconds: budgetSeconds,
+            isOvertime: isOvertime,
+            isStale: isStale,
+            now: now
+        )
+        let clock: CockpitClockStyle
+        if isStale, !isOvertime {
+            clock = .stale
+        } else if isOvertime || snapshot.remaining <= 0 {
+            clock = .overtime
+        } else {
+            clock = .countdown(end: deadline)
+        }
+        return CockpitDisplayModel(
+            title: title,
+            clock: clock,
+            phase: snapshot.phase,
+            headerState: snapshot.headerState,
+            deadlineLabel: CockpitPresentation.deadlineLabel(from: snapshot),
+            budgetSeconds: budgetSeconds,
+            pausedProgress: nil,
+            isStale: isStale,
+            accessibilityTimer: CockpitFormat.accessibilityTimerValue(
+                remaining: snapshot.remaining,
+                isStale: isStale,
+                isOvertime: isOvertime || snapshot.remaining <= 0
+            )
+        )
+    }
 }
 
 struct CockpitInstrumentSnapshot: Equatable {
@@ -109,20 +213,30 @@ struct CockpitInstrumentSnapshot: Equatable {
         deadline: Date,
         budgetSeconds: Int,
         isOvertime: Bool,
+        isStale: Bool = false,
         now: Date
     ) -> CockpitInstrumentSnapshot {
         let budget = TimeInterval(max(budgetSeconds, 1))
         let remaining = deadline.timeIntervalSince(now)
-        let phase: FocusTimerPhase = isOvertime
-            ? .overtime
-            : FocusTimerPhase(remaining: remaining, budgetSeconds: budget)
+        let phase: FocusTimerPhase
+        let header: String?
+        if isStale, !isOvertime {
+            phase = FocusTimerPhase(remaining: max(remaining, 0), budgetSeconds: budget)
+            header = "更新待ち"
+        } else if isOvertime {
+            phase = .overtime
+            header = FocusTimerPhase.overtime.stateLabel
+        } else {
+            phase = FocusTimerPhase(remaining: remaining, budgetSeconds: budget)
+            header = phase.stateLabel
+        }
         let elapsed = budget - remaining
         return CockpitInstrumentSnapshot(
             remaining: remaining,
             progress: CockpitFormat.progress(elapsed: elapsed, budget: budget),
             phase: phase,
             deadline: deadline,
-            headerState: phase.stateLabel
+            headerState: header
         )
     }
 }

@@ -2,7 +2,9 @@
 //  TodoTrainSessionLiveActivity.swift
 //  TodoTrainWidget
 //
-//  Dark cockpit instrument for StandBy / Lock Screen (Session LA, 終了ベル OFF).
+//  Dark cockpit for Lock Screen + StandBy (Session LA, 終了ベル OFF).
+//  StandBy = isActivityFullscreen. Background: showsWidgetContainerBackground
+//  for Lock Screen container; activityBackgroundTint for StandBy edge fill.
 //
 
 import SwiftUI
@@ -14,123 +16,186 @@ import ActivityKit
 struct TodoTrainSessionLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: TodoTrainActivityAttributes.self) { context in
-            lockScreenView(context: context)
+            SessionCockpitRoot(context: context)
         } dynamicIsland: { context in
-            DynamicIsland {
+            let presentation = CockpitDisplayModel.session(
+                title: context.state.title,
+                deadline: context.state.deadline,
+                budgetSeconds: context.state.budgetSeconds,
+                isOvertime: context.state.isOvertime,
+                isStale: context.isStale
+            )
+            return DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    phaseDot(context: context)
+                    CockpitIslandMark(phase: presentation.phase, size: 14)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
-                    Text(context.state.title)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(CockpitColors.muted)
-                        .lineLimit(1)
-                        .frame(maxWidth: 88, alignment: .trailing)
+                    CockpitIslandExpandedTrailing(
+                        phase: presentation.phase,
+                        headerState: presentation.headerState
+                    )
                 }
                 DynamicIslandExpandedRegion(.center) {
-                    islandTimer(context: context)
+                    CockpitIslandExpandedCenter(presentation: presentation)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    if let label = headerState(context) {
-                        Text(label)
-                            .font(.caption.weight(.bold))
-                            .foregroundStyle(snapshot(context).phase.accentColor)
-                            .padding(.top, 4)
-                    }
+                    EmptyView()
                 }
             } compactLeading: {
-                phaseDot(context: context)
+                CockpitIslandMark(phase: presentation.phase)
             } compactTrailing: {
-                compactTrailing(context: context)
+                CompactTrailingTimer(presentation: presentation)
             } minimal: {
-                phaseDot(context: context)
+                CockpitMinimalTimer(clock: presentation.clock, phase: presentation.phase)
+                    .accessibilityLabel("残り時間")
+                    .accessibilityValue(presentation.accessibilityTimer)
             }
+            .keylineTint(presentation.phase.accentColor)
+            .widgetURL(URL(string: "todotrain://focus"))
         }
+        .supplementalActivityFamilies([.medium])
     }
+}
 
-    // MARK: - Lock Screen / StandBy
+private struct CompactTrailingTimer: View {
+    let presentation: CockpitDisplayModel
+    @Environment(\.isDynamicIslandLimitedInWidth) private var limitedWidth
 
-    @ViewBuilder
-    private func lockScreenView(
-        context: ActivityViewContext<TodoTrainActivityAttributes>
-    ) -> some View {
-        TimelineView(.periodic(from: .now, by: 1)) { timeline in
-            let snap = snapshot(context, now: timeline.date)
-            CockpitInstrumentPanel(
-                title: context.state.title,
-                snapshot: snap,
-                timerFontSize: 56
-            )
-            .activityBackgroundTint(.black)
-        }
+    var body: some View {
+        CockpitCompactTimer(
+            clock: presentation.clock,
+            phase: presentation.phase,
+            limitedWidth: limitedWidth
+        )
+        .accessibilityLabel("残り時間")
+        .accessibilityValue(presentation.accessibilityTimer)
     }
+}
 
-    // MARK: - Dynamic Island
+private struct SessionCockpitRoot: View {
+    let context: ActivityViewContext<TodoTrainActivityAttributes>
 
-    private func snapshot(
-        _ context: ActivityViewContext<TodoTrainActivityAttributes>,
-        now: Date = .now
-    ) -> CockpitInstrumentSnapshot {
-        CockpitInstrumentSnapshot.session(
+    @Environment(\.isActivityFullscreen) private var isFullscreen
+    @Environment(\.showsWidgetContainerBackground) private var showsWidgetContainerBackground
+    @Environment(\.isLuminanceReduced) private var isLuminanceReduced
+
+    var body: some View {
+        let presentation = CockpitDisplayModel.session(
+            title: context.state.title,
             deadline: context.state.deadline,
             budgetSeconds: context.state.budgetSeconds,
             isOvertime: context.state.isOvertime,
-            now: now
+            isStale: context.isStale
+        )
+
+        Group {
+            if isFullscreen {
+                CockpitStandByInstrument(
+                    title: presentation.title,
+                    clock: presentation.clock,
+                    phase: presentation.phase,
+                    headerState: presentation.headerState,
+                    deadlineLabel: presentation.deadlineLabel,
+                    budgetSeconds: presentation.budgetSeconds,
+                    pausedProgress: nil,
+                    accessibilityTimer: presentation.accessibilityTimer
+                )
+            } else {
+                CockpitLockScreenInstrument(
+                    title: presentation.title,
+                    clock: presentation.clock,
+                    phase: presentation.phase,
+                    headerState: presentation.headerState,
+                    deadlineLabel: presentation.deadlineLabel,
+                    budgetSeconds: presentation.budgetSeconds,
+                    pausedProgress: nil,
+                    accessibilityTimer: presentation.accessibilityTimer
+                )
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .frame(maxHeight: isFullscreen ? .infinity : nil)
+        .opacity(isLuminanceReduced ? 0.92 : 1)
+        // LS: container black. StandBy: tint only — avoid boxed Color.black (WWDC26).
+        .background {
+            if showsWidgetContainerBackground {
+                Color.black
+            }
+        }
+        .activityBackgroundTint(.black)
+        .activitySystemActionForegroundColor(.white)
+        .widgetURL(URL(string: "todotrain://focus"))
+    }
+}
+
+// MARK: - Previews
+
+#if DEBUG
+private enum SessionPreviewFixtures {
+    static let attributes = TodoTrainActivityAttributes(sessionID: UUID())
+
+    static func running(remaining: TimeInterval, budget: Int = 20 * 60) -> TodoTrainActivityAttributes.ContentState {
+        .init(
+            title: "仕様書を書く",
+            deadline: .now.addingTimeInterval(remaining),
+            isOvertime: false,
+            budgetSeconds: budget
         )
     }
 
-    @ViewBuilder
-    private func islandTimer(
-        context: ActivityViewContext<TodoTrainActivityAttributes>
-    ) -> some View {
-        TimelineView(.periodic(from: .now, by: 1)) { timeline in
-            let snap = snapshot(context, now: timeline.date)
-            Text(CockpitFormat.timerLabel(remaining: snap.remaining))
-                .font(.title2.weight(.semibold))
-                .monospacedDigit()
-                .foregroundStyle(snap.phase.accentColor)
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
-        }
+    static var overtime: TodoTrainActivityAttributes.ContentState {
+        .init(
+            title: "仕様書を書く",
+            deadline: .now.addingTimeInterval(-90),
+            isOvertime: true,
+            budgetSeconds: 20 * 60
+        )
     }
 
-    @ViewBuilder
-    private func phaseDot(
-        context: ActivityViewContext<TodoTrainActivityAttributes>
-    ) -> some View {
-        TimelineView(.periodic(from: .now, by: 1)) { timeline in
-            Circle()
-                .fill(snapshot(context, now: timeline.date).phase.accentColor)
-                .frame(width: 10, height: 10)
-        }
-    }
-
-    @ViewBuilder
-    private func compactTrailing(
-        context: ActivityViewContext<TodoTrainActivityAttributes>
-    ) -> some View {
-        TimelineView(.periodic(from: .now, by: 1)) { timeline in
-            let snap = snapshot(context, now: timeline.date)
-            if context.state.isOvertime {
-                Text("超過")
-                    .font(.caption2.weight(.bold))
-                    .foregroundStyle(CockpitColors.red)
-            } else {
-                ZStack {
-                    Circle()
-                        .stroke(CockpitColors.track, lineWidth: 2.5)
-                    Circle()
-                        .trim(from: 0, to: snap.progress)
-                        .stroke(snap.phase.accentColor, style: StrokeStyle(lineWidth: 2.5, lineCap: .butt))
-                        .rotationEffect(.degrees(-90))
-                }
-                .frame(width: 18, height: 18)
-            }
-        }
-    }
-
-    private func headerState(_ context: ActivityViewContext<TodoTrainActivityAttributes>) -> String? {
-        snapshot(context).headerState
+    static var longTitle: TodoTrainActivityAttributes.ContentState {
+        .init(
+            title: "とても長い切符タイトルでレイアウトを確認する",
+            deadline: .now.addingTimeInterval(12 * 60),
+            isOvertime: false,
+            budgetSeconds: 20 * 60
+        )
     }
 }
+
+#Preview("Session Lock Screen", as: .content, using: SessionPreviewFixtures.attributes) {
+    TodoTrainSessionLiveActivity()
+} contentStates: {
+    SessionPreviewFixtures.running(remaining: 19 * 60)
+    SessionPreviewFixtures.running(remaining: 5 * 60)
+    SessionPreviewFixtures.running(remaining: 90)
+    SessionPreviewFixtures.overtime
+    SessionPreviewFixtures.longTitle
+}
+
+#Preview("Session DI Compact", as: .dynamicIsland(.compact), using: SessionPreviewFixtures.attributes) {
+    TodoTrainSessionLiveActivity()
+} contentStates: {
+    SessionPreviewFixtures.running(remaining: 5 * 60)
+    SessionPreviewFixtures.running(remaining: 90)
+    SessionPreviewFixtures.overtime
+    SessionPreviewFixtures.longTitle
+}
+
+#Preview("Session DI Minimal", as: .dynamicIsland(.minimal), using: SessionPreviewFixtures.attributes) {
+    TodoTrainSessionLiveActivity()
+} contentStates: {
+    SessionPreviewFixtures.running(remaining: 5 * 60)
+    SessionPreviewFixtures.running(remaining: 90)
+    SessionPreviewFixtures.overtime
+}
+
+#Preview("Session DI Expanded", as: .dynamicIsland(.expanded), using: SessionPreviewFixtures.attributes) {
+    TodoTrainSessionLiveActivity()
+} contentStates: {
+    SessionPreviewFixtures.running(remaining: 5 * 60)
+    SessionPreviewFixtures.running(remaining: 90)
+    SessionPreviewFixtures.overtime
+    SessionPreviewFixtures.longTitle
+}
+#endif
 #endif

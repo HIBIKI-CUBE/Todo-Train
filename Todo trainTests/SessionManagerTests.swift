@@ -488,7 +488,7 @@ struct SessionManagerTests {
         #expect(scheduler.requests.isEmpty)
     }
 
-    @Test func endBell_pausedOnPause() throws {
+    @Test func endBell_cancelledOnPause() throws {
         let scheduler = InMemoryAlarmScheduler()
         let (manager, context, _, _) = try makeHarness(
             endBellEnabled: true,
@@ -500,24 +500,28 @@ struct SessionManagerTests {
         let sessionID = try #require(manager.activeSession?.id)
         try manager.pause()
 
-        #expect(scheduler.pausedSessionIDs.contains(sessionID))
-        #expect(!scheduler.cancelledSessionIDs.contains(sessionID))
+        #expect(scheduler.cancelledSessionIDs.contains(sessionID))
+        #expect(scheduler.requests.isEmpty)
     }
 
-    @Test func endBell_resumedOnResume() throws {
+    @Test func endBell_rescheduledOnResume() throws {
         let scheduler = InMemoryAlarmScheduler()
-        let (manager, context, _, _) = try makeHarness(
+        let (manager, context, clock, _) = try makeHarness(
             endBellEnabled: true,
             alarmScheduler: scheduler
         )
         try manager.startService()
-        let ticket = try makeTicket(context)
+        let ticket = try makeTicket(context, seconds: 600)
         try manager.board(ticket: ticket)
         let sessionID = try #require(manager.activeSession?.id)
         try manager.pause()
+        #expect(scheduler.requests.isEmpty)
+        clock.advance(by: 60)
         try manager.resume()
 
-        #expect(scheduler.resumedSessionIDs.contains(sessionID))
+        #expect(scheduler.requests.contains { $0.sessionID == sessionID })
+        let fireAt = try #require(scheduler.requests.first?.fireAt)
+        #expect(fireAt > clock.now)
     }
 
     @Test func endBell_rescheduledOnExtend() throws {
@@ -597,7 +601,7 @@ struct SessionManagerTests {
         #expect(manager.todayOverrideCount == 1)
     }
 
-    @Test func recoverOnLaunch_keepsPausedEndBell() throws {
+    @Test func recoverOnLaunch_cancelsPausedEndBell() throws {
         let scheduler = InMemoryAlarmScheduler()
         let (manager, context, _, _) = try makeHarness(
             endBellEnabled: true,
@@ -608,12 +612,41 @@ struct SessionManagerTests {
         try manager.board(ticket: ticket)
         let sessionID = try #require(manager.activeSession?.id)
         try manager.pause()
-        #expect(scheduler.pausedSessionIDs.contains(sessionID))
-        let cancelAllBefore = scheduler.cancelAllCount
+        #expect(scheduler.cancelledSessionIDs.contains(sessionID))
+        // Simulate a leftover paused alarm that somehow remained scheduled.
+        scheduler.scheduleEndBell(
+            sessionID: sessionID,
+            ticketTitle: ticket.title,
+            fireAt: Date().addingTimeInterval(300),
+            budgetSeconds: 600
+        )
 
         try manager.recoverOnLaunch()
-        #expect(scheduler.cancelAllCount == cancelAllBefore)
+        #expect(scheduler.requests.isEmpty)
         #expect(manager.phase == .paused)
+    }
+
+    @Test func endBell_skipsLocalOvertimeNotificationWhenAuthorized() throws {
+        let scheduler = InMemoryAlarmScheduler()
+        scheduler.isAuthorized = true
+        let notifier = InMemoryOvertimeNotifier()
+        let container = try AppModelContainer.make(inMemory: true)
+        let context = ModelContext(container)
+        let clock = FixedSessionClock(Date(timeIntervalSince1970: 1_700_000_000))
+        let settings = AppSettings.makeForTesting(endBellEnabled: true)
+        let manager = SessionManager(
+            modelContext: context,
+            clock: clock,
+            settings: settings,
+            overtimeNotifier: notifier,
+            alarmScheduler: scheduler
+        )
+        try manager.startService()
+        let ticket = try makeTicket(context, seconds: 600)
+        try manager.board(ticket: ticket)
+
+        #expect(scheduler.requests.count == 1)
+        #expect(notifier.scheduledSessionIDs.isEmpty)
     }
 
     @Test func deleteTicket_removesUnusedTicket() throws {

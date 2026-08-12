@@ -41,4 +41,48 @@ final class FocusTimerPhaseTests: XCTestCase {
         XCTAssertEqual(FocusTimerPhase.final.stateLabel, "まもなく")
         XCTAssertEqual(FocusTimerPhase.overtime.stateLabel, "超過")
     }
+
+    func testSessionSnapshotMarksStaleWithoutClaimingOvertime() {
+        let deadline = Date().addingTimeInterval(120)
+        let snapshot = CockpitInstrumentSnapshot.session(
+            deadline: deadline,
+            budgetSeconds: 20 * 60,
+            isOvertime: false,
+            isStale: true,
+            now: Date()
+        )
+        XCTAssertEqual(snapshot.headerState, "更新待ち")
+        XCTAssertNotEqual(snapshot.phase, .overtime)
+    }
+
+    func testShortTimerLabelDropsSecondsWhenLimited() {
+        XCTAssertEqual(
+            CockpitFormat.shortTimerLabel(remaining: 12 * 60 + 5, limitedWidth: true),
+            "12分"
+        )
+        XCTAssertEqual(
+            CockpitFormat.shortTimerLabel(remaining: 5 * 60 + 5, limitedWidth: true),
+            "5:05"
+        )
+    }
+
+    func testDisplayModelSessionOvertime() {
+        let model = CockpitDisplayModel.session(
+            title: "A",
+            deadline: Date().addingTimeInterval(-10),
+            budgetSeconds: 300,
+            isOvertime: true,
+            isStale: false
+        )
+        XCTAssertEqual(model.clock, .overtime)
+        XCTAssertEqual(model.phase, .overtime)
+    }
+
+    func testTimerIntervalGuardsInvertedRange() {
+        let start = Date()
+        let end = start.addingTimeInterval(-30)
+        let range = CockpitTimerInterval.countdown(to: end, from: start)
+        XCTAssertEqual(range.lowerBound, start)
+        XCTAssertEqual(range.upperBound, start)
+    }
 }

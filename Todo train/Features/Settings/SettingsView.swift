@@ -47,7 +47,7 @@ struct SettingsView: View {
             } header: {
                 Text("終了ベル")
             } footer: {
-                Text("見積もり到達時に AlarmKit で強制通知します（Silent / Focus を突破）。StandBy のカウントダウン表示にも使われます。拒否された場合はローカル通知のみです。")
+                Text("見積もり到達時に AlarmKit で強制通知します（Silent / Focus を突破）。StandBy のカウントダウン表示にも使います。停車するとベルは消え、再乗車で残り時間から再スケジュールします。拒否された場合はローカル通知にフォールバックします。")
             }
             .onChange(of: settings.endBellEnabled) { _, _ in
                 sessionManager.syncEndBellWithSettings()

@@ -23,6 +23,28 @@ final class NoOpOvertimeNotifier: OvertimeNotifying {
     func cancelAll() {}
 }
 
+/// Test double that records scheduled overtime notifications.
+@MainActor
+final class InMemoryOvertimeNotifier: OvertimeNotifying {
+    private(set) var scheduledSessionIDs: [UUID] = []
+    private(set) var cancelledSessionIDs: [UUID] = []
+
+    func requestAuthorizationIfNeeded() {}
+
+    func schedule(sessionID: UUID, ticketTitle: String, fireAt: Date) {
+        scheduledSessionIDs.append(sessionID)
+    }
+
+    func cancel(sessionID: UUID) {
+        cancelledSessionIDs.append(sessionID)
+        scheduledSessionIDs.removeAll { $0 == sessionID }
+    }
+
+    func cancelAll() {
+        scheduledSessionIDs.removeAll()
+    }
+}
+
 @MainActor
 final class OvertimeNotifier: NSObject, OvertimeNotifying, UNUserNotificationCenterDelegate {
     static let shared = OvertimeNotifier()
@@ -85,11 +107,11 @@ final class OvertimeNotifier: NSObject, OvertimeNotifying, UNUserNotificationCen
         center.removeAllPendingNotificationRequests()
     }
 
-    // Prefer in-app OvertimeOverlay sound; show banner only while foreground.
+    // Prefer in-app OvertimeOverlay while Focus is foreground; never stack a banner on top.
     nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification
     ) async -> UNNotificationPresentationOptions {
-        [.banner, .list]
+        []
     }
 }

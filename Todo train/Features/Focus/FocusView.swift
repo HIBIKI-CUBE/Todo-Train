@@ -9,6 +9,7 @@ import SwiftUI
 struct FocusView: View {
     @Environment(SessionManager.self) private var sessionManager
     @Environment(AppSettings.self) private var settings
+    @Environment(TransferCanvasPresenter.self) private var transferCanvas
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.verticalSizeClass) private var verticalSizeClass
@@ -20,14 +21,8 @@ struct FocusView: View {
     @State private var didPlayOvertimeSound = false
     @State private var overtimePulse = false
     @State private var overtimeHaptic = 0
-    @State private var canvasLaunch: CanvasLaunch?
     @State private var extendReason: String?
-
-    private struct CanvasLaunch: Identifiable {
-        let id = UUID()
-        let parent: Ticket
-        let sessionID: UUID?
-    }
+    @State private var didConsumePendingAction = false
 
     private let extendReasons = ["見積もりが甘かった", "割り込みが入った", "もう少しで終わる", "その他"]
 
@@ -53,17 +48,12 @@ struct FocusView: View {
         .sensoryFeedback(.warning, trigger: overtimeHaptic)
         .sheet(isPresented: $showPauseLimitSheet) {
             PauseLimitSheet(
-                onCurrentPartialDisembark: { ticket, sessionID in
-                    canvasLaunch = CanvasLaunch(parent: ticket, sessionID: sessionID)
-                },
                 onSlotFreedTryPause: {
                     try? sessionManager.pause()
                 }
             )
             .environment(sessionManager)
-        }
-        .sheet(item: $canvasLaunch) { launch in
-            RemainingTicketsCanvas(parent: launch.parent, fromSessionID: launch.sessionID)
+            .environment(transferCanvas)
         }
         .alert("エラー", isPresented: $showError) {
             Button("OK", role: .cancel) {}
@@ -73,6 +63,7 @@ struct FocusView: View {
         .onAppear {
             sessionManager.reconcile()
             handleOvertimeSound()
+            consumePendingActionIfNeeded()
         }
         .onChange(of: sessionManager.phase) { _, newPhase in
             if newPhase != .overtime {
@@ -347,18 +338,41 @@ struct FocusView: View {
 
     private func handleOvertimeSound() {
         guard settings.overtimeSoundEnabled else { return }
+        // AlarmKit owns the audible end signal when authorized.
+        guard !sessionManager.isAlarmKitEndBellActive else { return }
         guard sessionManager.phase == .overtime, !didPlayOvertimeSound else { return }
         didPlayOvertimeSound = true
         OvertimeAlert.playSound()
+    }
+
+    private func consumePendingActionIfNeeded() {
+        guard !didConsumePendingAction else { return }
+        guard let action = FocusPendingActionStore.consume() else { return }
+        didConsumePendingAction = true
+        guard action.sessionID == sessionManager.activeSession?.id else { return }
+
+        switch action.kind {
+        case .arrive:
+            // Overtime keeps the in-Focus 3-choice UI; running/paused arrive immediately.
+            if sessionManager.phase != .overtime {
+                run { try sessionManager.arrive() }
+            }
+        case .extend:
+            withAnimation(TrainTheme.Motion.soft) {
+                showExtendChips = true
+            }
+        }
     }
 
     private func partialDisembarkAndShowCanvas() {
         guard let ticket = sessionManager.activeSession?.ticket else { return }
         let sessionID = sessionManager.activeSession?.id
         do {
+            // Enqueue before close: Focus fullScreenCover dismisses on phase change.
+            transferCanvas.enqueueAfterFocusDismiss(parent: ticket, sessionID: sessionID)
             try sessionManager.partialDisembark()
-            canvasLaunch = CanvasLaunch(parent: ticket, sessionID: sessionID)
         } catch {
+            transferCanvas.clearPending()
             errorMessage = error.localizedDescription
             showError = true
         }
@@ -387,4 +401,5 @@ struct FocusView: View {
     return FocusView()
         .environment(manager)
         .environment(AppSettings.shared)
+        .environment(TransferCanvasPresenter())
 }
