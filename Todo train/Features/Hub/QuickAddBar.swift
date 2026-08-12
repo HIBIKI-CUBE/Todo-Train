@@ -11,6 +11,7 @@ import SwiftData
 struct QuickAddSheet: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
     @Query(sort: \Ticket.sortOrder) private var allTickets: [Ticket]
     @Query(sort: \Tag.sortOrder) private var allTags: [Tag]
     @Query private var allSessions: [WorkSession]
@@ -183,7 +184,9 @@ struct QuickAddSheet: View {
                 }
             }
         }
-        .presentationDetents([.medium, .large])
+        .presentationDetents(
+            verticalSizeClass == .compact ? [.large] : [.medium, .large]
+        )
         .presentationDragIndicator(.visible)
     }
 

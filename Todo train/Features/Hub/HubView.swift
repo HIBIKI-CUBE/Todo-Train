@@ -9,6 +9,7 @@ import SwiftData
 struct HubView: View {
     @Environment(SessionManager.self) private var sessionManager
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
 
     @Query(sort: \Ticket.sortOrder) private var allTickets: [Ticket]
 
@@ -55,92 +56,22 @@ struct HubView: View {
         return "発車できません"
     }
 
+    private var isLandscapeSplit: Bool {
+        verticalSizeClass == .compact
+    }
+
     var body: some View {
-        List {
-            Section {
-                ServiceSummaryBar(
-                    onError: { message in
-                        errorMessage = message
-                        showError = true
-                    },
-                    onRequestEndService: {
-                        requestEndService()
-                    }
-                )
-            }
-
-            if !sessionManager.pausedSessions.isEmpty {
-                Section {
-                    ForEach(sessionManager.pausedSessions, id: \.id) { session in
-                        if let ticket = session.ticket {
-                            HStack(spacing: TrainTheme.Space.md) {
-                                NavigationLink {
-                                    TicketDetailView(ticket: ticket)
-                                } label: {
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(ticket.title)
-                                            .font(TrainTheme.TypeScale.ticketTitle())
-                                        Text("残り \(formatRemaining(session))")
-                                            .font(TrainTheme.TypeScale.meta())
-                                            .foregroundStyle(TrainTheme.signalAmber)
-                                            .monospacedDigit()
-                                        SignalBadge(kind: .paused)
-                                    }
-                                }
-                                Spacer(minLength: 8)
-                                Button("再乗車") {
-                                    board(ticket)
-                                }
-                                .buttonStyle(.borderedProminent)
-                                .tint(TrainTheme.rail)
-                                .disabled(!canBoardGenerally)
-                                .accessibilityHint(canBoardGenerally ? "停車中の切符を再開" : boardDisabledReason)
-                            }
-                            .accessibilityElement(children: .contain)
-                        }
-                    }
-                } header: {
-                    Text("停車中")
-                }
-            }
-
-            Section {
-                if openTickets.isEmpty {
-                    ContentUnavailableView {
-                        Label("切符がありません", systemImage: "tram")
-                    } description: {
-                        Text("右上の ＋ から掃き出しましょう。")
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 24)
-                } else if backlogTickets.isEmpty {
-                    Text("未乗車の切符はありません。停車中から再乗車するか、＋ で追加してください。")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(backlogTickets, id: \.id) { ticket in
-                        TicketCardView(
-                            ticket: ticket,
-                            canBoard: canBoardGenerally,
-                            boardDisabledReason: boardDisabledReason,
-                            onBoard: { board(ticket) }
-                        )
-                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                            Button("削除", role: .destructive) {
-                                ticketPendingDelete = ticket
-                                showDeleteConfirm = true
-                            }
-                        }
-                    }
-                    .onMove(perform: moveBacklogTickets)
-                }
-            } header: {
-                Text("切符")
+        Group {
+            if isLandscapeSplit {
+                landscapeSplitHub
+            } else {
+                portraitHubList
             }
         }
-        .listStyle(.insetGrouped)
         .navigationTitle("Todo train")
-        .navigationBarTitleDisplayMode(.large)
+        .navigationBarTitleDisplayMode(
+            TrainLayout.navigationBarTitleDisplayMode(verticalSizeClass: verticalSizeClass)
+        )
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 EditButton()
@@ -227,6 +158,114 @@ struct HubView: View {
         }
     }
 
+    // MARK: - Portrait (single List)
+
+    private var portraitHubList: some View {
+        List {
+            serviceSummarySection
+
+            if !sessionManager.pausedSessions.isEmpty {
+                pausedSessionsSection
+            }
+
+            ticketsSection
+        }
+        .listStyle(.insetGrouped)
+    }
+
+    // MARK: - Landscape split (service | tickets)
+
+    private var landscapeSplitHub: some View {
+        HStack(alignment: .top, spacing: 0) {
+            servicePane
+                .frame(width: TrainLayout.hubServicePaneWidth)
+
+            ticketsPane
+        }
+    }
+
+    private var servicePane: some View {
+        List {
+            serviceSummarySection
+
+            if !sessionManager.pausedSessions.isEmpty {
+                pausedSessionsSection
+            }
+        }
+        .listStyle(.insetGrouped)
+    }
+
+    private var ticketsPane: some View {
+        List {
+            ticketsSection
+        }
+        .listStyle(.insetGrouped)
+    }
+
+  // MARK: - Shared sections
+
+    private var serviceSummarySection: some View {
+        Section {
+            ServiceSummaryBar(
+                onError: { message in
+                    errorMessage = message
+                    showError = true
+                },
+                onRequestEndService: {
+                    requestEndService()
+                }
+            )
+        }
+    }
+
+    private var pausedSessionsSection: some View {
+        Section {
+            ForEach(sessionManager.pausedSessions, id: \.id) { session in
+                if let ticket = session.ticket {
+                    pausedTicketRow(ticket: ticket, session: session)
+                }
+            }
+        } header: {
+            Text("停車中")
+        }
+    }
+
+    private var ticketsSection: some View {
+        Section {
+            if openTickets.isEmpty {
+                ContentUnavailableView {
+                    Label("切符がありません", systemImage: "tram")
+                } description: {
+                    Text("右上の ＋ から掃き出しましょう。")
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, isLandscapeSplit ? 8 : 24)
+            } else if backlogTickets.isEmpty {
+                Text("未乗車の切符はありません。停車中から再乗車するか、＋ で追加してください。")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(backlogTickets, id: \.id) { ticket in
+                    TicketCardView(
+                        ticket: ticket,
+                        canBoard: canBoardGenerally,
+                        boardDisabledReason: boardDisabledReason,
+                        onBoard: { board(ticket) }
+                    )
+                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                        Button("削除", role: .destructive) {
+                            ticketPendingDelete = ticket
+                            showDeleteConfirm = true
+                        }
+                    }
+                }
+                .onMove(perform: moveBacklogTickets)
+            }
+        } header: {
+            Text("切符")
+        }
+    }
+
     /// S-03: after a day change, surface the end-of-service flow (once Focus is not blocking).
     private func presentServiceEndIfNeeded() {
         guard sessionManager.needsServiceDayEndPrompt else { return }
@@ -247,6 +286,35 @@ struct HubView: View {
         } else {
             showServiceEndSheet = true
         }
+    }
+
+    @ViewBuilder
+    private func pausedTicketRow(ticket: Ticket, session: WorkSession) -> some View {
+        HStack(spacing: TrainTheme.Space.md) {
+            NavigationLink {
+                TicketDetailView(ticket: ticket)
+            } label: {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(ticket.title)
+                        .font(TrainTheme.TypeScale.ticketTitle())
+                        .lineLimit(isLandscapeSplit ? 2 : nil)
+                    Text("残り \(formatRemaining(session))")
+                        .font(TrainTheme.TypeScale.meta())
+                        .foregroundStyle(TrainTheme.signalAmber)
+                        .monospacedDigit()
+                    SignalBadge(kind: .paused)
+                }
+            }
+            Spacer(minLength: 8)
+            Button("再乗車") {
+                board(ticket)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(TrainTheme.rail)
+            .disabled(!canBoardGenerally)
+            .accessibilityHint(canBoardGenerally ? "停車中の切符を再開" : boardDisabledReason)
+        }
+        .accessibilityElement(children: .contain)
     }
 
     private func isPaused(_ ticket: Ticket) -> Bool {

@@ -7,6 +7,8 @@ import SwiftUI
 
 struct ServiceSummaryBar: View {
     @Environment(SessionManager.self) private var sessionManager
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
+
     let onError: (String) -> Void
     let onRequestEndService: () -> Void
 
@@ -14,8 +16,12 @@ struct ServiceSummaryBar: View {
         sessionManager.isInService || sessionManager.needsServiceDayEndPrompt
     }
 
+    private var usesTightVerticalLayout: Bool {
+        verticalSizeClass == .compact
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: TrainTheme.Space.md) {
+        VStack(alignment: .leading, spacing: usesTightVerticalLayout ? TrainTheme.Space.sm : TrainTheme.Space.md) {
             if sessionManager.needsServiceDayEndPrompt {
                 Label {
                     Text("昨日の運行が未終了です。終了してから今日の運行を開始してください。")
@@ -27,39 +33,7 @@ struct ServiceSummaryBar: View {
                 .foregroundStyle(.primary)
             }
 
-            HStack(alignment: .center, spacing: TrainTheme.Space.md) {
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: TrainTheme.Space.sm) {
-                        Circle()
-                            .fill(statusDot)
-                            .frame(width: 8, height: 8)
-                        Text(statusTitle)
-                            .font(TrainTheme.TypeScale.status())
-                    }
-
-                    if let key = sessionManager.activeServiceDay?.calendarDayKey,
-                       sessionManager.activeServiceDay?.isOpen == true {
-                        Text(Self.displayDay(from: key))
-                            .font(TrainTheme.TypeScale.meta())
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                Spacer(minLength: 8)
-
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text("停車")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                    Text("\(sessionManager.pausedTicketCount)/\(sessionManager.pauseLimit)")
-                        .font(.title3.weight(.semibold).monospacedDigit())
-                        .foregroundStyle(
-                            sessionManager.pausedTicketCount >= sessionManager.pauseLimit
-                                ? TrainTheme.signalAmber
-                                : .primary
-                        )
-                }
-            }
+            statusPauseRow
 
             if canEndOpenService {
                 Button(
@@ -81,7 +55,49 @@ struct ServiceSummaryBar: View {
                 .frame(maxWidth: .infinity)
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, usesTightVerticalLayout ? 2 : 4)
+    }
+
+    private var statusPauseRow: some View {
+        HStack(alignment: .center, spacing: TrainTheme.Space.md) {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: TrainTheme.Space.sm) {
+                    Circle()
+                        .fill(statusDot)
+                        .frame(width: 8, height: 8)
+                    Text(statusTitle)
+                        .font(TrainTheme.TypeScale.status())
+                        .lineLimit(1)
+                }
+
+                if let key = sessionManager.activeServiceDay?.calendarDayKey,
+                   sessionManager.activeServiceDay?.isOpen == true {
+                    Text(Self.displayDay(from: key))
+                        .font(TrainTheme.TypeScale.meta())
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+
+            Spacer(minLength: 8)
+
+            VStack(alignment: .trailing, spacing: 2) {
+                Text("停車")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Text("\(sessionManager.pausedTicketCount)/\(sessionManager.pauseLimit)")
+                    .font(
+                        usesTightVerticalLayout
+                            ? .body.weight(.semibold).monospacedDigit()
+                            : .title3.weight(.semibold).monospacedDigit()
+                    )
+                    .foregroundStyle(
+                        sessionManager.pausedTicketCount >= sessionManager.pauseLimit
+                            ? TrainTheme.signalAmber
+                            : .primary
+                    )
+            }
+        }
     }
 
     private var statusTitle: String {

@@ -6,12 +6,24 @@
 import Foundation
 
 protocol LiveActivityManaging: Sendable {
-    func startOrUpdate(sessionID: UUID, title: String, deadline: Date, isOvertime: Bool)
+    func startOrUpdate(
+        sessionID: UUID,
+        title: String,
+        deadline: Date,
+        isOvertime: Bool,
+        budgetSeconds: Int
+    )
     func end()
 }
 
 struct NoOpLiveActivityManager: LiveActivityManaging {
-    func startOrUpdate(sessionID: UUID, title: String, deadline: Date, isOvertime: Bool) {}
+    func startOrUpdate(
+        sessionID: UUID,
+        title: String,
+        deadline: Date,
+        isOvertime: Bool,
+        budgetSeconds: Int
+    ) {}
     func end() {}
 }
 
@@ -26,19 +38,29 @@ final class LiveActivityManager: LiveActivityManaging {
 
     private init() {}
 
-    func startOrUpdate(sessionID: UUID, title: String, deadline: Date, isOvertime: Bool) {
+    func startOrUpdate(
+        sessionID: UUID,
+        title: String,
+        deadline: Date,
+        isOvertime: Bool,
+        budgetSeconds: Int
+    ) {
         guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
 
         let state = TodoTrainActivityAttributes.ContentState(
             title: title,
             deadline: deadline,
-            isOvertime: isOvertime
+            isOvertime: isOvertime,
+            budgetSeconds: max(budgetSeconds, 1)
         )
+
+        // Become stale shortly after the deadline if we never push an overtime update.
+        let staleDate = isOvertime ? nil : deadline.addingTimeInterval(30)
 
         if currentSessionID == sessionID,
            let activity = Activity<TodoTrainActivityAttributes>.activities.first {
             Task {
-                await activity.update(ActivityContent(state: state, staleDate: nil))
+                await activity.update(ActivityContent(state: state, staleDate: staleDate))
             }
             return
         }
@@ -50,7 +72,7 @@ final class LiveActivityManager: LiveActivityManaging {
         do {
             _ = try Activity.request(
                 attributes: attributes,
-                content: ActivityContent(state: state, staleDate: nil),
+                content: ActivityContent(state: state, staleDate: staleDate),
                 pushType: nil
             )
         } catch {

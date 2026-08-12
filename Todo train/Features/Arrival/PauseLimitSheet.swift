@@ -7,10 +7,9 @@ import SwiftUI
 
 struct PauseLimitSheet: View {
     @Environment(SessionManager.self) private var sessionManager
+    @Environment(TransferCanvasPresenter.self) private var transferCanvas
     @Environment(\.dismiss) private var dismiss
 
-    /// Called after current ticket partial disembark so Focus can present the canvas.
-    var onCurrentPartialDisembark: (Ticket, UUID?) -> Void
     /// After freeing a slot, try pausing the current ride again.
     var onSlotFreedTryPause: () -> Void
 
@@ -98,6 +97,7 @@ struct PauseLimitSheet: View {
                     Button("閉じる") { dismiss() }
                 }
             }
+            // Nested sheet is fine here: Focus stays up while resolving paused tickets.
             .sheet(item: $canvasLaunch) { launch in
                 RemainingTicketsCanvas(parent: launch.parent, fromSessionID: launch.sessionID)
             }
@@ -163,10 +163,12 @@ struct PauseLimitSheet: View {
         guard let ticket = sessionManager.activeSession?.ticket else { return }
         let sessionID = sessionManager.activeSession?.id
         do {
+            // Focus dismisses with the session — host canvas from ContentView after cover tears down.
+            transferCanvas.enqueueAfterFocusDismiss(parent: ticket, sessionID: sessionID)
             try sessionManager.partialDisembark()
             dismiss()
-            onCurrentPartialDisembark(ticket, sessionID)
         } catch {
+            transferCanvas.clearPending()
             present(error)
         }
     }
