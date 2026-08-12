@@ -4,5 +4,16 @@
 <dict>
 	<key>NSAlarmKitUsageDescription</key>
 	<string>見積もり時間の終了を知らせる終了ベルを鳴らすために使います。</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>dev.hibiki-cube.Todo-train</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>todotrain</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

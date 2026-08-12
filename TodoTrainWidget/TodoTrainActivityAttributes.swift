@@ -13,6 +13,7 @@ struct TodoTrainActivityAttributes: ActivityAttributes {
         var title: String
         var deadline: Date
         var isOvertime: Bool
+        var budgetSeconds: Int
     }
 
     var sessionID: UUID

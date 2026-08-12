@@ -2,8 +2,10 @@
 //  TodoTrainAlarmLiveActivity.swift
 //  TodoTrainWidget
 //
-//  Custom LA = vision + interactive controls (LiveActivityIntent).
-//  AlarmPresentation buttons only cover the system templated fallback UI.
+//  Dark cockpit for Lock Screen + StandBy (AlarmKit).
+//  StandBy = isActivityFullscreen. Background: showsWidgetContainerBackground
+//  for Lock Screen container; activityBackgroundTint for StandBy edge fill.
+//  Single essential control (停車 / 停止). Arrive / extend via app deep link.
 //
 
 import AppIntents
@@ -17,255 +19,296 @@ import AlarmKit
 struct TodoTrainAlarmLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: AlarmAttributes<TodoTrainAlarmMetadata>.self) { context in
-            lockScreenView(context: context)
-                .padding(.horizontal, 18)
-                .padding(.vertical, 16)
+            AlarmCockpitRoot(context: context)
         } dynamicIsland: { context in
-            DynamicIsland {
+            let presentation = AlarmPresentationModel(context: context)
+            return DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    Image(systemName: "tram.fill")
-                        .font(.title3)
-                        .foregroundStyle(Color("AccentColor"))
+                    CockpitIslandMark(phase: presentation.phase, size: 14)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
-                    Text(ticketTitle(context))
-                        .font(.caption.weight(.semibold))
-                        .lineLimit(1)
-                        .frame(maxWidth: 90, alignment: .trailing)
+                    CockpitIslandExpandedTrailing(
+                        phase: presentation.phase,
+                        headerState: presentation.headerState
+                    )
                 }
                 DynamicIslandExpandedRegion(.center) {
-                    primaryTimer(context: context, style: .island)
+                    CockpitIslandExpandedCenter(presentation: presentation.display)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    controlRow(context: context, compact: true)
-                        .padding(.top, 6)
+                    CockpitAlarmControlRow(
+                        alarmID: context.state.alarmID,
+                        sessionID: presentation.sessionID,
+                        mode: context.state.mode,
+                        layout: .islandCompact
+                    )
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 4)
                 }
             } compactLeading: {
-                Image(systemName: "tram.fill")
-                    .font(.caption2)
-                    .foregroundStyle(Color("AccentColor"))
+                CockpitIslandMark(phase: presentation.phase)
             } compactTrailing: {
-                compactTrailing(context: context)
+                AlarmCompactTrailingTimer(presentation: presentation)
             } minimal: {
-                Image(systemName: "tram.fill")
-                    .font(.caption2)
+                CockpitMinimalTimer(clock: presentation.clock, phase: presentation.phase)
+                    .accessibilityLabel("残り時間")
+                    .accessibilityValue(presentation.display.accessibilityTimer)
             }
+            .keylineTint(presentation.phase.accentColor)
+            .widgetURL(URL(string: "todotrain://focus"))
         }
+        .supplementalActivityFamilies([.medium])
     }
+}
 
-    private enum TimerStyle {
-        case lockScreen
-        case island
+private struct AlarmCompactTrailingTimer: View {
+    let presentation: AlarmPresentationModel
+    @Environment(\.isDynamicIslandLimitedInWidth) private var limitedWidth
+
+    var body: some View {
+        CockpitCompactTimer(
+            clock: presentation.clock,
+            phase: presentation.phase,
+            limitedWidth: limitedWidth
+        )
+        .accessibilityLabel("残り時間")
+        .accessibilityValue(presentation.display.accessibilityTimer)
     }
+}
 
-    // MARK: - Lock Screen / StandBy
+// MARK: - Presentation model
 
-    @ViewBuilder
-    private func lockScreenView(
-        context: ActivityViewContext<AlarmAttributes<TodoTrainAlarmMetadata>>
-    ) -> some View {
-        VStack(spacing: 12) {
-            HStack(spacing: 6) {
-                Image(systemName: "tram.fill")
-                    .foregroundStyle(Color("AccentColor"))
-                Text(ticketTitle(context))
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                Spacer(minLength: 0)
-                modeCaption(context: context)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-            }
+private struct AlarmPresentationModel {
+    let title: String
+    let sessionID: UUID
+    let clock: CockpitClockStyle
+    let phase: FocusTimerPhase
+    let headerState: String?
+    let deadlineLabel: String
+    let budgetSeconds: Int
+    let pausedProgress: Double?
+    let mode: AlarmPresentationState.Mode
+    let display: CockpitDisplayModel
 
-            primaryTimer(context: context, style: .lockScreen)
-                .frame(maxWidth: .infinity)
+    init(context: ActivityViewContext<AlarmAttributes<TodoTrainAlarmMetadata>>) {
+        let now = Date.now
+        let budget = context.attributes.metadata?.budgetSeconds ?? 1
+        let snapshot = CockpitInstrumentSnapshot.alarm(
+            mode: context.state.mode,
+            budgetSeconds: budget,
+            now: now
+        )
+        title = context.attributes.metadata?.ticketTitle ?? "乗務中"
+        sessionID = context.attributes.metadata?.sessionID ?? context.state.alarmID
+        budgetSeconds = budget
+        mode = context.state.mode
+        phase = snapshot.phase
+        deadlineLabel = CockpitPresentation.deadlineLabel(from: snapshot)
 
-            progressBar(context: context)
-                .frame(height: 6)
-                .padding(.horizontal, 4)
-
-            controlRow(context: context, compact: false)
-                .padding(.top, 2)
-        }
-        .activityBackgroundTint(Color("AccentColor").opacity(0.14))
-    }
-
-    // MARK: - Timer
-
-    @ViewBuilder
-    private func primaryTimer(
-        context: ActivityViewContext<AlarmAttributes<TodoTrainAlarmMetadata>>,
-        style: TimerStyle
-    ) -> some View {
-        let font: Font = style == .lockScreen
-            ? .system(size: 48, weight: .medium, design: .rounded)
-            : .title2.weight(.semibold)
-
+        let resolvedClock: CockpitClockStyle
+        let resolvedHeader: String?
+        let resolvedPaused: Double?
         switch context.state.mode {
         case .countdown(let countdown):
-            Text(timerInterval: Date.now...countdown.fireDate, countsDown: true)
-                .font(font)
-                .monospacedDigit()
-                .multilineTextAlignment(.center)
-                .minimumScaleFactor(0.6)
-                .lineLimit(1)
-                .frame(maxWidth: style == .lockScreen ? 220 : 120)
-        case .paused(let paused):
-            Text(pausedRemainingLabel(paused))
-                .font(font)
-                .monospacedDigit()
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: style == .lockScreen ? 220 : 120)
-        case .alert:
-            Label("見積もり終了", systemImage: "bell.fill")
-                .font(style == .lockScreen ? .title2.weight(.semibold) : .headline)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-        @unknown default:
-            Text("—")
-                .font(font)
-                .monospacedDigit()
-        }
-    }
-
-    // MARK: - Compact DI (keep narrow)
-
-    @ViewBuilder
-    private func compactTrailing(
-        context: ActivityViewContext<AlarmAttributes<TodoTrainAlarmMetadata>>
-    ) -> some View {
-        switch context.state.mode {
-        case .countdown(let countdown):
-            ProgressView(
-                timerInterval: Date.now...countdown.fireDate,
-                countsDown: true,
-                label: { EmptyView() },
-                currentValueLabel: { EmptyView() }
-            )
-            .progressViewStyle(.circular)
-            .tint(Color("AccentColor"))
-            .frame(width: 18, height: 18)
-        case .paused(let paused):
-            Text(pausedRemainingLabel(paused))
-                .font(.caption2.monospacedDigit().weight(.semibold))
-                .frame(width: 36, alignment: .trailing)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-        case .alert:
-            Image(systemName: "bell.fill")
-                .font(.caption2)
-        @unknown default:
-            EmptyView()
-        }
-    }
-
-    // MARK: - Progress
-
-    @ViewBuilder
-    private func progressBar(
-        context: ActivityViewContext<AlarmAttributes<TodoTrainAlarmMetadata>>
-    ) -> some View {
-        switch context.state.mode {
-        case .countdown(let countdown):
-            ProgressView(
-                timerInterval: Date.now...countdown.fireDate,
-                countsDown: true,
-                label: { EmptyView() },
-                currentValueLabel: { EmptyView() }
-            )
-            .tint(Color("AccentColor"))
+            resolvedClock = .countdown(end: countdown.fireDate)
+            resolvedHeader = snapshot.phase.stateLabel
+            resolvedPaused = nil
         case .paused(let paused):
             let remaining = max(0, paused.totalCountdownDuration - paused.previouslyElapsedDuration)
-            let total = max(paused.totalCountdownDuration, 0.001)
-            ProgressView(value: remaining, total: total)
-                .tint(Color("AccentColor"))
+            resolvedClock = .paused(remaining: remaining)
+            resolvedHeader = "停車中"
+            resolvedPaused = CockpitFormat.progress(
+                elapsed: paused.previouslyElapsedDuration,
+                budget: TimeInterval(budget)
+            )
         case .alert:
-            ProgressView(value: 0, total: 1)
-                .tint(Color("AccentColor"))
+            resolvedClock = .alert
+            resolvedHeader = "超過"
+            resolvedPaused = 1
         @unknown default:
-            EmptyView()
+            resolvedClock = .paused(remaining: 0)
+            resolvedHeader = nil
+            resolvedPaused = 0
         }
+        clock = resolvedClock
+        headerState = resolvedHeader
+        pausedProgress = resolvedPaused
+        display = CockpitDisplayModel(
+            title: title,
+            clock: resolvedClock,
+            phase: phase,
+            headerState: resolvedHeader,
+            deadlineLabel: deadlineLabel,
+            budgetSeconds: budget,
+            pausedProgress: resolvedPaused,
+            isStale: context.isStale,
+            accessibilityTimer: CockpitFormat.accessibilityTimerValue(
+                remaining: snapshot.remaining,
+                isStale: context.isStale,
+                isOvertime: phase == .overtime
+            )
+        )
     }
+}
 
-    // MARK: - Controls (required for custom LA)
+private struct AlarmCockpitRoot: View {
+    let context: ActivityViewContext<AlarmAttributes<TodoTrainAlarmMetadata>>
 
-    @ViewBuilder
-    private func controlRow(
-        context: ActivityViewContext<AlarmAttributes<TodoTrainAlarmMetadata>>,
-        compact: Bool
-    ) -> some View {
-        let alarmID = context.state.alarmID
-        let iconSize: CGFloat = compact ? 28 : 36
+    /// StandBy / fullscreen — Apple's documented signal only.
+    @Environment(\.isActivityFullscreen) private var isFullscreen
+    @Environment(\.showsWidgetContainerBackground) private var showsWidgetContainerBackground
+    @Environment(\.isLuminanceReduced) private var isLuminanceReduced
 
-        HStack(spacing: compact ? 28 : 40) {
-            Button(intent: EndBellCancelIntent(alarmID: alarmID)) {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: iconSize))
-                    .symbolRenderingMode(.hierarchical)
-                    .foregroundStyle(.secondary)
-            }
-            .buttonStyle(.plain)
+    var body: some View {
+        let presentation = AlarmPresentationModel(context: context)
 
-            switch context.state.mode {
-            case .countdown:
-                Button(intent: EndBellPauseIntent(alarmID: alarmID)) {
-                    Image(systemName: "pause.circle.fill")
-                        .font(.system(size: iconSize + (compact ? 4 : 8)))
-                        .symbolRenderingMode(.hierarchical)
-                        .foregroundStyle(Color("AccentColor"))
+        Group {
+            if isFullscreen {
+                CockpitStandByInstrument(
+                    title: presentation.title,
+                    clock: presentation.clock,
+                    phase: presentation.phase,
+                    headerState: presentation.headerState,
+                    deadlineLabel: presentation.deadlineLabel,
+                    budgetSeconds: presentation.budgetSeconds,
+                    pausedProgress: presentation.pausedProgress,
+                    accessibilityTimer: presentation.display.accessibilityTimer
+                ) {
+                    CockpitAlarmControlRow(
+                        alarmID: context.state.alarmID,
+                        sessionID: presentation.sessionID,
+                        mode: context.state.mode,
+                        layout: .standByStack
+                    )
                 }
-                .buttonStyle(.plain)
-            case .paused:
-                Button(intent: EndBellResumeIntent(alarmID: alarmID)) {
-                    Image(systemName: "play.circle.fill")
-                        .font(.system(size: iconSize + (compact ? 4 : 8)))
-                        .symbolRenderingMode(.hierarchical)
-                        .foregroundStyle(Color("AccentColor"))
+            } else {
+                CockpitLockScreenInstrument(
+                    title: presentation.title,
+                    clock: presentation.clock,
+                    phase: presentation.phase,
+                    headerState: presentation.headerState,
+                    deadlineLabel: presentation.deadlineLabel,
+                    budgetSeconds: presentation.budgetSeconds,
+                    pausedProgress: presentation.pausedProgress,
+                    accessibilityTimer: presentation.display.accessibilityTimer
+                ) {
+                    CockpitAlarmControlRow(
+                        alarmID: context.state.alarmID,
+                        sessionID: presentation.sessionID,
+                        mode: context.state.mode,
+                        layout: .horizontalRow
+                    )
                 }
-                .buttonStyle(.plain)
-            case .alert:
-                Button(intent: EndBellStopIntent(alarmID: alarmID, sessionID: context.attributes.metadata?.sessionID ?? alarmID)) {
-                    Image(systemName: "stop.circle.fill")
-                        .font(.system(size: iconSize + (compact ? 4 : 8)))
-                        .symbolRenderingMode(.hierarchical)
-                        .foregroundStyle(Color("AccentColor"))
-                }
-                .buttonStyle(.plain)
-            @unknown default:
-                EmptyView()
             }
         }
         .frame(maxWidth: .infinity)
-    }
-
-    @ViewBuilder
-    private func modeCaption(
-        context: ActivityViewContext<AlarmAttributes<TodoTrainAlarmMetadata>>
-    ) -> some View {
-        switch context.state.mode {
-        case .paused:
-            Text("停車中")
-        case .alert:
-            Text("終了ベル")
-        case .countdown:
-            EmptyView()
-        @unknown default:
-            EmptyView()
+        .frame(maxHeight: isFullscreen ? .infinity : nil)
+        .opacity(isLuminanceReduced ? 0.92 : 1)
+        // LS: container black. StandBy: tint only — avoid boxed Color.black (WWDC26).
+        .background {
+            if showsWidgetContainerBackground {
+                Color.black
+            }
         }
-    }
-
-    private func ticketTitle(
-        _ context: ActivityViewContext<AlarmAttributes<TodoTrainAlarmMetadata>>
-    ) -> String {
-        context.attributes.metadata?.ticketTitle ?? "乗務中"
-    }
-
-    private func pausedRemainingLabel(_ paused: AlarmPresentationState.Mode.Paused) -> String {
-        let remaining = max(0, Int(paused.totalCountdownDuration - paused.previouslyElapsedDuration))
-        let minutes = remaining / 60
-        let seconds = remaining % 60
-        return String(format: "%d:%02d", minutes, seconds)
+        .activityBackgroundTint(.black)
+        .activitySystemActionForegroundColor(.white)
+        .widgetURL(URL(string: "todotrain://focus"))
     }
 }
+
+// MARK: - Previews
+
+#if DEBUG
+private enum AlarmPreviewFixtures {
+    static let sessionID = UUID()
+    static let alarmID = sessionID
+    static let budget: TimeInterval = 20 * 60
+
+    static var attributes: AlarmAttributes<TodoTrainAlarmMetadata> {
+        let pause = AlarmButton(text: "停車", textColor: .white, systemImageName: "pause.fill")
+        let resume = AlarmButton(text: "再乗車", textColor: .white, systemImageName: "play.fill")
+        return AlarmAttributes(
+            presentation: AlarmPresentation(
+                alert: AlarmPresentation.Alert(title: "見積もり終了"),
+                countdown: AlarmPresentation.Countdown(
+                    title: "仕様書を書く",
+                    pauseButton: pause
+                ),
+                paused: AlarmPresentation.Paused(
+                    title: "停車中",
+                    resumeButton: resume
+                )
+            ),
+            metadata: TodoTrainAlarmMetadata(
+                sessionID: sessionID,
+                ticketTitle: "仕様書を書く",
+                budgetSeconds: Int(budget)
+            ),
+            tintColor: CockpitColors.amber
+        )
+    }
+
+    static func countdownState(remaining: TimeInterval) -> AlarmPresentationState {
+        let now = Date.now
+        let fire = now.addingTimeInterval(remaining)
+        let elapsed = budget - remaining
+        return AlarmPresentationState(
+            alarmID: alarmID,
+            mode: .countdown(
+                .init(
+                    totalCountdownDuration: budget,
+                    previouslyElapsedDuration: elapsed,
+                    startDate: now.addingTimeInterval(-elapsed),
+                    fireDate: fire
+                )
+            )
+        )
+    }
+
+    static var alertState: AlarmPresentationState {
+        let comps = Calendar.current.dateComponents([.hour, .minute], from: .now)
+        return AlarmPresentationState(
+            alarmID: alarmID,
+            mode: .alert(
+                .init(time: Alarm.Schedule.Relative.Time(
+                    hour: comps.hour ?? 0,
+                    minute: comps.minute ?? 0
+                ))
+            )
+        )
+    }
+}
+
+#Preview("Alarm Lock Screen", as: .content, using: AlarmPreviewFixtures.attributes) {
+    TodoTrainAlarmLiveActivity()
+} contentStates: {
+    AlarmPreviewFixtures.countdownState(remaining: 19 * 60)
+    AlarmPreviewFixtures.countdownState(remaining: 5 * 60)
+    AlarmPreviewFixtures.countdownState(remaining: 90)
+    AlarmPreviewFixtures.alertState
+}
+
+#Preview("Alarm DI Compact", as: .dynamicIsland(.compact), using: AlarmPreviewFixtures.attributes) {
+    TodoTrainAlarmLiveActivity()
+} contentStates: {
+    AlarmPreviewFixtures.countdownState(remaining: 5 * 60)
+    AlarmPreviewFixtures.countdownState(remaining: 90)
+    AlarmPreviewFixtures.alertState
+}
+
+#Preview("Alarm DI Minimal", as: .dynamicIsland(.minimal), using: AlarmPreviewFixtures.attributes) {
+    TodoTrainAlarmLiveActivity()
+} contentStates: {
+    AlarmPreviewFixtures.countdownState(remaining: 5 * 60)
+    AlarmPreviewFixtures.alertState
+}
+
+#Preview("Alarm DI Expanded", as: .dynamicIsland(.expanded), using: AlarmPreviewFixtures.attributes) {
+    TodoTrainAlarmLiveActivity()
+} contentStates: {
+    AlarmPreviewFixtures.countdownState(remaining: 5 * 60)
+    AlarmPreviewFixtures.countdownState(remaining: 90)
+    AlarmPreviewFixtures.alertState
+}
+#endif
 #endif

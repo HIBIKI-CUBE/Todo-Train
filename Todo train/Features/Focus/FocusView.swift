@@ -9,10 +9,10 @@ import SwiftUI
 struct FocusView: View {
     @Environment(SessionManager.self) private var sessionManager
     @Environment(AppSettings.self) private var settings
+    @Environment(TransferCanvasPresenter.self) private var transferCanvas
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-
-    @ScaledMetric(relativeTo: .largeTitle) private var timerSize: CGFloat = 64
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
 
     @State private var showExtendChips = false
     @State private var showPauseLimitSheet = false
@@ -21,147 +21,39 @@ struct FocusView: View {
     @State private var didPlayOvertimeSound = false
     @State private var overtimePulse = false
     @State private var overtimeHaptic = 0
-    @State private var canvasLaunch: CanvasLaunch?
     @State private var extendReason: String?
-
-    private struct CanvasLaunch: Identifiable {
-        let id = UUID()
-        let parent: Ticket
-        let sessionID: UUID?
-    }
+    @State private var didConsumePendingAction = false
 
     private let extendReasons = ["見積もりが甘かった", "割り込みが入った", "もう少しで終わる", "その他"]
+
+    /// Portrait: controls take ~38% of height. Compact: right pane ~40% of width.
+    private let portraitControlFraction: CGFloat = 0.38
+    private let compactControlFraction: CGFloat = 0.40
 
     var body: some View {
         ZStack {
             CabinBackground(
-                overtime: sessionManager.phase == .overtime,
+                phase: currentTimerPhase,
                 reduceTransparency: reduceTransparency
             )
 
-            VStack(spacing: TrainTheme.Space.xl) {
-                Spacer()
-
-                Text(title)
-                    .font(.title2.weight(.medium))
-                    .foregroundStyle(TrainTheme.cabinInk)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, TrainTheme.Space.lg)
-                    .accessibilityAddTraits(.isHeader)
-
-                TimelineView(.periodic(from: .now, by: 1)) { context in
-                    let _ = context.date
-                    let remaining = sessionManager.remainingSeconds
-                    VStack(spacing: TrainTheme.Space.sm) {
-                        Text(timerLabel(remaining))
-                            .font(TrainTheme.TypeScale.timer(size: timerSize))
-                            .monospacedDigit()
-                            .foregroundStyle(timerColor(remaining))
-                            .minimumScaleFactor(0.55)
-                            .lineLimit(1)
-                            .scaleEffect((overtimePulse && !reduceMotion) ? 1.03 : 1)
-                            .animation(reduceMotion ? nil : TrainTheme.Motion.pulse, value: overtimePulse)
-                            .accessibilityLabel("残り時間")
-                            .accessibilityValue(timerLabel(remaining))
-
-                        if let budget = sessionManager.activeSession?.budgetSecondsAtStart,
-                           let estimate = sessionManager.activeSession?.estimatedSecondsAtStart {
-                            let extensionMinutes = max(0, (budget - estimate) / 60)
-                            Text(
-                                extensionMinutes > 0
-                                    ? "見積もり \(estimate / 60)分  ·  延長 +\(extensionMinutes)分"
-                                    : "見積もり \(estimate / 60)分"
-                            )
-                            .font(TrainTheme.TypeScale.timerMeta())
-                            .foregroundStyle(TrainTheme.cabinInk.opacity(0.55))
-                        }
-                    }
-                    .onChange(of: context.date) { _, _ in
-                        sessionManager.reconcile()
-                        handleOvertimeSound()
-                    }
+            GeometryReader { geo in
+                if verticalSizeClass == .compact {
+                    compactDashboard(size: geo.size)
+                } else {
+                    portraitDashboard(size: geo.size)
                 }
-
-                Spacer()
-
-                if showExtendChips {
-                    VStack(spacing: TrainTheme.Space.sm) {
-                        Text("どのくらい伸ばしますか？")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(TrainTheme.cabinInk.opacity(0.7))
-                        EstimateChips(style: .extendPrefix) { minutes in
-                            run {
-                                try sessionManager.extend(
-                                    by: TimeInterval(minutes * 60),
-                                    reason: extendReason
-                                )
-                            }
-                            showExtendChips = false
-                            extendReason = nil
-                        }
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 8) {
-                                ForEach(extendReasons, id: \.self) { reason in
-                                    Button(reason) {
-                                        extendReason = extendReason == reason ? nil : reason
-                                    }
-                                    .buttonStyle(.bordered)
-                                    .tint(extendReason == reason ? TrainTheme.signalAmber : .secondary)
-                                }
-                            }
-                        }
-                    }
-                    .padding(.horizontal)
-                    .transition(.opacity.combined(with: .move(edge: .bottom)))
-                }
-
-                FocusControlsView(
-                    onPause: {
-                        run {
-                            try sessionManager.pause()
-                        }
-                    },
-                    onPartialDisembark: {
-                        partialDisembarkAndShowCanvas()
-                    },
-                    onArrive: {
-                        run { try sessionManager.arrive() }
-                    },
-                    onExtendMenu: {
-                        withAnimation(TrainTheme.Motion.soft) {
-                            showExtendChips.toggle()
-                        }
-                    }
-                )
-                .padding(.horizontal, TrainTheme.Space.lg)
-                .safeAreaPadding(.bottom, 12)
-            }
-
-            if sessionManager.phase == .overtime {
-                OvertimeOverlay(
-                    onAlreadyDone: { run { try sessionManager.arrive(resolution: .alreadyDone) } },
-                    onJustFinished: { run { try sessionManager.arrive(resolution: .justFinished) } },
-                    onExtend: { seconds, reason in
-                        run { try sessionManager.extend(by: seconds, reason: reason) }
-                    }
-                )
-                .transition(.opacity)
-                .sensoryFeedback(.warning, trigger: overtimeHaptic)
             }
         }
+        .sensoryFeedback(.warning, trigger: overtimeHaptic)
         .sheet(isPresented: $showPauseLimitSheet) {
             PauseLimitSheet(
-                onCurrentPartialDisembark: { ticket, sessionID in
-                    canvasLaunch = CanvasLaunch(parent: ticket, sessionID: sessionID)
-                },
                 onSlotFreedTryPause: {
                     try? sessionManager.pause()
                 }
             )
             .environment(sessionManager)
-        }
-        .sheet(item: $canvasLaunch) { launch in
-            RemainingTicketsCanvas(parent: launch.parent, fromSessionID: launch.sessionID)
+            .environment(transferCanvas)
         }
         .alert("エラー", isPresented: $showError) {
             Button("OK", role: .cancel) {}
@@ -171,11 +63,13 @@ struct FocusView: View {
         .onAppear {
             sessionManager.reconcile()
             handleOvertimeSound()
+            consumePendingActionIfNeeded()
         }
         .onChange(of: sessionManager.phase) { _, newPhase in
             if newPhase != .overtime {
                 didPlayOvertimeSound = false
                 overtimePulse = false
+                showExtendChips = false
             } else {
                 overtimePulse = true
                 overtimeHaptic += 1
@@ -184,39 +78,301 @@ struct FocusView: View {
         }
     }
 
+    // MARK: - Dashboards
+
+    private func portraitDashboard(size: CGSize) -> some View {
+        let controlHeight = size.height * portraitControlFraction
+        return VStack(spacing: 0) {
+            headerStrip
+            FocusControlDivider()
+            timerPanel
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            FocusControlDivider()
+            telemetryStrip
+            FocusControlDivider()
+            controlSection
+                .frame(height: controlHeight)
+        }
+        .safeAreaPadding(.top, 4)
+    }
+
+    private func compactDashboard(size: CGSize) -> some View {
+        let controlWidth = size.width * compactControlFraction
+        return HStack(spacing: 0) {
+            VStack(spacing: 0) {
+                headerStrip
+                FocusControlDivider()
+                timerPanel
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                FocusControlDivider()
+                telemetryStrip
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            FocusControlVerticalDivider()
+
+            controlSection
+                .frame(width: controlWidth)
+                .frame(maxHeight: .infinity)
+        }
+        .safeAreaPadding(.leading, 4)
+        .safeAreaPadding(.trailing, 4)
+    }
+
+    // MARK: - Panels
+
+    private var headerStrip: some View {
+        HStack(alignment: .center, spacing: TrainTheme.Space.sm) {
+            Text(title)
+                .font(.system(size: 18, weight: .semibold, design: .default))
+                .foregroundStyle(FocusPanel.ink)
+                .lineLimit(2)
+                .minimumScaleFactor(0.8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityAddTraits(.isHeader)
+
+            if let label = currentTimerPhase.stateLabel {
+                Text(label)
+                    .font(.system(size: 20, weight: .bold, design: .default))
+                    .foregroundStyle(currentTimerPhase.accentColor)
+                    .accessibilityAddTraits(.isHeader)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 14)
+        .background(FocusPanel.fill)
+        .overlay(alignment: .leading) {
+            Rectangle()
+                .fill(currentTimerPhase.accentColor)
+                .frame(width: 3)
+                .opacity(currentTimerPhase == .cruise ? 0 : 1)
+        }
+    }
+
+    private var timerPanel: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            let remaining = sessionManager.remainingSeconds
+            let phase = timerPhase(remaining: remaining)
+
+            GeometryReader { geo in
+                let fontSize = timerFontSize(in: geo.size)
+                Text(timerLabel(remaining))
+                    .font(.system(size: fontSize, weight: .semibold, design: .default))
+                    .monospacedDigit()
+                    .foregroundStyle(phase.accentColor)
+                    .minimumScaleFactor(0.4)
+                    .lineLimit(1)
+                    .scaleEffect((overtimePulse && !reduceMotion) ? 1.02 : 1)
+                    .animation(reduceMotion ? nil : TrainTheme.Motion.pulse, value: overtimePulse)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .accessibilityLabel("残り時間")
+                    .accessibilityValue(timerLabel(remaining))
+            }
+            .onChange(of: context.date) { _, _ in
+                sessionManager.reconcile()
+                handleOvertimeSound()
+            }
+        }
+        .background(Color.black)
+        .overlay {
+            Rectangle()
+                .strokeBorder(currentTimerPhase.panelBorder, lineWidth: FocusPanel.hairlineWidth)
+                .padding(0)
+                .allowsHitTesting(false)
+        }
+    }
+
+    private var telemetryStrip: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            let remaining = sessionManager.remainingSeconds
+            let phase = timerPhase(remaining: remaining)
+
+            VStack(spacing: 0) {
+                FocusProgressBar(
+                    progress: progressValue(at: context.date),
+                    phase: phase
+                )
+
+                HStack(spacing: TrainTheme.Space.md) {
+                    Text(deadlineLabel(remaining: remaining, now: context.date))
+                        .font(.system(size: 15, weight: .semibold, design: .default))
+                        .foregroundStyle(phase == .overtime ? TrainTheme.signalRed : FocusPanel.ink)
+                        .monospacedDigit()
+
+                    Spacer(minLength: 0)
+
+                    if let meta = estimateMetaText {
+                        Text(meta)
+                            .font(.system(size: 14, weight: .medium, design: .default))
+                            .foregroundStyle(FocusPanel.muted)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
+                    }
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+            }
+            .background(FocusPanel.fill)
+        }
+    }
+
+    private var controlSection: some View {
+        Group {
+            if showExtendChips {
+                FocusExtendPanel(
+                    reasons: extendReasons,
+                    selectedReason: $extendReason,
+                    onExtend: { minutes in
+                        applyExtend(minutes: minutes)
+                    },
+                    onDismiss: {
+                        withAnimation(TrainTheme.Motion.soft) {
+                            showExtendChips = false
+                            extendReason = nil
+                        }
+                    }
+                )
+            } else if sessionManager.phase == .overtime {
+                OvertimeControlsView(
+                    onAlreadyDone: { run { try sessionManager.arrive(resolution: .alreadyDone) } },
+                    onJustFinished: { run { try sessionManager.arrive(resolution: .justFinished) } },
+                    onExtend: {
+                        withAnimation(TrainTheme.Motion.soft) {
+                            showExtendChips = true
+                        }
+                    }
+                )
+            } else {
+                FocusControlsView(
+                    onPause: { run { try sessionManager.pause() } },
+                    onPartialDisembark: { partialDisembarkAndShowCanvas() },
+                    onArrive: { run { try sessionManager.arrive() } },
+                    onExtendMenu: {
+                        withAnimation(TrainTheme.Motion.soft) {
+                            showExtendChips.toggle()
+                        }
+                    }
+                )
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(FocusPanel.fill)
+    }
+
+    // MARK: - Data
+
     private var title: String {
         sessionManager.activeSession?.ticket?.title ?? "乗務中"
+    }
+
+    private var currentBudgetSeconds: TimeInterval {
+        TimeInterval(sessionManager.activeSession?.budgetSecondsAtStart ?? 1)
+    }
+
+    private var currentTimerPhase: FocusTimerPhase {
+        FocusTimerPhase(
+            remaining: sessionManager.remainingSeconds,
+            budgetSeconds: currentBudgetSeconds
+        )
+    }
+
+    private var estimateMetaText: String? {
+        guard let budget = sessionManager.activeSession?.budgetSecondsAtStart,
+              let estimate = sessionManager.activeSession?.estimatedSecondsAtStart else {
+            return nil
+        }
+        let extensionMinutes = max(0, (budget - estimate) / 60)
+        if extensionMinutes > 0 {
+            return "見積もり \(estimate / 60)分 · 延長 +\(extensionMinutes)分"
+        }
+        return "見積もり \(estimate / 60)分"
+    }
+
+    private func timerFontSize(in size: CGSize) -> CGFloat {
+        let byWidth = size.width * 0.48
+        let byHeight = size.height * 0.72
+        let capped: CGFloat = verticalSizeClass == .compact ? 140 : 220
+        return min(byWidth, byHeight, capped)
     }
 
     private func timerLabel(_ remaining: TimeInterval) -> String {
         let total = Int(remaining.rounded())
         if total < 0 {
             let absTotal = abs(total)
-            return String(format: "超過 %d:%02d", absTotal / 60, absTotal % 60)
+            return String(format: "%d:%02d", absTotal / 60, absTotal % 60)
         }
         return String(format: "%d:%02d", total / 60, total % 60)
     }
 
-    private func timerColor(_ remaining: TimeInterval) -> Color {
-        if remaining < 0 { return TrainTheme.signalRed }
-        if remaining < 60 { return TrainTheme.signalAmber }
-        return TrainTheme.cabinInk
+    private func progressValue(at now: Date) -> Double {
+        guard let session = sessionManager.activeSession else { return 0 }
+        let budget = max(TimeInterval(session.budgetSecondsAtStart), 1)
+        return session.elapsedSeconds(at: now) / budget
+    }
+
+    private func timerPhase(remaining: TimeInterval) -> FocusTimerPhase {
+        FocusTimerPhase(remaining: remaining, budgetSeconds: currentBudgetSeconds)
+    }
+
+    private func deadlineLabel(remaining: TimeInterval, now: Date) -> String {
+        if remaining <= 0 {
+            return "予定を超過"
+        }
+        let deadline = now.addingTimeInterval(remaining)
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ja_JP")
+        formatter.dateFormat = "予定 HH:mm"
+        return formatter.string(from: deadline)
+    }
+
+    private func applyExtend(minutes: Int) {
+        run {
+            try sessionManager.extend(
+                by: TimeInterval(minutes * 60),
+                reason: extendReason
+            )
+        }
+        showExtendChips = false
+        extendReason = nil
     }
 
     private func handleOvertimeSound() {
         guard settings.overtimeSoundEnabled else { return }
+        // AlarmKit owns the audible end signal when authorized.
+        guard !sessionManager.isAlarmKitEndBellActive else { return }
         guard sessionManager.phase == .overtime, !didPlayOvertimeSound else { return }
         didPlayOvertimeSound = true
-        OvertimeOverlay.playAlertSound()
+        OvertimeAlert.playSound()
+    }
+
+    private func consumePendingActionIfNeeded() {
+        guard !didConsumePendingAction else { return }
+        guard let action = FocusPendingActionStore.consume() else { return }
+        didConsumePendingAction = true
+        guard action.sessionID == sessionManager.activeSession?.id else { return }
+
+        switch action.kind {
+        case .arrive:
+            // Overtime keeps the in-Focus 3-choice UI; running/paused arrive immediately.
+            if sessionManager.phase != .overtime {
+                run { try sessionManager.arrive() }
+            }
+        case .extend:
+            withAnimation(TrainTheme.Motion.soft) {
+                showExtendChips = true
+            }
+        }
     }
 
     private func partialDisembarkAndShowCanvas() {
         guard let ticket = sessionManager.activeSession?.ticket else { return }
         let sessionID = sessionManager.activeSession?.id
         do {
+            // Enqueue before close: Focus fullScreenCover dismisses on phase change.
+            transferCanvas.enqueueAfterFocusDismiss(parent: ticket, sessionID: sessionID)
             try sessionManager.partialDisembark()
-            canvasLaunch = CanvasLaunch(parent: ticket, sessionID: sessionID)
         } catch {
+            transferCanvas.clearPending()
             errorMessage = error.localizedDescription
             showError = true
         }
@@ -245,4 +401,5 @@ struct FocusView: View {
     return FocusView()
         .environment(manager)
         .environment(AppSettings.shared)
+        .environment(TransferCanvasPresenter())
 }

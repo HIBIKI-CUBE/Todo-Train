@@ -9,6 +9,7 @@ import SwiftData
 struct HistoryView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(SessionManager.self) private var sessionManager
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
 
     @Query(sort: \WorkSession.endedAt, order: .reverse)
     private var sessions: [WorkSession]
@@ -72,6 +73,9 @@ struct HistoryView: View {
         }
         .listStyle(.insetGrouped)
         .navigationTitle("履歴")
+        .navigationBarTitleDisplayMode(
+            TrainLayout.navigationBarTitleDisplayMode(verticalSizeClass: verticalSizeClass)
+        )
         .searchable(text: $searchText, prompt: "切符名で検索")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
