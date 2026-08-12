@@ -21,12 +21,22 @@ final class WorkSession {
     var budgetSecondsAtStart: Int
     /// Raw value of `SessionOutcome`
     var outcomeRaw: String?
+    /// Raw value of `OvertimeResolution` when closed from overtime UI.
+    var overtimeResolutionRaw: String?
 
     var ticket: Ticket?
+
+    @Relationship(deleteRule: .cascade, inverse: \SessionExtension.session)
+    var extensions: [SessionExtension]
 
     var outcome: SessionOutcome? {
         get { outcomeRaw.flatMap(SessionOutcome.init(rawValue:)) }
         set { outcomeRaw = newValue?.rawValue }
+    }
+
+    var overtimeResolution: OvertimeResolution? {
+        get { overtimeResolutionRaw.flatMap(OvertimeResolution.init(rawValue:)) }
+        set { overtimeResolutionRaw = newValue?.rawValue }
     }
 
     var isOpen: Bool { endedAt == nil }
@@ -47,7 +57,9 @@ final class WorkSession {
         self.estimatedSecondsAtStart = estimatedSecondsAtStart
         self.budgetSecondsAtStart = estimatedSecondsAtStart
         self.outcomeRaw = nil
+        self.overtimeResolutionRaw = nil
         self.ticket = ticket
+        self.extensions = []
     }
 
     func elapsedSeconds(at now: Date) -> TimeInterval {

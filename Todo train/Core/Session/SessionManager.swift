@@ -293,7 +293,7 @@ final class SessionManager {
         // AlarmKit already resumed the countdown; do not reschedule.
     }
 
-    func extend(by seconds: TimeInterval, now: Date? = nil) throws {
+    func extend(by seconds: TimeInterval, reason: String? = nil, now: Date? = nil) throws {
         let now = now ?? clock.now
         guard let session = activeSession, session.isOpen else {
             throw SessionError.noActiveSession
@@ -303,7 +303,15 @@ final class SessionManager {
         }
         guard seconds > 0 else { return }
 
-        session.budgetSecondsAtStart += Int(seconds.rounded())
+        let added = Int(seconds.rounded())
+        session.budgetSecondsAtStart += added
+        let record = SessionExtension(
+            addedSeconds: added,
+            reason: reason?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
+            createdAt: now,
+            session: session
+        )
+        modelContext.insert(record)
         suppressedEndBellSessionIDs.remove(session.id)
         try save()
         reconcile(now: now)
@@ -312,10 +320,13 @@ final class SessionManager {
         refreshEndBell(for: session, now: now)
     }
 
-    func arrive(now: Date? = nil) throws {
+    func arrive(resolution: OvertimeResolution? = nil, now: Date? = nil) throws {
         let now = now ?? clock.now
         guard let session = activeSession, session.isOpen else {
             throw SessionError.noActiveSession
+        }
+        if let resolution {
+            session.overtimeResolution = resolution
         }
         try close(session: session, outcome: .arrived, closureKind: .arrived, now: now)
     }
@@ -606,5 +617,12 @@ final class SessionManager {
 
     private func save() throws {
         try modelContext.save()
+    }
+}
+
+private extension String {
+    var nilIfEmpty: String? {
+        let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 }

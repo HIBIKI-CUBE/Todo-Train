@@ -10,6 +10,7 @@ enum AppModelContainer {
     static let schema = Schema([
         Ticket.self,
         WorkSession.self,
+        SessionExtension.self,
         Tag.self,
         TaskLineage.self,
         ServiceDay.self,

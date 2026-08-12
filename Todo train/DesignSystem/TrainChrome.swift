@@ -9,19 +9,22 @@ import SwiftUI
 
 struct CabinBackground: View {
     var overtime: Bool = false
+    var reduceTransparency: Bool = false
 
     var body: some View {
         ZStack {
             TrainTheme.cabin
-            RadialGradient(
-                colors: [
-                    (overtime ? TrainTheme.signalRed : TrainTheme.rail).opacity(0.22),
-                    .clear
-                ],
-                center: .top,
-                startRadius: 20,
-                endRadius: 420
-            )
+            if !reduceTransparency {
+                RadialGradient(
+                    colors: [
+                        (overtime ? TrainTheme.signalRed : TrainTheme.rail).opacity(0.22),
+                        .clear
+                    ],
+                    center: .top,
+                    startRadius: 20,
+                    endRadius: 420
+                )
+            }
         }
         .ignoresSafeArea()
     }
