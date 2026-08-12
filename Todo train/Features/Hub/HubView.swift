@@ -19,6 +19,9 @@ struct HubView: View {
     @State private var hubDestination: HubDestination?
     @State private var errorMessage = ""
     @State private var showError = false
+    /// Single-issue celebration playing on Hub (may overlap sheet dismiss).
+    @State private var hubIssueEject: TicketIssueEjectEvent?
+    @State private var hubIssueHaptic = 0
 
     private enum HubDestination: Hashable, Identifiable {
         case tags
@@ -111,8 +114,23 @@ struct HubView: View {
         }
         .errorAlert(isPresented: $showError, message: errorMessage)
         .sheet(isPresented: $showQuickAdd) {
-            QuickAddSheet()
+            QuickAddSheet { event in
+                // Commit-instant celebration: haptic + overlay while sheet dismisses in parallel.
+                hubIssueEject = event
+                hubIssueHaptic += 1
+            }
         }
+        .overlay {
+            if let hubIssueEject {
+                TicketIssueEjectOverlay(event: hubIssueEject) {
+                    if self.hubIssueEject?.id == hubIssueEject.id {
+                        self.hubIssueEject = nil
+                    }
+                }
+                .transition(.opacity)
+            }
+        }
+        .sensoryFeedback(.success, trigger: hubIssueHaptic)
         .sheet(isPresented: $showServiceEndSheet) {
             ServiceEndSheet { message in
                 errorMessage = message

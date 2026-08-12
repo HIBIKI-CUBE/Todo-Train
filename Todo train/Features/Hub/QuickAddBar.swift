@@ -2,13 +2,17 @@
 //  QuickAddBar.swift
 //  Todo train
 //
-//  Sheet-based quick add (Form + continuous add).
+//  Thumb-zone ticket desk: single (dismiss → Hub celebration) vs continuous dump
+//  (speed first — selection haptic + undo only).
 //
 
 import SwiftUI
 import SwiftData
 
 struct QuickAddSheet: View {
+    /// Single-issue handoff: Hub shows the ticket after this sheet dismisses.
+    var onSingleIssued: ((TicketIssueEjectEvent) -> Void)?
+
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @Environment(\.verticalSizeClass) private var verticalSizeClass
@@ -18,12 +22,24 @@ struct QuickAddSheet: View {
 
     @State private var title = ""
     @State private var pendingMinutes = 30
-    @State private var showCustomEstimate = false
     @State private var selectedTagIDs: Set<UUID> = []
     @State private var insertionPosition: TicketInsertionPosition = .end
+    @State private var continuousDump = false
     @State private var didAddOnce = false
     @State private var addPulse = 0
+    @State private var warnPulse = 0
+    @State private var softHapticPulse = 0
+    @State private var showInsertMenu = false
+    @State private var showCustomEstimate = false
+    @State private var undoPayload: UndoPayload?
+    @State private var didSeedEstimate = false
     @FocusState private var titleFocused: Bool
+
+    private struct UndoPayload: Equatable {
+        let ticketID: UUID
+        let title: String
+        let minutes: Int
+    }
 
     private var openTickets: [Ticket] {
         allTickets.filter(\.isOpen)
@@ -37,17 +53,8 @@ struct QuickAddSheet: View {
         !trimmedTitle.isEmpty
     }
 
-    private var defaultTag: Tag? {
-        allTags.first
-    }
-
     private var estimateSuggestion: (minutes: Int, sampleCount: Int)? {
-        let tagIDs: Set<UUID>? = {
-            if selectedTagIDs.isEmpty {
-                return defaultTag.map { [$0.id] }
-            }
-            return selectedTagIDs
-        }()
+        let tagIDs: Set<UUID>? = selectedTagIDs.isEmpty ? nil : selectedTagIDs
         let samples = EstimateHeuristic.arrivedSamples(
             from: Array(allSessions),
             matchingAnyTagIDs: tagIDs
@@ -61,101 +68,27 @@ struct QuickAddSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section {
-                    TextField("何をする？", text: $title)
-                        .focused($titleFocused)
-                        .submitLabel(.go)
-                        .onSubmit {
-                            addTicket(keepOpen: true)
-                        }
-                } footer: {
-                    Text("見積もりチップをタップすると、タイトル入力済みならすぐ発行します。")
+            VStack(spacing: 0) {
+                titleZone
+                    .padding(.horizontal, TrainTheme.Space.lg)
+                    .padding(.top, TrainTheme.Space.md)
+
+                if let undoPayload {
+                    undoBar(undoPayload)
+                        .padding(.horizontal, TrainTheme.Space.lg)
+                        .padding(.top, TrainTheme.Space.sm)
+                        .transition(.move(edge: .top).combined(with: .opacity))
                 }
 
-                Section {
-                    EstimateChips(
-                        minutesOptions: EstimateChips.ticketPresets,
-                        style: .plainMinutes,
-                        highlightedMinutes: highlightedEstimateMinutes,
-                        selectedMinutes: pendingMinutes
-                    ) { minutes in
-                        pendingMinutes = minutes
-                        showCustomEstimate = false
-                        // H-03: title ready → chip tap completes add.
-                        if canAdd {
-                            addTicket(keepOpen: true)
-                        }
-                    }
+                tagStrip
+                    .padding(.top, TrainTheme.Space.md)
 
-                    Button(showCustomEstimate ? "プリセットに戻る" : "任意の分を入力") {
-                        showCustomEstimate.toggle()
-                    }
-
-                    if showCustomEstimate {
-                        CustomEstimateInput(
-                            minutes: $pendingMinutes,
-                            highlightedMinutes: highlightedEstimateMinutes
-                        )
-                    }
-                } header: {
-                    Text("見積もり")
-                } footer: {
-                    if let suggestion = estimateSuggestion {
-                        Text(EstimateHeuristic.caption(
-                            minutes: suggestion.minutes,
-                            sampleCount: suggestion.sampleCount
-                        ))
-                    } else {
-                        Text("到着した切符の履歴から、よく使う分を強調します。")
-                    }
-                }
-
-                if !openTickets.isEmpty {
-                    Section {
-                        InsertPositionPicker(
-                            openTickets: openTickets,
-                            position: $insertionPosition
-                        )
-                    } header: {
-                        Text("挿入位置")
-                    } footer: {
-                        Text("デフォルトは末尾。連続追加のあいだ選択は維持されます。")
-                    }
-                }
-
-                Section {
-                    if allTags.isEmpty {
-                        Text("タグはまだありません。Hub の … → タグ から追加できます。")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    } else {
-                        ForEach(allTags, id: \.id) { tag in
-                            Button {
-                                toggleTag(tag.id)
-                            } label: {
-                                HStack {
-                                    Circle()
-                                        .fill(TagPalette.color(hex: tag.colorHex))
-                                        .frame(width: 10, height: 10)
-                                    Text(tag.name)
-                                        .foregroundStyle(.primary)
-                                    Spacer()
-                                    if selectedTagIDs.contains(tag.id) {
-                                        Image(systemName: "checkmark")
-                                            .font(.body.weight(.semibold))
-                                            .foregroundStyle(TrainTheme.rail)
-                                    }
-                                }
-                            }
-                            .accessibilityAddTraits(selectedTagIDs.contains(tag.id) ? .isSelected : [])
-                        }
-                    }
-                } header: {
-                    Text("タグ")
-                } footer: {
-                    Text("任意。連続追加のあいだ選択は維持されます。")
-                }
+                Spacer(minLength: TrainTheme.Space.sm)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .background(TrainTheme.platform)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                thumbRail
             }
             .navigationTitle("新しい切符")
             .navigationBarTitleDisplayMode(.inline)
@@ -165,29 +98,231 @@ struct QuickAddSheet: View {
                         dismiss()
                     }
                 }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("追加") {
-                        addTicket(keepOpen: true)
-                    }
-                    .fontWeight(.semibold)
-                    .disabled(!canAdd)
-                }
             }
-            .sensoryFeedback(.success, trigger: addPulse)
+            .sensoryFeedback(.selection, trigger: softHapticPulse)
+            .sensoryFeedback(.warning, trigger: warnPulse)
+            .confirmationDialog("挿入位置", isPresented: $showInsertMenu, titleVisibility: .visible) {
+                Button("末尾（デフォルト）") { insertionPosition = .end }
+                Button("先頭") { insertionPosition = .start }
+                ForEach(openTickets, id: \.id) { ticket in
+                    Button("「\(ticket.title)」の直後") {
+                        insertionPosition = .after(ticket.id)
+                    }
+                }
+                Button("キャンセル", role: .cancel) {}
+            } message: {
+                Text("次に発行する切符の位置。連続追加のあいだ維持されます。")
+            }
+            .sheet(isPresented: $showCustomEstimate) {
+                customEstimateSheet
+                    .presentationDetents([.medium])
+                    .presentationDragIndicator(.visible)
+            }
             .onAppear {
-                pendingMinutes = highlightedEstimateMinutes
-                if let defaultTag {
-                    selectedTagIDs = [defaultTag.id]
+                continuousDump = false
+                if !didSeedEstimate {
+                    pendingMinutes = highlightedEstimateMinutes
+                    didSeedEstimate = true
                 }
                 DispatchQueue.main.async {
                     titleFocused = true
                 }
             }
+            .animation(TrainTheme.Motion.soft, value: undoPayload)
+            .animation(TrainTheme.Motion.soft, value: continuousDump)
         }
         .presentationDetents(
             verticalSizeClass == .compact ? [.large] : [.medium, .large]
         )
         .presentationDragIndicator(.visible)
+    }
+
+    // MARK: - Zones
+
+    private var titleZone: some View {
+        TextField("何をする？", text: $title)
+            .font(.title2.weight(.semibold))
+            .focused($titleFocused)
+            .submitLabel(.go)
+            .onSubmit { submitFromReturn() }
+            .padding(.horizontal, TrainTheme.Space.md)
+            .padding(.vertical, TrainTheme.Space.lg)
+            .background(
+                RoundedRectangle(cornerRadius: TrainTheme.Radius.control, style: .continuous)
+                    .fill(TrainTheme.surface)
+            )
+    }
+
+    private func undoBar(_ payload: UndoPayload) -> some View {
+        HStack {
+            Text("切符を発行しました")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            Spacer()
+            Button("取り消す") {
+                performUndo(payload)
+            }
+            .fontWeight(.semibold)
+        }
+        .padding(.horizontal, TrainTheme.Space.md)
+        .padding(.vertical, TrainTheme.Space.sm)
+        .background(
+            Capsule(style: .continuous)
+                .fill(TrainTheme.surface)
+        )
+    }
+
+    private var tagStrip: some View {
+        Group {
+            if allTags.isEmpty {
+                Text("タグは Hub の … → タグ から追加できます。")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, TrainTheme.Space.lg)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    GlassEffectContainer(spacing: 10) {
+                        HStack(spacing: 10) {
+                            ForEach(allTags, id: \.id) { tag in
+                                tagChip(tag)
+                            }
+                        }
+                        .padding(.horizontal, TrainTheme.Space.lg)
+                    }
+                }
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("タグ")
+    }
+
+    private func tagChip(_ tag: Tag) -> some View {
+        let selected = selectedTagIDs.contains(tag.id)
+        return Button {
+            toggleTag(tag.id)
+        } label: {
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(TagPalette.color(hex: tag.colorHex))
+                    .frame(width: 8, height: 8)
+                Text(tag.name)
+                    .font(.subheadline.weight(selected ? .semibold : .regular))
+                    .foregroundStyle(.primary)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+        }
+        .buttonStyle(.plain)
+        .glassEffect(
+            selected
+                ? .regular.tint(TrainTheme.rail).interactive()
+                : .regular.interactive(),
+            in: .capsule
+        )
+        .accessibilityAddTraits(selected ? .isSelected : [])
+        .accessibilityLabel(tag.name)
+    }
+
+    private var thumbRail: some View {
+        VStack(spacing: TrainTheme.Space.sm) {
+            HStack(alignment: .center, spacing: TrainTheme.Space.md) {
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    Text("\(pendingMinutes)")
+                        .font(.system(size: 56, weight: .medium, design: .rounded))
+                        .monospacedDigit()
+                        .contentTransition(.numericText())
+                        .animation(TrainTheme.Motion.gaugeSnap, value: pendingMinutes)
+                        .onLongPressGesture(minimumDuration: 0.45) {
+                            showCustomEstimate = true
+                        }
+                        .accessibilityHint("長押しで任意の分を入力")
+                    Text("分")
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer(minLength: 0)
+
+                VStack(alignment: .trailing, spacing: 6) {
+                    Toggle(isOn: $continuousDump) {
+                        Text("連続掃き出し")
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .tint(TrainTheme.rail)
+                    .accessibilityHint("オンでシートを開いたまま速く発行。オフで1枚発行して閉じ、Hubで切符を見せます")
+
+                    if didAddOnce {
+                        Text("発行 \(addPulse)")
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(.secondary)
+                            .contentTransition(.numericText())
+                            .animation(TrainTheme.Motion.soft, value: addPulse)
+                    }
+                }
+            }
+
+            EstimateSnapGauge(
+                minutes: $pendingMinutes,
+                highlightedMinutes: highlightedEstimateMinutes,
+                willIssue: { canAdd },
+                onCommit: { commitFromGauge() },
+                onLongPress: {
+                    if !openTickets.isEmpty {
+                        showInsertMenu = true
+                    }
+                }
+            )
+            .padding(.bottom, TrainTheme.Space.xs)
+        }
+        .padding(.horizontal, TrainTheme.Space.lg)
+        .padding(.top, TrainTheme.Space.md)
+        .padding(.bottom, TrainTheme.Space.sm)
+        .background(TrainTheme.surface.ignoresSafeArea(edges: .bottom))
+    }
+
+    private var customEstimateSheet: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    CustomEstimateInput(
+                        minutes: $pendingMinutes,
+                        highlightedMinutes: highlightedEstimateMinutes
+                    )
+                } footer: {
+                    Text("ゲージの停泊以外の分。連続追加のあいだ維持されます。")
+                }
+            }
+            .navigationTitle("任意の分")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("完了") {
+                        showCustomEstimate = false
+                        titleFocused = true
+                    }
+                    .fontWeight(.semibold)
+                }
+            }
+        }
+    }
+
+    // MARK: - Actions
+
+    private func submitFromReturn() {
+        guard canAdd else {
+            warnPulse += 1
+            return
+        }
+        commitIssue()
+    }
+
+    private func commitFromGauge() {
+        guard canAdd else {
+            titleFocused = true
+            return
+        }
+        commitIssue()
     }
 
     private func toggleTag(_ id: UUID) {
@@ -198,8 +333,11 @@ struct QuickAddSheet: View {
         }
     }
 
-    private func addTicket(keepOpen: Bool) {
+    private func commitIssue() {
         guard canAdd else { return }
+
+        let issuedTitle = trimmedTitle
+        let issuedMinutes = pendingMinutes
 
         let openOrdered = openTickets
         var orderedIDs = openOrdered.map(\.id)
@@ -209,8 +347,8 @@ struct QuickAddSheet: View {
         )
 
         let ticket = Ticket(
-            title: trimmedTitle,
-            estimatedSeconds: pendingMinutes * 60,
+            title: issuedTitle,
+            estimatedSeconds: issuedMinutes * 60,
             sortOrder: insertAt
         )
         ticket.tags = allTags.filter { selectedTagIDs.contains($0.id) }
@@ -228,25 +366,57 @@ struct QuickAddSheet: View {
         do {
             try modelContext.save()
         } catch {
-            // Keep sheet open; user can retry.
             return
         }
 
         didAddOnce = true
         addPulse += 1
-        title = ""
-        if keepOpen {
+
+        if continuousDump {
+            undoPayload = UndoPayload(
+                ticketID: ticket.id,
+                title: issuedTitle,
+                minutes: issuedMinutes
+            )
+            scheduleUndoExpiry(for: ticket.id)
+            softHapticPulse += 1
+            title = ""
             DispatchQueue.main.async {
                 titleFocused = true
             }
         } else {
+            onSingleIssued?(
+                TicketIssueEjectEvent(title: issuedTitle, minutes: issuedMinutes)
+            )
             dismiss()
         }
+    }
+
+    private func scheduleUndoExpiry(for ticketID: UUID) {
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(4))
+            if undoPayload?.ticketID == ticketID {
+                undoPayload = nil
+            }
+        }
+    }
+
+    private func performUndo(_ payload: UndoPayload) {
+        let match = allTickets.first(where: { $0.id == payload.ticketID })
+            ?? openTickets.first(where: { $0.id == payload.ticketID })
+        if let match {
+            modelContext.delete(match)
+            try? modelContext.save()
+        }
+        title = payload.title
+        pendingMinutes = payload.minutes
+        undoPayload = nil
+        titleFocused = true
     }
 }
 
 #Preview {
     let container = try! AppModelContainer.make(inMemory: true)
-    return QuickAddSheet()
+    return QuickAddSheet(onSingleIssued: nil)
         .modelContainer(container)
 }

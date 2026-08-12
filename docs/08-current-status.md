@@ -1,6 +1,6 @@
 # 08 — 現状ステータス
 
-最終更新: 2026-08-12（削除 UI 統一）
+最終更新: 2026-08-12（親指発券帯 Quick Add + 削除 Undo）
 
 ## 結論
 
@@ -43,9 +43,10 @@ Todo train/
     History/               HistorySearch, TicketReissue, WeeklyReport
     Settings/              AppSettings
     Coaching/              CoachingEngine
-  DesignSystem/            TrainTheme, TrainChrome, TrainLayout, EstimateChips, DeleteConfirmation
+  DesignSystem/            TrainTheme, TrainChrome, TrainLayout, EstimateChips,
+                           DeleteConfirmation, EstimateSnapMapping, EstimateSnapGauge
   Features/
-    Hub/                   HubView, QuickAddBar, ServiceSummaryBar
+    Hub/                   HubView, QuickAddBar（親指発券帯）, ServiceSummaryBar
     Focus/                 FocusView, FocusControlsView, OvertimeSheet
     Arrival/               PauseLimitSheet, TransferCanvasPresenter
     History/               HistoryView, WeeklyReportView
@@ -58,7 +59,7 @@ Todo trainTests/           23 ファイル（Swift Testing）
 
 ## 動作するユーザーフロー
 
-1. 運行開始 → ツールバー `＋` で切符掃き出し（見積もり + 任意タグ）
+1. 運行開始 → ツールバー `＋` で親指発券帯（Return / スナップ・ゲージで掃き出し）
 2. 発車 → Focus（停車 / 到着 / 延長 / 超過）
 3. 停車上限 → 解決シート / 途中下車キャンバス / 臨時停車
 4. 履歴で振り返り・乗り継ぎリンク・今日に追加
@@ -72,6 +73,7 @@ Todo trainTests/           23 ファイル（Swift Testing）
 | CloudKit | entitlement あり・未使用 |
 | Session LA からの Intent | 未実装（Alarm LA は `EndBellIntents` 済み） |
 | iPad 最適化 | v2 以降 |
+| 乗り継ぎキャンバスのゲージ統一 | Phase 2（Quick Add のみ線形スナップ・ゲージ） |
 
 ## テスト
 
