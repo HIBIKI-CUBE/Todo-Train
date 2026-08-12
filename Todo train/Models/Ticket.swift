@@ -13,6 +13,7 @@ final class Ticket {
     var estimatedSeconds: Int
     var sortOrder: Int
     var createdAt: Date
+    var dueDate: Date?
     var closedAt: Date?
     /// Raw value of `ClosureKind`
     var closureKindRaw: String?

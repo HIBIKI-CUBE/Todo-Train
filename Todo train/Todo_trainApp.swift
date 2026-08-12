@@ -2,8 +2,6 @@
 //  Todo_trainApp.swift
 //  Todo train
 //
-//  Created by HIBIKI CUBE on 2026/08/11.
-//
 
 import SwiftUI
 import SwiftData
@@ -12,20 +10,34 @@ import SwiftData
 struct Todo_trainApp: App {
     private let container: ModelContainer
     @State private var sessionManager: SessionManager
+    @State private var settings = AppSettings.shared
 
     init() {
         do {
             let container = try AppModelContainer.make(inMemory: false)
             self.container = container
-            // Use the same ModelContext the views will share via environment...
-            // SessionManager needs a long-lived context bound to this container.
             let context = container.mainContext
-            _sessionManager = State(
-                initialValue: SessionManager(
-                    modelContext: context,
-                    overtimeNotifier: OvertimeNotifier.shared
-                )
+            #if canImport(ActivityKit)
+            let liveActivity: any LiveActivityManaging = LiveActivityManager.shared
+            #else
+            let liveActivity: any LiveActivityManaging = NoOpLiveActivityManager()
+            #endif
+            #if canImport(AlarmKit)
+            let alarmScheduler: any AlarmScheduling = AlarmKitScheduler.shared
+            #else
+            let alarmScheduler: any AlarmScheduling = NoOpAlarmScheduler()
+            #endif
+            let manager = SessionManager(
+                modelContext: context,
+                settings: AppSettings.shared,
+                overtimeNotifier: OvertimeNotifier.shared,
+                liveActivityManager: liveActivity,
+                alarmScheduler: alarmScheduler
             )
+            _sessionManager = State(initialValue: manager)
+            #if canImport(AlarmKit)
+            AlarmKitScheduler.shared.bind(sessionManager: manager)
+            #endif
             OvertimeNotifier.shared.configure()
         } catch {
             fatalError("Could not create ModelContainer: \(error)")
@@ -36,6 +48,7 @@ struct Todo_trainApp: App {
         WindowGroup {
             ContentView()
                 .environment(sessionManager)
+                .environment(settings)
                 .modelContainer(container)
         }
     }

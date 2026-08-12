@@ -7,31 +7,29 @@ import SwiftUI
 
 struct HistorySessionRow: View {
     let session: WorkSession
+    var onReissue: ((Ticket) -> Void)?
 
     private var children: [Ticket] {
         session.ticket?.childLineages.compactMap(\.child) ?? []
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: TrainTheme.Space.sm) {
             HStack(alignment: .firstTextBaseline) {
                 Text(timeLabel)
-                    .font(.caption.monospacedDigit())
+                    .font(.caption.weight(.semibold).monospacedDigit())
                     .foregroundStyle(.secondary)
                     .frame(width: 44, alignment: .leading)
 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 4) {
                     Text(session.ticket?.title ?? "不明な切符")
-                        .font(.body.weight(.medium))
+                        .font(TrainTheme.TypeScale.ticketTitle())
                         .lineLimit(1)
 
-                    HStack(spacing: 8) {
-                        Text(HistoryStats.outcomeLabel(session.outcome))
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(outcomeColor)
-
+                    HStack(spacing: TrainTheme.Space.sm) {
+                        outcomeBadge
                         Text(durationLabel)
-                            .font(.caption)
+                            .font(TrainTheme.TypeScale.meta())
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -43,10 +41,20 @@ struct HistorySessionRow: View {
                         TicketDetailView(ticket: ticket)
                     } label: {
                         Image(systemName: "chevron.right")
-                            .font(.caption)
+                            .font(.caption.weight(.semibold))
                             .foregroundStyle(.tertiary)
                     }
                 }
+            }
+
+            if let ticket = session.ticket, let onReissue {
+                Button("今日に追加") {
+                    onReissue(ticket)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .tint(TrainTheme.rail)
+                .padding(.leading, 44)
             }
 
             if session.outcome == .partialDisembark, !children.isEmpty {
@@ -55,19 +63,19 @@ struct HistorySessionRow: View {
                         NavigationLink {
                             TicketDetailView(ticket: child)
                         } label: {
-                            HStack(spacing: 4) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "arrow.turn.down.right")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
                                 Text("乗り継ぎ")
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
                                 Text(child.title)
-                                    .font(.caption)
+                                    .font(.caption.weight(.medium))
+                                    .foregroundStyle(.primary)
                                     .lineLimit(1)
                                 if child.isOpen {
-                                    Text("Hub")
-                                        .font(.caption2)
-                                        .padding(.horizontal, 4)
-                                        .padding(.vertical, 1)
-                                        .background(Color.accentColor.opacity(0.15), in: Capsule())
+                                    SignalBadge(kind: .inService, customLabel: "Hub")
                                 }
                             }
                         }
@@ -76,7 +84,23 @@ struct HistorySessionRow: View {
                 .padding(.leading, 44)
             }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 4)
+    }
+
+    @ViewBuilder
+    private var outcomeBadge: some View {
+        switch session.outcome {
+        case .arrived:
+            SignalBadge(kind: .arrived)
+        case .partialDisembark:
+            SignalBadge(kind: .paused, customLabel: "途中下車")
+        case .abandoned:
+            SignalBadge(kind: .abandoned)
+        default:
+            Text(HistoryStats.outcomeLabel(session.outcome))
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(TrainTheme.muted)
+        }
     }
 
     private var timeLabel: String {
@@ -90,14 +114,5 @@ struct HistorySessionRow: View {
         let actual = Int(session.accumulatedActiveSeconds / 60)
         let estimate = session.estimatedSecondsAtStart / 60
         return "\(actual)分/\(estimate)分"
-    }
-
-    private var outcomeColor: Color {
-        switch session.outcome {
-        case .arrived: .green
-        case .partialDisembark: .orange
-        case .abandoned: .red
-        default: .secondary
-        }
     }
 }

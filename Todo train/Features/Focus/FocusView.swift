@@ -8,12 +8,14 @@ import SwiftUI
 
 struct FocusView: View {
     @Environment(SessionManager.self) private var sessionManager
+    @Environment(AppSettings.self) private var settings
 
     @State private var showExtendChips = false
     @State private var showPauseLimitSheet = false
     @State private var errorMessage = ""
     @State private var showError = false
     @State private var didPlayOvertimeSound = false
+    @State private var overtimePulse = false
     @State private var canvasLaunch: CanvasLaunch?
 
     private struct CanvasLaunch: Identifiable {
@@ -24,36 +26,38 @@ struct FocusView: View {
 
     var body: some View {
         ZStack {
-            Color(.systemBackground)
-                .ignoresSafeArea()
+            CabinBackground(overtime: sessionManager.phase == .overtime)
 
-            VStack(spacing: 32) {
+            VStack(spacing: TrainTheme.Space.xl) {
                 Spacer()
 
                 Text(title)
                     .font(.title2.weight(.medium))
+                    .foregroundStyle(TrainTheme.cabinInk)
                     .multilineTextAlignment(.center)
-                    .padding(.horizontal)
+                    .padding(.horizontal, TrainTheme.Space.lg)
 
                 TimelineView(.periodic(from: .now, by: 1)) { context in
                     let _ = context.date
                     let remaining = sessionManager.remainingSeconds
-                    VStack(spacing: 8) {
+                    VStack(spacing: TrainTheme.Space.sm) {
                         Text(timerLabel(remaining))
-                            .font(.system(size: 64, weight: .light, design: .rounded))
+                            .font(TrainTheme.TypeScale.timer())
                             .monospacedDigit()
-                            .foregroundStyle(remaining < 0 ? Color.orange : Color.primary)
+                            .foregroundStyle(timerColor(remaining))
+                            .scaleEffect(overtimePulse ? 1.03 : 1)
+                            .animation(TrainTheme.Motion.pulse, value: overtimePulse)
 
                         if let budget = sessionManager.activeSession?.budgetSecondsAtStart,
                            let estimate = sessionManager.activeSession?.estimatedSecondsAtStart {
                             let extensionMinutes = max(0, (budget - estimate) / 60)
                             Text(
                                 extensionMinutes > 0
-                                    ? "見積もり \(estimate / 60)分 / 延長 +\(extensionMinutes)分"
+                                    ? "見積もり \(estimate / 60)分  ·  延長 +\(extensionMinutes)分"
                                     : "見積もり \(estimate / 60)分"
                             )
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                            .font(TrainTheme.TypeScale.timerMeta())
+                            .foregroundStyle(TrainTheme.cabinInk.opacity(0.55))
                         }
                     }
                     .onChange(of: context.date) { _, _ in
@@ -65,11 +69,17 @@ struct FocusView: View {
                 Spacer()
 
                 if showExtendChips {
-                    EstimateChips { minutes in
-                        run { try sessionManager.extend(by: TimeInterval(minutes * 60)) }
-                        showExtendChips = false
+                    VStack(spacing: TrainTheme.Space.sm) {
+                        Text("どのくらい伸ばしますか？")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(TrainTheme.cabinInk.opacity(0.7))
+                        EstimateChips(style: .extendPrefix) { minutes in
+                            run { try sessionManager.extend(by: TimeInterval(minutes * 60)) }
+                            showExtendChips = false
+                        }
                     }
-                    .padding(.bottom, 8)
+                    .padding(.horizontal)
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
                 }
 
                 FocusControlsView(
@@ -85,10 +95,13 @@ struct FocusView: View {
                         run { try sessionManager.arrive() }
                     },
                     onExtendMenu: {
-                        showExtendChips.toggle()
+                        withAnimation(TrainTheme.Motion.soft) {
+                            showExtendChips.toggle()
+                        }
                     }
                 )
-                .padding(.bottom, 40)
+                .padding(.horizontal, TrainTheme.Space.lg)
+                .padding(.bottom, 36)
             }
 
             if sessionManager.phase == .overtime {
@@ -99,6 +112,7 @@ struct FocusView: View {
                         run { try sessionManager.extend(by: seconds) }
                     }
                 )
+                .transition(.opacity)
             }
         }
         .sheet(isPresented: $showPauseLimitSheet) {
@@ -127,7 +141,9 @@ struct FocusView: View {
         .onChange(of: sessionManager.phase) { _, newPhase in
             if newPhase != .overtime {
                 didPlayOvertimeSound = false
+                overtimePulse = false
             } else {
+                overtimePulse = true
                 handleOvertimeSound()
             }
         }
@@ -146,7 +162,14 @@ struct FocusView: View {
         return String(format: "%d:%02d", total / 60, total % 60)
     }
 
+    private func timerColor(_ remaining: TimeInterval) -> Color {
+        if remaining < 0 { return TrainTheme.signalRed }
+        if remaining < 60 { return TrainTheme.signalAmber }
+        return TrainTheme.cabinInk
+    }
+
     private func handleOvertimeSound() {
+        guard settings.overtimeSoundEnabled else { return }
         guard sessionManager.phase == .overtime, !didPlayOvertimeSound else { return }
         didPlayOvertimeSound = true
         OvertimeOverlay.playAlertSound()
@@ -186,4 +209,5 @@ struct FocusView: View {
     try! manager.board(ticket: ticket)
     return FocusView()
         .environment(manager)
+        .environment(AppSettings.shared)
 }

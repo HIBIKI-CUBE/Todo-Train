@@ -15,47 +15,58 @@ struct OvertimeOverlay: View {
 
     var body: some View {
         ZStack {
-            Color.black.opacity(0.55)
+            Color.black.opacity(0.62)
                 .ignoresSafeArea()
 
-            VStack(spacing: 20) {
-                Text("見積もりを過ぎました")
-                    .font(.title2.weight(.semibold))
-                    .foregroundStyle(.white)
+            VStack(spacing: TrainTheme.Space.lg) {
+                VStack(spacing: TrainTheme.Space.sm) {
+                    SignalBadge(kind: .overtime)
+                    Text("見積もりを過ぎました")
+                        .font(.title2.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .multilineTextAlignment(.center)
+                }
 
                 if showExtendChips {
                     Text("どのくらい伸ばしますか？")
-                        .foregroundStyle(.white.opacity(0.9))
+                        .foregroundStyle(.white.opacity(0.85))
                     EstimateChips { minutes in
                         onExtend(TimeInterval(minutes * 60))
                         showExtendChips = false
                     }
                     Button("戻る") {
-                        showExtendChips = false
+                        withAnimation(TrainTheme.Motion.soft) {
+                            showExtendChips = false
+                        }
                     }
-                    .foregroundStyle(.white.opacity(0.8))
+                    .foregroundStyle(.white.opacity(0.75))
                 } else {
-                    VStack(spacing: 12) {
+                    VStack(spacing: TrainTheme.Space.sm) {
                         Button("もう終わってた") { onAlreadyDone() }
-                            .buttonStyle(.borderedProminent)
-                            .controlSize(.large)
+                            .buttonStyle(FocusPrimaryButtonStyle())
 
                         Button("ちょうど終わった") { onJustFinished() }
-                            .buttonStyle(.borderedProminent)
-                            .controlSize(.large)
+                            .buttonStyle(FocusPrimaryButtonStyle())
 
                         Button("延長する") {
-                            showExtendChips = true
+                            withAnimation(TrainTheme.Motion.soft) {
+                                showExtendChips = true
+                            }
                         }
-                        .buttonStyle(.bordered)
-                        .controlSize(.large)
-                        .tint(.white)
+                        .buttonStyle(FocusSecondaryButtonStyle())
                     }
                 }
             }
             .padding(28)
-            .frame(maxWidth: 340)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))
+            .frame(maxWidth: 360)
+            .background(
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(TrainTheme.cabinLift)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 20)
+                            .strokeBorder(TrainTheme.signalRed.opacity(0.35), lineWidth: 1)
+                    }
+            )
         }
     }
 

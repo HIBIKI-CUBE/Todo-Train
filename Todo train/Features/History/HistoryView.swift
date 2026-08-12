@@ -7,35 +7,92 @@ import SwiftUI
 import SwiftData
 
 struct HistoryView: View {
+    @Environment(\.modelContext) private var modelContext
+
     @Query(sort: \WorkSession.endedAt, order: .reverse)
     private var sessions: [WorkSession]
 
+    @State private var searchText = ""
+
+    private var endedSessions: [WorkSession] {
+        sessions.filter { $0.endedAt != nil }
+    }
+
+    private var filteredSessions: [WorkSession] {
+        HistorySearch.filter(sessions: endedSessions, query: searchText)
+    }
+
     private var groups: [(dayKey: String, sessions: [WorkSession])] {
-        HistoryStats.groupByDay(sessions: Array(sessions))
+        HistoryStats.groupByDay(sessions: filteredSessions)
+    }
+
+    private var isSearching: Bool {
+        !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     var body: some View {
         List {
-            if groups.isEmpty {
-                Text("まだ履歴がありません。発車して到着・途中下車するとここに残ります。")
-                    .foregroundStyle(.secondary)
+            if filteredSessions.isEmpty {
+                ContentUnavailableView {
+                    Label(
+                        isSearching ? "一致する履歴がありません" : "まだ履歴がありません",
+                        systemImage: isSearching ? "magnifyingglass" : "clock"
+                    )
+                } description: {
+                    Text(
+                        isSearching
+                            ? "別の切符名で検索してみてください。"
+                            : "発車して到着・途中下車するとここに残ります。"
+                    )
+                }
+            } else if isSearching {
+                ForEach(filteredSessions, id: \.id) { session in
+                    HistorySessionRow(session: session, onReissue: reissue)
+                }
             } else {
                 ForEach(groups, id: \.dayKey) { group in
                     Section {
                         ForEach(group.sessions, id: \.id) { session in
-                            HistorySessionRow(session: session)
+                            HistorySessionRow(session: session, onReissue: reissue)
                         }
                     } header: {
                         DailyStatsHeader(
                             dayKey: group.dayKey,
                             aggregate: HistoryStats.aggregate(sessions: group.sessions)
                         )
+                        .textCase(nil)
                     }
                 }
             }
         }
+        .listStyle(.insetGrouped)
         .navigationTitle("履歴")
-        .navigationBarTitleDisplayMode(.inline)
+        .searchable(text: $searchText, prompt: "切符名で検索")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                NavigationLink {
+                    WeeklyReportView()
+                } label: {
+                    Text("週次")
+                }
+            }
+        }
+    }
+
+    private func reissue(from ticket: Ticket) {
+        let nextOrder = nextSortOrder()
+        let copy = TicketReissue.makeTodayCopy(from: ticket, sortOrder: nextOrder)
+        modelContext.insert(copy)
+        try? modelContext.save()
+    }
+
+    private func nextSortOrder() -> Int {
+        let descriptor = FetchDescriptor<Ticket>(
+            predicate: #Predicate { $0.closedAt == nil },
+            sortBy: [SortDescriptor(\.sortOrder, order: .reverse)]
+        )
+        let maxOrder = (try? modelContext.fetch(descriptor).first?.sortOrder) ?? -1
+        return maxOrder + 1
     }
 }
 
