@@ -11,6 +11,7 @@ struct FocusView: View {
     @Environment(AppSettings.self) private var settings
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
 
     @ScaledMetric(relativeTo: .largeTitle) private var timerSize: CGFloat = 64
 
@@ -39,102 +40,10 @@ struct FocusView: View {
                 reduceTransparency: reduceTransparency
             )
 
-            VStack(spacing: TrainTheme.Space.xl) {
-                Spacer()
-
-                Text(title)
-                    .font(.title2.weight(.medium))
-                    .foregroundStyle(TrainTheme.cabinInk)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, TrainTheme.Space.lg)
-                    .accessibilityAddTraits(.isHeader)
-
-                TimelineView(.periodic(from: .now, by: 1)) { context in
-                    let _ = context.date
-                    let remaining = sessionManager.remainingSeconds
-                    VStack(spacing: TrainTheme.Space.sm) {
-                        Text(timerLabel(remaining))
-                            .font(TrainTheme.TypeScale.timer(size: timerSize))
-                            .monospacedDigit()
-                            .foregroundStyle(timerColor(remaining))
-                            .minimumScaleFactor(0.55)
-                            .lineLimit(1)
-                            .scaleEffect((overtimePulse && !reduceMotion) ? 1.03 : 1)
-                            .animation(reduceMotion ? nil : TrainTheme.Motion.pulse, value: overtimePulse)
-                            .accessibilityLabel("残り時間")
-                            .accessibilityValue(timerLabel(remaining))
-
-                        if let budget = sessionManager.activeSession?.budgetSecondsAtStart,
-                           let estimate = sessionManager.activeSession?.estimatedSecondsAtStart {
-                            let extensionMinutes = max(0, (budget - estimate) / 60)
-                            Text(
-                                extensionMinutes > 0
-                                    ? "見積もり \(estimate / 60)分  ·  延長 +\(extensionMinutes)分"
-                                    : "見積もり \(estimate / 60)分"
-                            )
-                            .font(TrainTheme.TypeScale.timerMeta())
-                            .foregroundStyle(TrainTheme.cabinInk.opacity(0.55))
-                        }
-                    }
-                    .onChange(of: context.date) { _, _ in
-                        sessionManager.reconcile()
-                        handleOvertimeSound()
-                    }
-                }
-
-                Spacer()
-
-                if showExtendChips {
-                    VStack(spacing: TrainTheme.Space.sm) {
-                        Text("どのくらい伸ばしますか？")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(TrainTheme.cabinInk.opacity(0.7))
-                        EstimateChips(style: .extendPrefix) { minutes in
-                            run {
-                                try sessionManager.extend(
-                                    by: TimeInterval(minutes * 60),
-                                    reason: extendReason
-                                )
-                            }
-                            showExtendChips = false
-                            extendReason = nil
-                        }
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 8) {
-                                ForEach(extendReasons, id: \.self) { reason in
-                                    Button(reason) {
-                                        extendReason = extendReason == reason ? nil : reason
-                                    }
-                                    .buttonStyle(.bordered)
-                                    .tint(extendReason == reason ? TrainTheme.signalAmber : .secondary)
-                                }
-                            }
-                        }
-                    }
-                    .padding(.horizontal)
-                    .transition(.opacity.combined(with: .move(edge: .bottom)))
-                }
-
-                FocusControlsView(
-                    onPause: {
-                        run {
-                            try sessionManager.pause()
-                        }
-                    },
-                    onPartialDisembark: {
-                        partialDisembarkAndShowCanvas()
-                    },
-                    onArrive: {
-                        run { try sessionManager.arrive() }
-                    },
-                    onExtendMenu: {
-                        withAnimation(TrainTheme.Motion.soft) {
-                            showExtendChips.toggle()
-                        }
-                    }
-                )
-                .padding(.horizontal, TrainTheme.Space.lg)
-                .safeAreaPadding(.bottom, 12)
+            if verticalSizeClass == .compact {
+                compactFocusLayout
+            } else {
+                portraitFocusLayout
             }
 
             if sessionManager.phase == .overtime {
@@ -182,6 +91,168 @@ struct FocusView: View {
                 handleOvertimeSound()
             }
         }
+    }
+
+    private var portraitFocusLayout: some View {
+        VStack(spacing: TrainTheme.Space.xl) {
+            Spacer()
+
+            titleView
+
+            timerBlock
+
+            Spacer()
+
+            if showExtendChips {
+                extendChipsBlock
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+            }
+
+            focusControls
+                .padding(.horizontal, TrainTheme.Space.lg)
+                .safeAreaPadding(.bottom, 12)
+        }
+    }
+
+    private var compactFocusLayout: some View {
+        HStack(alignment: .center, spacing: TrainTheme.Space.lg) {
+            VStack(spacing: TrainTheme.Space.sm) {
+                titleView
+                timerBlock
+            }
+            .frame(maxWidth: .infinity)
+
+            VStack(spacing: TrainTheme.Space.sm) {
+                if showExtendChips {
+                    compactExtendChipsBlock
+                        .transition(.opacity.combined(with: .move(edge: .trailing)))
+                }
+
+                focusControls
+            }
+            .frame(width: 188)
+        }
+        .padding(.horizontal, TrainTheme.Space.lg)
+        .safeAreaPadding(.vertical, 8)
+    }
+
+    private var titleView: some View {
+        Text(title)
+            .font(.title2.weight(.medium))
+            .foregroundStyle(TrainTheme.cabinInk)
+            .multilineTextAlignment(.center)
+            .lineLimit(verticalSizeClass == .compact ? 2 : nil)
+            .padding(.horizontal, verticalSizeClass == .compact ? 0 : TrainTheme.Space.lg)
+            .accessibilityAddTraits(.isHeader)
+    }
+
+    private var timerBlock: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            let _ = context.date
+            let remaining = sessionManager.remainingSeconds
+            VStack(spacing: TrainTheme.Space.sm) {
+                Text(timerLabel(remaining))
+                    .font(TrainTheme.TypeScale.timer(size: timerSize))
+                    .monospacedDigit()
+                    .foregroundStyle(timerColor(remaining))
+                    .minimumScaleFactor(0.55)
+                    .lineLimit(1)
+                    .scaleEffect((overtimePulse && !reduceMotion) ? 1.03 : 1)
+                    .animation(reduceMotion ? nil : TrainTheme.Motion.pulse, value: overtimePulse)
+                    .accessibilityLabel("残り時間")
+                    .accessibilityValue(timerLabel(remaining))
+
+                if let budget = sessionManager.activeSession?.budgetSecondsAtStart,
+                   let estimate = sessionManager.activeSession?.estimatedSecondsAtStart {
+                    let extensionMinutes = max(0, (budget - estimate) / 60)
+                    Text(
+                        extensionMinutes > 0
+                            ? "見積もり \(estimate / 60)分  ·  延長 +\(extensionMinutes)分"
+                            : "見積もり \(estimate / 60)分"
+                    )
+                    .font(TrainTheme.TypeScale.timerMeta())
+                    .foregroundStyle(TrainTheme.cabinInk.opacity(0.55))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                }
+            }
+            .onChange(of: context.date) { _, _ in
+                sessionManager.reconcile()
+                handleOvertimeSound()
+            }
+        }
+    }
+
+    private var extendChipsBlock: some View {
+        VStack(spacing: TrainTheme.Space.sm) {
+            Text("どのくらい伸ばしますか？")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(TrainTheme.cabinInk.opacity(0.7))
+            EstimateChips(style: .extendPrefix) { minutes in
+                run {
+                    try sessionManager.extend(
+                        by: TimeInterval(minutes * 60),
+                        reason: extendReason
+                    )
+                }
+                showExtendChips = false
+                extendReason = nil
+            }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(extendReasons, id: \.self) { reason in
+                        Button(reason) {
+                            extendReason = extendReason == reason ? nil : reason
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(extendReason == reason ? TrainTheme.signalAmber : .secondary)
+                    }
+                }
+            }
+        }
+        .padding(.horizontal)
+    }
+
+    private var compactExtendChipsBlock: some View {
+        VStack(spacing: TrainTheme.Space.xs) {
+            Text("延長")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(TrainTheme.cabinInk.opacity(0.7))
+            EstimateChips(
+                style: .extendPrefix,
+                layout: .flow
+            ) { minutes in
+                run {
+                    try sessionManager.extend(
+                        by: TimeInterval(minutes * 60),
+                        reason: extendReason
+                    )
+                }
+                showExtendChips = false
+                extendReason = nil
+            }
+        }
+    }
+
+    private var focusControls: some View {
+        FocusControlsView(
+            onPause: {
+                run {
+                    try sessionManager.pause()
+                }
+            },
+            onPartialDisembark: {
+                partialDisembarkAndShowCanvas()
+            },
+            onArrive: {
+                run { try sessionManager.arrive() }
+            },
+            onExtendMenu: {
+                withAnimation(TrainTheme.Motion.soft) {
+                    showExtendChips.toggle()
+                }
+            }
+        )
     }
 
     private var title: String {

@@ -41,7 +41,10 @@
 | Quick Add | シート + Form（`QuickAddSheet`） |
 | Hub / History / Settings / Reorder | 標準 List/Form、ダーク対応 |
 | 切符・履歴の削除 | Hub スワイプ / 詳細ボタン / 履歴行スワイプ（物理削除） |
+| iPhone 横向き UI | Hub compact = 運行\|切符 2 ペイン + 履歴 / 設定 / Focus の compact レイアウト（`TrainLayout`） |
 | 方針ドキュメント | [12-ui-design.md](12-ui-design.md) |
+
+**横向き Mac 検証観点（iPhone 15 Pro Max シミュレータ）:** Hub 左に運行＋停車・右に切符が同時表示、Focus タイマー主役 + 操作到達、履歴ヘッダ薄化、Quick Add キーボード共存、portrait 退行なし。
 
 ## MVP 完了マップ（Sprint 1–10）
 

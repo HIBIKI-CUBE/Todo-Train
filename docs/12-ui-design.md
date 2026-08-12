@@ -57,6 +57,20 @@
 - ボタン: 可能な限り `.bordered` / `.borderedProminent` / `role: .destructive`。
 - Focus: 縦一列。操作は下部。cabin 専用スタイルのみ例外。
 
+## 横向き（iPhone compact height）
+
+トリガー: `verticalSizeClass == .compact`（`EnvironmentValues.isCompactHeight`）。iPad 分割ビューは v2 スコープ外。
+
+| 原則 | 内容 |
+|------|------|
+| 高さは希少 | large title を inline に、サマリー・ヘッダを 1 行化 |
+| 幅は密度 | 行内メタ・タグを横展開。空き幅のダッシュボード化はしない |
+| Hub 2 ペイン | compact 時は左 280pt に運行＋停車、右に切符リスト（単一 List の横伸びはしない） |
+| 骨格維持 | List / Form / cabin。マスター・ディテール分割・FAB は増やさない |
+| Focus 例外 | portrait は縦一列のまま。compact のみタイマー \| 操作の 2 ペイン |
+
+実装: `DesignSystem/TrainLayout.swift`。
+
 ## AlarmKit / StandBy（終了ベル LA）
 
 HIG とシステム Alarm UI を骨格にし、列車メタファは **アクセントのみ**。

@@ -9,6 +9,7 @@ import SwiftData
 struct SettingsView: View {
     @Environment(AppSettings.self) private var settings
     @Environment(SessionManager.self) private var sessionManager
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
 
     var body: some View {
         Form {
@@ -63,6 +64,9 @@ struct SettingsView: View {
             }
         }
         .navigationTitle("設定")
+        .navigationBarTitleDisplayMode(
+            TrainLayout.navigationBarTitleDisplayMode(verticalSizeClass: verticalSizeClass)
+        )
     }
 }
 
