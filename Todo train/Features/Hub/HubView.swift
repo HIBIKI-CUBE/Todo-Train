@@ -17,6 +17,8 @@ struct HubView: View {
     @State private var hubDestination: HubDestination?
     @State private var errorMessage = ""
     @State private var showError = false
+    @State private var ticketPendingDelete: Ticket?
+    @State private var showDeleteConfirm = false
 
     private enum HubDestination: Hashable, Identifiable {
         case tags
@@ -123,6 +125,12 @@ struct HubView: View {
                             boardDisabledReason: boardDisabledReason,
                             onBoard: { board(ticket) }
                         )
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            Button("削除", role: .destructive) {
+                                ticketPendingDelete = ticket
+                                showDeleteConfirm = true
+                            }
+                        }
                     }
                     .onMove(perform: moveBacklogTickets)
                 }
@@ -176,6 +184,27 @@ struct HubView: View {
         } message: {
             Text(errorMessage)
         }
+        .confirmationDialog(
+            "この切符を削除しますか？",
+            isPresented: $showDeleteConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("削除", role: .destructive) {
+                if let ticket = ticketPendingDelete {
+                    deleteTicket(ticket)
+                }
+                ticketPendingDelete = nil
+            }
+            Button("キャンセル", role: .cancel) {
+                ticketPendingDelete = nil
+            }
+        } message: {
+            if let ticket = ticketPendingDelete, !ticket.sessions.isEmpty {
+                Text("「\(ticket.title)」と関連する履歴も削除されます。")
+            } else if let ticket = ticketPendingDelete {
+                Text("「\(ticket.title)」を削除します。この操作は取り消せません。")
+            }
+        }
         .sheet(isPresented: $showQuickAdd) {
             QuickAddSheet()
         }
@@ -227,6 +256,15 @@ struct HubView: View {
     private func board(_ ticket: Ticket) {
         do {
             try sessionManager.board(ticket: ticket)
+        } catch {
+            errorMessage = error.localizedDescription
+            showError = true
+        }
+    }
+
+    private func deleteTicket(_ ticket: Ticket) {
+        do {
+            try sessionManager.deleteTicket(ticket)
         } catch {
             errorMessage = error.localizedDescription
             showError = true

@@ -363,6 +363,53 @@ final class SessionManager {
         try close(session: session, outcome: .abandoned, closureKind: .abandoned, now: now)
     }
 
+    // MARK: - Physical deletion
+
+    /// Removes a ticket and cascaded sessions from the store.
+    /// Open sessions on the ticket are torn down (LA / alarms / activeSession) without archiving.
+    func deleteTicket(_ ticket: Ticket, now: Date? = nil) throws {
+        let now = now ?? clock.now
+        for session in ticket.sessions where session.isOpen {
+            tearDownOpenSessionSideEffects(session)
+        }
+        modelContext.delete(ticket)
+        try save()
+        reconcile(now: now)
+    }
+
+    /// Removes one ended history row. If the parent ticket has no sessions left, deletes the ticket too.
+    func deleteEndedSession(_ session: WorkSession, now: Date? = nil) throws {
+        let now = now ?? clock.now
+        guard TicketDeletion.canDeleteEndedSession(session) else {
+            throw SessionError.cannotDeleteOpenSession
+        }
+        let ticket = session.ticket
+        let remainingIDs = ticket?.sessions.map(\.id) ?? []
+        let shouldDeleteTicket = ticket != nil
+            && TicketDeletion.shouldDeleteOrphanTicket(
+                remainingSessionIDs: remainingIDs,
+                removing: session.id
+            )
+        modelContext.delete(session)
+        if shouldDeleteTicket, let ticket {
+            modelContext.delete(ticket)
+        }
+        try save()
+        reconcile(now: now)
+    }
+
+    /// Clears in-memory / external side effects for an open session without writing closure fields.
+    private func tearDownOpenSessionSideEffects(_ session: WorkSession) {
+        if activeSession?.id == session.id {
+            activeSession = nil
+            phase = .idle
+        }
+        overtimeNotifier.cancel(sessionID: session.id)
+        liveActivityManager.end()
+        alarmScheduler.cancel(sessionID: session.id)
+        suppressedEndBellSessionIDs.remove(session.id)
+    }
+
     private func close(
         session: WorkSession,
         outcome: SessionOutcome,

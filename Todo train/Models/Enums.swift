@@ -50,6 +50,7 @@ enum SessionError: Error, Equatable, LocalizedError {
     case cannotEndServiceWhileRunning
     case unresolvedPausedTickets
     case ticketAlreadyClosed
+    case cannotDeleteOpenSession
 
     var errorDescription: String? {
         switch self {
@@ -75,6 +76,8 @@ enum SessionError: Error, Equatable, LocalizedError {
             "停車中の切符を途中下車または放棄してから運行終了してください"
         case .ticketAlreadyClosed:
             "この切符はすでに閉じられています"
+        case .cannotDeleteOpenSession:
+            "終了していないセッションは履歴から削除できません"
         }
     }
 }

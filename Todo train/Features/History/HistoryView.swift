@@ -8,11 +8,16 @@ import SwiftData
 
 struct HistoryView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(SessionManager.self) private var sessionManager
 
     @Query(sort: \WorkSession.endedAt, order: .reverse)
     private var sessions: [WorkSession]
 
     @State private var searchText = ""
+    @State private var sessionPendingDelete: WorkSession?
+    @State private var showDeleteConfirm = false
+    @State private var errorMessage = ""
+    @State private var showError = false
 
     private var endedSessions: [WorkSession] {
         sessions.filter { $0.endedAt != nil }
@@ -47,13 +52,13 @@ struct HistoryView: View {
                 }
             } else if isSearching {
                 ForEach(filteredSessions, id: \.id) { session in
-                    HistorySessionRow(session: session, onReissue: reissue)
+                    historyRow(session)
                 }
             } else {
                 ForEach(groups, id: \.dayKey) { group in
                     Section {
                         ForEach(group.sessions, id: \.id) { session in
-                            HistorySessionRow(session: session, onReissue: reissue)
+                            historyRow(session)
                         }
                     } header: {
                         DailyStatsHeader(
@@ -77,6 +82,48 @@ struct HistoryView: View {
                 }
             }
         }
+        .confirmationDialog(
+            "この履歴を削除しますか？",
+            isPresented: $showDeleteConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("削除", role: .destructive) {
+                if let session = sessionPendingDelete {
+                    deleteSession(session)
+                }
+                sessionPendingDelete = nil
+            }
+            Button("キャンセル", role: .cancel) {
+                sessionPendingDelete = nil
+            }
+        } message: {
+            Text("この行のセッションだけを削除します。同じ切符の他の履歴は残ります。")
+        }
+        .alert("エラー", isPresented: $showError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(errorMessage)
+        }
+    }
+
+    @ViewBuilder
+    private func historyRow(_ session: WorkSession) -> some View {
+        HistorySessionRow(session: session, onReissue: reissue)
+            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                Button("削除", role: .destructive) {
+                    sessionPendingDelete = session
+                    showDeleteConfirm = true
+                }
+            }
+    }
+
+    private func deleteSession(_ session: WorkSession) {
+        do {
+            try sessionManager.deleteEndedSession(session)
+        } catch {
+            errorMessage = error.localizedDescription
+            showError = true
+        }
     }
 
     private func reissue(from ticket: Ticket) {
@@ -98,8 +145,10 @@ struct HistoryView: View {
 
 #Preview {
     let container = try! AppModelContainer.make(inMemory: true)
+    let manager = SessionManager(modelContext: container.mainContext)
     return NavigationStack {
         HistoryView()
+            .environment(manager)
             .modelContainer(container)
     }
 }
