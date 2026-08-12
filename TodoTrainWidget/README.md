@@ -32,4 +32,4 @@ Xcode ターゲット `TodoTrainWidget`（Widget Extension）がプロジェク�
 
 App Group: `group.dev.hibiki-cube.Todo-train`
 
-手順: [docs/10-live-activity-setup.md](../docs/10-live-activity-setup.md) / [docs/11-v2-alarmkit-setup.md](../docs/11-v2-alarmkit-setup.md)。
+手順: [docs/11-v2-alarmkit-setup.md](../docs/11-v2-alarmkit-setup.md)。

@@ -12,10 +12,11 @@
 | Overtime | ✅ | 超過 3 択 |
 | Pause Limit Sheet | ✅ | 停車中解決優先 |
 | Remaining Tickets Canvas | ✅ | 到着整理（掃き出し、ウィザードなし） |
-| History | ✅ + v1 強化予定 | タイムライン、乗り継ぎ。検索・今日に追加は v1 |
-| Reorder View | v1 | 全表示 + フィルタ強調、手動 D&D |
+| History | ✅ | タイムライン、乗り継ぎ、検索、今日に追加 |
+| Reorder View | ✅ | 全表示 + フィルタ強調、手動 D&D |
 | Emergency Override | ✅ | セーフティカバー + スライドホールド（MVP 済） |
-| Settings | v1 | 停車上限 2/3、音 ON/OFF（[09](09-v1-implementation.md) WP-A） |
+| Settings | ✅ | 停車上限 2/3、終了ベル、超過音 |
+| Weekly Report | ✅ | 週次レポート（履歴タブ内） |
 
 ## Hub
 
@@ -110,7 +111,7 @@
 - 各行: タイトル + 見積もり
 - 挿入位置ピッカー（共通コンポーネント）
 - 「残りなし」で子 0 枚確定可
-- AI 分割提案は v1・タップ時のみ + PCC 注釈
+- AI 分割提案はタップ時のみ + PCC 注釈（stub）
 
 ## 運行終了
 
@@ -124,7 +125,7 @@
 ## 履歴
 
 - MVP: セッション一覧 + 乗り継ぎリンク
-- v1: sticky 日次 stats、検索、「今日に追加」
+- sticky 日次 stats、検索、「今日に追加」
 - 行スワイプでそのセッション（履歴）を削除。最後のセッションなら切符も削除
 
 ## 切符詳細

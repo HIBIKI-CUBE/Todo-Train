@@ -8,18 +8,16 @@
 2. [docs/01-vision.md](docs/01-vision.md) — 哲学・誰のためか
 3. [docs/02-requirements.md](docs/02-requirements.md) — 確定要件・却下事項
 4. [docs/03-terminology.md](docs/03-terminology.md) — UI / ドメイン用語（勝手に言い換えない）
-
-### いまのフェーズが v1 のとき（Cloud Agent 含む）
-
-5. [docs/08-current-status.md](docs/08-current-status.md) — MVP 完了マップ
-6. [docs/09-v1-implementation.md](docs/09-v1-implementation.md) — **実装指示書（スコープ・WP・Linux 制約・受入）**
+5. [docs/08-current-status.md](docs/08-current-status.md) — **現状の実装マップ**
 
 実装・設計変更時は追加で:
 
-7. [docs/04-architecture.md](docs/04-architecture.md) — SessionManager / SwiftData / 運行
-8. [docs/05-ux-flows.md](docs/05-ux-flows.md) — 画面とフロー
-9. [docs/06-roadmap.md](docs/06-roadmap.md) — MVP / v1 / v2 スコープ
-10. [docs/07-research.md](docs/07-research.md) — 根拠・Live Activity 制限
+6. [docs/04-architecture.md](docs/04-architecture.md) — SessionManager / SwiftData / 運行
+7. [docs/05-ux-flows.md](docs/05-ux-flows.md) — 画面とフロー
+8. [docs/06-roadmap.md](docs/06-roadmap.md) — MVP / v1 / v2 スコープ
+9. [docs/07-research.md](docs/07-research.md) — 根拠・Live Activity 制限
+10. [docs/11-v2-alarmkit-setup.md](docs/11-v2-alarmkit-setup.md) — Widget / LA / AlarmKit 配線・検証
+11. [docs/12-ui-design.md](docs/12-ui-design.md) — UI 方針
 
 ## 作業時の原則
 
@@ -35,7 +33,7 @@
 - **iOS Simulator / 本格的な `xcodebuild test` は期待しない。**
 - 純関数化 + `Todo trainTests` へのテスト追加を優先。
 - Live Activity / Widget / 通知 / PCC の実行確認は PR の **Needs Mac verification** に委ねる。
-- 詳細は [docs/09-v1-implementation.md](docs/09-v1-implementation.md) §0 と §7。
+- PR 本文に Mac 検証チェックリストを載せる（[11-v2-alarmkit-setup.md](docs/11-v2-alarmkit-setup.md) §6 参照）。
 
 ## ブランチ
 
