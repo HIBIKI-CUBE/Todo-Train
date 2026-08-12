@@ -9,6 +9,7 @@ import SwiftData
 struct TagEditorView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @Environment(DeletionUndoCenter.self) private var undoCenter
 
     var existing: Tag?
 
@@ -45,6 +46,18 @@ struct TagEditorView: View {
                 }
                 .padding(.vertical, 4)
             }
+
+            if existing != nil {
+                Section {
+                    Button("タグを削除", role: .destructive) {
+                        deleteExisting()
+                    }
+                } footer: {
+                    if let existing {
+                        Text(TicketDeletion.tagDeleteFooter(ticketCount: existing.tickets.count))
+                    }
+                }
+            }
         }
         .navigationTitle(existing == nil ? "タグを追加" : "タグを編集")
         .navigationBarTitleDisplayMode(.inline)
@@ -78,6 +91,25 @@ struct TagEditorView: View {
             modelContext.insert(tag)
         }
         try? modelContext.save()
+        dismiss()
+    }
+
+    private func deleteExisting() {
+        guard let existing else { return }
+        let tagName = existing.name
+        let allTags = (try? modelContext.fetch(FetchDescriptor<Tag>(sortBy: [SortDescriptor(\.sortOrder)]))) ?? []
+        let record = DeletionUndo.captureTag(existing, allTags: allTags)
+        modelContext.delete(existing)
+        try? modelContext.save()
+        let remaining = (try? modelContext.fetch(FetchDescriptor<Tag>(sortBy: [SortDescriptor(\.sortOrder)]))) ?? []
+        TagOrdering.normalizeSortOrders(remaining)
+        try? modelContext.save()
+        undoCenter.offer(message: DeletionUndo.bannerMessage(tagName: tagName)) {
+            withAnimation {
+                DeletionUndo.restoreTag(record, into: modelContext)
+                try? modelContext.save()
+            }
+        }
         dismiss()
     }
 

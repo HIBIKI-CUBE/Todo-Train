@@ -8,6 +8,7 @@ import SwiftData
 
 struct TagManagerView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(DeletionUndoCenter.self) private var undoCenter
     @Query(sort: \Tag.sortOrder) private var tags: [Tag]
 
     @State private var editorMode: EditorMode?
@@ -48,9 +49,11 @@ struct TagManagerView: View {
                         }
                     }
                     .buttonStyle(.plain)
+                    .deleteSwipeAction(accessibilityName: tag.name) {
+                        deleteTag(tag)
+                    }
                 }
                 .onMove(perform: moveTags)
-                .onDelete(perform: deleteTags)
             }
         }
         .navigationTitle("タグ")
@@ -86,13 +89,23 @@ struct TagManagerView: View {
         try? modelContext.save()
     }
 
-    private func deleteTags(at offsets: IndexSet) {
-        for index in offsets {
-            modelContext.delete(tags[index])
-        }
+    private func deleteTag(_ tag: Tag) {
+        let name = tag.name
+        let record = DeletionUndo.captureTag(tag, allTags: Array(tags))
+        modelContext.delete(tag)
         try? modelContext.save()
         let remaining = (try? modelContext.fetch(FetchDescriptor<Tag>(sortBy: [SortDescriptor(\.sortOrder)]))) ?? []
         TagOrdering.normalizeSortOrders(remaining)
         try? modelContext.save()
+        undoCenter.offer(message: DeletionUndo.bannerMessage(tagName: name)) {
+            withAnimation {
+                try? restoreTag(record)
+            }
+        }
+    }
+
+    private func restoreTag(_ record: DeletionUndo.TagRecord) throws {
+        DeletionUndo.restoreTag(record, into: modelContext)
+        try modelContext.save()
     }
 }

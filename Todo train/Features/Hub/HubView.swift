@@ -10,6 +10,7 @@ struct HubView: View {
     @Environment(SessionManager.self) private var sessionManager
     @Environment(\.modelContext) private var modelContext
     @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @Environment(DeletionUndoCenter.self) private var undoCenter
 
     @Query(sort: \Ticket.sortOrder) private var allTickets: [Ticket]
 
@@ -18,8 +19,6 @@ struct HubView: View {
     @State private var hubDestination: HubDestination?
     @State private var errorMessage = ""
     @State private var showError = false
-    @State private var ticketPendingDelete: Ticket?
-    @State private var showDeleteConfirm = false
     /// Single-issue celebration playing on Hub (may overlap sheet dismiss).
     @State private var hubIssueEject: TicketIssueEjectEvent?
     @State private var hubIssueHaptic = 0
@@ -113,32 +112,7 @@ struct HubView: View {
                 ReorderView()
             }
         }
-        .alert("エラー", isPresented: $showError) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(errorMessage)
-        }
-        .confirmationDialog(
-            "この切符を削除しますか？",
-            isPresented: $showDeleteConfirm,
-            titleVisibility: .visible
-        ) {
-            Button("削除", role: .destructive) {
-                if let ticket = ticketPendingDelete {
-                    deleteTicket(ticket)
-                }
-                ticketPendingDelete = nil
-            }
-            Button("キャンセル", role: .cancel) {
-                ticketPendingDelete = nil
-            }
-        } message: {
-            if let ticket = ticketPendingDelete, !ticket.sessions.isEmpty {
-                Text("「\(ticket.title)」と関連する履歴も削除されます。")
-            } else if let ticket = ticketPendingDelete {
-                Text("「\(ticket.title)」を削除します。この操作は取り消せません。")
-            }
-        }
+        .errorAlert(isPresented: $showError, message: errorMessage)
         .sheet(isPresented: $showQuickAdd) {
             QuickAddSheet { event in
                 // Commit-instant celebration: haptic + overlay while sheet dismisses in parallel.
@@ -241,6 +215,9 @@ struct HubView: View {
             ForEach(sessionManager.pausedSessions, id: \.id) { session in
                 if let ticket = session.ticket {
                     pausedTicketRow(ticket: ticket, session: session)
+                        .deleteSwipeAction(accessibilityName: ticket.title) {
+                            deleteTicket(ticket)
+                        }
                 }
             }
         } header: {
@@ -270,11 +247,8 @@ struct HubView: View {
                         boardDisabledReason: boardDisabledReason,
                         onBoard: { board(ticket) }
                     )
-                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                        Button("削除", role: .destructive) {
-                            ticketPendingDelete = ticket
-                            showDeleteConfirm = true
-                        }
+                    .deleteSwipeAction(accessibilityName: ticket.title) {
+                        deleteTicket(ticket)
                     }
                 }
                 .onMove(perform: moveBacklogTickets)
@@ -349,8 +323,15 @@ struct HubView: View {
     }
 
     private func deleteTicket(_ ticket: Ticket) {
+        let title = ticket.title
+        let record = DeletionUndo.captureTicket(ticket)
         do {
             try sessionManager.deleteTicket(ticket)
+            undoCenter.offer(message: DeletionUndo.bannerMessage(ticketTitle: title)) {
+                withAnimation {
+                    try? sessionManager.restoreDeletedTicket(record)
+                }
+            }
         } catch {
             errorMessage = error.localizedDescription
             showError = true
@@ -387,6 +368,7 @@ struct HubView: View {
         HubView()
             .environment(manager)
             .environment(AppSettings.shared)
+            .environment(DeletionUndoCenter())
             .modelContainer(container)
     }
 }

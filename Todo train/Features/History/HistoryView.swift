@@ -9,14 +9,13 @@ import SwiftData
 struct HistoryView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(SessionManager.self) private var sessionManager
+    @Environment(DeletionUndoCenter.self) private var undoCenter
     @Environment(\.verticalSizeClass) private var verticalSizeClass
 
     @Query(sort: \WorkSession.endedAt, order: .reverse)
     private var sessions: [WorkSession]
 
     @State private var searchText = ""
-    @State private var sessionPendingDelete: WorkSession?
-    @State private var showDeleteConfirm = false
     @State private var errorMessage = ""
     @State private var showError = false
 
@@ -86,44 +85,54 @@ struct HistoryView: View {
                 }
             }
         }
-        .confirmationDialog(
-            "この履歴を削除しますか？",
-            isPresented: $showDeleteConfirm,
-            titleVisibility: .visible
-        ) {
-            Button("削除", role: .destructive) {
-                if let session = sessionPendingDelete {
-                    deleteSession(session)
-                }
-                sessionPendingDelete = nil
-            }
-            Button("キャンセル", role: .cancel) {
-                sessionPendingDelete = nil
-            }
-        } message: {
-            Text("この行のセッションだけを削除します。同じ切符の他の履歴は残ります。")
-        }
-        .alert("エラー", isPresented: $showError) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(errorMessage)
-        }
+        .errorAlert(isPresented: $showError, message: errorMessage)
     }
 
     @ViewBuilder
     private func historyRow(_ session: WorkSession) -> some View {
         HistorySessionRow(session: session, onReissue: reissue)
-            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                Button("削除", role: .destructive) {
-                    sessionPendingDelete = session
-                    showDeleteConfirm = true
-                }
+            .deleteSwipeAction(
+                accessibilityName: session.ticket?.title ?? "この履歴"
+            ) {
+                deleteSession(session)
             }
     }
 
     private func deleteSession(_ session: WorkSession) {
+        let title = session.ticket?.title ?? "不明な切符"
+        let remainingIDs = session.ticket?.sessions.map(\.id) ?? [session.id]
+        let deletesTicket = TicketDeletion.shouldDeleteOrphanTicket(
+            remainingSessionIDs: remainingIDs,
+            removing: session.id
+        )
         do {
-            try sessionManager.deleteEndedSession(session)
+            if deletesTicket, let ticket = session.ticket {
+                let record = DeletionUndo.captureTicket(ticket)
+                try sessionManager.deleteEndedSession(session)
+                undoCenter.offer(
+                    message: DeletionUndo.bannerMessage(
+                        historyTicketTitle: title,
+                        deletedTicketToo: true
+                    )
+                ) {
+                    withAnimation {
+                        try? sessionManager.restoreDeletedTicket(record)
+                    }
+                }
+            } else {
+                let record = DeletionUndo.captureSession(session)
+                try sessionManager.deleteEndedSession(session)
+                undoCenter.offer(
+                    message: DeletionUndo.bannerMessage(
+                        historyTicketTitle: title,
+                        deletedTicketToo: false
+                    )
+                ) {
+                    withAnimation {
+                        try? sessionManager.restoreDeletedSession(record)
+                    }
+                }
+            }
         } catch {
             errorMessage = error.localizedDescription
             showError = true
@@ -153,6 +162,7 @@ struct HistoryView: View {
     return NavigationStack {
         HistoryView()
             .environment(manager)
+            .environment(DeletionUndoCenter())
             .modelContainer(container)
     }
 }

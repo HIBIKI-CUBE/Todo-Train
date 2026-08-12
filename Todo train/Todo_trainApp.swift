@@ -11,6 +11,7 @@ struct Todo_trainApp: App {
     private let container: ModelContainer
     @State private var sessionManager: SessionManager
     @State private var settings = AppSettings.shared
+    @State private var deletionUndo = DeletionUndoCenter()
 
     init() {
         do {
@@ -49,6 +50,7 @@ struct Todo_trainApp: App {
             ContentView()
                 .environment(sessionManager)
                 .environment(settings)
+                .environment(deletionUndo)
                 .modelContainer(container)
         }
     }

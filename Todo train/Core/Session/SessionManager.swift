@@ -399,6 +399,23 @@ final class SessionManager {
         reconcile(now: now)
     }
 
+    func restoreDeletedTicket(_ record: DeletionUndo.TicketRecord) throws {
+        try DeletionUndo.restoreTicket(record, into: modelContext)
+        try save()
+        try recoverOnLaunch()
+    }
+
+    func restoreDeletedSession(_ record: DeletionUndo.SessionRecord) throws {
+        DeletionUndo.restoreSession(record, onto: nil, into: modelContext)
+        try save()
+        try recoverOnLaunch()
+    }
+
+    func restoreDeletedTag(_ record: DeletionUndo.TagRecord) throws {
+        DeletionUndo.restoreTag(record, into: modelContext)
+        try save()
+    }
+
     /// Clears in-memory / external side effects for an open session without writing closure fields.
     private func tearDownOpenSessionSideEffects(_ session: WorkSession) {
         if activeSession?.id == session.id {

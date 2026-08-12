@@ -1,6 +1,6 @@
 # 08 — 現状ステータス
 
-最終更新: 2026-08-12（親指発券帯 Quick Add）
+最終更新: 2026-08-12（親指発券帯 Quick Add + 削除 Undo）
 
 ## 結論
 
@@ -29,7 +29,7 @@
 | StandBy / Session LA | ✅ コックピット計器 UI + サイズ契約。検証は [11](11-v2-alarmkit-setup.md) §6 |
 | 週次レポート | ✅ `WeeklyReportView` + 純関数テスト |
 | UI polish | ✅ `TrainTheme` / `TrainChrome` / 横向き compact（[12](12-ui-design.md)） |
-| 切符・履歴の削除 | ✅ Hub スワイプ / 詳細 / 履歴行スワイプ |
+| 切符・履歴の削除 | ✅ フルスワイプ + バナー Undo（[12](12-ui-design.md)） |
 
 ## ディレクトリ（実装の地図）
 
@@ -37,14 +37,14 @@
 Todo train/
   ContentView.swift        TabView（切符 / 履歴 / 設定）+ Focus cover
   Core/
-    Session/               SessionManager, TicketDeletion
+    Session/               SessionManager, TicketDeletion, DeletionUndo
     Alarms/                AlarmScheduling, EndBellDelivery, SessionEndSchedule
     Notifications/         OvertimeNotifier
     History/               HistorySearch, TicketReissue, WeeklyReport
     Settings/              AppSettings
     Coaching/              CoachingEngine
   DesignSystem/            TrainTheme, TrainChrome, TrainLayout, EstimateChips,
-                           EstimateSnapMapping, EstimateSnapGauge
+                           DeleteConfirmation, EstimateSnapMapping, EstimateSnapGauge
   Features/
     Hub/                   HubView, QuickAddBar（親指発券帯）, ServiceSummaryBar
     Focus/                 FocusView, FocusControlsView, OvertimeSheet
@@ -54,7 +54,7 @@ Todo train/
     Reorder/               ReorderView
     Settings/              SettingsView
 TodoTrainWidget/           Home Widget + Session LA + Alarm LA
-Todo trainTests/           23 ファイル（Swift Testing）
+Todo trainTests/           25 ファイル（Swift Testing）
 ```
 
 ## 動作するユーザーフロー

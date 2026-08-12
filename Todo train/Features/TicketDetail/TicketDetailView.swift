@@ -10,6 +10,7 @@ struct TicketDetailView: View {
     @Environment(SessionManager.self) private var sessionManager
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @Environment(DeletionUndoCenter.self) private var undoCenter
     @Bindable var ticket: Ticket
 
     @Query(sort: \Tag.sortOrder) private var allTags: [Tag]
@@ -17,7 +18,6 @@ struct TicketDetailView: View {
 
     @State private var errorMessage = ""
     @State private var showError = false
-    @State private var showDeleteConfirm = false
 
     private var canBoard: Bool {
         sessionManager.isInService
@@ -84,9 +84,10 @@ struct TicketDetailView: View {
                         displayedComponents: .date
                     )
                     if ticket.dueDate != nil {
-                        Button("期限をクリア", role: .destructive) {
+                        Button("期限をクリア") {
                             ticket.dueDate = nil
                         }
+                        .foregroundStyle(.secondary)
                     }
                     if let suggestion = estimateSuggestion {
                         Text(EstimateHeuristic.caption(
@@ -193,18 +194,7 @@ struct TicketDetailView: View {
                     .foregroundStyle(.secondary)
 
                 ForEach(sortedSessions, id: \.id) { session in
-                    HStack {
-                        Text(HistoryStats.outcomeLabel(session.outcome))
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                            .frame(width: 56, alignment: .leading)
-                        Text(sessionTimeLabel(session))
-                            .font(.caption.monospacedDigit())
-                        Spacer()
-                        Text("\(Int(session.accumulatedActiveSeconds / 60))分")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
+                    sessionRow(session)
                 }
             }
 
@@ -218,9 +208,12 @@ struct TicketDetailView: View {
             }
 
             Section {
-                Button("削除", role: .destructive) {
-                    showDeleteConfirm = true
+                Button("切符を削除", role: .destructive) {
+                    deleteTicket()
                 }
+                .accessibilityHint(TicketDeletion.ticketDeleteFooter(ride: TicketDeletion.rideState(for: ticket)))
+            } footer: {
+                Text(TicketDeletion.ticketDeleteFooter(ride: TicketDeletion.rideState(for: ticket)))
             }
         }
         .navigationTitle("切符の詳細")
@@ -228,26 +221,29 @@ struct TicketDetailView: View {
         .onDisappear {
             try? modelContext.save()
         }
-        .alert("エラー", isPresented: $showError) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(errorMessage)
+        .errorAlert(isPresented: $showError, message: errorMessage)
+    }
+
+    @ViewBuilder
+    private func sessionRow(_ session: WorkSession) -> some View {
+        let row = HStack {
+            Text(HistoryStats.outcomeLabel(session.outcome))
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: 56, alignment: .leading)
+            Text(sessionTimeLabel(session))
+                .font(.caption.monospacedDigit())
+            Spacer()
+            Text("\(Int(session.accumulatedActiveSeconds / 60))分")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
-        .confirmationDialog(
-            "この切符を削除しますか？",
-            isPresented: $showDeleteConfirm,
-            titleVisibility: .visible
-        ) {
-            Button("削除", role: .destructive) {
-                deleteTicket()
+        if session.endedAt != nil {
+            row.deleteSwipeAction(accessibilityName: "この乗車記録") {
+                deleteSession(session)
             }
-            Button("キャンセル", role: .cancel) {}
-        } message: {
-            if ticket.sessions.isEmpty {
-                Text("「\(ticket.title)」を削除します。この操作は取り消せません。")
-            } else {
-                Text("「\(ticket.title)」と関連する履歴も削除されます。")
-            }
+        } else {
+            row
         }
     }
 
@@ -261,9 +257,58 @@ struct TicketDetailView: View {
     }
 
     private func deleteTicket() {
+        let title = ticket.title
+        let record = DeletionUndo.captureTicket(ticket)
         do {
             try sessionManager.deleteTicket(ticket)
+            undoCenter.offer(message: DeletionUndo.bannerMessage(ticketTitle: title)) {
+                withAnimation {
+                    try? sessionManager.restoreDeletedTicket(record)
+                }
+            }
             dismiss()
+        } catch {
+            errorMessage = error.localizedDescription
+            showError = true
+        }
+    }
+
+    private func deleteSession(_ session: WorkSession) {
+        let title = ticket.title
+        let remainingIDs = ticket.sessions.map(\.id)
+        let deletesTicket = TicketDeletion.shouldDeleteOrphanTicket(
+            remainingSessionIDs: remainingIDs,
+            removing: session.id
+        )
+        do {
+            if deletesTicket {
+                let record = DeletionUndo.captureTicket(ticket)
+                try sessionManager.deleteEndedSession(session)
+                undoCenter.offer(
+                    message: DeletionUndo.bannerMessage(
+                        historyTicketTitle: title,
+                        deletedTicketToo: true
+                    )
+                ) {
+                    withAnimation {
+                        try? sessionManager.restoreDeletedTicket(record)
+                    }
+                }
+                dismiss()
+            } else {
+                let record = DeletionUndo.captureSession(session)
+                try sessionManager.deleteEndedSession(session)
+                undoCenter.offer(
+                    message: DeletionUndo.bannerMessage(
+                        historyTicketTitle: title,
+                        deletedTicketToo: false
+                    )
+                ) {
+                    withAnimation {
+                        try? sessionManager.restoreDeletedSession(record)
+                    }
+                }
+            }
         } catch {
             errorMessage = error.localizedDescription
             showError = true

@@ -77,6 +77,7 @@ struct SettingsView: View {
         SettingsView()
             .environment(AppSettings.shared)
             .environment(manager)
+            .environment(DeletionUndoCenter())
             .modelContainer(container)
     }
 }

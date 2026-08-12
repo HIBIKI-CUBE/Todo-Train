@@ -10,6 +10,7 @@ import SwiftData
 
 struct ContentView: View {
     @Environment(SessionManager.self) private var sessionManager
+    @Environment(DeletionUndoCenter.self) private var undoCenter
     @Environment(\.scenePhase) private var scenePhase
 
     @State private var isFocusPresented = false
@@ -39,6 +40,16 @@ struct ContentView: View {
         }
         .tint(TrainTheme.rail)
         .environment(transferCanvas)
+        .safeAreaInset(edge: .bottom, spacing: 8) {
+            if let message = undoCenter.bannerMessage {
+                DeletionUndoBanner(message: message) {
+                    undoCenter.undo()
+                }
+                .padding(.horizontal, TrainTheme.Space.lg)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.easeInOut(duration: 0.25), value: undoCenter.bannerMessage)
         .onAppear {
             if !didRecoverOnLaunch {
                 recoverOnLaunch()
@@ -132,5 +143,6 @@ struct ContentView: View {
     return ContentView()
         .environment(manager)
         .environment(AppSettings.shared)
+        .environment(DeletionUndoCenter())
         .modelContainer(container)
 }

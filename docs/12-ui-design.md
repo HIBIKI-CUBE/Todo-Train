@@ -60,6 +60,19 @@
 - ボタン: 可能な限り `.bordered` / `.borderedProminent` / `role: .destructive`（発券の主経路は Return／ゲージ）。タグチップ・ゲージノブは Liquid Glass。
 - Focus: エッジツーエッジのパネル格子（ヘッダ／タイマー／テレメトリ／操作）。丸角カードや大きな余白は使わない。
 
+### 破壊的操作（物理削除）
+
+Undo があるので、[HIG Alerts](https://developer.apple.com/design/human-interface-guidelines/alerts) どおり **よくある削除に Alert は出さない**。
+
+| 原則 | 内容 |
+|------|------|
+| フルスワイプ可 | 削除は即反映。`Label("削除", systemImage: "trash")` + `role: .destructive` |
+| Undo | 下部バナー「取り消す」（約 8 秒）。スナップショット復元（UndoManager は使わない＝タイトル編集と混ざらない） |
+| Alert なし | スワイプも詳細の削除ボタンも即削除＋バナー |
+| `role: .destructive` | 本当に消える操作だけ（期限クリアには使わない） |
+
+実装: `DeletionUndo` / `DeletionUndoCenter` / `DeleteConfirmation.swift`。
+
 ### 親指発券契約
 
 | 軌道 | 操作 | 狙い直し |
@@ -145,10 +158,11 @@ StandBy は全画面 API ではなく、提案された帯をシステムが拡�
 ## やらないこと
 
 - 紫グラデ / 汎用 SaaS ダーク / クリーム×テラコッタ×セリフ
-- カスタム FAB・Hub 上の半透明オーバーレイ・ボトムバー追加 UI（発券シート内の KB 直上親指帯は可）
+- カスタム FAB・Hub 上の半透明オーバーレイ・ボトムバー追加 UI（発券シート内の KB 直上親指帯・削除 Undo バナーは可）
 - 絵文字アイコンの多用
 - コーチング吹き出し
 - Web / Flutter 風の独自カードグリッドを「ブランド」にする行為
+- フルスワイプと Alert の二重確認、同一 View への `.alert` 重ね
 
 ## 実装マップ
 
@@ -156,6 +170,7 @@ StandBy は全画面 API ではなく、提案された帯をシステムが拡�
 |----------|------|
 | `DesignSystem/TrainTheme.swift` | adaptive 色・余白・型・`Motion.issueEject` / `gaugeSnap` |
 | `DesignSystem/TrainChrome.swift` | Focus 純黒ダッシュボード・進捗バー・計器バンク・SignalBadge |
+| `DesignSystem/DeleteConfirmation.swift` | フルスワイプ削除 + Undo バナー |
 | `DesignSystem/EstimateSnapMapping.swift` | 見積もり分↔線形位置の純関数・sticky デテント |
 | `DesignSystem/EstimateSnapGauge.swift` | KB 直上の線形スナップ・ゲージ |
 | `DesignSystem/TicketIssueEject.swift` | 単発発行の Hub 切符着地 |
