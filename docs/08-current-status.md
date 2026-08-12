@@ -15,8 +15,8 @@
 | WP-C Reorder | 実装済 | フィルタ強調 + D&D |
 | WP-D dueDate | 実装済 | 任意期限、自動ソートなし |
 | WP-E Custom estimate | 実装済 | 1–60 分任意入力 |
-| WP-F Live Activity | コード済 | Mac でターゲット/Capability 要確認（[10-live-activity-setup.md](10-live-activity-setup.md)） |
-| WP-G Widget | ソース済 | `TodoTrainWidget/` + README |
+| WP-F Live Activity | **配線済** | Session LA UI + AlarmKit 排他。実機確認は [10-live-activity-setup.md](10-live-activity-setup.md) |
+| WP-G Widget | **配線済** | App Group スナップショット。実機でホーム追加確認 |
 | WP-H AI / PCC | stub 済 | `CoachingEngine` + Heuristic |
 | WP-I CloudKit | 未着手 | 独立 PR 推奨 |
 
@@ -93,12 +93,11 @@ Todo trainTests/  SessionManager, HistoryStats, Tag, Overtime, Override, Estimat
 
 | 項目 | 備考 |
 |------|------|
-| `TicketCardView` | ファイルはあるが Hub はインライン UI。v1 で見た目刷新可 |
-| 挿入位置ピッカー | デフォルト末尾のみ。上級操作は薄い |
-| 延長「なぜ」 | チップのみ。理由フィールドは薄い/未接続の可能性 |
-| Settings 画面 | 停車上限は定数 2。設定 UI なし → **v1** |
-| CloudKit | entitlement あり・未使用 |
-| Live Activity / Widget | 未着手 → **v1** |
+| 挿入位置ピッカー | **実装済**（Quick Add / 乗り継ぎ） |
+| 延長「なぜ」 | **実装済**（SessionExtension + 理由チップ） |
+| Settings 画面 | 停車上限・終了ベル・超過音 |
+| CloudKit | entitlement あり・未使用（本スコープ外） |
+| Live Activity / Widget | Session LA + Home Widget 配線済。終了ベル ON 時は AlarmKit 排他 |
 
 ## テスト
 

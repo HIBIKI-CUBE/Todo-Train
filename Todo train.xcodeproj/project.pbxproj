@@ -66,7 +66,6 @@
 			membershipExceptions = (
 				Info.plist,
 				README.md,
-				TodoTrainWidget.swift,
 			);
 			target = B6EE2E82302B4E730022EBAD /* TodoTrainWidget */;
 		};
@@ -77,6 +76,7 @@
 				Info.plist,
 				README.md,
 				TodoTrainAlarmLiveActivity.swift,
+				TodoTrainSessionLiveActivity.swift,
 				TodoTrainWidget.swift,
 				TodoTrainWidgetBundle.swift,
 			);
@@ -384,6 +384,7 @@
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "dev.hibiki-cube.Todo-train";
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
@@ -419,6 +420,7 @@
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "dev.hibiki-cube.Todo-train";
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
@@ -637,6 +639,7 @@
 		B6EE2E86302B4E730022EBAD /* Debug configuration for PBXNativeTarget "TodoTrainWidget" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = TodoTrainWidget/TodoTrainWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = NPSM864R9U;
@@ -667,6 +670,7 @@
 		B6EE2E87302B4E730022EBAD /* Release configuration for PBXNativeTarget "TodoTrainWidget" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = TodoTrainWidget/TodoTrainWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = NPSM864R9U;
