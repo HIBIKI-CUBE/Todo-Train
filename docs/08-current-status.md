@@ -40,6 +40,7 @@
 | Tab ナビ | 切符 / 履歴 / 設定 |
 | Quick Add | シート + Form（`QuickAddSheet`） |
 | Hub / History / Settings / Reorder | 標準 List/Form、ダーク対応 |
+| 切符・履歴の削除 | Hub スワイプ / 詳細ボタン / 履歴行スワイプ（物理削除） |
 | 方針ドキュメント | [12-ui-design.md](12-ui-design.md) |
 
 ## MVP 完了マップ（Sprint 1–10）
