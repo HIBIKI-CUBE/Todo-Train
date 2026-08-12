@@ -9,6 +9,7 @@ import SwiftData
 struct TicketDetailView: View {
     @Environment(SessionManager.self) private var sessionManager
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.dismiss) private var dismiss
     @Bindable var ticket: Ticket
 
     @Query(sort: \Tag.sortOrder) private var allTags: [Tag]
@@ -16,6 +17,7 @@ struct TicketDetailView: View {
 
     @State private var errorMessage = ""
     @State private var showError = false
+    @State private var showDeleteConfirm = false
 
     private var canBoard: Bool {
         sessionManager.isInService
@@ -214,22 +216,54 @@ struct TicketDetailView: View {
                     .disabled(!canBoard && !isPaused)
                 }
             }
+
+            Section {
+                Button("削除", role: .destructive) {
+                    showDeleteConfirm = true
+                }
+            }
         }
         .navigationTitle("切符の詳細")
         .navigationBarTitleDisplayMode(.inline)
         .onDisappear {
             try? modelContext.save()
         }
-        .alert("発車できません", isPresented: $showError) {
+        .alert("エラー", isPresented: $showError) {
             Button("OK", role: .cancel) {}
         } message: {
             Text(errorMessage)
+        }
+        .confirmationDialog(
+            "この切符を削除しますか？",
+            isPresented: $showDeleteConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("削除", role: .destructive) {
+                deleteTicket()
+            }
+            Button("キャンセル", role: .cancel) {}
+        } message: {
+            if ticket.sessions.isEmpty {
+                Text("「\(ticket.title)」を削除します。この操作は取り消せません。")
+            } else {
+                Text("「\(ticket.title)」と関連する履歴も削除されます。")
+            }
         }
     }
 
     private func board() {
         do {
             try sessionManager.board(ticket: ticket)
+        } catch {
+            errorMessage = error.localizedDescription
+            showError = true
+        }
+    }
+
+    private func deleteTicket() {
+        do {
+            try sessionManager.deleteTicket(ticket)
+            dismiss()
         } catch {
             errorMessage = error.localizedDescription
             showError = true
