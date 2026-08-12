@@ -10,6 +10,7 @@
 | 面 | 方針 |
 |----|------|
 | Hub / 履歴 / 設定 | 標準の `List` / `Form`（`.insetGrouped`）。システム背景・セマンティック色 |
+| Quick Add | システム sheet + **親指発券帯**（タイトル・常時タグ・KB 直上ゲージ）。Form / Disclosure ではない |
 | Focus | 真っ黒ダッシュボード。超大タイマーが主役。hairline パネル格子＋ gapless 操作盤 |
 | 超過 / 臨時停車 | 信号色は意味を持たせる（緑・琥珀・赤） |
 
@@ -55,9 +56,24 @@
 ## レイアウトとコントロール
 
 - Hub: `List` + 標準行。`TicketCardView` はリスト行（枠カードにしない）。
-- 追加 UI: **シート + Form**。タイトル即フォーカス、見積もり・タグを同面、連続追加後もキーボード維持。
-- ボタン: 可能な限り `.bordered` / `.borderedProminent` / `role: .destructive`。
+- 追加 UI: **親指発券帯**（`QuickAddSheet`）。タイトル即フォーカス、Return＝主発行、タグ横チップ常時、KB 直上に線形スナップ・ゲージ＋巨大数字。連続追加後もキーボード維持。
+- ボタン: 可能な限り `.bordered` / `.borderedProminent` / `role: .destructive`（発券の主経路は Return／ゲージ）。タグチップ・ゲージノブは Liquid Glass。
 - Focus: エッジツーエッジのパネル格子（ヘッダ／タイマー／テレメトリ／操作）。丸角カードや大きな余白は使わない。
+
+### 親指発券契約
+
+| 軌道 | 操作 | 狙い直し |
+|------|------|----------|
+| 主 | タイトル → Return | 0 |
+| 副 | ゲージ tap / scrub+release | 1（KB→直上） |
+| 閉じる | 下スワイプ | — |
+
+- 見積もり・タグ・挿入は sticky。タグ自動選択なし（無タグ発行可）
+- 発行は即コミット + 短時間 Undo。確認ダイアログなし
+- ゲージ: 指 X と塗りは分比例で一致。各停泊に sticky。**タイトル入力済みで発行するスクラブ中は detent を抑え**、祝祭はシート側の切符演出に一本化
+- 挿入: ゲージ長押し。任意分: 巨大数字の長押し
+- 発行フィードバック: **単発（デフォルト）**はコミット即 haptic＋Hub 切符（シート閉じと並列）。祝祭は短尺 ~0.55s（可読ホールド→着地）。**連続掃き出しトグル ON** は速度優先（selection haptic ＋ Undo のみ、切符演出なし）。Return / ゲージは同一経路
+- 連続トグルはシート dismiss で OFF に戻る
 
 ## 横向き（iPhone compact height）
 
@@ -120,14 +136,16 @@ StandBy は全画面 API ではなく、提案された帯をシステムが拡�
 
 1. **発車**: Focus 出現はシステムフルスクリーン。内部タイマーは 1 秒 tick のみ。
 2. **超過突入**: タイマー色を amber→red へ、軽いスケールパルス 1 回。全面ディムは使わず操作盤を超過 3 択に差し替え。
-3. **シート**: システム presentation（detents medium/large）。過剰な spring は避ける。
+3. **切符発行 / ゲージ**: 単発はコミット即祝祭（`Motion.issueEject` 短尺）＋シート閉じ並列。連続は褒め最小（haptic ＋ Undo）。発行時はゲージ detent と喧嘩させない。スクラブのみ（未入力）の停泊越えは impact＋`Motion.gaugeSnap`。
+
+シート presentation はシステム detents。過剰な spring は避ける。
 
 ノイズになるパララックス・常時グローは禁止。
 
 ## やらないこと
 
 - 紫グラデ / 汎用 SaaS ダーク / クリーム×テラコッタ×セリフ
-- カスタム FAB・半透明オーバーレイのボトムバー追加 UI
+- カスタム FAB・Hub 上の半透明オーバーレイ・ボトムバー追加 UI（発券シート内の KB 直上親指帯は可）
 - 絵文字アイコンの多用
 - コーチング吹き出し
 - Web / Flutter 風の独自カードグリッドを「ブランド」にする行為
@@ -136,11 +154,14 @@ StandBy は全画面 API ではなく、提案された帯をシステムが拡�
 
 | ファイル | 役割 |
 |----------|------|
-| `DesignSystem/TrainTheme.swift` | adaptive 色・余白・型 |
+| `DesignSystem/TrainTheme.swift` | adaptive 色・余白・型・`Motion.issueEject` / `gaugeSnap` |
 | `DesignSystem/TrainChrome.swift` | Focus 純黒ダッシュボード・進捗バー・計器バンク・SignalBadge |
+| `DesignSystem/EstimateSnapMapping.swift` | 見積もり分↔線形位置の純関数・sticky デテント |
+| `DesignSystem/EstimateSnapGauge.swift` | KB 直上の線形スナップ・ゲージ |
+| `DesignSystem/TicketIssueEject.swift` | 単発発行の Hub 切符着地 |
 | `TodoTrainWidget/FocusTimerPhase.swift` | App + Widget 共有の段階色ロジック |
 | `TodoTrainWidget/CockpitLayoutContract.swift` | Live Activity 公称サイズ契約・密度選択 |
 | `TodoTrainWidget/CockpitInstrumentViews.swift` | StandBy 2ペイン / LS ViewThatFits ダーク計器 |
 | `ContentView.swift` | TabView + Focus cover |
-| `Features/Hub/QuickAddBar.swift` | `QuickAddSheet` |
+| `Features/Hub/QuickAddBar.swift` | `QuickAddSheet`（親指発券帯） |
 | 各 Feature | 標準 List / Form |
