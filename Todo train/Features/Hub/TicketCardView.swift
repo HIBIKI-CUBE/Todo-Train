@@ -7,8 +7,8 @@ import SwiftUI
 
 struct TicketCardView: View {
     let ticket: Ticket
-    let isPaused: Bool
     let canBoard: Bool
+    let boardDisabledReason: String?
     let onBoard: () -> Void
     var showsTags: Bool = true
 
@@ -32,10 +32,13 @@ struct TicketCardView: View {
                         if let dueDate = ticket.dueDate {
                             SignalBadge(kind: .due, customLabel: dueDateLabel(dueDate))
                         }
+                    }
 
-                        if isPaused {
-                            SignalBadge(kind: .paused)
-                        }
+                    if let progress = TicketProgress.caption(for: ticket) {
+                        Text(progress)
+                            .font(TrainTheme.TypeScale.meta())
+                            .foregroundStyle(TrainTheme.rail)
+                            .monospacedDigit()
                     }
 
                     if showsTags, !ticket.tags.isEmpty {
@@ -44,6 +47,8 @@ struct TicketCardView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .accessibilityLabel(ticket.title)
+            .accessibilityHint("詳細を開く")
 
             Button("発車") {
                 onBoard()
@@ -51,7 +56,9 @@ struct TicketCardView: View {
             .buttonStyle(.borderedProminent)
             .tint(TrainTheme.rail)
             .disabled(!canBoard)
+            .accessibilityHint(canBoard ? "フォーカスを開始" : (boardDisabledReason ?? "発車できません"))
         }
+        .accessibilityElement(children: .contain)
     }
 
     private func dueDateLabel(_ date: Date) -> String {

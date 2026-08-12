@@ -17,7 +17,8 @@ enum TicketLineageService {
         from parent: Ticket,
         drafts: [Draft],
         modelContext: ModelContext,
-        fromSessionID: UUID? = nil
+        fromSessionID: UUID? = nil,
+        insertionPosition: TicketInsertionPosition = .end
     ) throws {
         let meaningful = drafts
             .map { Draft(title: $0.title.trimmingCharacters(in: .whitespacesAndNewlines), estimatedSeconds: $0.estimatedSeconds) }
@@ -25,16 +26,27 @@ enum TicketLineageService {
         guard !meaningful.isEmpty else { return }
 
         let kind: LineageKind = meaningful.count == 1 ? .continuation : .split
-        var nextOrder = nextSortOrder(in: modelContext)
 
+        let openDescriptor = FetchDescriptor<Ticket>(
+            predicate: #Predicate { $0.closedAt == nil },
+            sortBy: [SortDescriptor(\.sortOrder)]
+        )
+        let openTickets = (try? modelContext.fetch(openDescriptor)) ?? []
+        var orderedIDs = openTickets.map(\.id)
+        var insertAt = TicketSortOrdering.insertionIndex(
+            openIDsOrdered: orderedIDs,
+            position: insertionPosition
+        )
+
+        var created: [Ticket] = []
         for draft in meaningful {
             let child = Ticket(
                 title: draft.title,
                 estimatedSeconds: min(max(draft.estimatedSeconds, 1), Ticket.maxEstimatedSeconds),
-                sortOrder: nextOrder
+                sortOrder: insertAt
             )
-            nextOrder += 1
             modelContext.insert(child)
+            created.append(child)
 
             let lineage = TaskLineage(
                 kind: kind,
@@ -44,18 +56,18 @@ enum TicketLineageService {
                 aiGenerated: false
             )
             modelContext.insert(lineage)
+
+            orderedIDs.insert(child.id, at: insertAt)
+            insertAt += 1
+        }
+
+        let orders = TicketSortOrdering.normalizedOrders(forOrderedIDs: orderedIDs)
+        for ticket in openTickets + created {
+            if let order = orders[ticket.id] {
+                ticket.sortOrder = order
+            }
         }
 
         try modelContext.save()
-    }
-
-    @MainActor
-    private static func nextSortOrder(in modelContext: ModelContext) -> Int {
-        let descriptor = FetchDescriptor<Ticket>(
-            predicate: #Predicate { $0.closedAt == nil },
-            sortBy: [SortDescriptor(\.sortOrder, order: .reverse)]
-        )
-        let maxOrder = (try? modelContext.fetch(descriptor).first?.sortOrder) ?? -1
-        return maxOrder + 1
     }
 }

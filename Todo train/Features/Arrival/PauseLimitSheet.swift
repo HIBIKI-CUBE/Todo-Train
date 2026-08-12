@@ -47,7 +47,7 @@ struct PauseLimitSheet: View {
                                     }
                                     .buttonStyle(.bordered)
 
-                                    Button("再開") {
+                                    Button("再乗車") {
                                         resumePaused(ticket)
                                     }
                                     .buttonStyle(.borderedProminent)

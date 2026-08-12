@@ -29,10 +29,28 @@ struct HubView: View {
         allTickets.filter(\.isOpen)
     }
 
+    /// Open tickets that are not currently paused (paused live in their own section).
+    private var backlogTickets: [Ticket] {
+        openTickets.filter { !isPaused($0) }
+    }
+
     private var canBoardGenerally: Bool {
         sessionManager.isInService
             && sessionManager.phase != .running
             && sessionManager.phase != .overtime
+    }
+
+    private var boardDisabledReason: String {
+        if sessionManager.needsServiceDayEndPrompt {
+            return "昨日の運行を終了してください"
+        }
+        if !sessionManager.isInService {
+            return "運行開始が必要です"
+        }
+        if sessionManager.phase == .running || sessionManager.phase == .overtime {
+            return "すでに走行中の切符があります"
+        }
+        return "発車できません"
     }
 
     var body: some View {
@@ -54,23 +72,29 @@ struct HubView: View {
                     ForEach(sessionManager.pausedSessions, id: \.id) { session in
                         if let ticket = session.ticket {
                             HStack(spacing: TrainTheme.Space.md) {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(ticket.title)
-                                        .font(TrainTheme.TypeScale.ticketTitle())
-                                    Text("残り \(formatRemaining(session))")
-                                        .font(TrainTheme.TypeScale.meta())
-                                        .foregroundStyle(TrainTheme.signalAmber)
-                                        .monospacedDigit()
+                                NavigationLink {
+                                    TicketDetailView(ticket: ticket)
+                                } label: {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(ticket.title)
+                                            .font(TrainTheme.TypeScale.ticketTitle())
+                                        Text("残り \(formatRemaining(session))")
+                                            .font(TrainTheme.TypeScale.meta())
+                                            .foregroundStyle(TrainTheme.signalAmber)
+                                            .monospacedDigit()
+                                        SignalBadge(kind: .paused)
+                                    }
                                 }
                                 Spacer(minLength: 8)
-                                Button("再開") {
+                                Button("再乗車") {
                                     board(ticket)
                                 }
                                 .buttonStyle(.borderedProminent)
                                 .tint(TrainTheme.rail)
                                 .disabled(!canBoardGenerally)
+                                .accessibilityHint(canBoardGenerally ? "停車中の切符を再開" : boardDisabledReason)
                             }
-                            .accessibilityElement(children: .combine)
+                            .accessibilityElement(children: .contain)
                         }
                     }
                 } header: {
@@ -87,16 +111,20 @@ struct HubView: View {
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 24)
+                } else if backlogTickets.isEmpty {
+                    Text("未乗車の切符はありません。停車中から再乗車するか、＋ で追加してください。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 } else {
-                    ForEach(openTickets, id: \.id) { ticket in
+                    ForEach(backlogTickets, id: \.id) { ticket in
                         TicketCardView(
                             ticket: ticket,
-                            isPaused: isPaused(ticket),
                             canBoard: canBoardGenerally,
+                            boardDisabledReason: boardDisabledReason,
                             onBoard: { board(ticket) }
                         )
                     }
-                    .onMove(perform: moveTickets)
+                    .onMove(perform: moveBacklogTickets)
                 }
             } header: {
                 Text("切符")
@@ -205,11 +233,17 @@ struct HubView: View {
         }
     }
 
-    private func moveTickets(from source: IndexSet, to destination: Int) {
-        var ordered = openTickets
+    private func moveBacklogTickets(from source: IndexSet, to destination: Int) {
+        var ordered = backlogTickets
         ordered.move(fromOffsets: source, toOffset: destination)
-        for (index, ticket) in ordered.enumerated() {
-            ticket.sortOrder = index
+        // Preserve paused tickets' relative order; rebuild full open order as paused first then backlog.
+        let paused = sessionManager.pausedSessions.compactMap(\.ticket)
+        let full = paused + ordered
+        let orders = TicketSortOrdering.normalizedOrders(forOrderedIDs: full.map(\.id))
+        for ticket in openTickets {
+            if let order = orders[ticket.id] {
+                ticket.sortOrder = order
+            }
         }
         try? modelContext.save()
     }
