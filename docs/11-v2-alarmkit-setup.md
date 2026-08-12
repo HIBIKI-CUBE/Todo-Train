@@ -30,7 +30,9 @@ Widget Extension（`TodoTrainWidget`）:
 |----------|------|
 | `TodoTrainWidgetBundle.swift` | `@main` — Home + Session LA + Alarm LA |
 | `TodoTrainSessionLiveActivity.swift` | 発車中 Session LA |
-| `TodoTrainAlarmLiveActivity.swift` | 大タイマー + Intent 操作ボタン + 細い compact |
+| `TodoTrainAlarmLiveActivity.swift` | 大タイマー + ダーク計器 + Intent 操作（StandBy / LS） |
+| `TodoTrainSessionLiveActivity.swift` | 終了ベル OFF 時の同系 Session LA |
+| `FocusTimerPhase.swift` / `CockpitInstrumentViews.swift` | App + Widget 共有の段階色・計器部品 |
 | `TodoTrainActivityAttributes.swift` | App + Extension 共有（Session LA） |
 | `WidgetSnapshot.swift` | App Group スナップショット |
 | `EndBellIntents.swift` | App + Extension 共有（停車 / 再乗車 / キャンセル / Stop） |
@@ -68,8 +70,9 @@ Hub → 設定 → **終了ベル（AlarmKit）** を ON にすると、発車�
 ## 6. Mac 検証チェックリスト
 
 - [ ] AlarmKit 権限プロンプト
-- [ ] 発車 → StandBy / LS で大タイマー + 横 Progress + **停車/キャンセル操作**
-- [ ] Dynamic Island compact が狭い（円 Progress のみ）
+- [ ] 発車 → StandBy / LS で **黒背景・大タイマー・進捗バー・予定時刻** + **停車/キャンセル操作**
+- [ ] 20分切符: 残り約5分で「終盤」色、約2分で「まもなく」（Timeline 更新）
+- [ ] Dynamic Island compact: 相色ドット + 円形 Progress のみ（長い timer 禁止）
 - [ ] StandBy で **停車** / **再乗車** がタップできる
 - [ ] StandBy 停車 → アプリ側セッションが停車中；再乗車で復帰
 - [ ] 停車上限満杯 + StandBy 停車 → 臨時停車として整合（Alarm/DB 分裂なし）
@@ -77,7 +80,7 @@ Hub → 設定 → **終了ベル（AlarmKit）** を ON にすると、発車�
 - [ ] Focus 停車でも Alarm が消えず pause される
 - [ ] 予定終了でベル；Stop で止まる（到着自動なし）
 - [ ] 到着 / 放棄で Alarm が消える
-- [ ] v1 Session Live Activity と競合しないこと（終了ベル ON 時は Session LA を出さない）
+- [ ] 終了ベル OFF 時: Session LA も同系ダーク計器（超過は赤 + 進捗満杯）
 
 ## 7. ブランチ
 

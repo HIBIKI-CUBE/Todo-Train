@@ -10,7 +10,7 @@
 | 面 | 方針 |
 |----|------|
 | Hub / 履歴 / 設定 | 標準の `List` / `Form`（`.insetGrouped`）。システム背景・セマンティック色 |
-| Focus | 車内乗務の没入。システム外観に依存しない cabin。タイマーが主役 |
+| Focus | 真っ黒ダッシュボード。超大タイマーが主役。hairline パネル格子＋ gapless 操作盤 |
 | 超過 / 臨時停車 | 信号色は意味を持たせる（緑・琥珀・赤） |
 
 道具であること（`01-vision.md`）を崩さない。カスタムカード乱立・グラデ背景・FAB 祭りはしない。
@@ -34,7 +34,7 @@
 | **Platform / Surface** | `systemGroupedBackground` 系 | List / Form のキャンバス |
 | **Rail** | `AccentColor`（ライト紺 / ダークは明るめ） | CTA・タブ強調 |
 | **Signal Green / Amber / Red** | adaptive UIColor | 到着・停車・超過 |
-| **Cabin** | 固定ダーク | Focus のみ |
+| **Cabin** | 純黒（状態時のみ薄い wash） | Focus のみ |
 
 ハードコードした白カード・クリームグラデは使わない。
 
@@ -44,7 +44,9 @@
 |------|------|
 | 画面タイトル | システム `navigationTitle`（large / inline） |
 | 切符タイトル | `.body` + semibold |
-| タイマー | **超大・rounded + monospacedDigit**（Focus の主役） |
+| タイマー | **画面大半を占める超大・rounded + monospacedDigit**（Geometry 追従） |
+| 進捗バー | テレメトリ帯。経過は塗りのみ。下段に予定時刻＋見積もりメタ |
+| 状態語 | ヘッダ右に非平常時のみ（`終盤` / `まもなく` / `超過`）。色は予算比で段階変化（固定1分ルールではない） |
 | メタ | `.caption`、`.secondary` |
 | 運行ステータス | `.subheadline` + semibold |
 
@@ -55,7 +57,7 @@
 - Hub: `List` + 標準行。`TicketCardView` はリスト行（枠カードにしない）。
 - 追加 UI: **シート + Form**。タイトル即フォーカス、見積もり・タグを同面、連続追加後もキーボード維持。
 - ボタン: 可能な限り `.bordered` / `.borderedProminent` / `role: .destructive`。
-- Focus: 縦一列。操作は下部。cabin 専用スタイルのみ例外。
+- Focus: エッジツーエッジのパネル格子（ヘッダ／タイマー／テレメトリ／操作）。丸角カードや大きな余白は使わない。
 
 ## 横向き（iPhone compact height）
 
@@ -67,28 +69,32 @@
 | 幅は密度 | 行内メタ・タグを横展開。空き幅のダッシュボード化はしない |
 | Hub 2 ペイン | compact 時は左 280pt に運行＋停車、右に切符リスト（単一 List の横伸びはしない） |
 | 骨格維持 | List / Form / cabin。マスター・ディテール分割・FAB は増やさない |
-| Focus 例外 | portrait は縦一列のまま。compact のみタイマー \| 操作の 2 ペイン |
+| Focus 例外 | portrait は縦パネル格子。compact は計器 \| 操作の 2 ペイン（幅約 38%） |
 
 実装: `DesignSystem/TrainLayout.swift`。
 
 ## AlarmKit / StandBy（終了ベル LA）
 
-HIG とシステム Alarm UI を骨格にし、列車メタファは **アクセントのみ**。
+Focus ダッシュボードの **ダーク計器エコー**。Lock Screen / StandBy は Alarm LA（終了ベル ON）または Session LA（OFF）で同一の視覚言語。
 
 | 面 | 方針 |
 |----|------|
-| 視線（カスタム LA） | 中央の大タイマー + 横 Progress + `tram.fill` + 切符タイトル |
-| 操作 | **LA 内 `Button(intent: LiveActivityIntent)`**（停車 / 再乗車 / キャンセル）。`AlarmPresentation` のボタンはテンプレートフォールバック用 |
-| compact DI | アイコン + **小さな円形 Progress のみ**（長い `timerInterval` テキストで幅を取らない） |
-| 色 | `AccentColor`（rail）を tint。cabin 没入・グラデ禁止 |
-| 用語 | 停車 / 停車中 / 再乗車（「一時停止」は使わない） |
+| 背景 | 純黒 tint（旧 Accent 薄カードは廃止） |
+| 計器 | ヘッダ（タイトル + 状態語）・大タイマー・消費進捗バー・予定時刻 |
+| 段階色 | `FocusTimerPhase`（予算比 25% / 10%）。固定1分ルールではない |
+| 状態語 | 平常は非表示。終盤 / まもなく / 超過 / 停車中 |
+| 操作（Alarm LA） | gapless 2 列（キャンセル \| 停車/再乗車/Stop）。`LiveActivityIntent` |
+| compact DI | 相色ドット + 円形 Progress（長い timer テキスト禁止） |
+| やらない | フルスクリーン没入・格子操作盤・到着 Intent・グラデ |
+
+共有: `TodoTrainWidget/FocusTimerPhase.swift`, `CockpitInstrumentViews.swift`。
 
 詳細手順は [11-v2-alarmkit-setup.md](11-v2-alarmkit-setup.md)。
 
 ## モーション（意図的に 2–3）
 
 1. **発車**: Focus 出現はシステムフルスクリーン。内部タイマーは 1 秒 tick のみ。
-2. **超過突入**: タイマー色を amber→red へ、軽いスケールパルス 1 回。
+2. **超過突入**: タイマー色を amber→red へ、軽いスケールパルス 1 回。全面ディムは使わず操作盤を超過 3 択に差し替え。
 3. **シート**: システム presentation（detents medium/large）。過剰な spring は避ける。
 
 ノイズになるパララックス・常時グローは禁止。
@@ -106,7 +112,9 @@ HIG とシステム Alarm UI を骨格にし、列車メタファは **アクセ
 | ファイル | 役割 |
 |----------|------|
 | `DesignSystem/TrainTheme.swift` | adaptive 色・余白・型 |
-| `DesignSystem/TrainChrome.swift` | Focus cabin・SignalBadge・Focus ボタン |
+| `DesignSystem/TrainChrome.swift` | Focus 純黒ダッシュボード・進捗バー・計器バンク・SignalBadge |
+| `TodoTrainWidget/FocusTimerPhase.swift` | App + Widget 共有の段階色ロジック |
+| `TodoTrainWidget/CockpitInstrumentViews.swift` | StandBy / LS 用ダーク計器部品 |
 | `ContentView.swift` | TabView + Focus cover |
 | `Features/Hub/QuickAddBar.swift` | `QuickAddSheet` |
 | 各 Feature | 標準 List / Form |

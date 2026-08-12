@@ -14,7 +14,7 @@ struct EndBellRequest: Equatable, Sendable {
 
 protocol AlarmScheduling: Sendable {
     func requestAuthorizationIfNeeded()
-    func scheduleEndBell(sessionID: UUID, ticketTitle: String, fireAt: Date)
+    func scheduleEndBell(sessionID: UUID, ticketTitle: String, fireAt: Date, budgetSeconds: Int)
     /// Pause countdown without cancelling (StandBy / Focus 停車).
     func pause(sessionID: UUID)
     /// Resume a paused countdown. Returns false if nothing to resume (caller may reschedule).
@@ -26,7 +26,7 @@ protocol AlarmScheduling: Sendable {
 
 struct NoOpAlarmScheduler: AlarmScheduling {
     func requestAuthorizationIfNeeded() {}
-    func scheduleEndBell(sessionID: UUID, ticketTitle: String, fireAt: Date) {}
+    func scheduleEndBell(sessionID: UUID, ticketTitle: String, fireAt: Date, budgetSeconds: Int) {}
     func pause(sessionID: UUID) {}
     func resume(sessionID: UUID) -> Bool { false }
     func cancel(sessionID: UUID) {}
@@ -48,7 +48,7 @@ final class InMemoryAlarmScheduler: AlarmScheduling, @unchecked Sendable {
         lock.withLock { authorizationRequestCount += 1 }
     }
 
-    func scheduleEndBell(sessionID: UUID, ticketTitle: String, fireAt: Date) {
+    func scheduleEndBell(sessionID: UUID, ticketTitle: String, fireAt: Date, budgetSeconds: Int) {
         lock.withLock {
             pausedActive.remove(sessionID)
             requests.removeAll { $0.sessionID == sessionID }
@@ -126,9 +126,14 @@ final class AlarmKitScheduler: AlarmScheduling {
         }
     }
 
-    func scheduleEndBell(sessionID: UUID, ticketTitle: String, fireAt: Date) {
+    func scheduleEndBell(sessionID: UUID, ticketTitle: String, fireAt: Date, budgetSeconds: Int) {
         Task {
-            await scheduleEndBellAsync(sessionID: sessionID, ticketTitle: ticketTitle, fireAt: fireAt)
+            await scheduleEndBellAsync(
+                sessionID: sessionID,
+                ticketTitle: ticketTitle,
+                fireAt: fireAt,
+                budgetSeconds: budgetSeconds
+            )
         }
     }
 
@@ -170,7 +175,12 @@ final class AlarmKitScheduler: AlarmScheduling {
         }
     }
 
-    private func scheduleEndBellAsync(sessionID: UUID, ticketTitle: String, fireAt: Date) async {
+    private func scheduleEndBellAsync(
+        sessionID: UUID,
+        ticketTitle: String,
+        fireAt: Date,
+        budgetSeconds: Int
+    ) async {
         if AlarmManager.shared.authorizationState == .notDetermined {
             _ = try? await AlarmManager.shared.requestAuthorization()
         }
@@ -206,7 +216,11 @@ final class AlarmKitScheduler: AlarmScheduling {
             title: LocalizedStringResource("停車中"),
             resumeButton: resumeButton
         )
-        let metadata = TodoTrainAlarmMetadata(sessionID: sessionID, ticketTitle: ticketTitle)
+        let metadata = TodoTrainAlarmMetadata(
+            sessionID: sessionID,
+            ticketTitle: ticketTitle,
+            budgetSeconds: budgetSeconds
+        )
 
         let attributes = AlarmAttributes<TodoTrainAlarmMetadata>(
             presentation: AlarmPresentation(
@@ -215,7 +229,7 @@ final class AlarmKitScheduler: AlarmScheduling {
                 paused: pausedPresentation
             ),
             metadata: metadata,
-            tintColor: Color("AccentColor")
+            tintColor: .black
         )
         let configuration = AlarmManager.AlarmConfiguration<TodoTrainAlarmMetadata>(
             countdownDuration: duration,

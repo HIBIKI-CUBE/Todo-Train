@@ -6,12 +6,24 @@
 import Foundation
 
 protocol LiveActivityManaging: Sendable {
-    func startOrUpdate(sessionID: UUID, title: String, deadline: Date, isOvertime: Bool)
+    func startOrUpdate(
+        sessionID: UUID,
+        title: String,
+        deadline: Date,
+        isOvertime: Bool,
+        budgetSeconds: Int
+    )
     func end()
 }
 
 struct NoOpLiveActivityManager: LiveActivityManaging {
-    func startOrUpdate(sessionID: UUID, title: String, deadline: Date, isOvertime: Bool) {}
+    func startOrUpdate(
+        sessionID: UUID,
+        title: String,
+        deadline: Date,
+        isOvertime: Bool,
+        budgetSeconds: Int
+    ) {}
     func end() {}
 }
 
@@ -26,13 +38,20 @@ final class LiveActivityManager: LiveActivityManaging {
 
     private init() {}
 
-    func startOrUpdate(sessionID: UUID, title: String, deadline: Date, isOvertime: Bool) {
+    func startOrUpdate(
+        sessionID: UUID,
+        title: String,
+        deadline: Date,
+        isOvertime: Bool,
+        budgetSeconds: Int
+    ) {
         guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
 
         let state = TodoTrainActivityAttributes.ContentState(
             title: title,
             deadline: deadline,
-            isOvertime: isOvertime
+            isOvertime: isOvertime,
+            budgetSeconds: max(budgetSeconds, 1)
         )
 
         if currentSessionID == sessionID,

@@ -2,7 +2,7 @@
 //  TodoTrainSessionLiveActivity.swift
 //  TodoTrainWidget
 //
-//  Session (発車中) Live Activity — used when AlarmKit 終了ベル is off.
+//  Dark cockpit instrument for StandBy / Lock Screen (Session LA, 終了ベル OFF).
 //
 
 import SwiftUI
@@ -15,104 +15,122 @@ struct TodoTrainSessionLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: TodoTrainActivityAttributes.self) { context in
             lockScreenView(context: context)
-                .padding(.horizontal, 18)
-                .padding(.vertical, 16)
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    Image(systemName: "tram.fill")
-                        .font(.title3)
-                        .foregroundStyle(Color("AccentColor"))
+                    phaseDot(context: context)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
                     Text(context.state.title)
                         .font(.caption.weight(.semibold))
+                        .foregroundStyle(CockpitColors.muted)
                         .lineLimit(1)
-                        .frame(maxWidth: 90, alignment: .trailing)
+                        .frame(maxWidth: 88, alignment: .trailing)
                 }
                 DynamicIslandExpandedRegion(.center) {
-                    timerText(context: context, style: .island)
+                    islandTimer(context: context)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    Text(context.state.isOvertime ? "超過中" : "発車中")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(context.state.isOvertime ? .orange : .secondary)
-                        .padding(.top, 4)
+                    if let label = headerState(context) {
+                        Text(label)
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(snapshot(context).phase.accentColor)
+                            .padding(.top, 4)
+                    }
                 }
             } compactLeading: {
-                Image(systemName: "tram.fill")
-                    .font(.caption2)
-                    .foregroundStyle(Color("AccentColor"))
+                phaseDot(context: context)
             } compactTrailing: {
-                if context.state.isOvertime {
-                    Text("超過")
-                        .font(.caption2.weight(.bold))
-                        .foregroundStyle(.orange)
-                } else {
-                    Text(timerInterval: Date.now...context.state.deadline, countsDown: true)
-                        .font(.caption2.monospacedDigit())
-                        .multilineTextAlignment(.trailing)
-                        .frame(maxWidth: 52)
-                        .minimumScaleFactor(0.6)
-                }
+                compactTrailing(context: context)
             } minimal: {
-                Image(systemName: "tram.fill")
-                    .font(.caption2)
+                phaseDot(context: context)
             }
         }
     }
 
-    private enum TimerStyle {
-        case lockScreen
-        case island
-    }
+    // MARK: - Lock Screen / StandBy
 
     @ViewBuilder
     private func lockScreenView(
         context: ActivityViewContext<TodoTrainActivityAttributes>
     ) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 6) {
-                Image(systemName: "tram.fill")
-                    .foregroundStyle(Color("AccentColor"))
-                Text(context.state.title)
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(1)
-                Spacer(minLength: 0)
-                Text(context.state.isOvertime ? "超過中" : "発車中")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(context.state.isOvertime ? .orange : .secondary)
-            }
-
-            timerText(context: context, style: .lockScreen)
-                .frame(maxWidth: .infinity)
+        TimelineView(.periodic(from: .now, by: 1)) { timeline in
+            let snap = snapshot(context, now: timeline.date)
+            CockpitInstrumentPanel(
+                title: context.state.title,
+                snapshot: snap,
+                timerFontSize: 56
+            )
+            .activityBackgroundTint(.black)
         }
-        .activityBackgroundTint(Color("AccentColor").opacity(0.14))
+    }
+
+    // MARK: - Dynamic Island
+
+    private func snapshot(
+        _ context: ActivityViewContext<TodoTrainActivityAttributes>,
+        now: Date = .now
+    ) -> CockpitInstrumentSnapshot {
+        CockpitInstrumentSnapshot.session(
+            deadline: context.state.deadline,
+            budgetSeconds: context.state.budgetSeconds,
+            isOvertime: context.state.isOvertime,
+            now: now
+        )
     }
 
     @ViewBuilder
-    private func timerText(
-        context: ActivityViewContext<TodoTrainActivityAttributes>,
-        style: TimerStyle
+    private func islandTimer(
+        context: ActivityViewContext<TodoTrainActivityAttributes>
     ) -> some View {
-        let font: Font = style == .lockScreen
-            ? .system(size: 44, weight: .medium, design: .rounded)
-            : .title2.weight(.semibold)
-
-        if context.state.isOvertime {
-            Text("超過")
-                .font(font)
-                .foregroundStyle(.orange)
-                .frame(maxWidth: style == .lockScreen ? 220 : 120)
-        } else {
-            Text(timerInterval: Date.now...context.state.deadline, countsDown: true)
-                .font(font)
+        TimelineView(.periodic(from: .now, by: 1)) { timeline in
+            let snap = snapshot(context, now: timeline.date)
+            Text(CockpitFormat.timerLabel(remaining: snap.remaining))
+                .font(.title2.weight(.semibold))
                 .monospacedDigit()
-                .multilineTextAlignment(.center)
-                .minimumScaleFactor(0.6)
+                .foregroundStyle(snap.phase.accentColor)
                 .lineLimit(1)
-                .frame(maxWidth: style == .lockScreen ? 220 : 120)
+                .minimumScaleFactor(0.6)
         }
+    }
+
+    @ViewBuilder
+    private func phaseDot(
+        context: ActivityViewContext<TodoTrainActivityAttributes>
+    ) -> some View {
+        TimelineView(.periodic(from: .now, by: 1)) { timeline in
+            Circle()
+                .fill(snapshot(context, now: timeline.date).phase.accentColor)
+                .frame(width: 10, height: 10)
+        }
+    }
+
+    @ViewBuilder
+    private func compactTrailing(
+        context: ActivityViewContext<TodoTrainActivityAttributes>
+    ) -> some View {
+        TimelineView(.periodic(from: .now, by: 1)) { timeline in
+            let snap = snapshot(context, now: timeline.date)
+            if context.state.isOvertime {
+                Text("超過")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(CockpitColors.red)
+            } else {
+                ZStack {
+                    Circle()
+                        .stroke(CockpitColors.track, lineWidth: 2.5)
+                    Circle()
+                        .trim(from: 0, to: snap.progress)
+                        .stroke(snap.phase.accentColor, style: StrokeStyle(lineWidth: 2.5, lineCap: .butt))
+                        .rotationEffect(.degrees(-90))
+                }
+                .frame(width: 18, height: 18)
+            }
+        }
+    }
+
+    private func headerState(_ context: ActivityViewContext<TodoTrainActivityAttributes>) -> String? {
+        snapshot(context).headerState
     }
 }
 #endif

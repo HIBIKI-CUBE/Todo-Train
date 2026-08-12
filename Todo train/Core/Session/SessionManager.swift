@@ -587,7 +587,8 @@ final class SessionManager {
             sessionID: session.id,
             title: title,
             deadline: deadline,
-            isOvertime: session.remainingSeconds(at: now) <= 0
+            isOvertime: session.remainingSeconds(at: now) <= 0,
+            budgetSeconds: session.budgetSecondsAtStart
         )
     }
 
@@ -635,7 +636,12 @@ final class SessionManager {
             return
         }
         let title = session.ticket?.title ?? "切符"
-        alarmScheduler.scheduleEndBell(sessionID: session.id, ticketTitle: title, fireAt: fireAt)
+        alarmScheduler.scheduleEndBell(
+            sessionID: session.id,
+            ticketTitle: title,
+            fireAt: fireAt,
+            budgetSeconds: session.budgetSecondsAtStart
+        )
     }
 
     private func refreshOvertimeNotification(for session: WorkSession, now: Date) {
