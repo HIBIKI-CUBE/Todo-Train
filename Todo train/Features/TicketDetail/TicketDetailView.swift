@@ -204,7 +204,7 @@ struct TicketDetailView: View {
 
             if ticket.isOpen {
                 Section {
-                    Button(isPaused ? "再開" : "発車") {
+                    Button(isPaused ? "再乗車" : "発車") {
                         board()
                     }
                     .disabled(!canBoard && !isPaused)
