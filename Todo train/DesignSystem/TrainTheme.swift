@@ -84,6 +84,10 @@ enum TrainTheme {
         static let spring = Animation.spring(response: 0.38, dampingFraction: 0.82)
         static let soft = Animation.easeInOut(duration: 0.28)
         static let pulse = Animation.easeInOut(duration: 0.55).repeatCount(2, autoreverses: true)
+        /// Issued ticket bloom (snappy micro-interaction; keep under ~0.3s perceptual).
+        static let issueEject = Animation.spring(response: 0.24, dampingFraction: 0.86)
+        /// Gauge settle / detent escape (“ビュン”).
+        static let gaugeSnap = Animation.spring(response: 0.22, dampingFraction: 0.62)
     }
 
     // MARK: - Type
