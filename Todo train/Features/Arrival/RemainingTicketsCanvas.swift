@@ -73,6 +73,12 @@ struct RemainingTicketsCanvas: View {
                             }
                         }
                         .padding(.vertical, 4)
+                        .deleteSwipeAction(accessibilityName: rowTitle(row)) {
+                            removeRow(id: row.id)
+                        }
+                    }
+                    .onDelete { offsets in
+                        removeRows(at: offsets)
                     }
 
                     Button("行を追加") {
@@ -125,6 +131,25 @@ struct RemainingTicketsCanvas: View {
             .onAppear {
                 focusedRowID = rows.first?.id
             }
+        }
+    }
+
+    private func rowTitle(_ row: Row) -> String {
+        let trimmed = row.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? "この行" : trimmed
+    }
+
+    private func removeRow(id: UUID) {
+        rows.removeAll { $0.id == id }
+        if rows.isEmpty {
+            rows = [Row()]
+        }
+    }
+
+    private func removeRows(at offsets: IndexSet) {
+        rows.remove(atOffsets: offsets)
+        if rows.isEmpty {
+            rows = [Row()]
         }
     }
 

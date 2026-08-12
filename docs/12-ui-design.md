@@ -59,6 +59,21 @@
 - ボタン: 可能な限り `.bordered` / `.borderedProminent` / `role: .destructive`。
 - Focus: エッジツーエッジのパネル格子（ヘッダ／タイマー／テレメトリ／操作）。丸角カードや大きな余白は使わない。
 
+### 破壊的操作（物理削除）
+
+取り消しできないので、確認は **中央 Alert**（`confirmationDialog` は使わない）。文言は `TicketDeletion.Prompt` に集約し、結果で変える。
+
+| 対象 | 確認で言うこと |
+|------|----------------|
+| 未乗車の切符 | 切符名。履歴には触れない |
+| 履歴あり / 停車中 / 走行中 | 履歴 cascade、停車、フォーカスと終了ベル |
+| 履歴の最後のセッション | 切符も消える |
+| タグ | 切符は残る。使用中なら枚数 |
+
+- スワイプは **フルスワイプ可**。安全弁は Alert
+- `role: .destructive` は本当に消える操作だけ（期限クリアには使わない）
+- 実装: `DesignSystem/DeleteConfirmation.swift`
+
 ## 横向き（iPhone compact height）
 
 トリガー: `verticalSizeClass == .compact`（`EnvironmentValues.isCompactHeight`）。iPad 分割ビューは v2 スコープ外。
@@ -138,6 +153,7 @@ StandBy は全画面 API ではなく、提案された帯をシステムが拡�
 |----------|------|
 | `DesignSystem/TrainTheme.swift` | adaptive 色・余白・型 |
 | `DesignSystem/TrainChrome.swift` | Focus 純黒ダッシュボード・進捗バー・計器バンク・SignalBadge |
+| `DesignSystem/DeleteConfirmation.swift` | 物理削除の Alert + スワイプ。文言は `TicketDeletion.Prompt` |
 | `TodoTrainWidget/FocusTimerPhase.swift` | App + Widget 共有の段階色ロジック |
 | `TodoTrainWidget/CockpitLayoutContract.swift` | Live Activity 公称サイズ契約・密度選択 |
 | `TodoTrainWidget/CockpitInstrumentViews.swift` | StandBy 2ペイン / LS ViewThatFits ダーク計器 |

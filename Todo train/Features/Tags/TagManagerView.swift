@@ -11,6 +11,7 @@ struct TagManagerView: View {
     @Query(sort: \Tag.sortOrder) private var tags: [Tag]
 
     @State private var editorMode: EditorMode?
+    @State private var tagPendingDelete: Tag?
 
     private enum EditorMode: Identifiable {
         case create
@@ -48,9 +49,11 @@ struct TagManagerView: View {
                         }
                     }
                     .buttonStyle(.plain)
+                    .deleteSwipeAction(accessibilityName: tag.name) {
+                        tagPendingDelete = tag
+                    }
                 }
                 .onMove(perform: moveTags)
-                .onDelete(perform: deleteTags)
             }
         }
         .navigationTitle("タグ")
@@ -77,6 +80,9 @@ struct TagManagerView: View {
                 }
             }
         }
+        .deletionAlert(item: $tagPendingDelete, prompt: { TicketDeletion.tagPrompt(for: $0) }) { tag in
+            deleteTag(tag)
+        }
     }
 
     private func moveTags(from source: IndexSet, to destination: Int) {
@@ -86,10 +92,8 @@ struct TagManagerView: View {
         try? modelContext.save()
     }
 
-    private func deleteTags(at offsets: IndexSet) {
-        for index in offsets {
-            modelContext.delete(tags[index])
-        }
+    private func deleteTag(_ tag: Tag) {
+        modelContext.delete(tag)
         try? modelContext.save()
         let remaining = (try? modelContext.fetch(FetchDescriptor<Tag>(sortBy: [SortDescriptor(\.sortOrder)]))) ?? []
         TagOrdering.normalizeSortOrders(remaining)

@@ -14,6 +14,7 @@ struct TagEditorView: View {
 
     @State private var name: String = ""
     @State private var colorHex: String = TagPalette.colors[0].hex
+    @State private var showDeleteConfirm = false
 
     var body: some View {
         Form {
@@ -45,6 +46,18 @@ struct TagEditorView: View {
                 }
                 .padding(.vertical, 4)
             }
+
+            if existing != nil {
+                Section {
+                    Button("タグを削除", role: .destructive) {
+                        showDeleteConfirm = true
+                    }
+                } footer: {
+                    if let existing {
+                        Text(TicketDeletion.tagDeleteFooter(ticketCount: existing.tickets.count))
+                    }
+                }
+            }
         }
         .navigationTitle(existing == nil ? "タグを追加" : "タグを編集")
         .navigationBarTitleDisplayMode(.inline)
@@ -63,6 +76,19 @@ struct TagEditorView: View {
                 colorHex = existing.colorHex
             }
         }
+        .alert(
+            existing.map { TicketDeletion.tagPrompt(for: $0).title } ?? "このタグを削除しますか？",
+            isPresented: $showDeleteConfirm
+        ) {
+            Button("削除", role: .destructive) {
+                deleteExisting()
+            }
+            Button("キャンセル", role: .cancel) {}
+        } message: {
+            if let existing {
+                Text(TicketDeletion.tagPrompt(for: existing).message)
+            }
+        }
     }
 
     private func save() {
@@ -77,6 +103,16 @@ struct TagEditorView: View {
             let tag = Tag(name: trimmed, colorHex: colorHex, sortOrder: nextOrder)
             modelContext.insert(tag)
         }
+        try? modelContext.save()
+        dismiss()
+    }
+
+    private func deleteExisting() {
+        guard let existing else { return }
+        modelContext.delete(existing)
+        try? modelContext.save()
+        let remaining = (try? modelContext.fetch(FetchDescriptor<Tag>(sortBy: [SortDescriptor(\.sortOrder)]))) ?? []
+        TagOrdering.normalizeSortOrders(remaining)
         try? modelContext.save()
         dismiss()
     }

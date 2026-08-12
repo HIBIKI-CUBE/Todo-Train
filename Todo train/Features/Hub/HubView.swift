@@ -19,7 +19,6 @@ struct HubView: View {
     @State private var errorMessage = ""
     @State private var showError = false
     @State private var ticketPendingDelete: Ticket?
-    @State private var showDeleteConfirm = false
 
     private enum HubDestination: Hashable, Identifiable {
         case tags
@@ -115,26 +114,8 @@ struct HubView: View {
         } message: {
             Text(errorMessage)
         }
-        .confirmationDialog(
-            "この切符を削除しますか？",
-            isPresented: $showDeleteConfirm,
-            titleVisibility: .visible
-        ) {
-            Button("削除", role: .destructive) {
-                if let ticket = ticketPendingDelete {
-                    deleteTicket(ticket)
-                }
-                ticketPendingDelete = nil
-            }
-            Button("キャンセル", role: .cancel) {
-                ticketPendingDelete = nil
-            }
-        } message: {
-            if let ticket = ticketPendingDelete, !ticket.sessions.isEmpty {
-                Text("「\(ticket.title)」と関連する履歴も削除されます。")
-            } else if let ticket = ticketPendingDelete {
-                Text("「\(ticket.title)」を削除します。この操作は取り消せません。")
-            }
+        .deletionAlert(item: $ticketPendingDelete, prompt: { TicketDeletion.ticketPrompt(for: $0) }) { ticket in
+            deleteTicket(ticket)
         }
         .sheet(isPresented: $showQuickAdd) {
             QuickAddSheet()
@@ -223,6 +204,9 @@ struct HubView: View {
             ForEach(sessionManager.pausedSessions, id: \.id) { session in
                 if let ticket = session.ticket {
                     pausedTicketRow(ticket: ticket, session: session)
+                        .deleteSwipeAction(accessibilityName: ticket.title) {
+                            ticketPendingDelete = ticket
+                        }
                 }
             }
         } header: {
@@ -252,11 +236,8 @@ struct HubView: View {
                         boardDisabledReason: boardDisabledReason,
                         onBoard: { board(ticket) }
                     )
-                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                        Button("削除", role: .destructive) {
-                            ticketPendingDelete = ticket
-                            showDeleteConfirm = true
-                        }
+                    .deleteSwipeAction(accessibilityName: ticket.title) {
+                        ticketPendingDelete = ticket
                     }
                 }
                 .onMove(perform: moveBacklogTickets)

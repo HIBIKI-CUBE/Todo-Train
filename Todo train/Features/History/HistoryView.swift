@@ -16,7 +16,6 @@ struct HistoryView: View {
 
     @State private var searchText = ""
     @State private var sessionPendingDelete: WorkSession?
-    @State private var showDeleteConfirm = false
     @State private var errorMessage = ""
     @State private var showError = false
 
@@ -86,22 +85,11 @@ struct HistoryView: View {
                 }
             }
         }
-        .confirmationDialog(
-            "この履歴を削除しますか？",
-            isPresented: $showDeleteConfirm,
-            titleVisibility: .visible
-        ) {
-            Button("削除", role: .destructive) {
-                if let session = sessionPendingDelete {
-                    deleteSession(session)
-                }
-                sessionPendingDelete = nil
-            }
-            Button("キャンセル", role: .cancel) {
-                sessionPendingDelete = nil
-            }
-        } message: {
-            Text("この行のセッションだけを削除します。同じ切符の他の履歴は残ります。")
+        .deletionAlert(
+            item: $sessionPendingDelete,
+            prompt: { TicketDeletion.historySessionPrompt(for: $0) }
+        ) { session in
+            deleteSession(session)
         }
         .alert("エラー", isPresented: $showError) {
             Button("OK", role: .cancel) {}
@@ -113,11 +101,10 @@ struct HistoryView: View {
     @ViewBuilder
     private func historyRow(_ session: WorkSession) -> some View {
         HistorySessionRow(session: session, onReissue: reissue)
-            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                Button("削除", role: .destructive) {
-                    sessionPendingDelete = session
-                    showDeleteConfirm = true
-                }
+            .deleteSwipeAction(
+                accessibilityName: session.ticket?.title ?? "この履歴"
+            ) {
+                sessionPendingDelete = session
             }
     }
 

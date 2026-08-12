@@ -1,6 +1,6 @@
 # 08 — 現状ステータス
 
-最終更新: 2026-08-12（v1 / v2 マージ後）
+最終更新: 2026-08-12（削除 UI 統一）
 
 ## 結論
 
@@ -29,7 +29,7 @@
 | StandBy / Session LA | ✅ コックピット計器 UI + サイズ契約。検証は [11](11-v2-alarmkit-setup.md) §6 |
 | 週次レポート | ✅ `WeeklyReportView` + 純関数テスト |
 | UI polish | ✅ `TrainTheme` / `TrainChrome` / 横向き compact（[12](12-ui-design.md)） |
-| 切符・履歴の削除 | ✅ Hub スワイプ / 詳細 / 履歴行スワイプ |
+| 切符・履歴の削除 | ✅ Hub / 停車中 / 詳細 / 履歴 / タグ。確認は結果別 Alert（[12](12-ui-design.md)） |
 
 ## ディレクトリ（実装の地図）
 
@@ -43,7 +43,7 @@ Todo train/
     History/               HistorySearch, TicketReissue, WeeklyReport
     Settings/              AppSettings
     Coaching/              CoachingEngine
-  DesignSystem/            TrainTheme, TrainChrome, TrainLayout, EstimateChips
+    DesignSystem/            TrainTheme, TrainChrome, TrainLayout, EstimateChips, DeleteConfirmation
   Features/
     Hub/                   HubView, QuickAddBar, ServiceSummaryBar
     Focus/                 FocusView, FocusControlsView, OvertimeSheet
