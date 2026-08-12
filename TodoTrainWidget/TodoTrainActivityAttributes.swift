@@ -1,6 +1,6 @@
 //
 //  TodoTrainActivityAttributes.swift
-//  Todo train
+//  Shared by app + TodoTrainWidget (Session Live Activity).
 //
 
 import Foundation

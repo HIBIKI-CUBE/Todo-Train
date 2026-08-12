@@ -54,21 +54,25 @@ struct TicketDetailView: View {
             Section("切符") {
                 if ticket.isOpen {
                     TextField("タイトル", text: $ticket.title)
-                    Stepper(
-                        "見積もり \(ticket.estimatedSeconds / 60) 分",
-                        value: Binding(
-                            get: { ticket.estimatedSeconds / 60 },
-                            set: { ticket.estimatedSeconds = CustomEstimate.clampMinutes($0) * 60 }
-                        ),
-                        in: CustomEstimate.minMinutes...CustomEstimate.maxMinutes
-                    )
-                    CustomEstimateInput(
-                        minutes: Binding(
-                            get: { ticket.estimatedSeconds / 60 },
-                            set: { ticket.estimatedSeconds = CustomEstimate.clampMinutes($0) * 60 }
-                        ),
-                        highlightedMinutes: estimateSuggestion?.minutes
-                    )
+                    VStack(alignment: .leading, spacing: TrainTheme.Space.sm) {
+                        Text("見積もり \(ticket.estimatedSeconds / 60) 分")
+                            .font(.subheadline.weight(.medium))
+                        EstimateChips(
+                            minutesOptions: EstimateChips.ticketPresets,
+                            style: .plainMinutes,
+                            highlightedMinutes: estimateSuggestion?.minutes,
+                            selectedMinutes: ticket.estimatedSeconds / 60
+                        ) { minutes in
+                            ticket.estimatedSeconds = minutes * 60
+                        }
+                        CustomEstimateInput(
+                            minutes: Binding(
+                                get: { ticket.estimatedSeconds / 60 },
+                                set: { ticket.estimatedSeconds = CustomEstimate.clampMinutes($0) * 60 }
+                            ),
+                            highlightedMinutes: estimateSuggestion?.minutes
+                        )
+                    }
                     DatePicker(
                         "期限（任意）",
                         selection: Binding(

@@ -39,6 +39,6 @@ struct DailyStatsHeader: View {
     }
 
     private var displayDay: String {
-        dayKey
+        DayKeyFormatting.displayDay(from: dayKey)
     }
 }

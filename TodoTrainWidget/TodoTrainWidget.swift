@@ -1,8 +1,8 @@
 //
 //  TodoTrainWidget.swift
-//  Todo trainWidget
+//  TodoTrainWidget
 //
-//  Add this folder to a Widget Extension target in Xcode (see README.md).
+//  Home Screen Widget — reads App Group snapshot written by SessionManager.
 //
 
 import SwiftUI
@@ -21,18 +21,29 @@ struct TodoTrainProvider: TimelineProvider {
     }
 
     func getSnapshot(in context: Context, completion: @escaping (TodoTrainEntry) -> Void) {
-        completion(placeholder(in: context))
+        completion(entry(from: WidgetSnapshotStore.load()) ?? placeholder(in: context))
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<TodoTrainEntry>) -> Void) {
-        let entry = placeholder(in: context)
+        let entry = entry(from: WidgetSnapshotStore.load())
+            ?? TodoTrainEntry(date: .now, isInService: false, pausedCount: 0, focusMinutesToday: 0)
         let timeline = Timeline(entries: [entry], policy: .after(.now.addingTimeInterval(15 * 60)))
         completion(timeline)
+    }
+
+    private func entry(from snapshot: WidgetSnapshotStore.Snapshot?) -> TodoTrainEntry? {
+        guard let snapshot else { return nil }
+        return TodoTrainEntry(
+            date: snapshot.updatedAt,
+            isInService: snapshot.isInService,
+            pausedCount: snapshot.pausedCount,
+            focusMinutesToday: snapshot.focusMinutesToday
+        )
     }
 }
 
 struct TodoTrainWidgetEntryView: View {
-    @Environment(\.widgetFamily) var family
+    @Environment(\.widgetFamily) private var family
     var entry: TodoTrainProvider.Entry
 
     var body: some View {
@@ -46,21 +57,37 @@ struct TodoTrainWidgetEntryView: View {
 
     private var smallBody: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(entry.isInService ? "運行中" : "運休")
-                .font(.headline)
+            Label {
+                Text(entry.isInService ? "運行中" : "運休")
+                    .font(.headline)
+            } icon: {
+                Image(systemName: "tram.fill")
+                    .foregroundStyle(Color("AccentColor"))
+            }
             Text("停車 \(entry.pausedCount) 件")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+            Spacer(minLength: 0)
+            Text("今日 \(entry.focusMinutesToday) 分")
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-        .padding()
+        .containerBackground(for: .widget) {
+            Color("AccentColor").opacity(0.12)
+        }
     }
 
     private var mediumBody: some View {
         HStack {
             VStack(alignment: .leading, spacing: 6) {
-                Text(entry.isInService ? "運行中" : "運休")
-                    .font(.headline)
+                Label {
+                    Text(entry.isInService ? "運行中" : "運休")
+                        .font(.headline)
+                } icon: {
+                    Image(systemName: "tram.fill")
+                        .foregroundStyle(Color("AccentColor"))
+                }
                 Text("停車 \(entry.pausedCount) 件")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -71,19 +98,20 @@ struct TodoTrainWidgetEntryView: View {
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                 Text("\(entry.focusMinutesToday) 分")
-                    .font(.title3.weight(.semibold))
+                    .font(.title3.weight(.semibold).monospacedDigit())
             }
         }
-        .padding()
+        .containerBackground(for: .widget) {
+            Color("AccentColor").opacity(0.12)
+        }
     }
 }
 
-@main
-struct TodoTrainWidget: Widget {
-    let kind = "TodoTrainWidget"
+struct TodoTrainHomeWidget: Widget {
+    static let kind = WidgetSnapshotStore.homeWidgetKind
 
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: kind, provider: TodoTrainProvider()) { entry in
+        StaticConfiguration(kind: Self.kind, provider: TodoTrainProvider()) { entry in
             TodoTrainWidgetEntryView(entry: entry)
         }
         .configurationDisplayName("Todo train")
