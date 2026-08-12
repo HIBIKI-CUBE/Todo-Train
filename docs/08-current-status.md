@@ -54,7 +54,7 @@ Todo train/
     Reorder/               ReorderView
     Settings/              SettingsView
 TodoTrainWidget/           Home Widget + Session LA + Alarm LA
-Todo trainTests/           23 ファイル（Swift Testing）
+Todo trainTests/           25 ファイル（Swift Testing）
 ```
 
 ## 動作するユーザーフロー
