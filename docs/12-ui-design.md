@@ -61,18 +61,16 @@
 
 ### 破壊的操作（物理削除）
 
-Undo がないので、[HIG Alerts](https://developer.apple.com/design/human-interface-guidelines/alerts) と [swipeActions](https://developer.apple.com/documentation/swiftui/view/swipeactions(edge:allowsfullswipe:content:)) に合わせる。
+Undo があるので、[HIG Alerts](https://developer.apple.com/design/human-interface-guidelines/alerts) どおり **よくある削除に Alert は出さない**。
 
 | 原則 | 内容 |
 |------|------|
-| フルスワイプしない | Undo がない削除は、スワイプして **削除をタップ** が確認（Apple Forums の HIG 解釈） |
-| Alert は副作用があるときだけ | よくある未乗車切符・未使用タグは Alert なし。履歴 cascade / 停車 / 走行 / 最後の履歴 / 使用中タグは Alert |
-| スワイプの見た目 | `Label("削除", systemImage: "trash")`。確認待ちのボタンに `role: .destructive` を付けない（行が消えて戻る） |
-| Alert は 1 View に 1 つ | エラー Alert は `errorAlert` で別ビューに付ける |
-| タイトルに対象名 | 「〜を削除しますか？」。本文は結果だけ（名前を繰り返さない） |
+| フルスワイプ可 | 削除は即反映。`Label("削除", systemImage: "trash")` + `role: .destructive` |
+| Undo | 下部バナー「取り消す」（約 8 秒）。スナップショット復元（UndoManager は使わない＝タイトル編集と混ざらない） |
+| Alert なし | スワイプも詳細の削除ボタンも即削除＋バナー |
 | `role: .destructive` | 本当に消える操作だけ（期限クリアには使わない） |
 
-文言は `TicketDeletion.Prompt`。実装は `DesignSystem/DeleteConfirmation.swift`。
+実装: `DeletionUndo` / `DeletionUndoCenter` / `DeleteConfirmation.swift`。
 
 ## 横向き（iPhone compact height）
 
@@ -142,11 +140,11 @@ StandBy は全画面 API ではなく、提案された帯をシステムが拡�
 ## やらないこと
 
 - 紫グラデ / 汎用 SaaS ダーク / クリーム×テラコッタ×セリフ
-- カスタム FAB・半透明オーバーレイのボトムバー追加 UI
+- カスタム FAB・半透明オーバーレイのボトムバー追加 UI（削除 Undo バナーは例外）
 - 絵文字アイコンの多用
 - コーチング吹き出し
 - Web / Flutter 風の独自カードグリッドを「ブランド」にする行為
-- フルスワイプと Alert の二重確認、同一 View への `.alert` 重ね、確認待ちスワイプへの `role: .destructive`
+- フルスワイプと Alert の二重確認、同一 View への `.alert` 重ね
 
 ## 実装マップ
 
@@ -154,7 +152,7 @@ StandBy は全画面 API ではなく、提案された帯をシステムが拡�
 |----------|------|
 | `DesignSystem/TrainTheme.swift` | adaptive 色・余白・型 |
 | `DesignSystem/TrainChrome.swift` | Focus 純黒ダッシュボード・進捗バー・計器バンク・SignalBadge |
-| `DesignSystem/DeleteConfirmation.swift` | 物理削除の Alert + スワイプ。文言は `TicketDeletion.Prompt` |
+| `DesignSystem/DeleteConfirmation.swift` | フルスワイプ削除 + Undo バナー |
 | `TodoTrainWidget/FocusTimerPhase.swift` | App + Widget 共有の段階色ロジック |
 | `TodoTrainWidget/CockpitLayoutContract.swift` | Live Activity 公称サイズ契約・密度選択 |
 | `TodoTrainWidget/CockpitInstrumentViews.swift` | StandBy 2ペイン / LS ViewThatFits ダーク計器 |

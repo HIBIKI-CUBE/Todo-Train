@@ -73,10 +73,7 @@ struct RemainingTicketsCanvas: View {
                             }
                         }
                         .padding(.vertical, 4)
-                        .deleteSwipeAction(
-                            accessibilityName: rowTitle(row),
-                            needsConfirmation: false
-                        ) {
+                        .deleteSwipeAction(accessibilityName: rowTitle(row)) {
                             removeRow(id: row.id)
                         }
                     }

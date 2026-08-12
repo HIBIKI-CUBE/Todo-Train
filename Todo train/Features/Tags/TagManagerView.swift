@@ -8,10 +8,10 @@ import SwiftData
 
 struct TagManagerView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(DeletionUndoCenter.self) private var undoCenter
     @Query(sort: \Tag.sortOrder) private var tags: [Tag]
 
     @State private var editorMode: EditorMode?
-    @State private var tagPendingDelete: Tag?
 
     private enum EditorMode: Identifiable {
         case create
@@ -49,13 +49,8 @@ struct TagManagerView: View {
                         }
                     }
                     .buttonStyle(.plain)
-                    .deleteSwipeAction(
-                        accessibilityName: tag.name,
-                        needsConfirmation: TicketDeletion.swipeNeedsAlertForTag(
-                            ticketCount: tag.tickets.count
-                        )
-                    ) {
-                        requestDelete(tag)
+                    .deleteSwipeAction(accessibilityName: tag.name) {
+                        deleteTag(tag)
                     }
                 }
                 .onMove(perform: moveTags)
@@ -85,9 +80,6 @@ struct TagManagerView: View {
                 }
             }
         }
-        .deletionAlert(item: $tagPendingDelete, prompt: { TicketDeletion.tagPrompt(for: $0) }) { tag in
-            deleteTag(tag)
-        }
     }
 
     private func moveTags(from source: IndexSet, to destination: Int) {
@@ -97,21 +89,23 @@ struct TagManagerView: View {
         try? modelContext.save()
     }
 
-    private func requestDelete(_ tag: Tag) {
-        if TicketDeletion.swipeNeedsAlertForTag(ticketCount: tag.tickets.count) {
-            tagPendingDelete = tag
-        } else {
-            withAnimation {
-                deleteTag(tag)
-            }
-        }
-    }
-
     private func deleteTag(_ tag: Tag) {
+        let name = tag.name
+        let record = DeletionUndo.captureTag(tag, allTags: Array(tags))
         modelContext.delete(tag)
         try? modelContext.save()
         let remaining = (try? modelContext.fetch(FetchDescriptor<Tag>(sortBy: [SortDescriptor(\.sortOrder)]))) ?? []
         TagOrdering.normalizeSortOrders(remaining)
         try? modelContext.save()
+        undoCenter.offer(message: DeletionUndo.bannerMessage(tagName: name)) {
+            withAnimation {
+                try? restoreTag(record)
+            }
+        }
+    }
+
+    private func restoreTag(_ record: DeletionUndo.TagRecord) throws {
+        DeletionUndo.restoreTag(record, into: modelContext)
+        try modelContext.save()
     }
 }

@@ -737,6 +737,56 @@ struct SessionManagerTests {
         #expect(sessions.first?.id == second.id)
     }
 
+    @Test func restoreDeletedTicket_afterDelete_returnsTicket() throws {
+        let (manager, context, _, _) = try makeHarness()
+        let ticket = try makeTicket(context, title: "誤作成")
+        let record = DeletionUndo.captureTicket(ticket)
+        let id = ticket.id
+
+        try manager.deleteTicket(ticket)
+        #expect(try context.fetch(FetchDescriptor<Ticket>()).isEmpty)
+
+        try manager.restoreDeletedTicket(record)
+
+        let restored = try context.fetch(FetchDescriptor<Ticket>())
+        #expect(restored.contains { $0.id == id })
+        #expect(restored.first?.title == "誤作成")
+    }
+
+    @Test func restoreDeletedTicket_whileRunning_restoresPhase() throws {
+        let (manager, context, _, _) = try makeHarness()
+        try manager.startService()
+        let ticket = try makeTicket(context)
+        try manager.board(ticket: ticket)
+        let id = ticket.id
+        let record = DeletionUndo.captureTicket(ticket)
+
+        try manager.deleteTicket(ticket)
+        #expect(manager.phase == .idle)
+
+        try manager.restoreDeletedTicket(record)
+
+        #expect(manager.phase == .running)
+        #expect(manager.activeSession?.ticket?.id == id)
+    }
+
+    @Test func restoreDeletedSession_lastRow_restoresTicket() throws {
+        let (manager, context, _, _) = try makeHarness()
+        try manager.startService()
+        let ticket = try makeTicket(context, title: "到着済")
+        try manager.board(ticket: ticket)
+        try manager.arrive()
+        let session = try #require(ticket.sessions.first)
+        let record = DeletionUndo.captureTicket(ticket)
+
+        try manager.deleteEndedSession(session)
+        #expect(try context.fetch(FetchDescriptor<Ticket>()).isEmpty)
+
+        try manager.restoreDeletedTicket(record)
+        #expect(try context.fetch(FetchDescriptor<Ticket>()).count == 1)
+        #expect(try context.fetch(FetchDescriptor<WorkSession>()).count == 1)
+    }
+
     @Test func deleteEndedSession_rejectsOpenSession() throws {
         let (manager, context, _, _) = try makeHarness()
         try manager.startService()

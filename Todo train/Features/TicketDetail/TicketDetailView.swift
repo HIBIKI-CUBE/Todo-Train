@@ -10,6 +10,7 @@ struct TicketDetailView: View {
     @Environment(SessionManager.self) private var sessionManager
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @Environment(DeletionUndoCenter.self) private var undoCenter
     @Bindable var ticket: Ticket
 
     @Query(sort: \Tag.sortOrder) private var allTags: [Tag]
@@ -17,12 +18,6 @@ struct TicketDetailView: View {
 
     @State private var errorMessage = ""
     @State private var showError = false
-    @State private var pendingDeletion: PendingDeletion?
-
-    private enum PendingDeletion {
-        case ticket
-        case session(WorkSession)
-    }
 
     private var canBoard: Bool {
         sessionManager.isInService
@@ -214,7 +209,7 @@ struct TicketDetailView: View {
 
             Section {
                 Button("切符を削除", role: .destructive) {
-                    pendingDeletion = .ticket
+                    deleteTicket()
                 }
                 .accessibilityHint(TicketDeletion.ticketDeleteFooter(ride: TicketDeletion.rideState(for: ticket)))
             } footer: {
@@ -225,24 +220,6 @@ struct TicketDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .onDisappear {
             try? modelContext.save()
-        }
-        .deletionAlert(
-            item: $pendingDeletion,
-            prompt: { pending in
-                switch pending {
-                case .ticket:
-                    TicketDeletion.ticketPrompt(for: ticket)
-                case .session(let session):
-                    TicketDeletion.historySessionPrompt(for: session)
-                }
-            }
-        ) { pending in
-            switch pending {
-            case .ticket:
-                deleteTicket()
-            case .session(let session):
-                deleteSession(session)
-            }
         }
         .errorAlert(isPresented: $showError, message: errorMessage)
     }
@@ -262,11 +239,8 @@ struct TicketDetailView: View {
                 .foregroundStyle(.secondary)
         }
         if session.endedAt != nil {
-            row.deleteSwipeAction(
-                accessibilityName: "この乗車記録",
-                needsConfirmation: true
-            ) {
-                pendingDeletion = .session(session)
+            row.deleteSwipeAction(accessibilityName: "この乗車記録") {
+                deleteSession(session)
             }
         } else {
             row
@@ -283,8 +257,15 @@ struct TicketDetailView: View {
     }
 
     private func deleteTicket() {
+        let title = ticket.title
+        let record = DeletionUndo.captureTicket(ticket)
         do {
             try sessionManager.deleteTicket(ticket)
+            undoCenter.offer(message: DeletionUndo.bannerMessage(ticketTitle: title)) {
+                withAnimation {
+                    try? sessionManager.restoreDeletedTicket(record)
+                }
+            }
             dismiss()
         } catch {
             errorMessage = error.localizedDescription
@@ -293,14 +274,40 @@ struct TicketDetailView: View {
     }
 
     private func deleteSession(_ session: WorkSession) {
-        let willDeleteTicket = TicketDeletion.shouldDeleteOrphanTicket(
-            remainingSessionIDs: ticket.sessions.map(\.id),
+        let title = ticket.title
+        let remainingIDs = ticket.sessions.map(\.id)
+        let deletesTicket = TicketDeletion.shouldDeleteOrphanTicket(
+            remainingSessionIDs: remainingIDs,
             removing: session.id
         )
         do {
-            try sessionManager.deleteEndedSession(session)
-            if willDeleteTicket {
+            if deletesTicket {
+                let record = DeletionUndo.captureTicket(ticket)
+                try sessionManager.deleteEndedSession(session)
+                undoCenter.offer(
+                    message: DeletionUndo.bannerMessage(
+                        historyTicketTitle: title,
+                        deletedTicketToo: true
+                    )
+                ) {
+                    withAnimation {
+                        try? sessionManager.restoreDeletedTicket(record)
+                    }
+                }
                 dismiss()
+            } else {
+                let record = DeletionUndo.captureSession(session)
+                try sessionManager.deleteEndedSession(session)
+                undoCenter.offer(
+                    message: DeletionUndo.bannerMessage(
+                        historyTicketTitle: title,
+                        deletedTicketToo: false
+                    )
+                ) {
+                    withAnimation {
+                        try? sessionManager.restoreDeletedSession(record)
+                    }
+                }
             }
         } catch {
             errorMessage = error.localizedDescription

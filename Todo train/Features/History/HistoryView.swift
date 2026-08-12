@@ -9,13 +9,13 @@ import SwiftData
 struct HistoryView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(SessionManager.self) private var sessionManager
+    @Environment(DeletionUndoCenter.self) private var undoCenter
     @Environment(\.verticalSizeClass) private var verticalSizeClass
 
     @Query(sort: \WorkSession.endedAt, order: .reverse)
     private var sessions: [WorkSession]
 
     @State private var searchText = ""
-    @State private var sessionPendingDelete: WorkSession?
     @State private var errorMessage = ""
     @State private var showError = false
 
@@ -85,12 +85,6 @@ struct HistoryView: View {
                 }
             }
         }
-        .deletionAlert(
-            item: $sessionPendingDelete,
-            prompt: { TicketDeletion.historySessionPrompt(for: $0) }
-        ) { session in
-            deleteSession(session)
-        }
         .errorAlert(isPresented: $showError, message: errorMessage)
     }
 
@@ -98,16 +92,47 @@ struct HistoryView: View {
     private func historyRow(_ session: WorkSession) -> some View {
         HistorySessionRow(session: session, onReissue: reissue)
             .deleteSwipeAction(
-                accessibilityName: session.ticket?.title ?? "この履歴",
-                needsConfirmation: true
+                accessibilityName: session.ticket?.title ?? "この履歴"
             ) {
-                sessionPendingDelete = session
+                deleteSession(session)
             }
     }
 
     private func deleteSession(_ session: WorkSession) {
+        let title = session.ticket?.title ?? "不明な切符"
+        let remainingIDs = session.ticket?.sessions.map(\.id) ?? [session.id]
+        let deletesTicket = TicketDeletion.shouldDeleteOrphanTicket(
+            remainingSessionIDs: remainingIDs,
+            removing: session.id
+        )
         do {
-            try sessionManager.deleteEndedSession(session)
+            if deletesTicket, let ticket = session.ticket {
+                let record = DeletionUndo.captureTicket(ticket)
+                try sessionManager.deleteEndedSession(session)
+                undoCenter.offer(
+                    message: DeletionUndo.bannerMessage(
+                        historyTicketTitle: title,
+                        deletedTicketToo: true
+                    )
+                ) {
+                    withAnimation {
+                        try? sessionManager.restoreDeletedTicket(record)
+                    }
+                }
+            } else {
+                let record = DeletionUndo.captureSession(session)
+                try sessionManager.deleteEndedSession(session)
+                undoCenter.offer(
+                    message: DeletionUndo.bannerMessage(
+                        historyTicketTitle: title,
+                        deletedTicketToo: false
+                    )
+                ) {
+                    withAnimation {
+                        try? sessionManager.restoreDeletedSession(record)
+                    }
+                }
+            }
         } catch {
             errorMessage = error.localizedDescription
             showError = true
@@ -137,6 +162,7 @@ struct HistoryView: View {
     return NavigationStack {
         HistoryView()
             .environment(manager)
+            .environment(DeletionUndoCenter())
             .modelContainer(container)
     }
 }

@@ -10,6 +10,7 @@ struct HubView: View {
     @Environment(SessionManager.self) private var sessionManager
     @Environment(\.modelContext) private var modelContext
     @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @Environment(DeletionUndoCenter.self) private var undoCenter
 
     @Query(sort: \Ticket.sortOrder) private var allTickets: [Ticket]
 
@@ -18,7 +19,6 @@ struct HubView: View {
     @State private var hubDestination: HubDestination?
     @State private var errorMessage = ""
     @State private var showError = false
-    @State private var ticketPendingDelete: Ticket?
 
     private enum HubDestination: Hashable, Identifiable {
         case tags
@@ -109,9 +109,6 @@ struct HubView: View {
                 ReorderView()
             }
         }
-        .deletionAlert(item: $ticketPendingDelete, prompt: { TicketDeletion.ticketPrompt(for: $0) }) { ticket in
-            deleteTicket(ticket)
-        }
         .errorAlert(isPresented: $showError, message: errorMessage)
         .sheet(isPresented: $showQuickAdd) {
             QuickAddSheet()
@@ -200,11 +197,8 @@ struct HubView: View {
             ForEach(sessionManager.pausedSessions, id: \.id) { session in
                 if let ticket = session.ticket {
                     pausedTicketRow(ticket: ticket, session: session)
-                        .deleteSwipeAction(
-                            accessibilityName: ticket.title,
-                            needsConfirmation: true
-                        ) {
-                            ticketPendingDelete = ticket
+                        .deleteSwipeAction(accessibilityName: ticket.title) {
+                            deleteTicket(ticket)
                         }
                 }
             }
@@ -235,13 +229,8 @@ struct HubView: View {
                         boardDisabledReason: boardDisabledReason,
                         onBoard: { board(ticket) }
                     )
-                    .deleteSwipeAction(
-                        accessibilityName: ticket.title,
-                        needsConfirmation: TicketDeletion.swipeNeedsAlert(
-                            ride: TicketDeletion.rideState(for: ticket)
-                        )
-                    ) {
-                        requestDelete(ticket)
+                    .deleteSwipeAction(accessibilityName: ticket.title) {
+                        deleteTicket(ticket)
                     }
                 }
                 .onMove(perform: moveBacklogTickets)
@@ -315,19 +304,16 @@ struct HubView: View {
         }
     }
 
-    private func requestDelete(_ ticket: Ticket) {
-        if TicketDeletion.swipeNeedsAlert(ride: TicketDeletion.rideState(for: ticket)) {
-            ticketPendingDelete = ticket
-        } else {
-            withAnimation {
-                deleteTicket(ticket)
-            }
-        }
-    }
-
     private func deleteTicket(_ ticket: Ticket) {
+        let title = ticket.title
+        let record = DeletionUndo.captureTicket(ticket)
         do {
             try sessionManager.deleteTicket(ticket)
+            undoCenter.offer(message: DeletionUndo.bannerMessage(ticketTitle: title)) {
+                withAnimation {
+                    try? sessionManager.restoreDeletedTicket(record)
+                }
+            }
         } catch {
             errorMessage = error.localizedDescription
             showError = true
@@ -364,6 +350,7 @@ struct HubView: View {
         HubView()
             .environment(manager)
             .environment(AppSettings.shared)
+            .environment(DeletionUndoCenter())
             .modelContainer(container)
     }
 }

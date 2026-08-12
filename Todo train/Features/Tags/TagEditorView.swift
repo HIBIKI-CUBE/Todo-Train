@@ -9,12 +9,12 @@ import SwiftData
 struct TagEditorView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @Environment(DeletionUndoCenter.self) private var undoCenter
 
     var existing: Tag?
 
     @State private var name: String = ""
     @State private var colorHex: String = TagPalette.colors[0].hex
-    @State private var tagPendingDelete: Tag?
 
     var body: some View {
         Form {
@@ -50,7 +50,7 @@ struct TagEditorView: View {
             if existing != nil {
                 Section {
                     Button("タグを削除", role: .destructive) {
-                        tagPendingDelete = existing
+                        deleteExisting()
                     }
                 } footer: {
                     if let existing {
@@ -76,12 +76,6 @@ struct TagEditorView: View {
                 colorHex = existing.colorHex
             }
         }
-        .deletionAlert(
-            item: $tagPendingDelete,
-            prompt: { TicketDeletion.tagPrompt(for: $0) }
-        ) { tag in
-            deleteExisting(tag)
-        }
     }
 
     private func save() {
@@ -100,12 +94,22 @@ struct TagEditorView: View {
         dismiss()
     }
 
-    private func deleteExisting(_ tag: Tag) {
-        modelContext.delete(tag)
+    private func deleteExisting() {
+        guard let existing else { return }
+        let tagName = existing.name
+        let allTags = (try? modelContext.fetch(FetchDescriptor<Tag>(sortBy: [SortDescriptor(\.sortOrder)]))) ?? []
+        let record = DeletionUndo.captureTag(existing, allTags: allTags)
+        modelContext.delete(existing)
         try? modelContext.save()
         let remaining = (try? modelContext.fetch(FetchDescriptor<Tag>(sortBy: [SortDescriptor(\.sortOrder)]))) ?? []
         TagOrdering.normalizeSortOrders(remaining)
         try? modelContext.save()
+        undoCenter.offer(message: DeletionUndo.bannerMessage(tagName: tagName)) {
+            withAnimation {
+                DeletionUndo.restoreTag(record, into: modelContext)
+                try? modelContext.save()
+            }
+        }
         dismiss()
     }
 
