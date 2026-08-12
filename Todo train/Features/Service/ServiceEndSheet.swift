@@ -12,6 +12,8 @@ struct ServiceEndSheet: View {
     var onError: (String) -> Void
 
     @State private var canvasLaunch: CanvasLaunch?
+    @State private var localError = ""
+    @State private var showLocalError = false
 
     private struct CanvasLaunch: Identifiable {
         let id = UUID()
@@ -23,35 +25,35 @@ struct ServiceEndSheet: View {
         sessionManager.pausedSessions
     }
 
+    private var canConfirmEnd: Bool {
+        pausedSessions.isEmpty
+            && sessionManager.phase != .running
+            && sessionManager.phase != .overtime
+    }
+
     var body: some View {
         NavigationStack {
             List {
                 Section {
-                    Text("停車中の切符の扱いを選んでから運行を終了します。何もしなければ持ち越し（翌日も停車中）です。")
+                    Text(introCopy)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
 
                 if pausedSessions.isEmpty {
                     Section {
-                        Text("停車中の切符はありません。")
-                            .foregroundStyle(.secondary)
+                        Label("停車中の切符はありません", systemImage: "checkmark.circle.fill")
+                            .foregroundStyle(TrainTheme.signalGreen)
                     }
                 } else {
-                    Section("停車中（\(pausedSessions.count)）") {
+                    Section {
                         ForEach(pausedSessions, id: \.id) { session in
                             if let ticket = session.ticket {
-                                VStack(alignment: .leading, spacing: 8) {
-                                    HStack {
-                                        Text(ticket.title)
-                                            .font(.body.weight(.medium))
-                                        Spacer()
-                                        Text("持ち越し")
-                                            .font(.caption2)
-                                            .foregroundStyle(.secondary)
-                                    }
+                                VStack(alignment: .leading, spacing: 10) {
+                                    Text(ticket.title)
+                                        .font(.body.weight(.medium))
 
-                                    HStack {
+                                    HStack(spacing: 8) {
                                         Button("途中下車") {
                                             disembark(session, ticket: ticket)
                                         }
@@ -64,8 +66,13 @@ struct ServiceEndSheet: View {
                                     }
                                 }
                                 .padding(.vertical, 4)
+                                .accessibilityElement(children: .contain)
                             }
                         }
+                    } header: {
+                        Text("停車中（\(pausedSessions.count)）— すべて解決してください")
+                    } footer: {
+                        Text("途中下車すると乗り継ぎ切符を掃き出せます。未解決の停車中は持ち越しできません。")
                     }
                 }
 
@@ -73,9 +80,16 @@ struct ServiceEndSheet: View {
                     Button("運行を終了する", role: .destructive) {
                         confirmEnd()
                     }
+                    .disabled(!canConfirmEnd)
+                } footer: {
+                    if !canConfirmEnd {
+                        Text(sessionManager.phase == .running || sessionManager.phase == .overtime
+                            ? "走行中は運行終了できません。"
+                            : "停車中を途中下車または放棄してから終了できます。")
+                    }
                 }
             }
-            .navigationTitle("運行終了")
+            .navigationTitle(sessionManager.needsServiceDayEndPrompt ? "昨日の運行終了" : "運行終了")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -85,7 +99,21 @@ struct ServiceEndSheet: View {
             .sheet(item: $canvasLaunch) { launch in
                 RemainingTicketsCanvas(parent: launch.parent, fromSessionID: launch.sessionID)
             }
+            .alert("エラー", isPresented: $showLocalError) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(localError)
+            }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
         }
+    }
+
+    private var introCopy: String {
+        if sessionManager.needsServiceDayEndPrompt {
+            return "昨日の運行が続いています。停車中の切符を途中下車（乗り継ぎ）または放棄してから終了してください。"
+        }
+        return "停車中の切符を途中下車（乗り継ぎ）または放棄してから運行を終了します。"
     }
 
     private func disembark(_ session: WorkSession, ticket: Ticket) {
@@ -94,7 +122,7 @@ struct ServiceEndSheet: View {
             try sessionManager.partialDisembark(session: session)
             canvasLaunch = CanvasLaunch(parent: ticket, sessionID: sessionID)
         } catch {
-            onError(error.localizedDescription)
+            present(error)
         }
     }
 
@@ -102,7 +130,7 @@ struct ServiceEndSheet: View {
         do {
             try sessionManager.abandon(session: session)
         } catch {
-            onError(error.localizedDescription)
+            present(error)
         }
     }
 
@@ -111,7 +139,13 @@ struct ServiceEndSheet: View {
             try sessionManager.endService()
             dismiss()
         } catch {
-            onError(error.localizedDescription)
+            present(error)
         }
+    }
+
+    private func present(_ error: Error) {
+        localError = error.localizedDescription
+        showLocalError = true
+        onError(error.localizedDescription)
     }
 }

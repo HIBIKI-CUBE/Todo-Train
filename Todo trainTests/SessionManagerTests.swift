@@ -220,19 +220,19 @@ struct SessionManagerTests {
         }
     }
 
-    @Test func endService_succeeds_withPausedSessionsCarriedOver() throws {
+    @Test func endService_throwsWithUnresolvedPaused() throws {
         let (manager, context, _, _) = try makeHarness()
         try manager.startService()
         let a = try makeTicket(context, title: "A")
         try manager.board(ticket: a)
         try manager.pause()
 
-        try manager.endService()
-
-        #expect(manager.isInService == false)
+        #expect(throws: SessionError.unresolvedPausedTickets) {
+            try manager.endService()
+        }
+        #expect(manager.isInService == true)
         #expect(manager.pausedTicketCount == 1)
         #expect(a.isOpen)
-        #expect(manager.pausedSessions.first?.ticket?.id == a.id)
     }
 
     @Test func endService_succeeds_afterResolvingPaused() throws {
@@ -249,6 +249,53 @@ struct SessionManagerTests {
         #expect(manager.isInService == false)
         #expect(manager.pausedTicketCount == 0)
         #expect(a.closureKind == .abandoned)
+    }
+
+    @Test func startService_throwsWhenPreviousDayStillOpen() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let day1 = Date(timeIntervalSince1970: 1_700_000_000)
+        let day2 = calendar.date(byAdding: .day, value: 1, to: day1)!
+
+        let container = try AppModelContainer.make(inMemory: true)
+        let context = ModelContext(container)
+        let clock = FixedSessionClock(day1)
+        let manager = SessionManager(
+            modelContext: context,
+            clock: clock,
+            calendar: calendar,
+            settings: AppSettings.makeForTesting()
+        )
+        try manager.startService()
+        #expect(manager.isInService)
+
+        clock.advance(by: day2.timeIntervalSince(day1))
+        manager.reconcile()
+        #expect(manager.needsServiceDayEndPrompt)
+
+        #expect(throws: SessionError.serviceDayNeedsEnd) {
+            try manager.startService()
+        }
+    }
+
+    @Test func recoverOnLaunch_closesDuplicateOpenServiceDays() throws {
+        let (manager, context, clock, _) = try makeHarness()
+        let older = ServiceDay(
+            startedAt: clock.now.addingTimeInterval(-3600),
+            calendarDayKey: "2099-01-01"
+        )
+        let newer = ServiceDay(
+            startedAt: clock.now,
+            calendarDayKey: ServiceDay.dayKey(for: clock.now, calendar: .current)
+        )
+        context.insert(older)
+        context.insert(newer)
+        try context.save()
+
+        try manager.recoverOnLaunch()
+        #expect(older.endedAt != nil)
+        #expect(newer.endedAt == nil)
+        #expect(manager.activeServiceDay?.id == newer.id)
     }
 
     @Test func extend_increasesBudget_andLeavesOvertime() throws {

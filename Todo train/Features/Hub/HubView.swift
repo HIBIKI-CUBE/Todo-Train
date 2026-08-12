@@ -157,6 +157,26 @@ struct HubView: View {
                 showError = true
             }
         }
+        .onAppear {
+            presentServiceEndIfNeeded()
+        }
+        .onChange(of: sessionManager.needsServiceDayEndPrompt) { _, needs in
+            if needs {
+                presentServiceEndIfNeeded()
+            }
+        }
+        .onChange(of: sessionManager.phase) { _, _ in
+            presentServiceEndIfNeeded()
+        }
+    }
+
+    /// S-03: after a day change, surface the end-of-service flow (once Focus is not blocking).
+    private func presentServiceEndIfNeeded() {
+        guard sessionManager.needsServiceDayEndPrompt else { return }
+        guard sessionManager.phase != .running, sessionManager.phase != .overtime else { return }
+        if !showServiceEndSheet {
+            showServiceEndSheet = true
+        }
     }
 
     private func requestEndService() {
