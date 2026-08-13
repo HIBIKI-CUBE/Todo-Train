@@ -43,8 +43,8 @@ struct PunctualityTests {
         )
     }
 
-    @Test func classify_early_isNotCelebrated() {
-        // Immediate tap / padded estimate → 早着. No 定時.
+    @Test func classify_early_isNotOnTime() {
+        // Immediate tap / padded estimate → 早着. Still an 到着 to celebrate, just not 定時.
         #expect(
             Punctuality.classify(
                 outcome: .arrived,
@@ -195,6 +195,46 @@ struct PunctualityTests {
         context.insert(session)
 
         #expect(Punctuality.displayLabel(for: session) == "到着")
+    }
+
+    @Test func displayLabel_overtimeArrivalStaysArrivedNotDelay() throws {
+        let container = try AppModelContainer.make(inMemory: true)
+        let context = ModelContext(container)
+        let ticket = Ticket(title: "T", estimatedSeconds: 600)
+        context.insert(ticket)
+
+        let session = WorkSession(startedAt: .now, estimatedSecondsAtStart: 600, ticket: ticket)
+        session.endedAt = .now
+        session.outcome = .arrived
+        session.accumulatedActiveSeconds = 900
+        session.overtimeResolution = .justFinished
+        context.insert(session)
+
+        #expect(Punctuality.displayLabel(for: session) == "到着")
+    }
+
+    @Test func shouldCelebrateArrival_anyArrivedIncludingOvertime() {
+        #expect(Punctuality.shouldCelebrateArrival(outcome: .arrived))
+        #expect(!Punctuality.shouldCelebrateArrival(outcome: .partialDisembark))
+        #expect(!Punctuality.shouldCelebrateArrival(outcome: .abandoned))
+        #expect(!Punctuality.shouldCelebrateArrival(outcome: nil))
+    }
+
+    @Test func arrivalCaption_omitsGapUnlessOnTime() {
+        #expect(
+            Punctuality.arrivalCaption(
+                isOnTime: true,
+                estimateSeconds: 1_500,
+                actualSeconds: 1_440
+            ) == "見積もり 25分 · 実績 24分"
+        )
+        #expect(
+            Punctuality.arrivalCaption(
+                isOnTime: false,
+                estimateSeconds: 1_500,
+                actualSeconds: 2_100
+            ) == nil
+        )
     }
 
     @Test func durationCaption_matchesHistoryStyle() {

@@ -343,7 +343,7 @@ final class SessionManager {
             session.overtimeResolution = resolution
         }
         try close(session: session, outcome: .arrived, closureKind: .arrived, now: now)
-        enqueueOnTimeArrivalIfNeeded(session)
+        enqueueArrivalMomentIfNeeded(session)
     }
 
     func partialDisembark(now: Date? = nil) throws {
@@ -756,15 +756,16 @@ final class SessionManager {
         fetchOpenSessions().filter(\.isPaused)
     }
 
-    private func enqueueOnTimeArrivalIfNeeded(_ session: WorkSession) {
-        guard Punctuality.classify(session) == .onTime else { return }
+    private func enqueueArrivalMomentIfNeeded(_ session: WorkSession) {
+        guard Punctuality.shouldCelebrateArrival(outcome: session.outcome) else { return }
         let title = session.ticket?.title ?? "切符"
         enqueuePunctualityMoment(
             PunctualityMoment(
-                kind: .onTimeArrival(
+                kind: .arrival(
                     title: title,
                     estimateSeconds: session.estimatedSecondsAtStart,
-                    actualSeconds: session.accumulatedActiveSeconds
+                    actualSeconds: session.accumulatedActiveSeconds,
+                    isOnTime: Punctuality.classify(session) == .onTime
                 )
             )
         )

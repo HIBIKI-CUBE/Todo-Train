@@ -811,15 +811,16 @@ struct SessionManagerTests {
         let moment = try #require(manager.punctualityMoment)
         #expect(manager.punctualityHapticTick == 1)
         #expect(
-            moment.kind == .onTimeArrival(
+            moment.kind == .arrival(
                 title: ticket.title,
                 estimateSeconds: 600,
-                actualSeconds: 560
+                actualSeconds: 560,
+                isOnTime: true
             )
         )
     }
 
-    @Test func arrive_early_doesNotEnqueueMoment() throws {
+    @Test func arrive_early_enqueuesArrivalMoment() throws {
         let (manager, context, clock, _) = try makeHarness()
         try manager.startService()
         let ticket = try makeTicket(context, seconds: 600)
@@ -828,11 +829,19 @@ struct SessionManagerTests {
         clock.advance(by: 10)
         try manager.arrive()
 
-        #expect(manager.punctualityMoment == nil)
-        #expect(manager.punctualityHapticTick == 0)
+        let moment = try #require(manager.punctualityMoment)
+        #expect(manager.punctualityHapticTick == 1)
+        #expect(
+            moment.kind == .arrival(
+                title: ticket.title,
+                estimateSeconds: 600,
+                actualSeconds: 10,
+                isOnTime: false
+            )
+        )
     }
 
-    @Test func arrive_overtime_doesNotEnqueueMoment() throws {
+    @Test func arrive_overtime_enqueuesArrivalMoment() throws {
         let (manager, context, clock, _) = try makeHarness()
         try manager.startService()
         let ticket = try makeTicket(context, seconds: 120)
@@ -841,7 +850,15 @@ struct SessionManagerTests {
         clock.advance(by: 180)
         try manager.arrive(resolution: .justFinished)
 
-        #expect(manager.punctualityMoment == nil)
+        let moment = try #require(manager.punctualityMoment)
+        #expect(
+            moment.kind == .arrival(
+                title: ticket.title,
+                estimateSeconds: 120,
+                actualSeconds: 180,
+                isOnTime: false
+            )
+        )
     }
 
     @Test func endService_onTimeArrivals_enqueuesServiceMoment() throws {
@@ -877,7 +894,21 @@ struct SessionManagerTests {
         try manager.board(ticket: ticket)
         clock.advance(by: 10)
         try manager.arrive()
+        manager.consumePunctualityMoment()
+
+        try manager.endService()
         #expect(manager.punctualityMoment == nil)
+    }
+
+    @Test func endService_withOvertimeArrival_doesNotEnqueueServiceMoment() throws {
+        let (manager, context, clock, _) = try makeHarness()
+        try manager.startService()
+        let ticket = try makeTicket(context, seconds: 120)
+
+        try manager.board(ticket: ticket)
+        clock.advance(by: 180)
+        try manager.arrive(resolution: .justFinished)
+        manager.consumePunctualityMoment()
 
         try manager.endService()
         #expect(manager.punctualityMoment == nil)
@@ -912,10 +943,11 @@ struct SessionManagerTests {
 
         #expect(manager.punctualityQueue.count == 2)
         #expect(
-            manager.punctualityMoment?.kind == .onTimeArrival(
+            manager.punctualityMoment?.kind == .arrival(
                 title: ticket.title,
                 estimateSeconds: 600,
-                actualSeconds: 560
+                actualSeconds: 560,
+                isOnTime: true
             )
         )
         manager.consumePunctualityMoment()

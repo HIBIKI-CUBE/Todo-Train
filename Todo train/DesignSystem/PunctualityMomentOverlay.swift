@@ -119,22 +119,28 @@ struct PunctualityMomentOverlay: View {
 
     private var headline: String {
         switch moment.kind {
-        case .onTimeArrival: "定時到着"
-        case .onTimeService: "定時運行"
+        case .arrival(_, _, _, let isOnTime):
+            Punctuality.arrivalHeadline(isOnTime: isOnTime)
+        case .onTimeService:
+            "定時運行"
         }
     }
 
     private var title: String? {
         switch moment.kind {
-        case .onTimeArrival(let title, _, _): title
+        case .arrival(let title, _, _, _): title
         case .onTimeService: nil
         }
     }
 
     private var caption: String? {
         switch moment.kind {
-        case .onTimeArrival(_, let estimate, let actual):
-            Punctuality.durationCaption(estimateSeconds: estimate, actualSeconds: actual)
+        case .arrival(_, let estimate, let actual, let isOnTime):
+            Punctuality.arrivalCaption(
+                isOnTime: isOnTime,
+                estimateSeconds: estimate,
+                actualSeconds: actual
+            )
         case .onTimeService:
             "本日、ダイヤどおり"
         }
@@ -142,8 +148,16 @@ struct PunctualityMomentOverlay: View {
 
     private var accessibilityText: String {
         switch moment.kind {
-        case .onTimeArrival(let title, let estimate, let actual):
-            "定時到着。\(title)。\(Punctuality.durationCaption(estimateSeconds: estimate, actualSeconds: actual))"
+        case .arrival(let title, let estimate, let actual, let isOnTime):
+            let head = Punctuality.arrivalHeadline(isOnTime: isOnTime)
+            if let caption = Punctuality.arrivalCaption(
+                isOnTime: isOnTime,
+                estimateSeconds: estimate,
+                actualSeconds: actual
+            ) {
+                return "\(head)。\(title)。\(caption)"
+            }
+            return "\(head)。\(title)"
         case .onTimeService:
             "本日、定時運行でした"
         }
@@ -208,10 +222,27 @@ struct PunctualityMomentOverlay: View {
         Color(uiColor: .systemGroupedBackground).ignoresSafeArea()
         PunctualityMomentOverlay(
             moment: PunctualityMoment(
-                kind: .onTimeArrival(
+                kind: .arrival(
                     title: "週次レビューの下書き",
                     estimateSeconds: 1_500,
-                    actualSeconds: 1_440
+                    actualSeconds: 1_440,
+                    isOnTime: true
+                )
+            )
+        )
+    }
+}
+
+#Preview("到着（超過後）") {
+    ZStack {
+        Color(uiColor: .systemGroupedBackground).ignoresSafeArea()
+        PunctualityMomentOverlay(
+            moment: PunctualityMoment(
+                kind: .arrival(
+                    title: "週次レビューの下書き",
+                    estimateSeconds: 1_500,
+                    actualSeconds: 2_100,
+                    isOnTime: false
                 )
             )
         )

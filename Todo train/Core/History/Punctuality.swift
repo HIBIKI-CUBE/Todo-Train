@@ -22,7 +22,13 @@ enum ArrivalPunctuality: Equatable, Sendable {
 /// Ephemeral joy — not a score. Played once, then discarded.
 struct PunctualityMoment: Identifiable, Equatable, Sendable {
     enum Kind: Equatable, Sendable {
-        case onTimeArrival(title: String, estimateSeconds: Int, actualSeconds: TimeInterval)
+        /// Any 到着. `isOnTime` only flavors copy; overtime still gets praised.
+        case arrival(
+            title: String,
+            estimateSeconds: Int,
+            actualSeconds: TimeInterval,
+            isOnTime: Bool
+        )
         case onTimeService
     }
 
@@ -52,7 +58,7 @@ enum Punctuality {
     }
 
     /// Classify against the **original** estimate, not the extended budget.
-    /// Padding estimates lands in `.early` (no celebration). Waiting out overtime is `.late`.
+    /// Used only to flavor copy (定時到着). Completion is praised regardless.
     static func classify(
         outcome: SessionOutcome?,
         elapsedSeconds: TimeInterval,
@@ -96,6 +102,24 @@ enum Punctuality {
             return "定時"
         }
         return HistoryStats.outcomeLabel(session.outcome)
+    }
+
+    static func shouldCelebrateArrival(outcome: SessionOutcome?) -> Bool {
+        outcome == .arrived
+    }
+
+    static func arrivalHeadline(isOnTime: Bool) -> String {
+        isOnTime ? "定時到着" : "到着"
+    }
+
+    /// Match line only when 定時. Overtime/early celebrations omit the gap so completion stays first.
+    static func arrivalCaption(
+        isOnTime: Bool,
+        estimateSeconds: Int,
+        actualSeconds: TimeInterval
+    ) -> String? {
+        guard isOnTime else { return nil }
+        return durationCaption(estimateSeconds: estimateSeconds, actualSeconds: actualSeconds)
     }
 
     static func durationCaption(estimateSeconds: Int, actualSeconds: TimeInterval) -> String {
