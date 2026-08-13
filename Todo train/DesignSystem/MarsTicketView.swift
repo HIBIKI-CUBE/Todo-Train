@@ -2,7 +2,7 @@
 //  MarsTicketView.swift
 //  Todo train
 //
-//  Unused Mars-style 8.5cm ticket face. Shared by issue celebration and arrival wait.
+//  Unused Mars-style 8.5cm ticket face. Shared by issue, Hub stack, and arrival.
 //  No punch / stamp here — those belong to the used overlay.
 //
 
@@ -29,12 +29,26 @@ struct MarsTicketContent: Equatable {
         self.serial = serial ?? MarsTicketContent.makeSerial(from: issuedAt)
     }
 
-    static func makeSerial(from date: Date) -> String {
+    init(ticket: Ticket) {
+        let tags = ticket.tags.sorted { $0.sortOrder < $1.sortOrder }.map(\.name)
+        self.init(
+            title: ticket.title,
+            minutes: max(ticket.estimatedSeconds / 60, 1),
+            tagNames: tags,
+            issuedAt: ticket.createdAt,
+            serial: MarsTicketContent.makeSerial(from: ticket.createdAt, salt: ticket.id)
+        )
+    }
+
+    static func makeSerial(from date: Date, salt: UUID? = nil) -> String {
         let cal = Calendar.current
         let h = cal.component(.hour, from: date)
         let m = cal.component(.minute, from: date)
         let s = cal.component(.second, from: date)
-        let n = (h * 3600 + m * 60 + s) % 100_000
+        var n = (h * 3600 + m * 60 + s) % 100_000
+        if let salt {
+            n = (n + abs(salt.uuidString.hashValue % 10_000)) % 100_000
+        }
         return String(format: "%05d", n)
     }
 
@@ -60,11 +74,20 @@ struct MarsTicketContent: Equatable {
     }
 }
 
-/// Pure unused ticket face. Animation lives in overlays.
+/// Pure unused ticket face. Animation lives in overlays / Hub stack.
 struct MarsTicketView: View {
     let content: MarsTicketContent
+    var density: MarsTicketSpec.Density = .celebration
     /// 0…1 — title row reveal for thermal scan (1 = fully printed).
     var titleReveal: CGFloat = 1
+
+    private var pad: CGFloat {
+        density == .hub ? MarsTicketSpec.hubContentPad : MarsTicketSpec.contentPad
+    }
+
+    private var columnSpacing: CGFloat {
+        density == .hub ? 4 : 6
+    }
 
     var body: some View {
         GeometryReader { geo in
@@ -80,11 +103,11 @@ struct MarsTicketView: View {
                 HStack(alignment: .top, spacing: 0) {
                     faceColumn
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                        .padding(MarsTicketSpec.contentPad)
+                        .padding(pad)
 
                     verticalSerial
                         .frame(width: MarsTicketSpec.verticalSerialWidth)
-                        .padding(.vertical, MarsTicketSpec.contentPad)
+                        .padding(.vertical, pad)
                         .padding(.trailing, 4)
                 }
             }
@@ -118,57 +141,64 @@ struct MarsTicketView: View {
     }
 
     private var faceColumn: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: columnSpacing) {
             HStack(alignment: .firstTextBaseline) {
                 Text("切符")
                     .font(MarsTicketSpec.kindFont())
                     .foregroundStyle(MarsTicketSpec.printInk)
                     .tracking(2)
                 Spacer(minLength: 4)
-                Text(dotsRow)
-                    .font(MarsTicketSpec.kindFont())
-                    .foregroundStyle(MarsTicketSpec.printInk.opacity(0.55))
-                    .accessibilityHidden(true)
-            }
-
-            titleRow
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.vertical, 4)
-
-            if !content.tagNames.isEmpty {
-                Text("経由：" + content.tagNames.joined(separator: "・"))
-                    .font(MarsTicketSpec.viaFont())
-                    .foregroundStyle(MarsTicketSpec.printInk)
-                    .lineLimit(1)
-            }
-
-            HStack(alignment: .firstTextBaseline) {
-                Text(content.validityLine)
-                    .font(MarsTicketSpec.metaFont())
-                    .foregroundStyle(MarsTicketSpec.printInk)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
-                Spacer(minLength: 6)
                 Text("\(content.minutes)分")
                     .font(MarsTicketSpec.metaFont().weight(.bold))
                     .foregroundStyle(MarsTicketSpec.printInk)
                     .monospacedDigit()
             }
 
-            Spacer(minLength: 0)
+            titleRow
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, density == .hub ? 2 : 4)
 
-            Text("Todo train発行  \(content.terminalDate)  \(content.serial)")
-                .font(MarsTicketSpec.terminalFont())
-                .foregroundStyle(MarsTicketSpec.printInk.opacity(0.85))
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-                .monospacedDigit()
+            if density == .celebration {
+                if !content.tagNames.isEmpty {
+                    Text("経由：" + content.tagNames.joined(separator: "・"))
+                        .font(MarsTicketSpec.viaFont())
+                        .foregroundStyle(MarsTicketSpec.printInk)
+                        .lineLimit(1)
+                }
+
+                Text(content.validityLine)
+                    .font(MarsTicketSpec.metaFont())
+                    .foregroundStyle(MarsTicketSpec.printInk)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+
+                Spacer(minLength: 0)
+
+                Text("Todo train発行  \(content.terminalDate)  \(content.serial)")
+                    .font(MarsTicketSpec.terminalFont())
+                    .foregroundStyle(MarsTicketSpec.printInk.opacity(0.85))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                    .monospacedDigit()
+            } else {
+                if !content.tagNames.isEmpty {
+                    Text(content.tagNames.joined(separator: "・"))
+                        .font(MarsTicketSpec.viaFont())
+                        .foregroundStyle(MarsTicketSpec.printInk.opacity(0.85))
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 0)
+                Text(content.terminalDate)
+                    .font(MarsTicketSpec.terminalFont())
+                    .foregroundStyle(MarsTicketSpec.printInk.opacity(0.75))
+                    .monospacedDigit()
+            }
         }
     }
 
     private var titleRow: some View {
         Text(content.title)
-            .font(MarsTicketSpec.titleFont())
+            .font(density == .hub ? MarsTicketSpec.titleFont().weight(.bold) : MarsTicketSpec.titleFont())
             .foregroundStyle(MarsTicketSpec.printInk)
             .lineLimit(2)
             .minimumScaleFactor(0.7)
@@ -191,10 +221,6 @@ struct MarsTicketView: View {
             .rotationEffect(.degrees(90))
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .accessibilityHidden(true)
-    }
-
-    private var dotsRow: String {
-        "□□□□········"
     }
 }
 
@@ -231,26 +257,13 @@ private struct MarsTicketGroundPattern: View {
     }
 }
 
-#Preview("長題・明") {
+#Preview("Hub密度") {
     ZStack {
         Color(uiColor: .systemGroupedBackground).ignoresSafeArea()
         MarsTicketView(
-            content: MarsTicketContent(
-                title: "週次レビューの下書きを仕上げて共有する",
-                minutes: 45,
-                tagNames: ["仕事", "書く"]
-            )
+            content: MarsTicketContent(title: "週次レビューの下書き", minutes: 25, tagNames: ["仕事"]),
+            density: .hub
         )
-        .padding(.horizontal, MarsTicketSpec.horizontalMargin)
-    }
-}
-
-#Preview("タグなし・Focus黒") {
-    ZStack {
-        Color.black.ignoresSafeArea()
-        MarsTicketView(
-            content: MarsTicketContent(title: "買い物リスト", minutes: 10, tagNames: [])
-        )
-        .padding(.horizontal, MarsTicketSpec.horizontalMargin)
+        .padding(.horizontal, MarsTicketSpec.HubStack.horizontalInset)
     }
 }

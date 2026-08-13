@@ -385,6 +385,7 @@ struct QuickAddSheet: View {
         } else {
             onSingleIssued?(
                 TicketIssueEjectEvent(
+                    ticketID: ticket.id,
                     title: issuedTitle,
                     minutes: issuedMinutes,
                     tagNames: allTags

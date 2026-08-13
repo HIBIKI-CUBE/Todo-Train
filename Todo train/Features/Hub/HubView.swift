@@ -17,10 +17,13 @@ struct HubView: View {
     @State private var showQuickAdd = false
     @State private var showServiceEndSheet = false
     @State private var hubDestination: HubDestination?
+    @State private var detailTicket: Ticket?
     @State private var errorMessage = ""
     @State private var showError = false
     /// Single-issue celebration playing on Hub (may overlap sheet dismiss).
     @State private var hubIssueEject: TicketIssueEjectEvent?
+    /// After issue settle, bring this ticket to the front of the stack.
+    @State private var stackHighlightID: UUID?
 
     private enum HubDestination: Hashable, Identifiable {
         case tags
@@ -66,7 +69,7 @@ struct HubView: View {
             if isLandscapeSplit {
                 landscapeSplitHub
             } else {
-                portraitHubList
+                portraitHub
             }
         }
         .navigationTitle("Todo train")
@@ -74,9 +77,6 @@ struct HubView: View {
             TrainLayout.navigationBarTitleDisplayMode(verticalSizeClass: verticalSizeClass)
         )
         .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                EditButton()
-            }
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     Button {
@@ -111,11 +111,19 @@ struct HubView: View {
                 ReorderView()
             }
         }
+        .navigationDestination(isPresented: Binding(
+            get: { detailTicket != nil },
+            set: { if !$0 { detailTicket = nil } }
+        )) {
+            if let detailTicket {
+                TicketDetailView(ticket: detailTicket)
+            }
+        }
         .errorAlert(isPresented: $showError, message: errorMessage)
         .sheet(isPresented: $showQuickAdd) {
             QuickAddSheet { event in
-                // Commit-instant Mars eject while sheet dismisses in parallel.
                 hubIssueEject = event
+                stackHighlightID = event.ticketID
             }
         }
         .overlay {
@@ -147,54 +155,54 @@ struct HubView: View {
         }
     }
 
-    // MARK: - Portrait (single List)
+    // MARK: - Portrait
 
-    private var portraitHubList: some View {
-        List {
-            serviceSummarySection
-
-            if !sessionManager.pausedSessions.isEmpty {
-                pausedSessionsSection
+    private var portraitHub: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: TrainTheme.Space.lg) {
+                serviceBlock
+                if !sessionManager.pausedSessions.isEmpty {
+                    pausedBlock
+                }
+                ticketsBlock
             }
-
-            ticketsSection
+            .padding(.bottom, TrainTheme.Space.xl)
         }
-        .listStyle(.insetGrouped)
+        .background(TrainTheme.platform)
     }
 
-    // MARK: - Landscape split (service | tickets)
+    // MARK: - Landscape split
 
     private var landscapeSplitHub: some View {
         HStack(alignment: .top, spacing: 0) {
-            servicePane
-                .frame(width: TrainLayout.hubServicePaneWidth)
-
-            ticketsPane
-        }
-    }
-
-    private var servicePane: some View {
-        List {
-            serviceSummarySection
-
-            if !sessionManager.pausedSessions.isEmpty {
-                pausedSessionsSection
+            ScrollView {
+                VStack(alignment: .leading, spacing: TrainTheme.Space.md) {
+                    serviceBlock
+                    if !sessionManager.pausedSessions.isEmpty {
+                        pausedBlock
+                    }
+                }
+                .padding(.bottom, TrainTheme.Space.lg)
             }
+            .frame(width: TrainLayout.hubServicePaneWidth)
+            .background(TrainTheme.platform)
+
+            ScrollView {
+                ticketsBlock
+                    .padding(.bottom, TrainTheme.Space.lg)
+            }
+            .background(TrainTheme.platform)
         }
-        .listStyle(.insetGrouped)
     }
 
-    private var ticketsPane: some View {
-        List {
-            ticketsSection
-        }
-        .listStyle(.insetGrouped)
-    }
+    // MARK: - Blocks
 
-  // MARK: - Shared sections
-
-    private var serviceSummarySection: some View {
-        Section {
+    private var serviceBlock: some View {
+        VStack(alignment: .leading, spacing: TrainTheme.Space.sm) {
+            Text("運行")
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, TrainTheme.Space.lg)
             ServiceSummaryBar(
                 onError: { message in
                     errorMessage = message
@@ -204,26 +212,41 @@ struct HubView: View {
                     requestEndService()
                 }
             )
+            .padding(.horizontal, TrainTheme.Space.md)
         }
+        .padding(.top, TrainTheme.Space.sm)
     }
 
-    private var pausedSessionsSection: some View {
-        Section {
-            ForEach(sessionManager.pausedSessions, id: \.id) { session in
-                if let ticket = session.ticket {
-                    pausedTicketRow(ticket: ticket, session: session)
-                        .deleteSwipeAction(accessibilityName: ticket.title) {
-                            deleteTicket(ticket)
-                        }
+    private var pausedBlock: some View {
+        VStack(alignment: .leading, spacing: TrainTheme.Space.sm) {
+            Text("停車中")
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, TrainTheme.Space.lg)
+
+            VStack(spacing: TrainTheme.Space.sm) {
+                ForEach(sessionManager.pausedSessions, id: \.id) { session in
+                    if let ticket = session.ticket {
+                        pausedTicketRow(ticket: ticket, session: session)
+                            .padding(.horizontal, TrainTheme.Space.md)
+                            .contextMenu {
+                                Button("削除", role: .destructive) {
+                                    deleteTicket(ticket)
+                                }
+                            }
+                    }
                 }
             }
-        } header: {
-            Text("停車中")
         }
     }
 
-    private var ticketsSection: some View {
-        Section {
+    private var ticketsBlock: some View {
+        VStack(alignment: .leading, spacing: TrainTheme.Space.sm) {
+            Text("切符")
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, TrainTheme.Space.lg)
+
             if openTickets.isEmpty {
                 ContentUnavailableView {
                     Label("切符がありません", systemImage: "tram")
@@ -236,23 +259,20 @@ struct HubView: View {
                 Text("未乗車の切符はありません。停車中から再乗車するか、＋ で追加してください。")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
+                    .padding(.horizontal, TrainTheme.Space.lg)
             } else {
-                ForEach(backlogTickets, id: \.id) { ticket in
-                    TicketCardView(
-                        ticket: ticket,
-                        canBoard: canBoardGenerally,
-                        boardDisabledReason: boardDisabledReason,
-                        onBoard: { board(ticket) }
-                    )
-                    .deleteSwipeAction(accessibilityName: ticket.title) {
-                        deleteTicket(ticket)
-                    }
-                }
-                .onMove(perform: moveBacklogTickets)
+                TicketStackView(
+                    tickets: backlogTickets,
+                    canBoard: canBoardGenerally,
+                    boardDisabledReason: boardDisabledReason,
+                    highlightedTicketID: stackHighlightID,
+                    onBoard: { board($0) },
+                    onOpenDetail: { detailTicket = $0 },
+                    onDelete: { deleteTicket($0) }
+                )
             }
-        } header: {
-            Text("切符")
         }
+        .padding(.top, TrainTheme.Space.sm)
     }
 
     /// S-03: after a day change, surface the end-of-service flow (once Focus is not blocking).
@@ -280,21 +300,24 @@ struct HubView: View {
     @ViewBuilder
     private func pausedTicketRow(ticket: Ticket, session: WorkSession) -> some View {
         HStack(spacing: TrainTheme.Space.md) {
-            NavigationLink {
-                TicketDetailView(ticket: ticket)
+            Button {
+                detailTicket = ticket
             } label: {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(ticket.title)
                         .font(TrainTheme.TypeScale.ticketTitle())
                         .lineLimit(isLandscapeSplit ? 2 : nil)
+                        .foregroundStyle(.primary)
                     Text("残り \(formatRemaining(session))")
                         .font(TrainTheme.TypeScale.meta())
                         .foregroundStyle(TrainTheme.signalAmber)
                         .monospacedDigit()
                     SignalBadge(kind: .paused)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            Spacer(minLength: 8)
+            .buttonStyle(.plain)
+
             Button("再乗車") {
                 board(ticket)
             }
@@ -303,6 +326,8 @@ struct HubView: View {
             .disabled(!canBoardGenerally)
             .accessibilityHint(canBoardGenerally ? "停車中の切符を再開" : boardDisabledReason)
         }
+        .padding(TrainTheme.Space.md)
+        .background(TrainTheme.surface, in: RoundedRectangle(cornerRadius: TrainTheme.Radius.control, style: .continuous))
         .accessibilityElement(children: .contain)
     }
 
@@ -333,21 +358,6 @@ struct HubView: View {
             errorMessage = error.localizedDescription
             showError = true
         }
-    }
-
-    private func moveBacklogTickets(from source: IndexSet, to destination: Int) {
-        var ordered = backlogTickets
-        ordered.move(fromOffsets: source, toOffset: destination)
-        // Preserve paused tickets' relative order; rebuild full open order as paused first then backlog.
-        let paused = sessionManager.pausedSessions.compactMap(\.ticket)
-        let full = paused + ordered
-        let orders = TicketSortOrdering.normalizedOrders(forOrderedIDs: full.map(\.id))
-        for ticket in openTickets {
-            if let order = orders[ticket.id] {
-                ticket.sortOrder = order
-            }
-        }
-        try? modelContext.save()
     }
 
     private func formatRemaining(_ session: WorkSession) -> String {

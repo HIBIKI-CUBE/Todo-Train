@@ -9,7 +9,8 @@
 
 | 面 | 方針 |
 |----|------|
-| Hub / 履歴 / 設定 | 標準の `List` / `Form`（`.insetGrouped`）。システム背景・セマンティック色 |
+| Hub | システム背景のうえ、未乗車は **マルス券 Wallet スタック**（前面フル券＋ peek）。運行・停車は標準ブロック |
+| 履歴 / 設定 | 標準の `List` / `Form`（`.insetGrouped`）。システム背景・セマンティック色 |
 | Quick Add | システム sheet + **親指発券帯**（タイトル・常時タグ・KB 直上ゲージ）。Form / Disclosure ではない |
 | Focus | 真っ黒ダッシュボード。超大タイマーが主役。hairline パネル格子＋ gapless 操作盤 |
 | 超過 / 臨時停車 | 信号色は意味を持たせる（緑・琥珀・赤） |
@@ -55,7 +56,7 @@
 
 ## レイアウトとコントロール
 
-- Hub: `List` + 標準行。`TicketCardView` はリスト行（枠カードにしない）。
+- Hub: 未乗車は `TicketStackView`（マルス券の Wallet peek）。前面券に **発車**、タップで前面化／詳細。停車中はスタック外の琥珀ブロック。並べ替えは `…` → `ReorderView`（スタック内 D&D なし）。削除はコンテキストメニュー（List スワイプは使わない）。
 - 追加 UI: **親指発券帯**（`QuickAddSheet`）。タイトル即フォーカス、Return＝主発行、タグ横チップ常時、KB 直上に線形スナップ・ゲージ＋巨大数字。連続追加後もキーボード維持。
 - ボタン: 可能な限り `.bordered` / `.borderedProminent` / `role: .destructive`（発券の主経路は Return／ゲージ）。タグチップ・ゲージノブは Liquid Glass。
 - Focus: エッジツーエッジのパネル格子（ヘッダ／タイマー／テレメトリ／操作）。丸角カードや大きな余白は使わない。
@@ -66,9 +67,9 @@ Undo があるので、[HIG Alerts](https://developer.apple.com/design/human-int
 
 | 原則 | 内容 |
 |------|------|
-| フルスワイプ可 | 削除は即反映。`Label("削除", systemImage: "trash")` + `role: .destructive` |
+| 即削除可 | Hub スタックはコンテキストメニュー、詳細は削除ボタン。いずれも即反映 + `role: .destructive` |
 | Undo | 下部バナー「取り消す」（約 8 秒）。スナップショット復元（UndoManager は使わない＝タイトル編集と混ざらない） |
-| Alert なし | スワイプも詳細の削除ボタンも即削除＋バナー |
+| Alert なし | コンテキストメニューも詳細の削除も即削除＋バナー |
 | `role: .destructive` | 本当に消える操作だけ（期限クリアには使わない） |
 
 実装: `DeletionUndo` / `DeletionUndoCenter` / `DeleteConfirmation.swift`。
@@ -90,7 +91,7 @@ Undo があるので、[HIG Alerts](https://developer.apple.com/design/human-int
 
 ## 祝祭面の例外（発行 / 到着）
 
-Hub / Focus / 設定は上記の HIG 骨格のまま。**発行と到着の祝祭だけ**は列車モチーフを前面に出す。
+Focus / 設定は HIG 骨格のまま。Hub の未乗車リストはマルス券スタックでモチーフを日常面にも載せる。**発行と到着の祝祭**はさらに演出を前面に出す。
 
 | 面 | 方針 |
 |----|------|
@@ -135,16 +136,18 @@ Hub / Focus / 設定は上記の HIG 骨格のまま。**発行と到着の祝�
 | `DesignSystem/DeleteConfirmation.swift` | フルスワイプ削除 + Undo バナー |
 | `DesignSystem/EstimateSnapMapping.swift` | 見積もり分↔線形位置の純関数・sticky デテント |
 | `DesignSystem/EstimateSnapGauge.swift` | KB 直上の線形スナップ・ゲージ |
-| `DesignSystem/TicketIssueEject.swift` | 単発発行のマルス排出＋感熱＋読ませるホールド |
-| `DesignSystem/ArrivalInvalidateOverlay.swift` | 到着: スワイプで無効化（穴・印・裂け） |
+| `DesignSystem/TicketIssueEject.swift` | 単発発行のマルス排出＋読ませるホールド（下スワイプで早めにはける） |
+| `DesignSystem/ArrivalInvalidateOverlay.swift` | 到着: 検札印を自分でドン |
 | `DesignSystem/PunctualityMomentOverlay.swift` | 定時運行の短いカプセル |
+| `DesignSystem/TicketStackLayout.swift` | Hub Wallet スタックの純関数レイアウト |
 | `Core/History/Punctuality.swift` | 帯域判定（当初見積もり）。スコアを持たない |
 | `TodoTrainWidget/FocusTimerPhase.swift` | App + Widget 共有の段階色ロジック |
 | `TodoTrainWidget/CockpitLayoutContract.swift` | Live Activity 公称サイズ契約・密度選択 |
 | `TodoTrainWidget/CockpitInstrumentViews.swift` | StandBy 2ペイン / LS ViewThatFits ダーク計器 |
 | `ContentView.swift` | TabView + Focus cover |
 | `Features/Hub/QuickAddBar.swift` | `QuickAddSheet`（親指発券帯） |
-| 各 Feature | 標準 List / Form |
+| `Features/Hub/TicketStackView.swift` / `HubMarsTicketCard.swift` | Hub マルス Wallet スタック |
+| 履歴 / 設定 | 標準 List / Form |
 
 ## 横向き（iPhone compact height）
 
@@ -154,8 +157,8 @@ Hub / Focus / 設定は上記の HIG 骨格のまま。**発行と到着の祝�
 |------|------|
 | 高さは希少 | large title を inline に、サマリー・ヘッダを 1 行化 |
 | 幅は密度 | 行内メタ・タグを横展開。空き幅のダッシュボード化はしない |
-| Hub 2 ペイン | compact 時は左 280pt に運行＋停車、右に切符リスト（単一 List の横伸びはしない） |
-| 骨格維持 | List / Form / cabin。マスター・ディテール分割・FAB は増やさない |
+| Hub 2 ペイン | compact 時は左 280pt に運行＋停車、右にマルス券スタック（単一 List の横伸びはしない） |
+| 骨格維持 | Hub スタック + Form / cabin。マスター・ディテール分割・FAB は増やさない |
 | Focus 例外 | portrait は縦パネル格子。compact は計器 \| 操作の 2 ペイン（幅約 38%） |
 
 実装: `DesignSystem/TrainLayout.swift`。

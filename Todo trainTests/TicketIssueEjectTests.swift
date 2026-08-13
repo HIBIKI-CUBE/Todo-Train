@@ -18,7 +18,7 @@ struct TicketIssueEjectTests {
     }
 
     @Test func ejectEvent_storesTitleMinutesAndTags() {
-        let event = TicketIssueEjectEvent(title: "メモ", minutes: 15, tagNames: ["仕事"])
+        let event = TicketIssueEjectEvent(ticketID: UUID(), title: "メモ", minutes: 15, tagNames: ["仕事"])
         #expect(event.title == "メモ")
         #expect(event.minutes == 15)
         #expect(event.tagNames == ["仕事"])

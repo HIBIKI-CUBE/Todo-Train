@@ -51,9 +51,10 @@ Todo train/
   DesignSystem/            TrainTheme, TrainChrome, TrainLayout, EstimateChips,
                            DeleteConfirmation, EstimateSnapMapping, EstimateSnapGauge,
                            TicketIssueEject, ArrivalInvalidateOverlay, PunctualityMomentOverlay,
-                           MarsTicketSpec, MarsTicketView
+                           MarsTicketSpec, MarsTicketView, TicketStackLayout
   Features/
-    Hub/                   HubView, QuickAddBar（親指発券帯）, ServiceSummaryBar
+    Hub/                   HubView, QuickAddBar（親指発券帯）, ServiceSummaryBar,
+                           TicketStackView, HubMarsTicketCard
     Focus/                 FocusView, FocusControlsView, OvertimeSheet
     Arrival/               PauseLimitSheet, TransferCanvasPresenter
     History/               HistoryView, WeeklyReportView
@@ -61,7 +62,7 @@ Todo train/
     Reorder/               ReorderView
     Settings/              SettingsView
 TodoTrainWidget/           Home Widget + Session LA + Alarm LA
-Todo trainTests/           26 ファイル（Swift Testing）
+Todo trainTests/           Swift Testing（TicketStackLayout 含む）
 ```
 
 ## 動作するユーザーフロー

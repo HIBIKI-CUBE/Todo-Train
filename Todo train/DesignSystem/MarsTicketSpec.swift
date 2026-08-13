@@ -25,7 +25,38 @@ enum MarsTicketSpec {
 
     static let horizontalMargin: CGFloat = 20
     static let contentPad: CGFloat = 10
+    static let hubContentPad: CGFloat = 8
     static let verticalSerialWidth: CGFloat = 14
+
+    // MARK: - Hub Wallet stack
+
+    enum HubStack {
+        /// Visible strip height for non-front tickets (title + minutes peek).
+        static let peekHeight: CGFloat = 52
+        /// Overlap so the stack reads as one deck.
+        static let peekOverlap: CGFloat = 10
+        static let maxVisiblePeeks: Int = 8
+        static let frontBoardBarHeight: CGFloat = 48
+        static let horizontalInset: CGFloat = 16
+        static let bringToFront = Animation.spring(response: 0.38, dampingFraction: 0.86)
+
+        static func peekStep(visibleCount: Int) -> CGFloat {
+            max(0, peekHeight - peekOverlap)
+        }
+
+        /// Total height of a stack with `count` tickets (front full + peeks behind).
+        static func stackHeight(ticketWidth: CGFloat, count: Int, frontExpanded: Bool) -> CGFloat {
+            guard count > 0 else { return 0 }
+            let frontH = height(forWidth: ticketWidth) + (frontExpanded ? frontBoardBarHeight : 0)
+            let behind = max(0, min(count, maxVisiblePeeks) - 1)
+            return frontH + CGFloat(behind) * peekStep(visibleCount: behind)
+        }
+    }
+
+    enum Density: Equatable {
+        case celebration
+        case hub
+    }
 
     // MARK: - Fixed paper inks (never semantic / adaptive)
 
