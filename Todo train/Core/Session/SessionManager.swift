@@ -31,9 +31,10 @@ final class SessionManager {
     /// Prevents recover / foreground from silently re-scheduling the same bell.
     private var suppressedEndBellSessionIDs: Set<UUID> = []
 
-    /// Ephemeral 定時 moments. Not persisted, not a score. Play then `consumePunctualityMoment()`.
+    /// Ephemeral moments. Not persisted, not a score.
+    /// Arrival haptic is owned by `ArrivalInvalidateOverlay`; enqueue ticks only for 定時運行.
     private(set) var punctualityQueue: [PunctualityMoment] = []
-    /// Bumps only when a moment is enqueued (haptic). Consume must not tick.
+    /// Bumps when a 定時運行 moment is enqueued (haptic). Consume must not tick.
     private(set) var punctualityHapticTick: Int = 0
 
     var punctualityMoment: PunctualityMoment? { punctualityQueue.first }
@@ -773,7 +774,11 @@ final class SessionManager {
 
     private func enqueuePunctualityMoment(_ moment: PunctualityMoment) {
         punctualityQueue.append(moment)
-        punctualityHapticTick += 1
+        // Arrival haptic is owned by ArrivalInvalidateOverlay (user swipe).
+        // 定時運行 keeps a brief success cue on enqueue.
+        if case .onTimeService = moment.kind {
+            punctualityHapticTick += 1
+        }
     }
 
     /// Arrivals closed during this service window (startedAt ... endedBy).

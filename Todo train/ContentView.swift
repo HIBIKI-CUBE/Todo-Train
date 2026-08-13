@@ -99,12 +99,22 @@ struct ContentView: View {
         }
         .overlay {
             if !isFocusPresented, let moment = sessionManager.punctualityMoment {
-                PunctualityMomentOverlay(moment: moment) {
-                    sessionManager.consumePunctualityMoment()
+                Group {
+                    switch moment.kind {
+                    case .arrival:
+                        ArrivalInvalidateOverlay(moment: moment) {
+                            sessionManager.consumePunctualityMoment()
+                        }
+                    case .onTimeService:
+                        PunctualityMomentOverlay(moment: moment) {
+                            sessionManager.consumePunctualityMoment()
+                        }
+                    }
                 }
                 .id(moment.id)
             }
         }
+        // Arrival haptic is driven by the invalidate gesture; service moment keeps a light success.
         .sensoryFeedback(.success, trigger: sessionManager.punctualityHapticTick)
     }
 

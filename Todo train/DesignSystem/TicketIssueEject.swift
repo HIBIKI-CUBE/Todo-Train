@@ -2,7 +2,8 @@
 //  TicketIssueEject.swift
 //  Todo train
 //
-//  Single-issue celebration on Hub — snappy (~550ms), overlaps sheet dismiss.
+//  Single-issue: ticket slides up from the screen bottom (sheet exit edge),
+//  90° CW and already printed, then uprights. No mid-air clip.
 //
 
 import SwiftUI
@@ -11,18 +12,38 @@ struct TicketIssueEjectEvent: Identifiable, Equatable {
     let id: UUID
     let title: String
     let minutes: Int
+    let tagNames: [String]
+    let issuedAt: Date
 
-    init(id: UUID = UUID(), title: String, minutes: Int) {
+    init(
+        id: UUID = UUID(),
+        title: String,
+        minutes: Int,
+        tagNames: [String] = [],
+        issuedAt: Date = .now
+    ) {
         self.id = id
         self.title = title
         self.minutes = minutes
+        self.tagNames = tagNames
+        self.issuedAt = issuedAt
     }
 
-    /// Full presentation budget (ms). Keep in sync with `TicketIssueEjectOverlay` phases.
-    static let presentationMilliseconds = 550
+    var ticketContent: MarsTicketContent {
+        MarsTicketContent(
+            title: title,
+            minutes: minutes,
+            tagNames: tagNames,
+            issuedAt: issuedAt
+        )
+    }
+
+    static var presentationMilliseconds: Int {
+        MarsTicketSpec.IssueMotion.presentationMilliseconds
+    }
 }
 
-/// Full-screen Hub celebration: light scrim + readable ticket, then short settle.
+/// Hub celebration: emerge from bottom edge → upright → hold → settle.
 struct TicketIssueEjectOverlay: View {
     let event: TicketIssueEjectEvent
     var onFinished: (() -> Void)?
@@ -30,197 +51,203 @@ struct TicketIssueEjectOverlay: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private enum Phase: Equatable {
+        /// Fully below the bottom edge.
         case idle
-        case held
+        /// Sliding up from the bottom, still 90° CW.
+        case ejecting
+        /// On-screen, still 90° CW.
+        case ejected
+        /// Landscape upright.
+        case upright
         case settling
         case gone
     }
 
     @State private var phase: Phase = .idle
+    /// 0 = below bottom edge, 1 = fully on screen (slot orientation).
+    @State private var ejectProgress: CGFloat = 0
     @State private var runID = UUID()
+    @State private var ejectHaptic = 0
+    @State private var landHaptic = 0
 
     var body: some View {
-        ZStack {
-            Color.black
-                .opacity(scrimOpacity)
-                .ignoresSafeArea()
+        GeometryReader { geo in
+            let ticketWidth = min(
+                geo.size.width - MarsTicketSpec.horizontalMargin * 2,
+                420
+            )
+            let ticketHeight = MarsTicketSpec.height(forWidth: ticketWidth)
+            // 90° CW → long edge vertical.
+            let verticalSpan = ticketWidth
+            let bottom = geo.size.height
+            // Resting place while still portrait-oriented (above the bottom edge).
+            let emergedCenterY = bottom - verticalSpan * 0.52 - geo.safeAreaInsets.bottom - 12
+            // Fully tucked under the bottom edge (sheet / machine mouth).
+            let hiddenCenterY = bottom + verticalSpan * 0.55 + 8
+            let uprightCenterY = geo.size.height * 0.42
+            let centerY = ticketCenterY(
+                hiddenCenterY: hiddenCenterY,
+                emergedCenterY: emergedCenterY,
+                uprightCenterY: uprightCenterY
+            )
 
-            ticketCard
-                .padding(.horizontal, TrainTheme.Space.lg)
-                .scaleEffect(cardScale)
-                .opacity(cardOpacity)
-                .offset(y: cardOffsetY)
+            ZStack {
+                Color.black
+                    .opacity(scrimOpacity)
+                    .ignoresSafeArea()
+
+                // Bottom-edge mouth only — never a floating mid-air lip.
+                if showsBottomMouth {
+                    Rectangle()
+                        .fill(Color.primary.opacity(0.22))
+                        .frame(height: 3)
+                        .frame(maxWidth: .infinity)
+                        .opacity(bottomMouthOpacity)
+                        .position(x: geo.size.width / 2, y: bottom - 1.5)
+                }
+
+                MarsTicketView(content: event.ticketContent, titleReveal: 1)
+                    .frame(width: ticketWidth, height: ticketHeight)
+                    .rotationEffect(.degrees(slotOriented ? 90 : 0))
+                    .position(x: geo.size.width / 2, y: centerY)
+                    .opacity(cardOpacity)
+                    // Clip to the screen: emerging from below reads as the sheet edge.
+                    .mask(alignment: .top) {
+                        Rectangle()
+                            .frame(width: geo.size.width, height: bottom)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    }
+            }
+            .frame(width: geo.size.width, height: geo.size.height)
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
+        .sensoryFeedback(.impact(weight: .medium, intensity: 1.0), trigger: ejectHaptic)
+        .sensoryFeedback(.impact(weight: .light, intensity: 0.7), trigger: landHaptic)
         .onAppear { startRun() }
         .onChange(of: event.id) { _, _ in startRun() }
     }
 
+    private var slotOriented: Bool {
+        switch phase {
+        case .idle, .ejecting, .ejected: true
+        case .upright, .settling, .gone: false
+        }
+    }
+
+    private var showsBottomMouth: Bool {
+        slotOriented
+    }
+
+    private var bottomMouthOpacity: Double {
+        switch phase {
+        case .idle: 0.15
+        case .ejecting: 0.45
+        case .ejected: 0.2
+        case .upright, .settling, .gone: 0
+        }
+    }
+
     private var scrimOpacity: Double {
         switch phase {
-        case .idle: 0
-        case .held: 0.28
-        case .settling: 0.12
+        case .idle: 0.06
+        case .ejecting, .ejected, .upright: 0.2
+        case .settling: 0.1
         case .gone: 0
         }
     }
 
     private var cardOpacity: Double {
         switch phase {
-        case .idle, .gone: 0
-        case .held: 1
-        case .settling: 0.5
+        case .gone: 0
+        case .settling: 0.55
+        case .idle, .ejecting, .ejected, .upright: 1
         }
     }
 
-    private var cardScale: CGFloat {
+    private func ticketCenterY(
+        hiddenCenterY: CGFloat,
+        emergedCenterY: CGFloat,
+        uprightCenterY: CGFloat
+    ) -> CGFloat {
         switch phase {
-        case .idle: 0.92
-        case .held: 1
-        case .settling: 0.96
-        case .gone: 0.94
+        case .idle:
+            hiddenCenterY
+        case .ejecting, .ejected:
+            hiddenCenterY + (emergedCenterY - hiddenCenterY) * ejectProgress
+        case .upright:
+            uprightCenterY
+        case .settling:
+            uprightCenterY + 16
+        case .gone:
+            uprightCenterY + 28
         }
-    }
-
-    private var cardOffsetY: CGFloat {
-        switch phase {
-        case .idle: 16
-        case .held: 0
-        case .settling: 36
-        case .gone: 52
-        }
-    }
-
-    private var ticketCard: some View {
-        IssuedTicketCard(title: event.title, minutes: event.minutes)
     }
 
     private func startRun() {
         let token = UUID()
         runID = token
         phase = .idle
+        ejectProgress = 0
 
         Task { @MainActor in
             if reduceMotion {
+                ejectProgress = 1
                 withAnimation(.easeOut(duration: 0.12)) {
-                    phase = .held
+                    phase = .upright
                 }
-                try? await Task.sleep(for: .milliseconds(200))
+                try? await Task.sleep(for: .milliseconds(1_800))
                 guard runID == token else { return }
-                withAnimation(.easeIn(duration: 0.12)) {
+                withAnimation(.easeIn(duration: 0.2)) {
                     phase = .gone
                 }
-                try? await Task.sleep(for: .milliseconds(120))
+                try? await Task.sleep(for: .milliseconds(200))
                 guard runID == token else { return }
                 onFinished?()
                 return
             }
 
-            // Bloom immediately — no idle wait (sheet dismiss runs in parallel).
-            withAnimation(TrainTheme.Motion.issueEject) {
-                phase = .held
+            ejectHaptic += 1
+            phase = .ejecting
+            withAnimation(MarsTicketSpec.IssueMotion.eject) {
+                ejectProgress = 1
             }
 
-            try? await Task.sleep(for: .milliseconds(320))
+            try? await Task.sleep(for: .milliseconds(MarsTicketSpec.IssueMotion.ejectMilliseconds))
+            guard runID == token else { return }
+            phase = .ejected
+
+            try? await Task.sleep(for: .milliseconds(90))
             guard runID == token else { return }
 
-            withAnimation(TrainTheme.Motion.issueEject) {
+            withAnimation(MarsTicketSpec.IssueMotion.upright) {
+                phase = .upright
+            }
+
+            try? await Task.sleep(
+                for: .milliseconds(
+                    MarsTicketSpec.IssueMotion.uprightMilliseconds
+                        + MarsTicketSpec.IssueMotion.readableHoldMilliseconds
+                )
+            )
+            guard runID == token else { return }
+
+            landHaptic += 1
+            withAnimation(MarsTicketSpec.IssueMotion.settle) {
                 phase = .settling
             }
 
-            try? await Task.sleep(for: .milliseconds(160))
+            try? await Task.sleep(for: .milliseconds(MarsTicketSpec.IssueMotion.settleMilliseconds))
             guard runID == token else { return }
 
             withAnimation(.easeIn(duration: 0.16)) {
                 phase = .gone
             }
 
-            try? await Task.sleep(for: .milliseconds(180))
+            try? await Task.sleep(for: .milliseconds(160))
             guard runID == token else { return }
             onFinished?()
         }
-    }
-}
-
-/// Paper-ticket motif used by the Hub celebration overlay.
-struct IssuedTicketCard: View {
-    let title: String
-    let minutes: Int
-
-    var body: some View {
-        HStack(spacing: 0) {
-            VStack(spacing: 8) {
-                Image(systemName: "tram.fill")
-                    .font(.title2.weight(.semibold))
-                Text("\(minutes)")
-                    .font(.system(size: 30, weight: .bold, design: .rounded))
-                    .monospacedDigit()
-                Text("分")
-                    .font(.caption.weight(.semibold))
-            }
-            .foregroundStyle(.white)
-            .frame(width: 76)
-            .padding(.vertical, 22)
-
-            ticketPerforation
-                .frame(width: 14)
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text("発券")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(TrainTheme.rail)
-                    .tracking(2)
-
-                Text(title)
-                    .font(.title2.weight(.semibold))
-                    .foregroundStyle(.primary)
-                    .lineLimit(3)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                Text("Todo train")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.horizontal, TrainTheme.Space.lg)
-            .padding(.vertical, 22)
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .background {
-            HStack(spacing: 0) {
-                TrainTheme.rail
-                    .frame(width: 76)
-                Color(uiColor: .systemBackground)
-                    .frame(width: 14)
-                Color(uiColor: .systemBackground)
-            }
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(TrainTheme.rail.opacity(0.45), lineWidth: 1.5)
-        )
-        .shadow(color: .black.opacity(0.28), radius: 24, y: 12)
-        .frame(maxWidth: 420)
-    }
-
-    private var ticketPerforation: some View {
-        VStack(spacing: 7) {
-            ForEach(0..<7, id: \.self) { _ in
-                Circle()
-                    .fill(TrainTheme.platform)
-                    .frame(width: 7, height: 7)
-            }
-        }
-        .padding(.vertical, 10)
-    }
-}
-
-#Preview("Ticket card") {
-    ZStack {
-        Color.black.opacity(0.28).ignoresSafeArea()
-        IssuedTicketCard(title: "週次レビューの下書き", minutes: 25)
-            .padding(.horizontal, TrainTheme.Space.lg)
     }
 }
 
@@ -228,7 +255,11 @@ struct IssuedTicketCard: View {
     ZStack {
         Color(uiColor: .systemGroupedBackground).ignoresSafeArea()
         TicketIssueEjectOverlay(
-            event: TicketIssueEjectEvent(title: "週次レビューの下書き", minutes: 25)
+            event: TicketIssueEjectEvent(
+                title: "週次レビューの下書き",
+                minutes: 25,
+                tagNames: ["仕事"]
+            )
         )
     }
 }

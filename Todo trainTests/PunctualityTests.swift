@@ -254,8 +254,9 @@ struct PunctualityTests {
         )
     }
 
-    @Test func presentation_isBriefNotAScoreScreen() {
-        #expect(PunctualityMoment.presentationMilliseconds <= 900)
+    @Test func presentation_serviceMomentIsBrief() {
+        // 定時運行 only — arrivals wait for swipe and do not use this budget.
+        #expect(PunctualityMoment.presentationMilliseconds <= 1_000)
         #expect(PunctualityMoment.presentationMilliseconds >= 650)
     }
 }

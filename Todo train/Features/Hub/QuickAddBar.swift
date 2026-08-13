@@ -386,7 +386,14 @@ struct QuickAddSheet: View {
             }
         } else {
             onSingleIssued?(
-                TicketIssueEjectEvent(title: issuedTitle, minutes: issuedMinutes)
+                TicketIssueEjectEvent(
+                    title: issuedTitle,
+                    minutes: issuedMinutes,
+                    tagNames: allTags
+                        .filter { selectedTagIDs.contains($0.id) }
+                        .sorted { $0.sortOrder < $1.sortOrder }
+                        .map(\.name)
+                )
             )
             dismiss()
         }

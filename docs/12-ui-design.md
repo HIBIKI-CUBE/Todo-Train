@@ -85,8 +85,66 @@ Undo があるので、[HIG Alerts](https://developer.apple.com/design/human-int
 - 発行は即コミット + 短時間 Undo。確認ダイアログなし
 - ゲージ: 指 X と塗りは分比例で一致。各停泊に sticky。**タイトル入力済みで発行するスクラブ中は detent を抑え**、祝祭はシート側の切符演出に一本化
 - 挿入: ゲージ長押し。任意分: 巨大数字の長押し
-- 発行フィードバック: **単発（デフォルト）**はコミット即 haptic＋Hub 切符（シート閉じと並列）。祝祭は短尺 ~0.55s（可読ホールド→着地）。**連続掃き出しトグル ON** は速度優先（selection haptic ＋ Undo のみ、切符演出なし）。Return / ゲージは同一経路
+- 発行フィードバック: **単発（デフォルト）**はコミット即 haptic＋Hub 上のマルス券排出（シート閉じと並列）。祝祭は読ませる尺（印字後 ~1.8s ホールド、合計 ~2.5–2.8s）。**連続掃き出しトグル ON** は速度優先（selection haptic ＋ Undo のみ、切符演出なし）。Return / ゲージは同一経路
 - 連続トグルはシート dismiss で OFF に戻る
+
+## 祝祭面の例外（発行 / 到着）
+
+Hub / Focus / 設定は上記の HIG 骨格のまま。**発行と到着の祝祭だけ**は列車モチーフを前面に出す。
+
+| 面 | 方針 |
+|----|------|
+| 発行（単発） | 未使用のマルス 8.5cm 乗車券。**画面下端（シートが閉じる辺）から** 90°CW でスライド排出 → 正立。空中クリップしない。印字済み。参照: [references/mars-joshaken.png](references/mars-joshaken.png) |
+| 到着 | 同じ未使用券が手元に出る。**自分で検札印をドンと押す**（破りはしない＝放棄に見えるため）。定時・早着は印色 / haptic のみ。超過でも核は同じ |
+| 定時運行 | 運行終了時のみ。小さな「定時運行」カプセル（~0.9s）。破るジェスチャは使わない |
+| やらない | 西洋ミシン目・16pt 角丸トースト・左色帯・`tram.fill`・鮭色エド券レイアウト・JR ロゴ地紋の複製・¥・偽駅名・コンフェッティ・点数 |
+
+実装: `MarsTicketSpec` / `MarsTicketView` / `TicketIssueEject` / `ArrivalInvalidateOverlay`。
+
+## モーション（意図的に少ない）
+
+1. **発車**: Focus 出現はシステムフルスクリーン。内部タイマーは 1 秒 tick のみ。
+2. **超過突入**: タイマー色を amber→red へ、軽いスケールパルス 1 回。全面ディムは使わず操作盤を超過 3 択に差し替え。
+3. **切符発行 / ゲージ**: 単発はコミット即マルス排出（シートから 90°CW → 正立、`MarsTicketSpec.IssueMotion` 固定 ms）＋シート閉じ並列。連続は褒め最小（haptic ＋ Undo）。発行時はゲージ detent と喧嘩させない。スクラブのみ（未入力）の停泊越えは impact＋`Motion.gaugeSnap`。
+4. **到着**: Focus 閉鎖後に `ArrivalInvalidateOverlay`。検札印ハンドルが券の上で誘い、ユーザーが押す／タップするまで待つ。破りは使わない。定時・早着は印 / haptic の味付け。超過でも取り下げない。点数・コンフェッティ・情報カードの OK 待ち・延着表示は禁止。
+5. **定時運行**: 運行終了直後の短いカプセルのみ。
+
+シート presentation はシステム detents。発行祝祭に celebration spring の使い回しはしない。
+
+ノイズになるパララックス・常時グローは禁止。
+
+## やらないこと
+
+- 紫グラデ / 汎用 SaaS ダーク / クリーム×テラコッタ×セリフ（**祝祭の水色マルス券紙は例外**）
+- カスタム FAB・Hub 上の半透明オーバーレイ・ボトムバー追加 UI（発券シート内の KB 直上親指帯・削除 Undo バナー・祝祭オーバーレイは可）
+- 絵文字アイコンの多用
+- コーチング吹き出し
+- ストリーク / XP / 定時率ゲージ / コンフェッティ
+- Web / Flutter 風の独自カードグリッドを「ブランド」にする行為
+- フルスワイプと Alert の二重確認、同一 View への `.alert` 重ね
+- 発行と到着を同じ「スクリム＋角丸トースト」に揃えること
+
+## 実装マップ
+
+| ファイル | 役割 |
+|----------|------|
+| `DesignSystem/TrainTheme.swift` | adaptive 色・余白・型・`Motion.gaugeSnap` 等 |
+| `DesignSystem/MarsTicketSpec.swift` | マルス券の比率・紙色・発行尺（固定。セマンティック色にしない） |
+| `DesignSystem/MarsTicketView.swift` | 未使用マルス券面（発行・到着待ちで共有） |
+| `DesignSystem/TrainChrome.swift` | Focus 純黒ダッシュボード・進捗バー・計器バンク・SignalBadge |
+| `DesignSystem/DeleteConfirmation.swift` | フルスワイプ削除 + Undo バナー |
+| `DesignSystem/EstimateSnapMapping.swift` | 見積もり分↔線形位置の純関数・sticky デテント |
+| `DesignSystem/EstimateSnapGauge.swift` | KB 直上の線形スナップ・ゲージ |
+| `DesignSystem/TicketIssueEject.swift` | 単発発行のマルス排出＋感熱＋読ませるホールド |
+| `DesignSystem/ArrivalInvalidateOverlay.swift` | 到着: スワイプで無効化（穴・印・裂け） |
+| `DesignSystem/PunctualityMomentOverlay.swift` | 定時運行の短いカプセル |
+| `Core/History/Punctuality.swift` | 帯域判定（当初見積もり）。スコアを持たない |
+| `TodoTrainWidget/FocusTimerPhase.swift` | App + Widget 共有の段階色ロジック |
+| `TodoTrainWidget/CockpitLayoutContract.swift` | Live Activity 公称サイズ契約・密度選択 |
+| `TodoTrainWidget/CockpitInstrumentViews.swift` | StandBy 2ペイン / LS ViewThatFits ダーク計器 |
+| `ContentView.swift` | TabView + Focus cover |
+| `Features/Hub/QuickAddBar.swift` | `QuickAddSheet`（親指発券帯） |
+| 各 Feature | 標準 List / Form |
 
 ## 横向き（iPhone compact height）
 
@@ -143,44 +201,3 @@ StandBy は全画面 API ではなく、提案された帯をシステムが拡�
 共有: `TodoTrainWidget/FocusTimerPhase.swift`, `CockpitLayoutContract.swift`, `CockpitInstrumentViews.swift`, `FocusPendingAction.swift`, `EndBellDelivery.swift`。
 
 詳細手順・段階ゲートは [11-v2-alarmkit-setup.md](11-v2-alarmkit-setup.md) §6。
-
-
-## モーション（意図的に少ない）
-
-1. **発車**: Focus 出現はシステムフルスクリーン。内部タイマーは 1 秒 tick のみ。
-2. **超過突入**: タイマー色を amber→red へ、軽いスケールパルス 1 回。全面ディムは使わず操作盤を超過 3 択に差し替え。
-3. **切符発行 / ゲージ**: 単発はコミット即祝祭（`Motion.issueEject` 短尺）＋シート閉じ並列。連続は褒め最小（haptic ＋ Undo）。発行時はゲージ detent と喧嘩させない。スクラブのみ（未入力）の停泊越えは impact＋`Motion.gaugeSnap`。
-4. **到着 / 定時運行**: Focus 閉鎖後（または運行終了直後）に短い駅案内（`Motion.onTimeArrival`、~0.8s）。**完了を先に祝う**。定時・早着はいい結果の見出し。超過でも取り下げない（超過だけ差分を出さない）。点数・コンフェッティ・タップ待ちモーダル・延着表示は禁止。
-
-シート presentation はシステム detents。過剰な spring は避ける。
-
-ノイズになるパララックス・常時グローは禁止。
-
-## やらないこと
-
-- 紫グラデ / 汎用 SaaS ダーク / クリーム×テラコッタ×セリフ
-- カスタム FAB・Hub 上の半透明オーバーレイ・ボトムバー追加 UI（発券シート内の KB 直上親指帯・削除 Undo バナーは可）
-- 絵文字アイコンの多用
-- コーチング吹き出し
-- ストリーク / XP / 定時率ゲージ / コンフェッティ
-- Web / Flutter 風の独自カードグリッドを「ブランド」にする行為
-- フルスワイプと Alert の二重確認、同一 View への `.alert` 重ね
-
-## 実装マップ
-
-| ファイル | 役割 |
-|----------|------|
-| `DesignSystem/TrainTheme.swift` | adaptive 色・余白・型・`Motion.issueEject` / `gaugeSnap` / `onTimeArrival` |
-| `DesignSystem/TrainChrome.swift` | Focus 純黒ダッシュボード・進捗バー・計器バンク・SignalBadge |
-| `DesignSystem/DeleteConfirmation.swift` | フルスワイプ削除 + Undo バナー |
-| `DesignSystem/EstimateSnapMapping.swift` | 見積もり分↔線形位置の純関数・sticky デテント |
-| `DesignSystem/EstimateSnapGauge.swift` | KB 直上の線形スナップ・ゲージ |
-| `DesignSystem/TicketIssueEject.swift` | 単発発行の Hub 切符着地 |
-| `DesignSystem/PunctualityMomentOverlay.swift` | 到着 / 定時到着 / 早着 / 定時運行の短い案内 |
-| `Core/History/Punctuality.swift` | 帯域判定（当初見積もり）。スコアを持たない |
-| `TodoTrainWidget/FocusTimerPhase.swift` | App + Widget 共有の段階色ロジック |
-| `TodoTrainWidget/CockpitLayoutContract.swift` | Live Activity 公称サイズ契約・密度選択 |
-| `TodoTrainWidget/CockpitInstrumentViews.swift` | StandBy 2ペイン / LS ViewThatFits ダーク計器 |
-| `ContentView.swift` | TabView + Focus cover |
-| `Features/Hub/QuickAddBar.swift` | `QuickAddSheet`（親指発券帯） |
-| 各 Feature | 標準 List / Form |

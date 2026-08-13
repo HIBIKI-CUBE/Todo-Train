@@ -84,12 +84,12 @@ enum TrainTheme {
         static let spring = Animation.spring(response: 0.38, dampingFraction: 0.82)
         static let soft = Animation.easeInOut(duration: 0.28)
         static let pulse = Animation.easeInOut(duration: 0.55).repeatCount(2, autoreverses: true)
-        /// Issued ticket bloom (snappy micro-interaction; keep under ~0.3s perceptual).
-        static let issueEject = Animation.spring(response: 0.24, dampingFraction: 0.86)
+        /// Issued ticket eject uses fixed easeOut ms in MarsTicketSpec.IssueMotion (not this spring).
+        static let issueEject = Animation.easeOut(duration: 0.28)
         /// Gauge settle / detent escape (“ビュン”).
         static let gaugeSnap = Animation.spring(response: 0.22, dampingFraction: 0.62)
-        /// 定時到着 / 定時運行の短い案内。発券より少し長く、点数画面にはしない。
-        static let onTimeArrival = Animation.spring(response: 0.32, dampingFraction: 0.86)
+        /// 定時運行 capsule only. Arrivals use ArrivalInvalidateOverlay.
+        static let onTimeArrival = Animation.easeOut(duration: 0.22)
     }
 
     // MARK: - Type

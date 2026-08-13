@@ -809,7 +809,7 @@ struct SessionManagerTests {
         try manager.arrive()
 
         let moment = try #require(manager.punctualityMoment)
-        #expect(manager.punctualityHapticTick == 1)
+        #expect(manager.punctualityHapticTick == 0)
         #expect(
             moment.kind == .arrival(
                 title: ticket.title,
@@ -830,7 +830,7 @@ struct SessionManagerTests {
         try manager.arrive()
 
         let moment = try #require(manager.punctualityMoment)
-        #expect(manager.punctualityHapticTick == 1)
+        #expect(manager.punctualityHapticTick == 0)
         #expect(
             moment.kind == .arrival(
                 title: ticket.title,
@@ -875,7 +875,7 @@ struct SessionManagerTests {
         try manager.endService()
         let moment = try #require(manager.punctualityMoment)
         #expect(moment.kind == .onTimeService)
-        #expect(manager.punctualityHapticTick == 2)
+        #expect(manager.punctualityHapticTick == 1)
     }
 
     @Test func endService_withoutArrivals_doesNotEnqueueServiceMoment() throws {
@@ -923,13 +923,14 @@ struct SessionManagerTests {
         try manager.board(ticket: ticket)
         clock.advance(by: 560)
         try manager.arrive()
-        #expect(manager.punctualityHapticTick == 1)
+        // Arrival joy is gesture-owned; enqueue must not fire success haptic.
+        #expect(manager.punctualityHapticTick == 0)
 
         manager.consumePunctualityMoment()
         #expect(manager.punctualityMoment == nil)
-        #expect(manager.punctualityHapticTick == 1)
+        #expect(manager.punctualityHapticTick == 0)
         manager.consumePunctualityMoment()
-        #expect(manager.punctualityHapticTick == 1)
+        #expect(manager.punctualityHapticTick == 0)
     }
 
     @Test func arriveThenEndService_queuesArrivalThenService() throws {

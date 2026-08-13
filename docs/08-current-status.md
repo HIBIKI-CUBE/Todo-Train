@@ -1,13 +1,15 @@
 # 08 — 現状ステータス
 
-最終更新: 2026-08-13（定時到着 / 定時運行の短い案内）
+最終更新: 2026-08-13（発行＝マルス券排出 / 到着＝スワイプ無効化）
 
 ## 結論
 
 **MVP（Sprint 1–10）・v1・v2（AlarmKit / UI polish）は `develop` にマージ済み。**  
 未着手は **CloudKit（WP-I）** のみ。実装マップと検証手順は本ファイルと [11-v2-alarmkit-setup.md](11-v2-alarmkit-setup.md) / [12-ui-design.md](12-ui-design.md) を参照。
 
-定時の喜びは **エフェメラな駅案内**（`Punctuality`）。まず到着を祝う。ストリークや定時率は出さない。超過で案内は取り下げない。
+定時の喜びは **エフェメラ**。到着は完了ジェスチャ（切符の無効化）で祝う。ストリークや定時率は出さない。超過で案内は取り下げない。
+
+発行の単発祝祭はマルス 8.5cm 未使用券（[references/](references/)）。到着は同じ券面をスワイプで使用済みにする（`ArrivalInvalidateOverlay`）。
 
 ### v1 進捗
 
@@ -48,7 +50,8 @@ Todo train/
     Coaching/              CoachingEngine
   DesignSystem/            TrainTheme, TrainChrome, TrainLayout, EstimateChips,
                            DeleteConfirmation, EstimateSnapMapping, EstimateSnapGauge,
-                           TicketIssueEject, PunctualityMomentOverlay
+                           TicketIssueEject, ArrivalInvalidateOverlay, PunctualityMomentOverlay,
+                           MarsTicketSpec, MarsTicketView
   Features/
     Hub/                   HubView, QuickAddBar（親指発券帯）, ServiceSummaryBar
     Focus/                 FocusView, FocusControlsView, OvertimeSheet

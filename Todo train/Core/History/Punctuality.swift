@@ -41,7 +41,8 @@ struct PunctualityMoment: Identifiable, Equatable, Sendable {
     }
 
     /// Readable but not a sit-and-wait celebration. Keep in sync with overlay phases.
-    static let presentationMilliseconds = 800
+    /// Used by 定時運行 capsule only; arrivals use ArrivalInvalidateOverlay (gesture).
+    static let presentationMilliseconds = 900
 }
 
 enum Punctuality {
