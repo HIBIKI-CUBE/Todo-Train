@@ -33,7 +33,7 @@ struct QuickAddSheet: View {
     @State private var showCustomEstimate = false
     @State private var undoPayload: UndoPayload?
     @State private var didSeedEstimate = false
-    @FocusState private var titleFocused: Bool
+    @State private var titleFocusNonce = 0
 
     private struct UndoPayload: Equatable {
         let ticketID: UUID
@@ -124,9 +124,7 @@ struct QuickAddSheet: View {
                     pendingMinutes = highlightedEstimateMinutes
                     didSeedEstimate = true
                 }
-                DispatchQueue.main.async {
-                    titleFocused = true
-                }
+                titleFocusNonce += 1
             }
             .animation(TrainTheme.Motion.soft, value: undoPayload)
             .animation(TrainTheme.Motion.soft, value: continuousDump)
@@ -140,17 +138,19 @@ struct QuickAddSheet: View {
     // MARK: - Zones
 
     private var titleZone: some View {
-        TextField("何をする？", text: $title)
-            .font(.title2.weight(.semibold))
-            .focused($titleFocused)
-            .submitLabel(.go)
-            .onSubmit { submitFromReturn() }
-            .padding(.horizontal, TrainTheme.Space.md)
-            .padding(.vertical, TrainTheme.Space.lg)
-            .background(
-                RoundedRectangle(cornerRadius: TrainTheme.Radius.control, style: .continuous)
-                    .fill(TrainTheme.surface)
-            )
+        ComposingTextField(
+            text: $title,
+            placeholder: "何をする？",
+            focusNonce: titleFocusNonce,
+            onSubmit: submitFromReturn
+        )
+        .fixedSize(horizontal: false, vertical: true)
+        .padding(.horizontal, TrainTheme.Space.md)
+        .padding(.vertical, TrainTheme.Space.lg)
+        .background(
+            RoundedRectangle(cornerRadius: TrainTheme.Radius.control, style: .continuous)
+                .fill(TrainTheme.surface)
+        )
     }
 
     private func undoBar(_ payload: UndoPayload) -> some View {
@@ -299,7 +299,7 @@ struct QuickAddSheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("完了") {
                         showCustomEstimate = false
-                        titleFocused = true
+                        titleFocusNonce += 1
                     }
                     .fontWeight(.semibold)
                 }
@@ -319,7 +319,7 @@ struct QuickAddSheet: View {
 
     private func commitFromGauge() {
         guard canAdd else {
-            titleFocused = true
+            titleFocusNonce += 1
             return
         }
         commitIssue()
@@ -381,9 +381,7 @@ struct QuickAddSheet: View {
             scheduleUndoExpiry(for: ticket.id)
             softHapticPulse += 1
             title = ""
-            DispatchQueue.main.async {
-                titleFocused = true
-            }
+            titleFocusNonce += 1
         } else {
             onSingleIssued?(
                 TicketIssueEjectEvent(
@@ -418,7 +416,7 @@ struct QuickAddSheet: View {
         title = payload.title
         pendingMinutes = payload.minutes
         undoPayload = nil
-        titleFocused = true
+        titleFocusNonce += 1
     }
 }
 
