@@ -1,11 +1,13 @@
 # 08 — 現状ステータス
 
-最終更新: 2026-08-12（親指発券帯 Quick Add + 削除 Undo）
+最終更新: 2026-08-13（定時到着 / 定時運行の短い案内）
 
 ## 結論
 
 **MVP（Sprint 1–10）・v1・v2（AlarmKit / UI polish）は `develop` にマージ済み。**  
 未着手は **CloudKit（WP-I）** のみ。実装マップと検証手順は本ファイルと [11-v2-alarmkit-setup.md](11-v2-alarmkit-setup.md) / [12-ui-design.md](12-ui-design.md) を参照。
+
+定時の喜びは **エフェメラな駅案内**（`Punctuality`）。まず到着を祝う。ストリークや定時率は出さない。超過で案内は取り下げない。
 
 ### v1 進捗
 
@@ -30,6 +32,7 @@
 | 週次レポート | ✅ `WeeklyReportView` + 純関数テスト |
 | UI polish | ✅ `TrainTheme` / `TrainChrome` / 横向き compact（[12](12-ui-design.md)） |
 | 切符・履歴の削除 | ✅ フルスワイプ + バナー Undo（[12](12-ui-design.md)） |
+| 定時到着 / 定時運行 | ✅ 到着は完了として案内。定時・早着はいい結果の見出し。超過でも取り下げない |
 
 ## ディレクトリ（実装の地図）
 
@@ -40,11 +43,12 @@ Todo train/
     Session/               SessionManager, TicketDeletion, DeletionUndo
     Alarms/                AlarmScheduling, EndBellDelivery, SessionEndSchedule
     Notifications/         OvertimeNotifier
-    History/               HistorySearch, TicketReissue, WeeklyReport
+    History/               HistorySearch, TicketReissue, WeeklyReport, Punctuality
     Settings/              AppSettings
     Coaching/              CoachingEngine
   DesignSystem/            TrainTheme, TrainChrome, TrainLayout, EstimateChips,
-                           DeleteConfirmation, EstimateSnapMapping, EstimateSnapGauge
+                           DeleteConfirmation, EstimateSnapMapping, EstimateSnapGauge,
+                           TicketIssueEject, PunctualityMomentOverlay
   Features/
     Hub/                   HubView, QuickAddBar（親指発券帯）, ServiceSummaryBar
     Focus/                 FocusView, FocusControlsView, OvertimeSheet
@@ -54,16 +58,16 @@ Todo train/
     Reorder/               ReorderView
     Settings/              SettingsView
 TodoTrainWidget/           Home Widget + Session LA + Alarm LA
-Todo trainTests/           25 ファイル（Swift Testing）
+Todo trainTests/           26 ファイル（Swift Testing）
 ```
 
 ## 動作するユーザーフロー
 
 1. 運行開始 → ツールバー `＋` で親指発券帯（Return / スナップ・ゲージで掃き出し）
-2. 発車 → Focus（停車 / 到着 / 延長 / 超過）
+2. 発車 → Focus（停車 / 到着 / 延長 / 超過）。到着したら短い案内。定時なら定時到着、早着なら早着
 3. 停車上限 → 解決シート / 途中下車キャンバス / 臨時停車
-4. 履歴で振り返り・乗り継ぎリンク・今日に追加
-5. 運行終了 → 停車中の持ち越し禁止 / 途中下車 / 放棄
+4. 履歴で振り返り・乗り継ぎリンク・今日に追加（定時はバッジのみ）
+5. 運行終了 → 停車中の持ち越し禁止 / 途中下車 / 放棄。遅延がなければ短い「定時運行」（早着可）
 6. 終了ベル ON → AlarmKit LA（StandBy）/ OFF → Session LA
 
 ## 既知のギャップ（意図的）

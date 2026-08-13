@@ -145,11 +145,12 @@ StandBy は全画面 API ではなく、提案された帯をシステムが拡�
 詳細手順・段階ゲートは [11-v2-alarmkit-setup.md](11-v2-alarmkit-setup.md) §6。
 
 
-## モーション（意図的に 2–3）
+## モーション（意図的に少ない）
 
 1. **発車**: Focus 出現はシステムフルスクリーン。内部タイマーは 1 秒 tick のみ。
 2. **超過突入**: タイマー色を amber→red へ、軽いスケールパルス 1 回。全面ディムは使わず操作盤を超過 3 択に差し替え。
 3. **切符発行 / ゲージ**: 単発はコミット即祝祭（`Motion.issueEject` 短尺）＋シート閉じ並列。連続は褒め最小（haptic ＋ Undo）。発行時はゲージ detent と喧嘩させない。スクラブのみ（未入力）の停泊越えは impact＋`Motion.gaugeSnap`。
+4. **到着 / 定時運行**: Focus 閉鎖後（または運行終了直後）に短い駅案内（`Motion.onTimeArrival`、~0.8s）。**完了を先に祝う**。定時・早着はいい結果の見出し。超過でも取り下げない（超過だけ差分を出さない）。点数・コンフェッティ・タップ待ちモーダル・延着表示は禁止。
 
 シート presentation はシステム detents。過剰な spring は避ける。
 
@@ -161,6 +162,7 @@ StandBy は全画面 API ではなく、提案された帯をシステムが拡�
 - カスタム FAB・Hub 上の半透明オーバーレイ・ボトムバー追加 UI（発券シート内の KB 直上親指帯・削除 Undo バナーは可）
 - 絵文字アイコンの多用
 - コーチング吹き出し
+- ストリーク / XP / 定時率ゲージ / コンフェッティ
 - Web / Flutter 風の独自カードグリッドを「ブランド」にする行為
 - フルスワイプと Alert の二重確認、同一 View への `.alert` 重ね
 
@@ -168,12 +170,14 @@ StandBy は全画面 API ではなく、提案された帯をシステムが拡�
 
 | ファイル | 役割 |
 |----------|------|
-| `DesignSystem/TrainTheme.swift` | adaptive 色・余白・型・`Motion.issueEject` / `gaugeSnap` |
+| `DesignSystem/TrainTheme.swift` | adaptive 色・余白・型・`Motion.issueEject` / `gaugeSnap` / `onTimeArrival` |
 | `DesignSystem/TrainChrome.swift` | Focus 純黒ダッシュボード・進捗バー・計器バンク・SignalBadge |
 | `DesignSystem/DeleteConfirmation.swift` | フルスワイプ削除 + Undo バナー |
 | `DesignSystem/EstimateSnapMapping.swift` | 見積もり分↔線形位置の純関数・sticky デテント |
 | `DesignSystem/EstimateSnapGauge.swift` | KB 直上の線形スナップ・ゲージ |
 | `DesignSystem/TicketIssueEject.swift` | 単発発行の Hub 切符着地 |
+| `DesignSystem/PunctualityMomentOverlay.swift` | 到着 / 定時到着 / 早着 / 定時運行の短い案内 |
+| `Core/History/Punctuality.swift` | 帯域判定（当初見積もり）。スコアを持たない |
 | `TodoTrainWidget/FocusTimerPhase.swift` | App + Widget 共有の段階色ロジック |
 | `TodoTrainWidget/CockpitLayoutContract.swift` | Live Activity 公称サイズ契約・密度選択 |
 | `TodoTrainWidget/CockpitInstrumentViews.swift` | StandBy 2ペイン / LS ViewThatFits ダーク計器 |

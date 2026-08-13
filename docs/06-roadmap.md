@@ -8,6 +8,7 @@
 | **v0.5** | （臨時停車 UI 等） | MVP に吸収済み |
 | **v1** | Settings、履歴検索・今日に追加、並べ替えビュー、dueDate、カスタム見積、LA、Widget、AI stub | **完了**（CloudKit を除く） |
 | **v2** | AlarmKit + StandBy、週次レポート、UI polish、横向き compact | **完了**（iPad 等は未着手） |
+| **定時** | 定時到着 / 定時運行の短い案内（非通貨） | **完了** |
 | **次** | CloudKit 同期 | 未着手 |
 
 ## MVP（完了チェック）

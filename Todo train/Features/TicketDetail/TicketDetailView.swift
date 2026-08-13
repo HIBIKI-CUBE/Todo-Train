@@ -227,7 +227,7 @@ struct TicketDetailView: View {
     @ViewBuilder
     private func sessionRow(_ session: WorkSession) -> some View {
         let row = HStack {
-            Text(HistoryStats.outcomeLabel(session.outcome))
+            Text(Punctuality.displayLabel(for: session))
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
                 .frame(width: 56, alignment: .leading)
