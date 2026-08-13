@@ -3,7 +3,7 @@
 //  Todo train
 //
 //  Single-issue: ticket slides up from the screen bottom (sheet exit edge),
-//  90° CW and already printed, then uprights. No mid-air clip.
+//  90° CW and already printed, then uprights. Swipe down dismisses early.
 //
 
 import SwiftUI
@@ -44,6 +44,7 @@ struct TicketIssueEjectEvent: Identifiable, Equatable {
 }
 
 /// Hub celebration: emerge from bottom edge → upright → hold → settle.
+/// Downward swipe dismisses early (same path as settle).
 struct TicketIssueEjectOverlay: View {
     let event: TicketIssueEjectEvent
     var onFinished: (() -> Void)?
@@ -66,9 +67,19 @@ struct TicketIssueEjectOverlay: View {
     @State private var phase: Phase = .idle
     /// 0 = below bottom edge, 1 = fully on screen (slot orientation).
     @State private var ejectProgress: CGFloat = 0
+    /// Interactive dismiss drag (down positive).
+    @State private var dragY: CGFloat = 0
     @State private var runID = UUID()
     @State private var ejectHaptic = 0
     @State private var landHaptic = 0
+    @State private var finishing = false
+
+    private var canDismissInteractively: Bool {
+        switch phase {
+        case .ejected, .upright: true
+        case .idle, .ejecting, .settling, .gone: false
+        }
+    }
 
     var body: some View {
         GeometryReader { geo in
@@ -89,11 +100,11 @@ struct TicketIssueEjectOverlay: View {
                 hiddenCenterY: hiddenCenterY,
                 emergedCenterY: emergedCenterY,
                 uprightCenterY: uprightCenterY
-            )
+            ) + dragY
 
             ZStack {
                 Color.black
-                    .opacity(scrimOpacity)
+                    .opacity(scrimOpacity * Double(max(0, 1 - dragY / 220)))
                     .ignoresSafeArea()
 
                 // Bottom-edge mouth only — never a floating mid-air lip.
@@ -119,13 +130,39 @@ struct TicketIssueEjectOverlay: View {
                     }
             }
             .frame(width: geo.size.width, height: geo.size.height)
+            .contentShape(Rectangle())
+            .gesture(dismissGesture)
         }
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("発券。\(event.title)。\(event.minutes)分")
+        .accessibilityHint("下にスワイプではけます")
+        .accessibilityAction(.escape) {
+            dismissEarly()
+        }
         .sensoryFeedback(.impact(weight: .medium, intensity: 1.0), trigger: ejectHaptic)
         .sensoryFeedback(.impact(weight: .light, intensity: 0.7), trigger: landHaptic)
         .onAppear { startRun() }
         .onChange(of: event.id) { _, _ in startRun() }
+    }
+
+    private var dismissGesture: some Gesture {
+        DragGesture(minimumDistance: 8)
+            .onChanged { value in
+                guard canDismissInteractively, !finishing else { return }
+                dragY = max(0, value.translation.height)
+            }
+            .onEnded { value in
+                guard canDismissInteractively, !finishing else { return }
+                let dy = max(0, value.translation.height)
+                let predicted = max(dy, value.predictedEndTranslation.height)
+                if predicted > 90 || dy > 70 {
+                    dismissEarly()
+                } else {
+                    withAnimation(MarsTicketSpec.IssueMotion.upright) {
+                        dragY = 0
+                    }
+                }
+            }
     }
 
     private var slotOriented: Bool {
@@ -178,9 +215,30 @@ struct TicketIssueEjectOverlay: View {
         case .upright:
             uprightCenterY
         case .settling:
-            uprightCenterY + 16
+            uprightCenterY + 16 + max(0, dragY)
         case .gone:
-            uprightCenterY + 28
+            uprightCenterY + 28 + max(0, dragY)
+        }
+    }
+
+    private func dismissEarly() {
+        guard !finishing else { return }
+        finishing = true
+        // Invalidate the auto-hold Task.
+        runID = UUID()
+        landHaptic += 1
+        withAnimation(MarsTicketSpec.IssueMotion.settle) {
+            phase = .settling
+            dragY = max(dragY, 24)
+        }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(MarsTicketSpec.IssueMotion.settleMilliseconds))
+            withAnimation(.easeIn(duration: 0.16)) {
+                phase = .gone
+                dragY += 40
+            }
+            try? await Task.sleep(for: .milliseconds(160))
+            onFinished?()
         }
     }
 
@@ -189,6 +247,8 @@ struct TicketIssueEjectOverlay: View {
         runID = token
         phase = .idle
         ejectProgress = 0
+        dragY = 0
+        finishing = false
 
         Task { @MainActor in
             if reduceMotion {
@@ -197,13 +257,8 @@ struct TicketIssueEjectOverlay: View {
                     phase = .upright
                 }
                 try? await Task.sleep(for: .milliseconds(1_800))
-                guard runID == token else { return }
-                withAnimation(.easeIn(duration: 0.2)) {
-                    phase = .gone
-                }
-                try? await Task.sleep(for: .milliseconds(200))
-                guard runID == token else { return }
-                onFinished?()
+                guard runID == token, !finishing else { return }
+                finishAutomatically(token: token)
                 return
             }
 
@@ -214,11 +269,11 @@ struct TicketIssueEjectOverlay: View {
             }
 
             try? await Task.sleep(for: .milliseconds(MarsTicketSpec.IssueMotion.ejectMilliseconds))
-            guard runID == token else { return }
+            guard runID == token, !finishing else { return }
             phase = .ejected
 
             try? await Task.sleep(for: .milliseconds(90))
-            guard runID == token else { return }
+            guard runID == token, !finishing else { return }
 
             withAnimation(MarsTicketSpec.IssueMotion.upright) {
                 phase = .upright
@@ -230,20 +285,25 @@ struct TicketIssueEjectOverlay: View {
                         + MarsTicketSpec.IssueMotion.readableHoldMilliseconds
                 )
             )
-            guard runID == token else { return }
+            guard runID == token, !finishing else { return }
+            finishAutomatically(token: token)
+        }
+    }
 
-            landHaptic += 1
-            withAnimation(MarsTicketSpec.IssueMotion.settle) {
-                phase = .settling
-            }
+    private func finishAutomatically(token: UUID) {
+        guard runID == token, !finishing else { return }
+        finishing = true
+        landHaptic += 1
+        withAnimation(MarsTicketSpec.IssueMotion.settle) {
+            phase = .settling
+        }
 
+        Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(MarsTicketSpec.IssueMotion.settleMilliseconds))
             guard runID == token else { return }
-
             withAnimation(.easeIn(duration: 0.16)) {
                 phase = .gone
             }
-
             try? await Task.sleep(for: .milliseconds(160))
             guard runID == token else { return }
             onFinished?()
