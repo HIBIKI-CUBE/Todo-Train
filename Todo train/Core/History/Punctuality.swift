@@ -11,7 +11,7 @@ import Foundation
 enum ArrivalPunctuality: Equatable, Sendable {
     /// Within the on-time band of the original estimate.
     case onTime
-    /// Finished too far ahead of the original estimate.
+    /// Finished ahead of the original estimate — a good result, not a miss.
     case early
     /// Overtime, or elapsed past the original estimate.
     case late
@@ -22,12 +22,12 @@ enum ArrivalPunctuality: Equatable, Sendable {
 /// Ephemeral joy — not a score. Played once, then discarded.
 struct PunctualityMoment: Identifiable, Equatable, Sendable {
     enum Kind: Equatable, Sendable {
-        /// Any 到着. `isOnTime` only flavors copy; overtime still gets praised.
+        /// Any 到着. Punctuality only flavors copy; overtime still gets praised.
         case arrival(
             title: String,
             estimateSeconds: Int,
             actualSeconds: TimeInterval,
-            isOnTime: Bool
+            punctuality: ArrivalPunctuality
         )
         case onTimeService
     }
@@ -58,7 +58,7 @@ enum Punctuality {
     }
 
     /// Classify against the **original** estimate, not the extended budget.
-    /// Used only to flavor copy (定時到着). Completion is praised regardless.
+    /// Flavors copy (定時到着 / 早着). Completion is praised regardless.
     static func classify(
         outcome: SessionOutcome?,
         elapsedSeconds: TimeInterval,
@@ -89,37 +89,54 @@ enum Punctuality {
         )
     }
 
-    /// A service is on-time only when it had at least one arrival and every arrival was on-time.
-    /// Empty days and 早着-only days do not qualify (nothing to farm by skipping work).
+    /// On or ahead of the published timetable (not delayed).
+    static func isAheadOfSchedule(_ punctuality: ArrivalPunctuality) -> Bool {
+        switch punctuality {
+        case .onTime, .early: true
+        case .late, .notApplicable: false
+        }
+    }
+
+    /// A service is on-time when it had at least one arrival and none were late.
+    /// 早着 counts — finishing ahead is good. Empty days do not qualify.
     static func isOnTimeService(arrivedSessions: [WorkSession]) -> Bool {
         let arrived = arrivedSessions.filter { $0.outcome == .arrived }
         guard !arrived.isEmpty else { return false }
-        return arrived.allSatisfy { classify($0) == .onTime }
+        return arrived.allSatisfy { isAheadOfSchedule(classify($0)) }
     }
 
     static func displayLabel(for session: WorkSession) -> String {
-        if classify(session) == .onTime {
-            return "定時"
+        switch classify(session) {
+        case .onTime: "定時"
+        case .early: "早着"
+        default: HistoryStats.outcomeLabel(session.outcome)
         }
-        return HistoryStats.outcomeLabel(session.outcome)
     }
 
     static func shouldCelebrateArrival(outcome: SessionOutcome?) -> Bool {
         outcome == .arrived
     }
 
-    static func arrivalHeadline(isOnTime: Bool) -> String {
-        isOnTime ? "定時到着" : "到着"
+    static func arrivalHeadline(_ punctuality: ArrivalPunctuality) -> String {
+        switch punctuality {
+        case .onTime: "定時到着"
+        case .early: "早着"
+        case .late, .notApplicable: "到着"
+        }
     }
 
-    /// Match line only when 定時. Overtime/early celebrations omit the gap so completion stays first.
+    /// 定時・早着は見積/実績を出す（いい結果）。超過は差を突き付けない。
     static func arrivalCaption(
-        isOnTime: Bool,
+        punctuality: ArrivalPunctuality,
         estimateSeconds: Int,
         actualSeconds: TimeInterval
     ) -> String? {
-        guard isOnTime else { return nil }
-        return durationCaption(estimateSeconds: estimateSeconds, actualSeconds: actualSeconds)
+        switch punctuality {
+        case .onTime, .early:
+            durationCaption(estimateSeconds: estimateSeconds, actualSeconds: actualSeconds)
+        case .late, .notApplicable:
+            nil
+        }
     }
 
     static func durationCaption(estimateSeconds: Int, actualSeconds: TimeInterval) -> String {

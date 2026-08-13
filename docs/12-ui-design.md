@@ -150,7 +150,7 @@ StandBy は全画面 API ではなく、提案された帯をシステムが拡�
 1. **発車**: Focus 出現はシステムフルスクリーン。内部タイマーは 1 秒 tick のみ。
 2. **超過突入**: タイマー色を amber→red へ、軽いスケールパルス 1 回。全面ディムは使わず操作盤を超過 3 択に差し替え。
 3. **切符発行 / ゲージ**: 単発はコミット即祝祭（`Motion.issueEject` 短尺）＋シート閉じ並列。連続は褒め最小（haptic ＋ Undo）。発行時はゲージ detent と喧嘩させない。スクラブのみ（未入力）の停泊越えは impact＋`Motion.gaugeSnap`。
-4. **到着 / 定時運行**: Focus 閉鎖後（または運行終了直後）に短い駅案内（`Motion.onTimeArrival`、~0.8s）。**完了を先に祝う**。定時は見出し味付け。超過でも取り下げない。点数・コンフェッティ・タップ待ちモーダル・延着表示は禁止。
+4. **到着 / 定時運行**: Focus 閉鎖後（または運行終了直後）に短い駅案内（`Motion.onTimeArrival`、~0.8s）。**完了を先に祝う**。定時・早着はいい結果の見出し。超過でも取り下げない（超過だけ差分を出さない）。点数・コンフェッティ・タップ待ちモーダル・延着表示は禁止。
 
 シート presentation はシステム detents。過剰な spring は避ける。
 
@@ -176,7 +176,7 @@ StandBy は全画面 API ではなく、提案された帯をシステムが拡�
 | `DesignSystem/EstimateSnapMapping.swift` | 見積もり分↔線形位置の純関数・sticky デテント |
 | `DesignSystem/EstimateSnapGauge.swift` | KB 直上の線形スナップ・ゲージ |
 | `DesignSystem/TicketIssueEject.swift` | 単発発行の Hub 切符着地 |
-| `DesignSystem/PunctualityMomentOverlay.swift` | 定時到着 / 定時運行の短い案内 |
+| `DesignSystem/PunctualityMomentOverlay.swift` | 到着 / 定時到着 / 早着 / 定時運行の短い案内 |
 | `Core/History/Punctuality.swift` | 帯域判定（当初見積もり）。スコアを持たない |
 | `TodoTrainWidget/FocusTimerPhase.swift` | App + Widget 共有の段階色ロジック |
 | `TodoTrainWidget/CockpitLayoutContract.swift` | Live Activity 公称サイズ契約・密度選択 |

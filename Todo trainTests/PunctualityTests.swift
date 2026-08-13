@@ -43,8 +43,7 @@ struct PunctualityTests {
         )
     }
 
-    @Test func classify_early_isNotOnTime() {
-        // Immediate tap / padded estimate → 早着. Still an 到着 to celebrate, just not 定時.
+    @Test func classify_early_isAheadOfSchedule() {
         #expect(
             Punctuality.classify(
                 outcome: .arrived,
@@ -53,14 +52,8 @@ struct PunctualityTests {
                 overtimeResolution: nil
             ) == .early
         )
-        #expect(
-            Punctuality.classify(
-                outcome: .arrived,
-                elapsedSeconds: 1_200,
-                estimateSeconds: 1_800,
-                overtimeResolution: nil
-            ) == .early
-        )
+        #expect(Punctuality.isAheadOfSchedule(.early))
+        #expect(Punctuality.arrivalHeadline(.early) == "早着")
     }
 
     @Test func classify_late_whenOvertimeOrPastEstimate() {
@@ -121,7 +114,7 @@ struct PunctualityTests {
         )
     }
 
-    @Test func isOnTimeService_requiresEveryArrivalOnTime() throws {
+    @Test func isOnTimeService_allowsEarlyAndRejectsLate() throws {
         let container = try AppModelContainer.make(inMemory: true)
         let context = ModelContext(container)
         let ticket = Ticket(title: "T", estimatedSeconds: 600)
@@ -141,8 +134,18 @@ struct PunctualityTests {
         early.accumulatedActiveSeconds = 60
         context.insert(early)
 
-        #expect(!Punctuality.isOnTimeService(arrivedSessions: [onTime, early]))
+        #expect(Punctuality.isOnTimeService(arrivedSessions: [onTime, early]))
+        #expect(Punctuality.isOnTimeService(arrivedSessions: [early]))
         #expect(!Punctuality.isOnTimeService(arrivedSessions: []))
+
+        let late = WorkSession(startedAt: .now, estimatedSecondsAtStart: 600, ticket: ticket)
+        late.endedAt = .now
+        late.outcome = .arrived
+        late.accumulatedActiveSeconds = 900
+        late.overtimeResolution = .justFinished
+        context.insert(late)
+
+        #expect(!Punctuality.isOnTimeService(arrivedSessions: [onTime, late]))
     }
 
     @Test func isOnTimeService_ignoresNonArrivals() throws {
@@ -182,7 +185,7 @@ struct PunctualityTests {
         #expect(Punctuality.displayLabel(for: session) == "定時")
     }
 
-    @Test func displayLabel_earlyArrivalStaysArrived() throws {
+    @Test func displayLabel_earlyArrivalIsHayachaku() throws {
         let container = try AppModelContainer.make(inMemory: true)
         let context = ModelContext(container)
         let ticket = Ticket(title: "T", estimatedSeconds: 600)
@@ -194,7 +197,7 @@ struct PunctualityTests {
         session.accumulatedActiveSeconds = 30
         context.insert(session)
 
-        #expect(Punctuality.displayLabel(for: session) == "到着")
+        #expect(Punctuality.displayLabel(for: session) == "早着")
     }
 
     @Test func displayLabel_overtimeArrivalStaysArrivedNotDelay() throws {
@@ -220,17 +223,24 @@ struct PunctualityTests {
         #expect(!Punctuality.shouldCelebrateArrival(outcome: nil))
     }
 
-    @Test func arrivalCaption_omitsGapUnlessOnTime() {
+    @Test func arrivalCaption_showsGapForOnTimeAndEarly_notLate() {
         #expect(
             Punctuality.arrivalCaption(
-                isOnTime: true,
+                punctuality: .onTime,
                 estimateSeconds: 1_500,
                 actualSeconds: 1_440
             ) == "見積もり 25分 · 実績 24分"
         )
         #expect(
             Punctuality.arrivalCaption(
-                isOnTime: false,
+                punctuality: .early,
+                estimateSeconds: 1_500,
+                actualSeconds: 900
+            ) == "見積もり 25分 · 実績 15分"
+        )
+        #expect(
+            Punctuality.arrivalCaption(
+                punctuality: .late,
                 estimateSeconds: 1_500,
                 actualSeconds: 2_100
             ) == nil

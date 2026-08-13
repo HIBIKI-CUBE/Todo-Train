@@ -119,8 +119,8 @@ struct PunctualityMomentOverlay: View {
 
     private var headline: String {
         switch moment.kind {
-        case .arrival(_, _, _, let isOnTime):
-            Punctuality.arrivalHeadline(isOnTime: isOnTime)
+        case .arrival(_, _, _, let punctuality):
+            Punctuality.arrivalHeadline(punctuality)
         case .onTimeService:
             "定時運行"
         }
@@ -135,9 +135,9 @@ struct PunctualityMomentOverlay: View {
 
     private var caption: String? {
         switch moment.kind {
-        case .arrival(_, let estimate, let actual, let isOnTime):
+        case .arrival(_, let estimate, let actual, let punctuality):
             Punctuality.arrivalCaption(
-                isOnTime: isOnTime,
+                punctuality: punctuality,
                 estimateSeconds: estimate,
                 actualSeconds: actual
             )
@@ -148,10 +148,10 @@ struct PunctualityMomentOverlay: View {
 
     private var accessibilityText: String {
         switch moment.kind {
-        case .arrival(let title, let estimate, let actual, let isOnTime):
-            let head = Punctuality.arrivalHeadline(isOnTime: isOnTime)
+        case .arrival(let title, let estimate, let actual, let punctuality):
+            let head = Punctuality.arrivalHeadline(punctuality)
             if let caption = Punctuality.arrivalCaption(
-                isOnTime: isOnTime,
+                punctuality: punctuality,
                 estimateSeconds: estimate,
                 actualSeconds: actual
             ) {
@@ -226,7 +226,23 @@ struct PunctualityMomentOverlay: View {
                     title: "週次レビューの下書き",
                     estimateSeconds: 1_500,
                     actualSeconds: 1_440,
-                    isOnTime: true
+                    punctuality: .onTime
+                )
+            )
+        )
+    }
+}
+
+#Preview("早着") {
+    ZStack {
+        Color(uiColor: .systemGroupedBackground).ignoresSafeArea()
+        PunctualityMomentOverlay(
+            moment: PunctualityMoment(
+                kind: .arrival(
+                    title: "週次レビューの下書き",
+                    estimateSeconds: 1_500,
+                    actualSeconds: 900,
+                    punctuality: .early
                 )
             )
         )
@@ -242,7 +258,7 @@ struct PunctualityMomentOverlay: View {
                     title: "週次レビューの下書き",
                     estimateSeconds: 1_500,
                     actualSeconds: 2_100,
-                    isOnTime: false
+                    punctuality: .late
                 )
             )
         )

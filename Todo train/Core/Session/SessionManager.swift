@@ -765,7 +765,7 @@ final class SessionManager {
                     title: title,
                     estimateSeconds: session.estimatedSecondsAtStart,
                     actualSeconds: session.accumulatedActiveSeconds,
-                    isOnTime: Punctuality.classify(session) == .onTime
+                    punctuality: Punctuality.classify(session)
                 )
             )
         )
