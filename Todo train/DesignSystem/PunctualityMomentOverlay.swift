@@ -159,7 +159,7 @@ struct PunctualityMomentOverlay: View {
             }
             return "\(head)。\(title)"
         case .onTimeService:
-            "本日、定時運行でした"
+            return "本日、定時運行でした"
         }
     }
 
