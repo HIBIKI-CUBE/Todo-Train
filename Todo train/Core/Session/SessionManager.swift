@@ -31,6 +31,13 @@ final class SessionManager {
     /// Prevents recover / foreground from silently re-scheduling the same bell.
     private var suppressedEndBellSessionIDs: Set<UUID> = []
 
+    /// Ephemeral 定時 moments. Not persisted, not a score. Play then `consumePunctualityMoment()`.
+    private(set) var punctualityQueue: [PunctualityMoment] = []
+    /// Bumps only when a moment is enqueued (haptic). Consume must not tick.
+    private(set) var punctualityHapticTick: Int = 0
+
+    var punctualityMoment: PunctualityMoment? { punctualityQueue.first }
+
     var pauseLimit: Int { settings.pauseLimit }
 
     /// True when Settings end-bell is on and AlarmKit is authorized (owns LA + alert).
@@ -133,6 +140,9 @@ final class SessionManager {
             throw SessionError.unresolvedPausedTickets
         }
 
+        let arrivedToday = arrivedSessions(inServiceDay: day, endedBy: now)
+        let onTimeService = Punctuality.isOnTimeService(arrivedSessions: arrivedToday)
+
         day.endedAt = now
         activeServiceDay = nil
         needsServiceDayEndPrompt = false
@@ -144,6 +154,9 @@ final class SessionManager {
         alarmScheduler.cancelAll()
         try save()
         reconcile(now: now)
+        if onTimeService {
+            enqueuePunctualityMoment(PunctualityMoment(kind: .onTimeService))
+        }
     }
 
     // MARK: - Boarding
@@ -330,6 +343,7 @@ final class SessionManager {
             session.overtimeResolution = resolution
         }
         try close(session: session, outcome: .arrived, closureKind: .arrived, now: now)
+        enqueueOnTimeArrivalIfNeeded(session)
     }
 
     func partialDisembark(now: Date? = nil) throws {
@@ -414,6 +428,11 @@ final class SessionManager {
     func restoreDeletedTag(_ record: DeletionUndo.TagRecord) throws {
         DeletionUndo.restoreTag(record, into: modelContext)
         try save()
+    }
+
+    func consumePunctualityMoment() {
+        guard !punctualityQueue.isEmpty else { return }
+        punctualityQueue.removeFirst()
     }
 
     /// Clears in-memory / external side effects for an open session without writing closure fields.
@@ -735,6 +754,40 @@ final class SessionManager {
 
     private func openPausedSessions() -> [WorkSession] {
         fetchOpenSessions().filter(\.isPaused)
+    }
+
+    private func enqueueOnTimeArrivalIfNeeded(_ session: WorkSession) {
+        guard Punctuality.classify(session) == .onTime else { return }
+        let title = session.ticket?.title ?? "切符"
+        enqueuePunctualityMoment(
+            PunctualityMoment(
+                kind: .onTimeArrival(
+                    title: title,
+                    estimateSeconds: session.estimatedSecondsAtStart,
+                    actualSeconds: session.accumulatedActiveSeconds
+                )
+            )
+        )
+    }
+
+    private func enqueuePunctualityMoment(_ moment: PunctualityMoment) {
+        punctualityQueue.append(moment)
+        punctualityHapticTick += 1
+    }
+
+    /// Arrivals closed during this service window (startedAt ... endedBy).
+    private func arrivedSessions(inServiceDay day: ServiceDay, endedBy end: Date) -> [WorkSession] {
+        let start = day.startedAt
+        let descriptor = FetchDescriptor<WorkSession>(
+            predicate: #Predicate<WorkSession> { session in
+                session.endedAt != nil
+            }
+        )
+        let ended = (try? modelContext.fetch(descriptor)) ?? []
+        return ended.filter { session in
+            guard session.outcome == .arrived, let endedAt = session.endedAt else { return false }
+            return endedAt >= start && endedAt <= end
+        }
     }
 
     private func save() throws {

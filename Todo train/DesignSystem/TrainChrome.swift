@@ -89,6 +89,7 @@ struct SignalBadge: View {
         case paused
         case overtime
         case arrived
+        case onTime
         case abandoned
         case due
 
@@ -99,6 +100,7 @@ struct SignalBadge: View {
             case .paused: "停車中"
             case .overtime: "超過"
             case .arrived: "到着"
+            case .onTime: "定時"
             case .abandoned: "放棄"
             case .due: "期限"
             }
@@ -106,7 +108,7 @@ struct SignalBadge: View {
 
         var color: Color {
             switch self {
-            case .inService, .arrived: TrainTheme.signalGreen
+            case .inService, .arrived, .onTime: TrainTheme.signalGreen
             case .outOfService: TrainTheme.muted
             case .paused, .due: TrainTheme.signalAmber
             case .overtime, .abandoned: TrainTheme.signalRed

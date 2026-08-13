@@ -97,6 +97,15 @@ struct ContentView: View {
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }
+        .overlay {
+            if !isFocusPresented, let moment = sessionManager.punctualityMoment {
+                PunctualityMomentOverlay(moment: moment) {
+                    sessionManager.consumePunctualityMoment()
+                }
+                .id(moment.id)
+            }
+        }
+        .sensoryFeedback(.success, trigger: sessionManager.punctualityHapticTick)
     }
 
     private func promoteTransferCanvasAfterFocusDismiss() {

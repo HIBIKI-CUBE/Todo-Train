@@ -88,6 +88,8 @@ enum TrainTheme {
         static let issueEject = Animation.spring(response: 0.24, dampingFraction: 0.86)
         /// Gauge settle / detent escape (“ビュン”).
         static let gaugeSnap = Animation.spring(response: 0.22, dampingFraction: 0.62)
+        /// 定時到着 / 定時運行の短い案内。発券より少し長く、点数画面にはしない。
+        static let onTimeArrival = Animation.spring(response: 0.32, dampingFraction: 0.86)
     }
 
     // MARK: - Type

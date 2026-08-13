@@ -91,7 +91,11 @@ struct HistorySessionRow: View {
     private var outcomeBadge: some View {
         switch session.outcome {
         case .arrived:
-            SignalBadge(kind: .arrived)
+            if Punctuality.classify(session) == .onTime {
+                SignalBadge(kind: .onTime)
+            } else {
+                SignalBadge(kind: .arrived)
+            }
         case .partialDisembark:
             SignalBadge(kind: .paused, customLabel: "途中下車")
         case .abandoned:
