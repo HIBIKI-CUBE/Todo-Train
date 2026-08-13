@@ -127,7 +127,7 @@ struct PunctualityMomentOverlay: View {
     private var title: String? {
         switch moment.kind {
         case .onTimeArrival(let title, _, _): title
-        case .onTimeService: "本日、定時運行でした"
+        case .onTimeService: nil
         }
     }
 
@@ -136,7 +136,7 @@ struct PunctualityMomentOverlay: View {
         case .onTimeArrival(_, let estimate, let actual):
             Punctuality.durationCaption(estimateSeconds: estimate, actualSeconds: actual)
         case .onTimeService:
-            nil
+            "本日、ダイヤどおり"
         }
     }
 
