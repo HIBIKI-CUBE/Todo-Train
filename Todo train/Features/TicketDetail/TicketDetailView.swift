@@ -19,6 +19,7 @@ struct TicketDetailView: View {
 
     @State private var errorMessage = ""
     @State private var showError = false
+    @State private var showPauseLimitSheet = false
 
     private var canBoard: Bool {
         sessionManager.isInService
@@ -204,7 +205,7 @@ struct TicketDetailView: View {
                     Button(isPaused ? "再乗車" : "発車") {
                         board()
                     }
-                    .disabled(!canBoard && !isPaused)
+                    .disabled(!canBoard)
                 }
             }
 
@@ -223,6 +224,12 @@ struct TicketDetailView: View {
             try? modelContext.save()
         }
         .errorAlert(isPresented: $showError, message: errorMessage)
+        .sheet(isPresented: $showPauseLimitSheet) {
+            PauseLimitSheet(
+                pendingTicket: ticket,
+                onSlotFreedTryBoard: { board() }
+            )
+        }
     }
 
     @ViewBuilder
@@ -252,6 +259,8 @@ struct TicketDetailView: View {
         do {
             ticketMotion.zoomSourceID = ticket.id
             try sessionManager.board(ticket: ticket)
+        } catch let error as SessionError where error == .pauseLimitReached {
+            showPauseLimitSheet = true
         } catch {
             ticketMotion.zoomSourceID = nil
             errorMessage = error.localizedDescription

@@ -3,17 +3,43 @@
 //  Shared by app + TodoTrainWidget — App Group handoff from LA Intents.
 //
 
+import AppIntents
 import Foundation
 
 enum FocusPendingActionKind: String, Codable, Sendable {
     case arrive
     case extend
+    case pause
+    case resume
 }
 
 struct FocusPendingAction: Codable, Equatable, Sendable {
     var kind: FocusPendingActionKind
     var sessionID: UUID
     var createdAt: Date
+}
+
+struct SessionResumeIntent: LiveActivityIntent {
+    static var title: LocalizedStringResource = "再乗車"
+    static var description = IntentDescription("停車中のカウントダウンを再開します。")
+    static var openAppWhenRun: Bool = true
+
+    @Parameter(title: "Session ID")
+    var sessionID: String
+
+    init() { sessionID = "" }
+
+    init(sessionID: UUID) {
+        self.sessionID = sessionID.uuidString
+    }
+
+    func perform() async throws -> some IntentResult {
+        guard let id = UUID(uuidString: sessionID) else { return .result() }
+        FocusPendingActionStore.enqueue(
+            FocusPendingAction(kind: .resume, sessionID: id, createdAt: .now)
+        )
+        return .result()
+    }
 }
 
 enum FocusPendingActionStore {

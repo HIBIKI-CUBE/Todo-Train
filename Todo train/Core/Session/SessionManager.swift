@@ -215,24 +215,14 @@ final class SessionManager {
             return
         }
 
-        let estimate = min(max(ticket.estimatedSeconds, 1), Ticket.maxEstimatedSeconds)
-        let session = WorkSession(
-            startedAt: now,
-            estimatedSecondsAtStart: estimate,
-            ticket: ticket,
-            boardedDeviceID: deviceIdentity.id
-        )
-        modelContext.insert(session)
-        applyCheckInSchedule(to: session, title: ticket.title, estimatedSeconds: estimate)
-        activeSession = session
-        phase = .running
-        try save()
-        reconcile(now: now)
-        refreshOvertimeNotification(for: session, now: now)
-        refreshLiveActivity(for: session, now: now)
-        refreshEndBell(for: session, now: now)
-        refreshProgressCheckInNotifications(for: session, now: now)
-        requestCheckInPrompt(for: session, title: ticket.title, estimatedMinutes: estimate / 60)
+        guard PauseLimitGuard.canBoardNewRide(
+            pausedCount: pausedTicketCount,
+            limit: settings.pauseLimit
+        ) else {
+            throw SessionError.pauseLimitReached
+        }
+
+        try startNewSession(ticket: ticket, now: now)
     }
 
     /// Pause the current ride in the store, then board `ticket`, without publishing `.paused`.
@@ -252,17 +242,43 @@ final class SessionManager {
                 return
             }
 
-            guard PauseLimitGuard.canPause(
-                currentPausedCount: pausedTicketCount,
+            // Gate on paused tickets already sitting, before parking the current ride.
+            guard PauseLimitGuard.canBoardNewRide(
+                pausedCount: pausedTicketCount,
                 limit: settings.pauseLimit
             ) else {
                 throw SessionError.pauseLimitReached
             }
 
             try parkRunningSessionForSwitch(running, now: now)
+            try startNewSession(ticket: ticket, now: now)
+            return
         }
 
         try board(ticket: ticket, now: now)
+    }
+
+    private func startNewSession(ticket: Ticket, now: Date) throws {
+        let estimate = min(max(ticket.estimatedSeconds, 1), Ticket.maxEstimatedSeconds)
+        let session = WorkSession(
+            startedAt: now,
+            estimatedSecondsAtStart: estimate,
+            ticket: ticket,
+            boardedDeviceID: deviceIdentity.id
+        )
+        modelContext.insert(session)
+        applyCheckInSchedule(to: session, title: ticket.title, estimatedSeconds: estimate)
+        activeSession = session
+        phase = .running
+        try save()
+        // One LA / Alarm at a time — drop the previous paused ride's presentation.
+        alarmScheduler.cancelAllExcept(sessionID: session.id)
+        reconcile(now: now)
+        refreshOvertimeNotification(for: session, now: now)
+        refreshLiveActivity(for: session, now: now)
+        refreshEndBell(for: session, now: now)
+        refreshProgressCheckInNotifications(for: session, now: now)
+        requestCheckInPrompt(for: session, title: ticket.title, estimatedMinutes: estimate / 60)
     }
 
     func pause(now: Date? = nil) throws {
@@ -275,29 +291,13 @@ final class SessionManager {
             return
         }
 
-        let pausedCount = pausedTicketCount
-        guard PauseLimitGuard.canPause(currentPausedCount: pausedCount, limit: settings.pauseLimit) else {
-            throw SessionError.pauseLimitReached
-        }
-
         try applyPause(session: session, now: now)
     }
 
-    /// Bypass pause limit (臨時停車). Increments today's override count. No hard cap.
+    /// Pause is always allowed. Kept for older call sites; no longer increments override.
     @discardableResult
     func forcePause(now: Date? = nil) throws -> Int {
-        let now = now ?? clock.now
-        guard let session = activeSession, session.isOpen else {
-            throw SessionError.noActiveSession
-        }
-        guard !session.isPaused else {
-            phase = .paused
-            return todayOverrideCount
-        }
-
-        try applyPause(session: session, now: now)
-        let dayKey = ServiceDay.dayKey(for: now, calendar: calendar)
-        todayOverrideCount = overrideCounter.increment(forDayKey: dayKey)
+        try pause(now: now)
         return todayOverrideCount
     }
 
@@ -313,10 +313,12 @@ final class SessionManager {
         phase = .paused
         overtimeNotifier.cancel(sessionID: session.id)
         checkInNotifier.cancel(sessionID: session.id)
-        liveActivityManager.end()
-        // Always cancel (never pause) so AlarmKit Live Activities do not linger while paused.
         if syncAlarm {
-            alarmScheduler.cancel(sessionID: session.id)
+            if isAlarmKitEndBellActive {
+                alarmScheduler.pause(sessionID: session.id)
+            } else {
+                alarmScheduler.cancel(sessionID: session.id)
+            }
         }
         try save()
         reconcile(now: now)
@@ -352,19 +354,10 @@ final class SessionManager {
     }
 
     /// StandBy / system AlarmKit pause → mirror into the open session (no AlarmKit echo).
-    /// When pause limit is full, records a temporary pause (臨時停車) so Alarm and DB stay aligned.
-    /// Caller (AlarmKitScheduler) must cancel the alarm after this so the paused LA disappears.
     func pauseFromAlarmKit(now: Date? = nil) throws {
         let now = now ?? clock.now
         guard let session = activeSession, session.isOpen, !session.isPaused else { return }
-        let pausedCount = pausedTicketCount
-        if PauseLimitGuard.canPause(currentPausedCount: pausedCount, limit: settings.pauseLimit) {
-            try applyPause(session: session, now: now, syncAlarm: false)
-        } else {
-            try applyPause(session: session, now: now, syncAlarm: false)
-            let dayKey = ServiceDay.dayKey(for: now, calendar: calendar)
-            todayOverrideCount = overrideCounter.increment(forDayKey: dayKey)
-        }
+        try applyPause(session: session, now: now, syncAlarm: false)
     }
 
     /// StandBy dismiss / cancel of the end bell — keep the ride running, do not reschedule.
@@ -387,16 +380,18 @@ final class SessionManager {
         session.segmentStartedAt = now
         phase = .running
         try save()
+        alarmScheduler.cancelAllExcept(sessionID: session.id)
+        let resumedAlarm = isAlarmKitEndBellActive && alarmScheduler.resume(sessionID: session.id)
         reconcile(now: now)
         refreshOvertimeNotification(for: session, now: now)
         refreshLiveActivity(for: session, now: now)
-        // Reschedule from remaining time — do not resume a paused AlarmKit countdown.
-        refreshEndBell(for: session, now: now)
+        if !resumedAlarm {
+            refreshEndBell(for: session, now: now)
+        }
         refreshProgressCheckInNotifications(for: session, now: now)
     }
 
-    /// StandBy / system AlarmKit resume is no longer a Live Activity path (paused alarms are cancelled).
-    /// Kept for tests / defensive sync if a template UI still resumes.
+    /// StandBy / system AlarmKit resume → mirror into the open session (no AlarmKit echo).
     func resumeFromAlarmKit(now: Date? = nil) throws {
         let now = now ?? clock.now
         guard let session = activeSession, session.isOpen, session.isPaused else { return }
@@ -408,7 +403,6 @@ final class SessionManager {
         reconcile(now: now)
         refreshOvertimeNotification(for: session, now: now)
         refreshLiveActivity(for: session, now: now)
-        refreshEndBell(for: session, now: now)
         refreshProgressCheckInNotifications(for: session, now: now)
     }
 
@@ -727,7 +721,13 @@ final class SessionManager {
 
         if session.isPaused {
             phase = .paused
-            liveActivityManager.end()
+            if PauseLiveActivityRetention.isExpired(pausedAt: session.pausedAt, now: now) {
+                liveActivityManager.end()
+                overtimeNotifier.cancel(sessionID: session.id)
+                alarmScheduler.cancel(sessionID: session.id)
+            } else {
+                refreshLiveActivity(for: session, now: now)
+            }
             return
         }
 
@@ -790,8 +790,9 @@ final class SessionManager {
         }
 
         try save()
+        let pendingKind = applyPendingLiveActivityAction()
         reconcile(now: now)
-        refreshOwnedDeviceSideEffects(now: now)
+        refreshOwnedDeviceSideEffects(now: now, pendingKind: pendingKind)
         refreshTodayOverrideCount(at: now)
     }
 
@@ -801,6 +802,25 @@ final class SessionManager {
         let now = now ?? clock.now
         reconcile(now: now)
         refreshOwnedDeviceSideEffects(now: now)
+    }
+
+    /// Consume pause/resume handoff from Live Activity intents (app may have been killed).
+    @discardableResult
+    func applyPendingLiveActivityAction() -> FocusPendingActionKind? {
+        guard let pending = FocusPendingActionStore.peek() else { return nil }
+        switch pending.kind {
+        case .pause, .resume:
+            _ = FocusPendingActionStore.consume()
+            guard pending.sessionID == activeSession?.id else { return nil }
+            if pending.kind == .pause {
+                try? pauseFromAlarmKit()
+            } else {
+                try? resumeFromAlarmKit()
+            }
+            return pending.kind
+        case .arrive, .extend:
+            return nil
+        }
     }
 
     /// Settings toggle for end bell — apply immediately to the active ride.
@@ -815,6 +835,17 @@ final class SessionManager {
         guard ownsDeviceSideEffects(session) else {
             alarmScheduler.cancelAll()
             liveActivityManager.end()
+            publishWidgetSnapshot(at: now)
+            return
+        }
+        if session.isPaused {
+            if settings.endBellEnabled {
+                liveActivityManager.end()
+            } else {
+                alarmScheduler.cancel(sessionID: session.id)
+                suppressedEndBellSessionIDs.remove(session.id)
+                refreshLiveActivity(for: session, now: now)
+            }
             publishWidgetSnapshot(at: now)
             return
         }
@@ -984,7 +1015,7 @@ final class SessionManager {
 
     /// Refresh or tear down device-local effects after launch / remote change.
     /// Does not collapse duplicate sessions (that stays in `recoverOnLaunch`).
-    private func refreshOwnedDeviceSideEffects(now: Date) {
+    private func refreshOwnedDeviceSideEffects(now: Date, pendingKind: FocusPendingActionKind? = nil) {
         guard let session = activeSession, session.isOpen else {
             liveActivityManager.end()
             alarmScheduler.cancelAll()
@@ -998,16 +1029,25 @@ final class SessionManager {
             return
         }
         if session.isPaused {
-            liveActivityManager.end()
             overtimeNotifier.cancel(sessionID: session.id)
             checkInNotifier.cancel(sessionID: session.id)
-            alarmScheduler.cancelAll()
+            if PauseLiveActivityRetention.isExpired(pausedAt: session.pausedAt, now: now) {
+                liveActivityManager.end()
+                alarmScheduler.cancelAll()
+            } else {
+                alarmScheduler.cancelAllExcept(sessionID: session.id)
+                refreshLiveActivity(for: session, now: now)
+            }
             return
         }
         alarmScheduler.cancelAllExcept(sessionID: session.id)
         refreshOvertimeNotification(for: session, now: now)
         refreshLiveActivity(for: session, now: now)
-        refreshEndBell(for: session, now: now)
+        if pendingKind == .resume, alarmScheduler.hasAlarm(sessionID: session.id) {
+            _ = alarmScheduler.resume(sessionID: session.id)
+        } else {
+            refreshEndBell(for: session, now: now)
+        }
         refreshProgressCheckInNotifications(for: session, now: now)
     }
 
@@ -1022,22 +1062,30 @@ final class SessionManager {
             return
         }
         // One LA at a time: AlarmKit StandBy countdown replaces Session LA.
-        if settings.endBellEnabled {
+        if isAlarmKitEndBellActive {
             liveActivityManager.end()
             return
         }
-        guard session.isOpen, !session.isPaused else {
+        guard session.isOpen else {
             liveActivityManager.end()
             return
         }
+        if session.isPaused,
+           PauseLiveActivityRetention.isExpired(pausedAt: session.pausedAt, now: now) {
+            liveActivityManager.end()
+            return
+        }
+        let remaining = session.remainingSeconds(at: now)
         let title = session.ticket?.title ?? "切符"
-        let deadline = now.addingTimeInterval(session.remainingSeconds(at: now))
+        let deadline = now.addingTimeInterval(remaining)
         liveActivityManager.startOrUpdate(
             sessionID: session.id,
             title: title,
             deadline: deadline,
-            isOvertime: session.remainingSeconds(at: now) <= 0,
-            budgetSeconds: session.budgetSecondsAtStart
+            isOvertime: remaining <= 0 && !session.isPaused,
+            budgetSeconds: session.budgetSecondsAtStart,
+            isPaused: session.isPaused,
+            pausedAt: session.pausedAt
         )
     }
 
@@ -1077,11 +1125,8 @@ final class SessionManager {
         }
         // User dismissed the bell from StandBy — do not resurrect it.
         guard !suppressedEndBellSessionIDs.contains(session.id) else { return }
-        // Paused sessions never keep an AlarmKit Live Activity.
-        guard !session.isPaused else {
-            alarmScheduler.cancel(sessionID: session.id)
-            return
-        }
+        // Keep a paused AlarmKit Live Activity; resume / retention / a new ride tears it down.
+        guard !session.isPaused else { return }
         let elapsed = session.elapsedSeconds(at: now)
         guard let fireAt = SessionEndSchedule.fireAt(
             budgetSeconds: session.budgetSecondsAtStart,

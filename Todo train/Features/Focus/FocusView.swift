@@ -55,17 +55,15 @@ struct FocusView: View {
             pendingSwitchTicketID = nil
         }) {
             PauseLimitSheet(
-                onSlotFreedTryPause: {
+                pendingTicket: pendingSwitchTicketID.flatMap { ticket(id: $0) },
+                onSlotFreedTryBoard: {
                     if let pendingSwitchTicketID, let ticket = ticket(id: pendingSwitchTicketID) {
                         presentIssuedInterrupt(TicketIssueEjectEvent(ticket: ticket), ticket: ticket)
                         self.pendingSwitchTicketID = nil
-                    } else {
-                        try? sessionManager.pause()
                     }
                 }
             )
             .environment(sessionManager)
-            .environment(transferCanvas)
         }
         .sheet(isPresented: $showInterruptIssue) {
             QuickAddSheet(presentation: .focusInterrupt) { event in
@@ -419,6 +417,10 @@ struct FocusView: View {
             withAnimation(TrainTheme.Motion.soft) {
                 showExtendChips = true
             }
+        case .pause:
+            break
+        case .resume:
+            run { try sessionManager.resume() }
         }
     }
 
@@ -468,8 +470,6 @@ struct FocusView: View {
     private func run(_ body: () throws -> Void) {
         do {
             try body()
-        } catch let error as SessionError where error == .pauseLimitReached {
-            showPauseLimitSheet = true
         } catch {
             errorMessage = error.localizedDescription
             showError = true

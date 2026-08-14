@@ -53,7 +53,7 @@ UI tick（1秒）は表示専用のみ
 - 運行開始 / 終了
 - 発車 / 停車 / 再開 / 延長 / 到着・途中下車 / 放棄 / 割り込み発車（`switchBoard`。`phase` を `.paused` にしない）。停車は `SessionPause` 区間を残す
 - 車内放送（`answerCheckIn` / `beginAwayWatch` / `endAwayWatch`）
-- 停車上限ゲート（`PauseLimitGuard`）
+- 停車上限ゲート（`PauseLimitGuard.canBoardNewRide`）— 停車は常に可。新規発車と割り込み発車だけ止める
 - 日付跨ぎ検知 → `needsServiceDayEndPrompt`
 - force-quit 後の open session 復元・複数 open の修復
 - `ScenePhase.active` 復帰時の `reconcile()`
@@ -67,7 +67,7 @@ UI tick（1秒）は表示専用のみ
 | 昨日の運行が open | `.serviceDayNeedsEnd` |
 | 走行中に運行終了 | `.cannotEndServiceWhileRunning` |
 | 二重発車 | `.alreadyBoarding` |
-| 停車上限 | `.pauseLimitReached` |
+| 停車上限での新規発車 | `.pauseLimitReached` |
 
 ## バックグラウンド超過（MVP）
 
@@ -96,7 +96,7 @@ CoachingEngine（プロトコル）
 
 ## Live Activity（v1）
 
-**1 LA = 1 乗務（発車中）**。全日運行 LA は不可（8h 上限）。  
+**1 LA = 走行中 1 件、または直近の停車中 1 件（最大 2 時間）**。全日運行 LA は不可（8h 上限）。  
 詳細は [07-research.md](07-research.md)。
 
 ## 推奨フォルダ構成（現行に近い）

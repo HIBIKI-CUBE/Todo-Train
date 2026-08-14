@@ -66,6 +66,22 @@ final class FocusTimerPhaseTests: XCTestCase {
         )
     }
 
+    func testDisplayModelSessionPaused() {
+        let model = CockpitDisplayModel.session(
+            title: "A",
+            deadline: Date().addingTimeInterval(90),
+            budgetSeconds: 300,
+            isOvertime: false,
+            isStale: false,
+            isPaused: true
+        )
+        guard case .paused(let remaining) = model.clock else {
+            return XCTFail("expected paused clock")
+        }
+        XCTAssertEqual(remaining, 90, accuracy: 1)
+        XCTAssertEqual(model.headerState, "停車中")
+    }
+
     func testDisplayModelSessionOvertime() {
         let model = CockpitDisplayModel.session(
             title: "A",

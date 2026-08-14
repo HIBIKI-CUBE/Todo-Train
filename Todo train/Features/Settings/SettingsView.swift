@@ -25,7 +25,7 @@ struct SettingsView: View {
             } header: {
                 Text("停車")
             } footer: {
-                Text("停車中に置いておける切符の枚数です。上限を超えると整理シートが開きます。")
+                Text("停車して置ける枚数です。上限に達すると新しい切符は発車できません。停車そのものはいつでもできます。再乗車もできます。")
             }
 
             Section {
@@ -65,7 +65,7 @@ struct SettingsView: View {
             } header: {
                 Text("終了ベル")
             } footer: {
-                Text("見積もり到達時に AlarmKit で強制通知します（Silent / Focus を突破）。StandBy のカウントダウン表示にも使います。停車するとベルは消え、再乗車で残り時間から再スケジュールします。拒否された場合はローカル通知にフォールバックします。")
+                Text("見積もり到達時に AlarmKit で強制通知します（Silent / Focus を突破）。StandBy のカウントダウン表示にも使います。停車中も Live Activity は残り、再乗車できます。別切符を発車すると切り替わります。2 時間置くと Live Activity だけ消え、切符は停車のままです。拒否された場合はローカル通知にフォールバックします。")
             }
             .onChange(of: settings.endBellEnabled) { _, _ in
                 sessionManager.syncEndBellWithSettings()

@@ -7,6 +7,7 @@
 //  for Lock Screen container; activityBackgroundTint for StandBy edge fill.
 //
 
+import AppIntents
 import SwiftUI
 import WidgetKit
 
@@ -23,7 +24,8 @@ struct TodoTrainSessionLiveActivity: Widget {
                 deadline: context.state.deadline,
                 budgetSeconds: context.state.budgetSeconds,
                 isOvertime: context.state.isOvertime,
-                isStale: context.isStale
+                isStale: context.isStale,
+                isPaused: context.state.isPaused
             )
             return DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
@@ -39,7 +41,18 @@ struct TodoTrainSessionLiveActivity: Widget {
                     CockpitIslandExpandedCenter(presentation: presentation)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    EmptyView()
+                    if context.state.isPaused {
+                        Button(intent: SessionResumeIntent(sessionID: context.attributes.sessionID)) {
+                            Label("再乗車", systemImage: "play.fill")
+                                .font(.caption.weight(.semibold))
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.horizontal, 12)
+                        .padding(.bottom, 4)
+                    } else {
+                        EmptyView()
+                    }
                 }
             } compactLeading: {
                 CockpitIslandMark(phase: presentation.phase)
@@ -48,7 +61,6 @@ struct TodoTrainSessionLiveActivity: Widget {
             } minimal: {
                 CockpitMinimalTimer(clock: presentation.clock, phase: presentation.phase)
                     .accessibilityLabel("残り時間")
-                    .accessibilityValue(presentation.accessibilityTimer)
             }
             .keylineTint(presentation.phase.accentColor)
             .widgetURL(URL(string: "todotrain://focus"))
@@ -68,7 +80,6 @@ private struct CompactTrailingTimer: View {
             limitedWidth: limitedWidth
         )
         .accessibilityLabel("残り時間")
-        .accessibilityValue(presentation.accessibilityTimer)
     }
 }
 
@@ -85,21 +96,72 @@ private struct SessionCockpitRoot: View {
             deadline: context.state.deadline,
             budgetSeconds: context.state.budgetSeconds,
             isOvertime: context.state.isOvertime,
-            isStale: context.isStale
+            isStale: context.isStale,
+            isPaused: context.state.isPaused
         )
 
         Group {
             if isFullscreen {
-                CockpitStandByInstrument(
+                if context.state.isPaused {
+                    CockpitStandByInstrument(
+                        title: presentation.title,
+                        clock: presentation.clock,
+                        phase: presentation.phase,
+                        headerState: presentation.headerState,
+                        deadlineLabel: presentation.deadlineLabel,
+                        budgetSeconds: presentation.budgetSeconds,
+                        pausedProgress: presentation.pausedProgress,
+                        accessibilityTimer: presentation.accessibilityTimer
+                    ) {
+                        Button(intent: SessionResumeIntent(sessionID: context.attributes.sessionID)) {
+                            VStack(spacing: 10) {
+                                Image(systemName: "play.fill")
+                                    .font(.system(size: 22, weight: .bold))
+                                Text("再乗車")
+                                    .font(.system(size: 18, weight: .bold))
+                            }
+                            .foregroundStyle(CockpitColors.green)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .background(
+                                CockpitColors.fillRaised,
+                                in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("再乗車")
+                    }
+                } else {
+                    CockpitStandByInstrument(
+                        title: presentation.title,
+                        clock: presentation.clock,
+                        phase: presentation.phase,
+                        headerState: presentation.headerState,
+                        deadlineLabel: presentation.deadlineLabel,
+                        budgetSeconds: presentation.budgetSeconds,
+                        pausedProgress: presentation.pausedProgress,
+                        accessibilityTimer: presentation.accessibilityTimer
+                    )
+                }
+            } else if context.state.isPaused {
+                CockpitLockScreenInstrument(
                     title: presentation.title,
                     clock: presentation.clock,
                     phase: presentation.phase,
                     headerState: presentation.headerState,
                     deadlineLabel: presentation.deadlineLabel,
                     budgetSeconds: presentation.budgetSeconds,
-                    pausedProgress: nil,
+                    pausedProgress: presentation.pausedProgress,
                     accessibilityTimer: presentation.accessibilityTimer
-                )
+                ) {
+                    Button(intent: SessionResumeIntent(sessionID: context.attributes.sessionID)) {
+                        Label("再乗車", systemImage: "play.fill")
+                            .font(.subheadline.weight(.bold))
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .background(CockpitColors.fillRaised, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("再乗車")
+                }
             } else {
                 CockpitLockScreenInstrument(
                     title: presentation.title,
@@ -108,7 +170,7 @@ private struct SessionCockpitRoot: View {
                     headerState: presentation.headerState,
                     deadlineLabel: presentation.deadlineLabel,
                     budgetSeconds: presentation.budgetSeconds,
-                    pausedProgress: nil,
+                    pausedProgress: presentation.pausedProgress,
                     accessibilityTimer: presentation.accessibilityTimer
                 )
             }
