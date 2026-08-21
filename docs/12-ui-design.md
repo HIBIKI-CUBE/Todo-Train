@@ -9,7 +9,7 @@
 
 | 面 | 方針 |
 |----|------|
-| Hub | システム背景のうえ、未乗車は **マルス券 Wallet スタック**（前面フル券＋ peek）。運行・停車は標準ブロック |
+| Hub | システム背景のうえ、未乗車は **マルス券 Wallet peek**（タップで中央 focus → **乗務口** → 運転台）。運行・停車は標準ブロック |
 | 履歴 / 設定 | 標準の `List` / `Form`（`.insetGrouped`）。システム背景・セマンティック色 |
 | Quick Add | システム sheet + **親指発券帯**（タイトル・常時タグ・KB 直上ゲージ）。Form / Disclosure ではない |
 | Focus | 真っ黒ダッシュボード。超大タイマーが主役。hairline パネル格子＋ gapless 操作盤 |
@@ -56,9 +56,9 @@
 
 ## レイアウトとコントロール
 
-- Hub: 未乗車は `TicketStackView`（マルス券の Wallet peek）。前面券に **発車**、タップで前面化／詳細。停車中はスタック外の琥珀ブロック。並べ替えは `…` → `ReorderView`（スタック内 D&D なし）。削除はコンテキストメニュー（List スワイプは使わない）。
+- Hub: 未乗車は `TicketStackView`（マルス券の **Wallet peek**。平リスト化しない）。フル券面を重ね、手前は全面可視。タップで同一券面が中央へ morph → 画面下に **運転台コンソール**。**発券後はリストに留まり祝祭を見せる**（自動 focus しない）。券フライトは easeInOut。タブ／ナビは focus 中もレイアウト固定（toolbar 隠しによるがくつき回避。dim で覆う）。発車は短い黒吸い込みのあと Focus へ。停車中はスタック外。並べ替えは `…` → `ReorderView`。削除はコンテキストメニュー。
 - 追加 UI: **親指発券帯**（`QuickAddSheet`）。タイトル即フォーカス、Return＝主発行、タグ横チップ常時、KB 直上に線形スナップ・ゲージ＋巨大数字。連続追加後もキーボード維持。
-- ボタン: 可能な限り `.bordered` / `.borderedProminent` / `role: .destructive`（発券の主経路は Return／ゲージ）。タグチップ・ゲージノブは Liquid Glass。
+- ボタン: 可能な限り `.bordered` / `.borderedProminent` / `role: .destructive`（発券の主経路は Return／ゲージ。Hub focus の発車／詳細は **Focus 操作盤セル**）。タグチップ・ゲージノブは Liquid Glass。
 - Focus: エッジツーエッジのパネル格子（ヘッダ／タイマー／テレメトリ／操作）。丸角カードや大きな余白は使わない。
 
 ### 破壊的操作（物理削除）
@@ -139,14 +139,15 @@ Focus / 設定は HIG 骨格のまま。Hub の未乗車リストはマルス券
 | `DesignSystem/TicketIssueEject.swift` | 単発発行のマルス排出＋読ませるホールド（下スワイプで早めにはける） |
 | `DesignSystem/ArrivalInvalidateOverlay.swift` | 到着: 検札印を自分でドン |
 | `DesignSystem/PunctualityMomentOverlay.swift` | 定時運行の短いカプセル |
-| `DesignSystem/TicketStackLayout.swift` | Hub Wallet スタックの純関数レイアウト |
+| `DesignSystem/TicketStackLayout.swift` | Hub 読める peek デッキの純関数レイアウト |
 | `Core/History/Punctuality.swift` | 帯域判定（当初見積もり）。スコアを持たない |
 | `TodoTrainWidget/FocusTimerPhase.swift` | App + Widget 共有の段階色ロジック |
 | `TodoTrainWidget/CockpitLayoutContract.swift` | Live Activity 公称サイズ契約・密度選択 |
 | `TodoTrainWidget/CockpitInstrumentViews.swift` | StandBy 2ペイン / LS ViewThatFits ダーク計器 |
 | `ContentView.swift` | TabView + Focus cover |
 | `Features/Hub/QuickAddBar.swift` | `QuickAddSheet`（親指発券帯） |
-| `Features/Hub/TicketStackView.swift` / `HubMarsTicketCard.swift` | Hub マルス Wallet スタック |
+| `Features/Hub/TicketStackView.swift` / `HubMarsTicketCard.swift` | Hub マルス peek ＋中央 focus |
+| `Features/Hub/HubTicketFocusActions.swift` | focus 後の操作ドック（発車 / 詳細。券とは分離） |
 | 履歴 / 設定 | 標準 List / Form |
 
 ## 横向き（iPhone compact height）

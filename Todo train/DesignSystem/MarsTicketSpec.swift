@@ -28,28 +28,34 @@ enum MarsTicketSpec {
     static let hubContentPad: CGFloat = 8
     static let verticalSerialWidth: CGFloat = 14
 
-    // MARK: - Hub Wallet stack
+    // MARK: - Hub Wallet peek deck
 
     enum HubStack {
-        /// Visible strip height for non-front tickets (title + minutes peek).
-        static let peekHeight: CGFloat = 52
-        /// Overlap so the stack reads as one deck.
-        static let peekOverlap: CGFloat = 10
+        /// Distance between ticket tops. Larger = airier peeks of covered cards.
+        static let peekStep: CGFloat = 104
         static let maxVisiblePeeks: Int = 8
-        static let frontBoardBarHeight: CGFloat = 48
         static let horizontalInset: CGFloat = 16
-        static let bringToFront = Animation.spring(response: 0.38, dampingFraction: 0.86)
+        /// Front (bottom) card is nearly flat; back cards lean a little more.
+        static let tiltNearDegrees: Double = 0.8
+        static let tiltFarDegrees: Double = 5.5
+        static let focusDimOpacity: Double = 0.42
+        /// Bottom cabin console row (plus hairline); layout reserve above home indicator.
+        static let focusConsoleRowHeight: CGFloat = 56
+        static let focusConsoleLayoutReserve: CGFloat = 72
+        /// Non-focused peers while one ticket is expanded (opacity only — no scale thrash).
+        static let focusPeerOpacity: Double = 0.62
+        static let cabinIngressMilliseconds = 260
+        /// Matched-geometry flight (keep short; avoid bouncy spring overshoot).
+        static let focusMilliseconds = 380
+        static let focus = Animation.easeInOut(duration: Double(focusMilliseconds) / 1_000)
+        static let cabinIngress = Animation.easeIn(duration: Double(cabinIngressMilliseconds) / 1_000)
+
+        /// Legacy alias — step is the layout contract now (covering creates peeks).
+        static var peekHeight: CGFloat { peekStep }
 
         static func peekStep(visibleCount: Int) -> CGFloat {
-            max(0, peekHeight - peekOverlap)
-        }
-
-        /// Total height of a stack with `count` tickets (front full + peeks behind).
-        static func stackHeight(ticketWidth: CGFloat, count: Int, frontExpanded: Bool) -> CGFloat {
-            guard count > 0 else { return 0 }
-            let frontH = height(forWidth: ticketWidth) + (frontExpanded ? frontBoardBarHeight : 0)
-            let behind = max(0, min(count, maxVisiblePeeks) - 1)
-            return frontH + CGFloat(behind) * peekStep(visibleCount: behind)
+            _ = visibleCount
+            return peekStep
         }
     }
 

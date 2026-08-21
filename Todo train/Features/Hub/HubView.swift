@@ -22,8 +22,10 @@ struct HubView: View {
     @State private var showError = false
     /// Single-issue celebration playing on Hub (may overlap sheet dismiss).
     @State private var hubIssueEject: TicketIssueEjectEvent?
-    /// After issue settle, bring this ticket to the front of the stack.
-    @State private var stackHighlightID: UUID?
+    @State private var focusedTicketID: UUID?
+    /// Full-cabin black beat before Focus cover.
+    @State private var cabinIngress = false
+    @Namespace private var ticketNamespace
 
     private enum HubDestination: Hashable, Identifiable {
         case tags
@@ -64,6 +66,12 @@ struct HubView: View {
         verticalSizeClass == .compact
     }
 
+    /// Cabin ingress paints full-screen black; ticket focus uses dim overlay (no toolbar hide —
+    /// toolbar(.hidden) mid-flight caused layout がくつき).
+    private var isTicketFocusChromeActive: Bool {
+        cabinIngress
+    }
+
     var body: some View {
         Group {
             if isLandscapeSplit {
@@ -72,10 +80,10 @@ struct HubView: View {
                 portraitHub
             }
         }
-        .navigationTitle("Todo train")
-        .navigationBarTitleDisplayMode(
-            TrainLayout.navigationBarTitleDisplayMode(verticalSizeClass: verticalSizeClass)
-        )
+        // Only hide chrome during cabin ingress (full black). Focus dim covers content without
+        // resizing the tab/nav layout.
+        .toolbar(isTicketFocusChromeActive ? .hidden : .automatic, for: .tabBar)
+        .toolbar(isTicketFocusChromeActive ? .hidden : .automatic, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
@@ -103,6 +111,10 @@ struct HubView: View {
                 .accessibilityLabel("切符を追加")
             }
         }
+        .navigationTitle("Todo train")
+        .navigationBarTitleDisplayMode(
+            TrainLayout.navigationBarTitleDisplayMode(verticalSizeClass: verticalSizeClass)
+        )
         .navigationDestination(item: $hubDestination) { destination in
             switch destination {
             case .tags:
@@ -123,7 +135,7 @@ struct HubView: View {
         .sheet(isPresented: $showQuickAdd) {
             QuickAddSheet { event in
                 hubIssueEject = event
-                stackHighlightID = event.ticketID
+                // Stay on the list so the issue celebration can play; do not auto-enter focus.
             }
         }
         .overlay {
@@ -135,6 +147,9 @@ struct HubView: View {
                 }
                 .transition(.opacity)
             }
+        }
+        .overlay {
+            ticketFocusLayer
         }
         .sheet(isPresented: $showServiceEndSheet) {
             ServiceEndSheet { message in
@@ -168,6 +183,7 @@ struct HubView: View {
             }
             .padding(.bottom, TrainTheme.Space.xl)
         }
+        .scrollClipDisabled()
         .background(TrainTheme.platform)
     }
 
@@ -191,6 +207,7 @@ struct HubView: View {
                 ticketsBlock
                     .padding(.bottom, TrainTheme.Space.lg)
             }
+            .scrollClipDisabled()
             .background(TrainTheme.platform)
         }
     }
@@ -265,7 +282,9 @@ struct HubView: View {
                     tickets: backlogTickets,
                     canBoard: canBoardGenerally,
                     boardDisabledReason: boardDisabledReason,
-                    highlightedTicketID: stackHighlightID,
+                    focusedTicketID: $focusedTicketID,
+                    ticketNamespace: ticketNamespace,
+                    onFocusTicket: { focusTicket($0) },
                     onBoard: { board($0) },
                     onOpenDetail: { detailTicket = $0 },
                     onDelete: { deleteTicket($0) }
@@ -273,6 +292,116 @@ struct HubView: View {
             }
         }
         .padding(.top, TrainTheme.Space.sm)
+    }
+
+    private var focusedBacklogTicket: Ticket? {
+        guard let focusedTicketID else { return nil }
+        return backlogTickets.first(where: { $0.id == focusedTicketID })
+    }
+
+    @ViewBuilder
+    private var ticketFocusLayer: some View {
+        let inset = MarsTicketSpec.HubStack.horizontalInset
+        let isFocusing = focusedTicketID != nil
+        let consoleVisible = isFocusing && !cabinIngress
+
+        ZStack {
+            Rectangle()
+                .fill(.ultraThinMaterial)
+                .overlay(Color.black.opacity(MarsTicketSpec.HubStack.focusDimOpacity))
+                .ignoresSafeArea()
+                .opacity(isFocusing && !cabinIngress ? 1 : 0)
+                .allowsHitTesting(isFocusing && !cabinIngress)
+                .onTapGesture(perform: dismissTicketFocus)
+
+            Color.black
+                .ignoresSafeArea()
+                .opacity(cabinIngress ? 1 : 0)
+                .allowsHitTesting(cabinIngress)
+
+            if let ticket = focusedBacklogTicket {
+                VStack(spacing: 0) {
+                    Spacer(minLength: 0)
+                    HubMarsTicketCard(ticket: ticket, onSelect: {})
+                        .matchedGeometryEffect(
+                            id: ticket.id,
+                            in: ticketNamespace,
+                            properties: .frame,
+                            anchor: .center,
+                            isSource: true
+                        )
+                        .padding(.horizontal, inset)
+                    Spacer(minLength: MarsTicketSpec.HubStack.focusConsoleLayoutReserve)
+                }
+                .allowsHitTesting(false)
+            }
+
+            VStack(spacing: 0) {
+                Spacer(minLength: 0)
+                HubTicketFocusActions(
+                    canBoard: canBoardGenerally,
+                    disabledReason: boardDisabledReason,
+                    revealed: consoleVisible,
+                    onBoard: {
+                        if let ticket = focusedBacklogTicket {
+                            boardFromFocus(ticket)
+                        }
+                    },
+                    onOpenDetail: {
+                        if let ticket = focusedBacklogTicket {
+                            openDetailFromFocus(ticket)
+                        }
+                    }
+                )
+            }
+            .allowsHitTesting(consoleVisible)
+        }
+    }
+
+    private func focusTicket(_ id: UUID) {
+        guard focusedTicketID != id else { return }
+        withAnimation(MarsTicketSpec.HubStack.focus) {
+            focusedTicketID = id
+        }
+    }
+
+    private func openDetailFromFocus(_ ticket: Ticket) {
+        let id = ticket.id
+        withAnimation(MarsTicketSpec.HubStack.focus) {
+            focusedTicketID = nil
+        }
+        let wait = MarsTicketSpec.HubStack.focusMilliseconds
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(wait))
+            detailTicket = backlogTickets.first(where: { $0.id == id })
+                ?? allTickets.first(where: { $0.id == id })
+                ?? ticket
+        }
+    }
+
+    private func boardFromFocus(_ ticket: Ticket) {
+        guard canBoardGenerally else { return }
+        withAnimation(MarsTicketSpec.HubStack.cabinIngress) {
+            cabinIngress = true
+        }
+        let ingressMs = MarsTicketSpec.HubStack.cabinIngressMilliseconds
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(ingressMs))
+            board(ticket)
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                focusedTicketID = nil
+                cabinIngress = false
+            }
+        }
+    }
+
+    private func dismissTicketFocus() {
+        guard !cabinIngress else { return }
+        withAnimation(MarsTicketSpec.HubStack.focus) {
+            focusedTicketID = nil
+        }
     }
 
     /// S-03: after a day change, surface the end-of-service flow (once Focus is not blocking).

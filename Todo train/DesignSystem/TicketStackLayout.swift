@@ -2,56 +2,51 @@
 //  TicketStackLayout.swift
 //  Todo train
 //
-//  Pure layout math for the Hub Wallet-style Mars ticket stack.
+//  Pure layout math for the Hub Wallet-style peek deck.
+//  Full Mars faces are stacked; lower cards cover upper ones (front = last = fully visible).
 //
 
 import CoreGraphics
 import Foundation
 
 enum TicketStackLayout {
-    /// Display order: front first, then peeks behind (backlog sortOrder ascending → front is first).
-    /// Returns y-offsets from the top of the stack container for each index in `orderedIDs`
-    /// when `frontID` is expanded at the front.
+    /// sortOrder ascending → top (back) to bottom (front).
     static func offsets(
         orderedIDs: [UUID],
-        frontID: UUID?,
-        ticketHeight: CGFloat,
-        peekStep: CGFloat = MarsTicketSpec.HubStack.peekStep(visibleCount: 1),
+        peekStep: CGFloat = MarsTicketSpec.HubStack.peekStep,
         maxPeeks: Int = MarsTicketSpec.HubStack.maxVisiblePeeks
     ) -> [UUID: CGFloat] {
         guard !orderedIDs.isEmpty else { return [:] }
-        let front = frontID.flatMap { orderedIDs.contains($0) ? $0 : nil } ?? orderedIDs[0]
-        var rest = orderedIDs.filter { $0 != front }
-        if rest.count > maxPeeks - 1 {
-            rest = Array(rest.prefix(maxPeeks - 1))
-        }
-
+        let visible = Array(orderedIDs.prefix(maxPeeks))
         var result: [UUID: CGFloat] = [:]
-        // Peeks sit above the front card strip (Wallet: stack grows downward from peeks into front).
-        // Visual: peeks first (small y), then front at y = peeks * step.
-        for (i, id) in rest.enumerated() {
+        for (i, id) in visible.enumerated() {
             result[id] = CGFloat(i) * peekStep
         }
-        result[front] = CGFloat(rest.count) * peekStep
         return result
     }
 
+    /// Front (last) ticket shows its full face; peeks above are whatever sticks out.
     static func totalHeight(
         orderedCount: Int,
-        ticketHeight: CGFloat,
-        boardBarHeight: CGFloat = MarsTicketSpec.HubStack.frontBoardBarHeight,
-        peekStep: CGFloat = MarsTicketSpec.HubStack.peekStep(visibleCount: 1),
+        faceHeight: CGFloat,
+        peekStep: CGFloat = MarsTicketSpec.HubStack.peekStep,
         maxPeeks: Int = MarsTicketSpec.HubStack.maxVisiblePeeks
     ) -> CGFloat {
         guard orderedCount > 0 else { return 0 }
         let visible = min(orderedCount, maxPeeks)
-        let behind = max(0, visible - 1)
-        return ticketHeight + boardBarHeight + CGFloat(behind) * peekStep
+        if visible == 1 { return faceHeight }
+        return faceHeight + CGFloat(visible - 1) * peekStep
     }
 
-    /// After bringing `tapped` to front, new ordered list for sort persistence (front first).
-    static func orderByBringingToFront(orderedIDs: [UUID], tapped: UUID) -> [UUID] {
-        guard orderedIDs.contains(tapped) else { return orderedIDs }
-        return [tapped] + orderedIDs.filter { $0 != tapped }
+    /// Index 0 = back (top), last = front (bottom). Front tilts least.
+    static func tiltDegrees(
+        index: Int,
+        count: Int,
+        near: Double = MarsTicketSpec.HubStack.tiltNearDegrees,
+        far: Double = MarsTicketSpec.HubStack.tiltFarDegrees
+    ) -> Double {
+        guard count > 1 else { return near }
+        let depth = Double(count - 1 - index) / Double(count - 1)
+        return near + (far - near) * depth
     }
 }
