@@ -25,7 +25,44 @@ enum MarsTicketSpec {
 
     static let horizontalMargin: CGFloat = 20
     static let contentPad: CGFloat = 10
+    static let hubContentPad: CGFloat = 8
     static let verticalSerialWidth: CGFloat = 14
+
+    // MARK: - Hub Wallet peek deck
+
+    enum HubStack {
+        /// Distance between ticket tops. Larger = airier peeks of covered cards.
+        static let peekStep: CGFloat = 104
+        static let maxVisiblePeeks: Int = 8
+        static let horizontalInset: CGFloat = 16
+        /// Front (bottom) card is nearly flat; back cards lean a little more.
+        static let tiltNearDegrees: Double = 0.8
+        static let tiltFarDegrees: Double = 5.5
+        static let focusDimOpacity: Double = 0.42
+        /// Bottom cabin console row (plus hairline); layout reserve above home indicator.
+        static let focusConsoleRowHeight: CGFloat = 56
+        static let focusConsoleLayoutReserve: CGFloat = 72
+        /// Non-focused peers while one ticket is expanded (opacity only — no scale thrash).
+        static let focusPeerOpacity: Double = 0.62
+        static let cabinIngressMilliseconds = 260
+        /// Matched-geometry flight (keep short; avoid bouncy spring overshoot).
+        static let focusMilliseconds = 380
+        static let focus = Animation.easeInOut(duration: Double(focusMilliseconds) / 1_000)
+        static let cabinIngress = Animation.easeIn(duration: Double(cabinIngressMilliseconds) / 1_000)
+
+        /// Legacy alias — step is the layout contract now (covering creates peeks).
+        static var peekHeight: CGFloat { peekStep }
+
+        static func peekStep(visibleCount: Int) -> CGFloat {
+            _ = visibleCount
+            return peekStep
+        }
+    }
+
+    enum Density: Equatable {
+        case celebration
+        case hub
+    }
 
     // MARK: - Fixed paper inks (never semantic / adaptive)
 

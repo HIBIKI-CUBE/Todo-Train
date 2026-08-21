@@ -10,6 +10,7 @@ import SwiftUI
 
 struct TicketIssueEjectEvent: Identifiable, Equatable {
     let id: UUID
+    let ticketID: UUID
     let title: String
     let minutes: Int
     let tagNames: [String]
@@ -17,12 +18,14 @@ struct TicketIssueEjectEvent: Identifiable, Equatable {
 
     init(
         id: UUID = UUID(),
+        ticketID: UUID,
         title: String,
         minutes: Int,
         tagNames: [String] = [],
         issuedAt: Date = .now
     ) {
         self.id = id
+        self.ticketID = ticketID
         self.title = title
         self.minutes = minutes
         self.tagNames = tagNames
@@ -316,6 +319,7 @@ struct TicketIssueEjectOverlay: View {
         Color(uiColor: .systemGroupedBackground).ignoresSafeArea()
         TicketIssueEjectOverlay(
             event: TicketIssueEjectEvent(
+                ticketID: UUID(),
                 title: "週次レビューの下書き",
                 minutes: 25,
                 tagNames: ["仕事"]
