@@ -49,4 +49,33 @@ enum TicketStackLayout {
         let depth = Double(count - 1 - index) / Double(count - 1)
         return near + (far - near) * depth
     }
+
+    /// Slot center of a stacked face, in the same space as `stackFrame`.
+    static func slotCenter(
+        stackFrame: CGRect,
+        horizontalInset: CGFloat,
+        faceWidth: CGFloat,
+        faceHeight: CGFloat,
+        slotTopY: CGFloat
+    ) -> CGPoint {
+        CGPoint(
+            x: stackFrame.minX + horizontalInset + faceWidth / 2,
+            y: stackFrame.minY + slotTopY + faceHeight / 2
+        )
+    }
+
+    /// Keep the ticket in its column (portrait = screen center, landscape = right pane).
+    /// Vertical target is the canvas midpoint above the cabin console.
+    static func liftDestination(
+        stackFrame: CGRect,
+        canvasSize: CGSize,
+        consoleReserve: CGFloat = MarsTicketSpec.HubStack.focusConsoleLayoutReserve
+    ) -> CGPoint {
+        let y = max(consoleReserve / 2, (canvasSize.height - consoleReserve) / 2)
+        return CGPoint(x: stackFrame.midX, y: y)
+    }
+
+    static func liftOffset(from slotCenter: CGPoint, to destination: CGPoint) -> CGSize {
+        CGSize(width: destination.x - slotCenter.x, height: destination.y - slotCenter.y)
+    }
 }

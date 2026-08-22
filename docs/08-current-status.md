@@ -54,8 +54,8 @@ Todo train/
                            MarsTicketSpec, MarsTicketView, TicketStackLayout
   Features/
     Hub/                   HubView, QuickAddBar（親指発券帯）, ServiceSummaryBar,
-                           TicketStackView（読める peek＋中央 focus）, HubMarsTicketCard,
-                           HubTicketFocusActions（発車/詳細ドック）
+                           TicketStackView（読める peek＋同一券の持ち上げ）, HubMarsTicketCard,
+                           HubTicketGateBand（券面改札帯）
     Focus/                 FocusView, FocusControlsView, OvertimeSheet
     Arrival/               PauseLimitSheet, TransferCanvasPresenter
     History/               HistoryView, WeeklyReportView

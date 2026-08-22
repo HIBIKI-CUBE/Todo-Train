@@ -3,10 +3,14 @@
 //  Todo train
 //
 //  Wallet peek deck: full Mars faces stacked (front = bottom = fully visible).
-//  Focus morphs via matchedGeometry; deck card stays mounted (opacity 0) so return is continuous.
+//  Focus picks up the same card (tilt flattens, offset to cabin center). No copy.
 //
 
 import SwiftUI
+
+enum HubTicketCanvas {
+    static let spaceName = "hubTicketCanvas"
+}
 
 private struct TicketStackHeightKey: PreferenceKey {
     static var defaultValue: CGFloat = 0
@@ -20,8 +24,7 @@ struct TicketStackView: View {
     let canBoard: Bool
     let boardDisabledReason: String?
     @Binding var focusedTicketID: UUID?
-    var ticketNamespace: Namespace.ID
-    /// Hub owns focus entry (animation / chrome policy).
+    var canvasSize: CGSize
     var onFocusTicket: (UUID) -> Void
     let onBoard: (Ticket) -> Void
     let onOpenDetail: (Ticket) -> Void
@@ -46,6 +49,11 @@ struct TicketStackView: View {
             )
             let visibleIDs = Set(yOffsets.keys)
             let anyFocused = focusedTicketID != nil
+            let stackFrame = geo.frame(in: .named(HubTicketCanvas.spaceName))
+            let destination = TicketStackLayout.liftDestination(
+                stackFrame: stackFrame,
+                canvasSize: canvasSize.width > 0 ? canvasSize : geo.size
+            )
 
             ZStack(alignment: .top) {
                 ForEach(Array(tickets.enumerated()), id: \.element.id) { index, ticket in
@@ -53,25 +61,31 @@ struct TicketStackView: View {
                         let y = yOffsets[ticket.id] ?? 0
                         let isFocused = ticket.id == focusedTicketID
                         let peerFocused = anyFocused && !isFocused
-                        // Keep peer tilt; only the flying card is flat (it's opacity-0 on deck).
                         let tilt = isFocused
                             ? 0.0
                             : TicketStackLayout.tiltDegrees(index: index, count: tickets.count)
+                        let slot = TicketStackLayout.slotCenter(
+                            stackFrame: stackFrame,
+                            horizontalInset: MarsTicketSpec.HubStack.horizontalInset,
+                            faceWidth: width,
+                            faceHeight: faceHeight,
+                            slotTopY: y
+                        )
+                        let lift = isFocused
+                            ? TicketStackLayout.liftOffset(from: slot, to: destination)
+                            : .zero
 
                         HubMarsTicketCard(
                             ticket: ticket,
-                            onSelect: { onFocusTicket(ticket.id) }
+                            isLifted: isFocused,
+                            canBoard: canBoard,
+                            disabledReason: boardDisabledReason,
+                            onSelect: { onFocusTicket(ticket.id) },
+                            onBoard: { onBoard(ticket) },
+                            onOpenDetail: { onOpenDetail(ticket) }
                         )
                         .frame(width: width, height: faceHeight, alignment: .top)
-                        .matchedGeometryEffect(
-                            id: ticket.id,
-                            in: ticketNamespace,
-                            properties: .frame,
-                            anchor: .center,
-                            isSource: !isFocused
-                        )
-                        .opacity(isFocused ? 0 : (peerFocused ? MarsTicketSpec.HubStack.focusPeerOpacity : 1))
-                        .allowsHitTesting(!anyFocused)
+                        .opacity(peerFocused ? MarsTicketSpec.HubStack.focusPeerOpacity : 1)
                         .rotation3DEffect(
                             .degrees(tilt),
                             axis: (x: 1, y: 0, z: 0),
@@ -80,6 +94,7 @@ struct TicketStackView: View {
                         )
                         .padding(.horizontal, MarsTicketSpec.HubStack.horizontalInset)
                         .offset(y: y)
+                        .offset(x: lift.width, y: lift.height)
                         .zIndex(isFocused ? 1_000 : Double(index))
                         .contextMenu {
                             Button("詳細") { onOpenDetail(ticket) }
@@ -95,7 +110,10 @@ struct TicketStackView: View {
             .preference(key: TicketStackHeightKey.self, value: totalH)
         }
         .frame(height: reportedHeight > 0 ? reportedHeight : fallbackHeight)
-        .onPreferenceChange(TicketStackHeightKey.self) { reportedHeight = $0 }
+        .onPreferenceChange(TicketStackHeightKey.self) { newValue in
+            guard abs(reportedHeight - newValue) > 0.5 else { return }
+            reportedHeight = newValue
+        }
         .onChange(of: orderedIDs) { _, ids in
             if let focusedTicketID, !ids.contains(focusedTicketID) {
                 self.focusedTicketID = nil
@@ -114,7 +132,6 @@ struct TicketStackView: View {
 
 #Preview {
     struct PreviewHost: View {
-        @Namespace private var ns
         @State private var focused: UUID?
         private let tickets = [
             Ticket(title: "メモ", estimatedSeconds: 900, sortOrder: 0),
@@ -129,7 +146,7 @@ struct TicketStackView: View {
                     canBoard: true,
                     boardDisabledReason: nil,
                     focusedTicketID: $focused,
-                    ticketNamespace: ns,
+                    canvasSize: CGSize(width: 390, height: 800),
                     onFocusTicket: { id in
                         withAnimation(MarsTicketSpec.HubStack.focus) {
                             focused = id
@@ -141,8 +158,17 @@ struct TicketStackView: View {
                 )
                 .padding(.vertical)
             }
+            .coordinateSpace(name: HubTicketCanvas.spaceName)
             .background(Color(uiColor: .systemGroupedBackground))
         }
     }
     return PreviewHost()
 }
+
+struct HubCanvasSizeKey: PreferenceKey {
+    static var defaultValue: CGSize = .zero
+    static func reduce(value: inout CGSize, nextValue: () -> CGSize) {
+        value = nextValue()
+    }
+}
+

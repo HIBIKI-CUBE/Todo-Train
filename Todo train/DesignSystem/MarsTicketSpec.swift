@@ -38,12 +38,12 @@ enum MarsTicketSpec {
         /// Front (bottom) card is nearly flat; back cards lean a little more.
         static let tiltNearDegrees: Double = 0.8
         static let tiltFarDegrees: Double = 5.5
-        static let focusDimOpacity: Double = 0.42
-        /// Bottom cabin console row (plus hairline); layout reserve above home indicator.
-        static let focusConsoleRowHeight: CGFloat = 56
-        static let focusConsoleLayoutReserve: CGFloat = 72
+        static let focusDimOpacity: Double = 0.16
+        static let gateBandHeight: CGFloat = 46
+        /// Ticket lift target sits above the floating tab bar (no separate dock).
+        static let focusConsoleLayoutReserve: CGFloat = 96
         /// Non-focused peers while one ticket is expanded (opacity only — no scale thrash).
-        static let focusPeerOpacity: Double = 0.62
+        static let focusPeerOpacity: Double = 0.4
         static let cabinIngressMilliseconds = 260
         /// Matched-geometry flight (keep short; avoid bouncy spring overshoot).
         static let focusMilliseconds = 380

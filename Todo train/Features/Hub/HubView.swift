@@ -25,7 +25,7 @@ struct HubView: View {
     @State private var focusedTicketID: UUID?
     /// Full-cabin black beat before Focus cover.
     @State private var cabinIngress = false
-    @Namespace private var ticketNamespace
+    @State private var hubCanvasSize: CGSize = .zero
 
     private enum HubDestination: Hashable, Identifiable {
         case tags
@@ -79,6 +79,17 @@ struct HubView: View {
             } else {
                 portraitHub
             }
+        }
+        .coordinateSpace(name: HubTicketCanvas.spaceName)
+        .background {
+            GeometryReader { geo in
+                Color.clear.preference(key: HubCanvasSizeKey.self, value: geo.size)
+            }
+        }
+        .onPreferenceChange(HubCanvasSizeKey.self) { size in
+            guard abs(hubCanvasSize.width - size.width) > 0.5
+                || abs(hubCanvasSize.height - size.height) > 0.5 else { return }
+            hubCanvasSize = size
         }
         // Only hide chrome during cabin ingress (full black). Focus dim covers content without
         // resizing the tab/nav layout.
@@ -149,7 +160,11 @@ struct HubView: View {
             }
         }
         .overlay {
-            ticketFocusLayer
+            if cabinIngress {
+                Color.black
+                    .ignoresSafeArea()
+                    .allowsHitTesting(true)
+            }
         }
         .sheet(isPresented: $showServiceEndSheet) {
             ServiceEndSheet { message in
@@ -175,15 +190,19 @@ struct HubView: View {
     private var portraitHub: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: TrainTheme.Space.lg) {
-                serviceBlock
-                if !sessionManager.pausedSessions.isEmpty {
-                    pausedBlock
+                VStack(alignment: .leading, spacing: TrainTheme.Space.lg) {
+                    serviceBlock
+                    if !sessionManager.pausedSessions.isEmpty {
+                        pausedBlock
+                    }
                 }
+                .overlay { hubChromeDim }
                 ticketsBlock
             }
             .padding(.bottom, TrainTheme.Space.xl)
         }
         .scrollClipDisabled()
+        .scrollDisabled(focusedTicketID != nil)
         .background(TrainTheme.platform)
     }
 
@@ -200,6 +219,8 @@ struct HubView: View {
                 }
                 .padding(.bottom, TrainTheme.Space.lg)
             }
+            .scrollDisabled(focusedTicketID != nil)
+            .overlay { hubChromeDim }
             .frame(width: TrainLayout.hubServicePaneWidth)
             .background(TrainTheme.platform)
 
@@ -208,6 +229,7 @@ struct HubView: View {
                     .padding(.bottom, TrainTheme.Space.lg)
             }
             .scrollClipDisabled()
+            .scrollDisabled(focusedTicketID != nil)
             .background(TrainTheme.platform)
         }
     }
@@ -283,10 +305,16 @@ struct HubView: View {
                     canBoard: canBoardGenerally,
                     boardDisabledReason: boardDisabledReason,
                     focusedTicketID: $focusedTicketID,
-                    ticketNamespace: ticketNamespace,
+                    canvasSize: hubCanvasSize,
                     onFocusTicket: { focusTicket($0) },
-                    onBoard: { board($0) },
-                    onOpenDetail: { detailTicket = $0 },
+                    onBoard: { boardFromFocus($0) },
+                    onOpenDetail: { ticket in
+                        if focusedTicketID != nil {
+                            openDetailFromFocus(ticket)
+                        } else {
+                            detailTicket = ticket
+                        }
+                    },
                     onDelete: { deleteTicket($0) }
                 )
             }
@@ -294,67 +322,14 @@ struct HubView: View {
         .padding(.top, TrainTheme.Space.sm)
     }
 
-    private var focusedBacklogTicket: Ticket? {
-        guard let focusedTicketID else { return nil }
-        return backlogTickets.first(where: { $0.id == focusedTicketID })
-    }
-
     @ViewBuilder
-    private var ticketFocusLayer: some View {
-        let inset = MarsTicketSpec.HubStack.horizontalInset
-        let isFocusing = focusedTicketID != nil
-        let consoleVisible = isFocusing && !cabinIngress
-
-        ZStack {
+    private var hubChromeDim: some View {
+        if focusedTicketID != nil && !cabinIngress {
             Rectangle()
-                .fill(.ultraThinMaterial)
-                .overlay(Color.black.opacity(MarsTicketSpec.HubStack.focusDimOpacity))
-                .ignoresSafeArea()
-                .opacity(isFocusing && !cabinIngress ? 1 : 0)
-                .allowsHitTesting(isFocusing && !cabinIngress)
+                .fill(Color.black.opacity(MarsTicketSpec.HubStack.focusDimOpacity))
                 .onTapGesture(perform: dismissTicketFocus)
-
-            Color.black
-                .ignoresSafeArea()
-                .opacity(cabinIngress ? 1 : 0)
-                .allowsHitTesting(cabinIngress)
-
-            if let ticket = focusedBacklogTicket {
-                VStack(spacing: 0) {
-                    Spacer(minLength: 0)
-                    HubMarsTicketCard(ticket: ticket, onSelect: {})
-                        .matchedGeometryEffect(
-                            id: ticket.id,
-                            in: ticketNamespace,
-                            properties: .frame,
-                            anchor: .center,
-                            isSource: true
-                        )
-                        .padding(.horizontal, inset)
-                    Spacer(minLength: MarsTicketSpec.HubStack.focusConsoleLayoutReserve)
-                }
-                .allowsHitTesting(false)
-            }
-
-            VStack(spacing: 0) {
-                Spacer(minLength: 0)
-                HubTicketFocusActions(
-                    canBoard: canBoardGenerally,
-                    disabledReason: boardDisabledReason,
-                    revealed: consoleVisible,
-                    onBoard: {
-                        if let ticket = focusedBacklogTicket {
-                            boardFromFocus(ticket)
-                        }
-                    },
-                    onOpenDetail: {
-                        if let ticket = focusedBacklogTicket {
-                            openDetailFromFocus(ticket)
-                        }
-                    }
-                )
-            }
-            .allowsHitTesting(consoleVisible)
+                .accessibilityAddTraits(.isButton)
+                .accessibilityLabel("選択をやめる")
         }
     }
 

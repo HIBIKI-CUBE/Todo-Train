@@ -3,6 +3,7 @@
 //  Todo trainTests
 //
 
+import CoreGraphics
 import Foundation
 import Testing
 @testable import Todo_train
@@ -39,5 +40,26 @@ struct TicketStackLayoutTests {
         #expect(back == 7)
         #expect(abs(mid - 4) < 0.01)
         #expect(front == 1)
+    }
+
+    @Test func liftOffset_movesSlotToCanvasCenterAboveConsole() {
+        let stack = CGRect(x: 0, y: 200, width: 390, height: 400)
+        let slot = TicketStackLayout.slotCenter(
+            stackFrame: stack,
+            horizontalInset: 16,
+            faceWidth: 358,
+            faceHeight: 242,
+            slotTopY: 104
+        )
+        let dest = TicketStackLayout.liftDestination(
+            stackFrame: stack,
+            canvasSize: CGSize(width: 390, height: 800),
+            consoleReserve: 72
+        )
+        let lift = TicketStackLayout.liftOffset(from: slot, to: dest)
+        #expect(abs(dest.x - 195) < 0.01)
+        #expect(abs(dest.y - 364) < 0.01)
+        #expect(abs(slot.x + lift.width - dest.x) < 0.01)
+        #expect(abs(slot.y + lift.height - dest.y) < 0.01)
     }
 }
