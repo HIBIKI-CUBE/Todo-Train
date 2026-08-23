@@ -35,13 +35,16 @@ enum TrainLayout {
     }
 
     /// Compact height is necessary but not sufficient: a narrow mirrored window stays one column.
+    /// Width 0 is "not measured yet" — treat as split so landscape does not flash a portrait stack.
     static func shouldSplitHub(availableWidth: CGFloat, compactHeight: Bool) -> Bool {
-        compactHeight && hubServicePaneWidth(for: availableWidth) > 0
+        guard compactHeight else { return false }
+        if availableWidth <= 1 { return true }
+        return hubServicePaneWidth(for: availableWidth) > 0
     }
 
     /// 0 means do not split — caller must use a single column.
     static func hubServicePaneWidth(for availableWidth: CGFloat) -> CGFloat {
-        guard availableWidth > 0 else { return 0 }
+        if availableWidth <= 1 { return hubServicePaneIdealWidth }
         let ideal = min(hubServicePaneIdealWidth, availableWidth * hubServicePaneMaxFraction)
         let pane = min(ideal, availableWidth - hubMinimumTicketPaneWidth)
         guard pane >= hubServicePaneMinimumWidth else { return 0 }
@@ -62,17 +65,6 @@ enum TrainLayout {
         horizontalInset: CGFloat = MarsTicketSpec.HubStack.horizontalInset
     ) -> CGSize {
         ticketFaceSize(containerWidth: overlayWidth, horizontalInset: horizontalInset)
-    }
-
-    /// ScrollView will report a child's *content* width, which can be a leftover landscape face.
-    /// Never let that outgrow the current column proposal.
-    static func resolvedTicketContainerWidth(measured: CGFloat, proposed: CGFloat) -> CGFloat {
-        let measuredWidth = measured > 1 ? measured : 0
-        let proposedWidth = proposed > 1 ? proposed : 0
-        if measuredWidth > 1, proposedWidth > 1 {
-            return min(measuredWidth, proposedWidth)
-        }
-        return max(measuredWidth, proposedWidth)
     }
 
     static func slotFrames(

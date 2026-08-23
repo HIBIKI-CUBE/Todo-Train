@@ -162,11 +162,11 @@ Focus / 設定は HIG 骨格のまま。Hub の未乗車リストはマルス券
 | 高さは希少 | large title を inline に、サマリー・ヘッダを 1 行化 |
 | 幅は密度 | 行内メタ・タグを横展開。空き幅のダッシュボード化はしない |
 | Hub 2 ペイン | compact height **かつ** 幅がサービスペイン＋最小券幅を満たすときだけ左ペイン（理想 280pt、狭い窓では縮小／非 split） |
-| 券サイズ | マルス比はコンテナの **今回の幅**。スロット枠は着地・戻しの位置だけ。古い幅は残さない |
+| 券サイズ | 幅の真実源は **そのレイアウトパスの提案幅**（`TicketDeckLayout` / overlay の `GeometryReader`）。測って `@State` に残さない。スロット枠は着地・戻しの位置だけ |
 | 骨格維持 | Hub スタック + Form / cabin。マスター・ディテール分割・FAB は増やさない |
 | Focus 例外 | 縦長は縦パネル格子。compact height は計器 \| 操作の 2 ペイン（幅約 38%） |
 
-実装: `DesignSystem/TrainLayout.swift`。
+実装: `DesignSystem/TrainLayout.swift`（split）、`DesignSystem/TicketDeckLayout.swift`（券面は提案幅）。
 
 ## AlarmKit / StandBy（終了ベル LA）
 

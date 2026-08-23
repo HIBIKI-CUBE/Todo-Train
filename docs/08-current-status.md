@@ -1,6 +1,6 @@
 # 08 — 現状ステータス
 
-最終更新: 2026-08-23（Hub 券サイズはシーン幅に追従。回転／ミラーリングリサイズ）
+最終更新: 2026-08-23（Hub 券幅は提案幅のみ。測ってキャッシュしない）
 
 ## 結論
 
@@ -48,7 +48,7 @@ Todo train/
     History/               HistorySearch, TicketReissue, WeeklyReport, Punctuality
     Settings/              AppSettings
     Coaching/              CoachingEngine
-  DesignSystem/            TrainTheme, TrainChrome, TrainLayout, EstimateChips,
+  DesignSystem/            TrainTheme, TrainChrome, TrainLayout, TicketDeckLayout, EstimateChips,
                            DeleteConfirmation, EstimateSnapMapping, EstimateSnapGauge,
                            TicketIssueEject, TicketMotion, ArrivalInvalidateOverlay, PunctualityMomentOverlay,
                            MarsTicketSpec, MarsTicketView, TicketStackLayout

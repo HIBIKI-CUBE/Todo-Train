@@ -27,9 +27,6 @@ struct HubView: View {
     @State private var ticketSlotFrames: [UUID: CGRect] = [:]
     @State private var departingTicketID: UUID?
     @State private var isPuttingBack = false
-    @State private var hubWidth: CGFloat = 0
-    /// Viewport of the ticket column (ScrollView), not content width.
-    @State private var ticketViewportWidth: CGFloat = 0
 
     @Environment(TicketMotionBridge.self) private var ticketMotion
     @Environment(\.focusZoomNamespace) private var focusZoomNamespace
@@ -86,52 +83,30 @@ struct HubView: View {
         return "発車できません"
     }
 
-    private var isLandscapeSplit: Bool {
-        TrainLayout.shouldSplitHub(
-            availableWidth: hubWidth,
-            compactHeight: verticalSizeClass == .compact
-        )
-    }
-
-    private var servicePaneWidth: CGFloat {
-        TrainLayout.hubServicePaneWidth(for: hubWidth)
-    }
-
-    private var ticketColumnWidth: CGFloat {
-        if ticketViewportWidth > 1 {
-            return ticketViewportWidth
-        }
-        if isLandscapeSplit {
-            return max(0, hubWidth - servicePaneWidth)
-        }
-        return hubWidth
+    private var isCompactHeight: Bool {
+        verticalSizeClass == .compact
     }
 
     /// Ticket lift does not hide chrome (toolbar(.hidden) mid-flight caused layout がくつき).
     /// Focus cover is the mode cut — no extra black wait on Hub.
 
     var body: some View {
-        Group {
-            if isLandscapeSplit {
-                landscapeSplitHub
-            } else {
-                portraitHub
-            }
-        }
-        .onGeometryChange(for: CGFloat.self) { proxy in
-            proxy.size.width
-        } action: { _, newWidth in
-            if abs(hubWidth - newWidth) > 0.5 {
-                if hubWidth > 1 {
-                    ticketSlotFrames = [:]
+        GeometryReader { geo in
+            let split = TrainLayout.shouldSplitHub(
+                availableWidth: geo.size.width,
+                compactHeight: isCompactHeight
+            )
+            let pane = TrainLayout.hubServicePaneWidth(for: geo.size.width)
+            Group {
+                if split {
+                    landscapeSplitHub(servicePaneWidth: pane)
+                } else {
+                    portraitHub
                 }
-                hubWidth = newWidth
             }
+            .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
         }
-        .onChange(of: isLandscapeSplit) { _, _ in
-            ticketViewportWidth = 0
-            ticketSlotFrames = [:]
-        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .coordinateSpace(.named(HubTicketCanvas.spaceName))
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -249,16 +224,11 @@ struct HubView: View {
         .scrollClipDisabled()
         .scrollDisabled(isPresentingOnDeck)
         .overlay { hubPresentOverlay }
-        .onGeometryChange(for: CGFloat.self) { proxy in
-            proxy.size.width
-        } action: { _, newWidth in
-            ticketViewportWidth = newWidth
-        }
     }
 
     // MARK: - Landscape split
 
-    private var landscapeSplitHub: some View {
+    private func landscapeSplitHub(servicePaneWidth: CGFloat) -> some View {
         HStack(alignment: .top, spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: TrainTheme.Space.md) {
@@ -272,21 +242,20 @@ struct HubView: View {
             .scrollDisabled(isPresentingOnDeck)
             .overlay { hubChromeDim }
             .frame(width: servicePaneWidth)
+            .frame(maxHeight: .infinity, alignment: .top)
             .background(TrainTheme.platform)
 
             ScrollView {
                 ticketsBlock
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
                     .padding(.bottom, TrainTheme.Space.lg)
             }
             .scrollClipDisabled()
             .scrollDisabled(isPresentingOnDeck)
             .overlay { hubPresentOverlay }
-            .onGeometryChange(for: CGFloat.self) { proxy in
-                proxy.size.width
-            } action: { _, newWidth in
-                ticketViewportWidth = newWidth
-            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
     // MARK: - Blocks
@@ -348,7 +317,7 @@ struct HubView: View {
                     Text("右上の ＋ から掃き出しましょう。")
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, isLandscapeSplit ? 8 : 24)
+                .padding(.vertical, isCompactHeight ? 8 : 24)
             } else if stackTickets.isEmpty {
                 Text("未乗車の切符はありません。停車中から再乗車するか、＋ で追加してください。")
                     .font(.footnote)
@@ -368,10 +337,8 @@ struct HubView: View {
                     onOpenDetail: { ticket in
                         detailTicket = ticket
                     },
-                    onDelete: { deleteTicket($0) },
-                    proposedWidth: ticketColumnWidth
+                    onDelete: { deleteTicket($0) }
                 )
-                .id(isLandscapeSplit)
                 .onPreferenceChange(TicketSlotFramesKey.self) { reported in
                     ticketSlotFrames = TrainLayout.slotFrames(
                         reported: reported,
@@ -602,7 +569,7 @@ struct HubView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(ticket.title)
                         .font(TrainTheme.TypeScale.ticketTitle())
-                        .lineLimit(isLandscapeSplit ? 2 : nil)
+                        .lineLimit(isCompactHeight ? 2 : nil)
                         .foregroundStyle(.primary)
                     Text("残り \(formatRemaining(session))")
                         .font(TrainTheme.TypeScale.meta())

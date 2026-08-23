@@ -3,6 +3,7 @@
 //  Todo train
 //
 //  Wallet peek deck: full Mars faces stacked (front = bottom = fully visible).
+//  Width comes from TicketDeckLayout's proposal this pass — never cached @State.
 //  Selection presentation lives on Hub's overlay, not in this stack.
 //
 
@@ -25,36 +26,18 @@ struct TicketStackView: View {
     let onBoard: (Ticket) -> Void
     let onOpenDetail: (Ticket) -> Void
     let onDelete: (Ticket) -> Void
-    /// Parent-measured column width so the first layout pass is not a 390pt guess.
-    var proposedWidth: CGFloat = 0
-
-    @State private var stackWidth: CGFloat = 0
 
     private var orderedIDs: [UUID] {
         tickets.map(\.id)
     }
 
     var body: some View {
-        let containerWidth = TrainLayout.resolvedTicketContainerWidth(
-            measured: stackWidth,
-            proposed: proposedWidth
-        )
-        let face = TrainLayout.ticketFaceSize(containerWidth: containerWidth)
-        let peekStep = MarsTicketSpec.HubStack.peekStep
-        let yOffsets = TicketStackLayout.offsets(orderedIDs: orderedIDs, peekStep: peekStep)
-        let totalH = TicketStackLayout.totalHeight(
-            orderedCount: tickets.count,
-            faceHeight: face.height,
-            peekStep: peekStep
-        )
-        let visibleIDs = Set(yOffsets.keys)
-        let visibleTickets = tickets.filter { visibleIDs.contains($0.id) }
+        let visibleTickets = tickets
         let anyFocused = focusedTicketID != nil
         let dimPeers = anyFocused && !isPuttingBack
 
-        ZStack(alignment: .top) {
+        TicketDeckLayout() {
             ForEach(Array(visibleTickets.enumerated()), id: \.element.id) { index, ticket in
-                let y = yOffsets[ticket.id] ?? 0
                 let isHidden = ticket.id == hiddenTicketID
                 let isFocused = ticket.id == focusedTicketID
                 let peerFocused = dimPeers && !isFocused && !isHidden
@@ -62,32 +45,12 @@ struct TicketStackView: View {
 
                 ticketCard(
                     ticket: ticket,
-                    index: index,
-                    y: y,
-                    width: face.width,
-                    faceHeight: face.height,
                     isHidden: isHidden,
                     isFocused: isFocused,
                     peerFocused: peerFocused,
                     blockPeerHits: anyFocused,
                     tilt: tilt
                 )
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .top)
-        .frame(height: containerWidth > 1 ? totalH : 0, alignment: .top)
-        // ScrollView sizes content to children; pin to the column, not the last face width.
-        .containerRelativeFrame(.horizontal, alignment: .top)
-        .onGeometryChange(for: CGFloat.self) { proxy in
-            proxy.size.width
-        } action: { _, newWidth in
-            if abs(stackWidth - newWidth) > 0.5 {
-                stackWidth = newWidth
-            }
-        }
-        .onChange(of: proposedWidth) { _, newWidth in
-            if newWidth > 1, stackWidth > newWidth + 1 {
-                stackWidth = newWidth
             }
         }
         .onChange(of: orderedIDs) { _, ids in
@@ -100,10 +63,6 @@ struct TicketStackView: View {
     @ViewBuilder
     private func ticketCard(
         ticket: Ticket,
-        index: Int,
-        y: CGFloat,
-        width: CGFloat,
-        faceHeight: CGFloat,
         isHidden: Bool,
         isFocused: Bool,
         peerFocused: Bool,
@@ -135,7 +94,6 @@ struct TicketStackView: View {
             }
             Button("削除", role: .destructive) { onDelete(ticket) }
         }
-        .frame(width: width, height: faceHeight, alignment: .top)
         .overlay {
             GeometryReader { slotGeo in
                 Color.clear.preference(
@@ -144,9 +102,6 @@ struct TicketStackView: View {
                 )
             }
         }
-        .padding(.horizontal, MarsTicketSpec.HubStack.horizontalInset)
-        .padding(.top, y)
-        .zIndex(Double(index))
     }
 }
 

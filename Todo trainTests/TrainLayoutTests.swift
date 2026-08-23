@@ -12,6 +12,7 @@ struct TrainLayoutTests {
     @Test func shouldSplitHub_requiresCompactHeight() {
         #expect(TrainLayout.shouldSplitHub(availableWidth: 900, compactHeight: false) == false)
         #expect(TrainLayout.shouldSplitHub(availableWidth: 900, compactHeight: true) == true)
+        #expect(TrainLayout.shouldSplitHub(availableWidth: 0, compactHeight: true) == true)
     }
 
     @Test func shouldSplitHub_skipsNarrowWindows() {
@@ -32,13 +33,6 @@ struct TrainLayoutTests {
         #expect(wide.width == 400 - MarsTicketSpec.HubStack.horizontalInset * 2)
         #expect(narrow.width < wide.width)
         #expect(abs(wide.height - MarsTicketSpec.height(forWidth: wide.width)) < 0.001)
-    }
-
-    @Test func resolvedTicketContainerWidth_clampsStaleLandscapeMeasurement() {
-        #expect(TrainLayout.resolvedTicketContainerWidth(measured: 900, proposed: 390) == 390)
-        #expect(TrainLayout.resolvedTicketContainerWidth(measured: 0, proposed: 390) == 390)
-        #expect(TrainLayout.resolvedTicketContainerWidth(measured: 400, proposed: 0) == 400)
-        #expect(TrainLayout.resolvedTicketContainerWidth(measured: 650, proposed: 650) == 650)
     }
 
     @Test func presentedCardSize_ignoresStaleSlotWidth() {
