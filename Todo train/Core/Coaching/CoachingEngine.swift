@@ -39,7 +39,6 @@ struct HeuristicCoachingEngine: CoachingEngine {
 }
 
 #if canImport(FoundationModels)
-@available(iOS 26.0, *)
 struct PCCCoachingEngine: CoachingEngine {
     func suggestSplit(for title: String, estimatedMinutes: Int) async -> SplitSuggestion? {
         // Stub: wire Private Cloud Compute when available on device.
