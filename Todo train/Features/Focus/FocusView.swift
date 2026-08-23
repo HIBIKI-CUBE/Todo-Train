@@ -76,6 +76,7 @@ struct FocusView: View {
                 handleOvertimeSound()
             }
         }
+        .modifier(FocusKeepAwakeModifier(settingEnabled: settings.keepAwakeWhileChargingInFocus))
     }
 
     // MARK: - Dashboards

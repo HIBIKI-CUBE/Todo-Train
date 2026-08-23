@@ -16,9 +16,15 @@ struct AppSettingsTests {
     }
 
     @Test func makeForTesting_setsValues() {
-        let settings = AppSettings.makeForTesting(pauseLimit: 3, overtimeSoundEnabled: false, endBellEnabled: true)
+        let settings = AppSettings.makeForTesting(
+            pauseLimit: 3,
+            overtimeSoundEnabled: false,
+            endBellEnabled: true,
+            keepAwakeWhileChargingInFocus: false
+        )
         #expect(settings.pauseLimit == 3)
         #expect(settings.overtimeSoundEnabled == false)
         #expect(settings.endBellEnabled == true)
+        #expect(settings.keepAwakeWhileChargingInFocus == false)
     }
 }

@@ -15,7 +15,7 @@
 
 | WP | 状態 | 備考 |
 |----|------|------|
-| WP-A Settings | ✅ | 停車上限 2/3、超過音 ON/OFF |
+| WP-A Settings | ✅ | 停車上限 2/3、超過音 ON/OFF、フォーカス充電中は画面を消さない |
 | WP-B History | ✅ | 検索 + 今日に追加 |
 | WP-C Reorder | ✅ | フィルタ強調 + D&D |
 | WP-D dueDate | ✅ | 任意期限、自動ソートなし |

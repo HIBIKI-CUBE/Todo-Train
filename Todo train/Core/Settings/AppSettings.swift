@@ -15,6 +15,7 @@ final class AppSettings {
         static let pauseLimit = "settings.pauseLimit"
         static let overtimeSoundEnabled = "settings.overtimeSoundEnabled"
         static let endBellEnabled = "settings.endBellEnabled"
+        static let keepAwakeWhileChargingInFocus = "settings.keepAwakeWhileChargingInFocus"
     }
 
     var pauseLimit: Int {
@@ -41,15 +42,24 @@ final class AppSettings {
         }
     }
 
+    /// Focus + charging (or full): disable idle timer so the screen stays on. Default ON.
+    var keepAwakeWhileChargingInFocus: Bool {
+        didSet {
+            UserDefaults.standard.set(keepAwakeWhileChargingInFocus, forKey: Keys.keepAwakeWhileChargingInFocus)
+        }
+    }
+
     static func makeForTesting(
         pauseLimit: Int = PauseLimitGuard.defaultLimit,
         overtimeSoundEnabled: Bool = true,
-        endBellEnabled: Bool = false
+        endBellEnabled: Bool = false,
+        keepAwakeWhileChargingInFocus: Bool = true
     ) -> AppSettings {
         let settings = AppSettings()
         settings.pauseLimit = Self.clampPauseLimit(pauseLimit)
         settings.overtimeSoundEnabled = overtimeSoundEnabled
         settings.endBellEnabled = endBellEnabled
+        settings.keepAwakeWhileChargingInFocus = keepAwakeWhileChargingInFocus
         return settings
     }
 
@@ -67,6 +77,12 @@ final class AppSettings {
             endBellEnabled = false
         } else {
             endBellEnabled = UserDefaults.standard.bool(forKey: Keys.endBellEnabled)
+        }
+
+        if UserDefaults.standard.object(forKey: Keys.keepAwakeWhileChargingInFocus) == nil {
+            keepAwakeWhileChargingInFocus = true
+        } else {
+            keepAwakeWhileChargingInFocus = UserDefaults.standard.bool(forKey: Keys.keepAwakeWhileChargingInFocus)
         }
     }
 

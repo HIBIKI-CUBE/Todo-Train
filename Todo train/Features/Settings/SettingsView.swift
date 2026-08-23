@@ -29,6 +29,17 @@ struct SettingsView: View {
             }
 
             Section {
+                Toggle("充電中は画面を消さない", isOn: Binding(
+                    get: { settings.keepAwakeWhileChargingInFocus },
+                    set: { settings.keepAwakeWhileChargingInFocus = $0 }
+                ))
+            } header: {
+                Text("フォーカス")
+            } footer: {
+                Text("発車中かつ充電中のとき、自動ロックしません。")
+            }
+
+            Section {
                 Toggle("超過時のシステム音", isOn: Binding(
                     get: { settings.overtimeSoundEnabled },
                     set: { settings.overtimeSoundEnabled = $0 }
