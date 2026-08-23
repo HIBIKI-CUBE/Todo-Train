@@ -27,6 +27,9 @@ struct HubView: View {
     @State private var ticketSlotFrames: [UUID: CGRect] = [:]
     @State private var departingTicketID: UUID?
     @State private var isPuttingBack = false
+    @State private var hubWidth: CGFloat = 0
+    /// Viewport of the ticket column (ScrollView), not content width.
+    @State private var ticketViewportWidth: CGFloat = 0
 
     @Environment(TicketMotionBridge.self) private var ticketMotion
     @Environment(\.focusZoomNamespace) private var focusZoomNamespace
@@ -84,7 +87,24 @@ struct HubView: View {
     }
 
     private var isLandscapeSplit: Bool {
-        verticalSizeClass == .compact
+        TrainLayout.shouldSplitHub(
+            availableWidth: hubWidth,
+            compactHeight: verticalSizeClass == .compact
+        )
+    }
+
+    private var servicePaneWidth: CGFloat {
+        TrainLayout.hubServicePaneWidth(for: hubWidth)
+    }
+
+    private var ticketColumnWidth: CGFloat {
+        if ticketViewportWidth > 1 {
+            return ticketViewportWidth
+        }
+        if isLandscapeSplit {
+            return max(0, hubWidth - servicePaneWidth)
+        }
+        return hubWidth
     }
 
     /// Ticket lift does not hide chrome (toolbar(.hidden) mid-flight caused layout がくつき).
@@ -97,6 +117,20 @@ struct HubView: View {
             } else {
                 portraitHub
             }
+        }
+        .onGeometryChange(for: CGFloat.self) { proxy in
+            proxy.size.width
+        } action: { _, newWidth in
+            if abs(hubWidth - newWidth) > 0.5 {
+                if hubWidth > 1 {
+                    ticketSlotFrames = [:]
+                }
+                hubWidth = newWidth
+            }
+        }
+        .onChange(of: isLandscapeSplit) { _, _ in
+            ticketViewportWidth = 0
+            ticketSlotFrames = [:]
         }
         .coordinateSpace(.named(HubTicketCanvas.spaceName))
         .toolbar {
@@ -215,6 +249,11 @@ struct HubView: View {
         .scrollClipDisabled()
         .scrollDisabled(isPresentingOnDeck)
         .overlay { hubPresentOverlay }
+        .onGeometryChange(for: CGFloat.self) { proxy in
+            proxy.size.width
+        } action: { _, newWidth in
+            ticketViewportWidth = newWidth
+        }
     }
 
     // MARK: - Landscape split
@@ -232,7 +271,7 @@ struct HubView: View {
             }
             .scrollDisabled(isPresentingOnDeck)
             .overlay { hubChromeDim }
-            .frame(width: TrainLayout.hubServicePaneWidth)
+            .frame(width: servicePaneWidth)
             .background(TrainTheme.platform)
 
             ScrollView {
@@ -242,6 +281,11 @@ struct HubView: View {
             .scrollClipDisabled()
             .scrollDisabled(isPresentingOnDeck)
             .overlay { hubPresentOverlay }
+            .onGeometryChange(for: CGFloat.self) { proxy in
+                proxy.size.width
+            } action: { _, newWidth in
+                ticketViewportWidth = newWidth
+            }
         }
     }
 
@@ -324,9 +368,16 @@ struct HubView: View {
                     onOpenDetail: { ticket in
                         detailTicket = ticket
                     },
-                    onDelete: { deleteTicket($0) }
+                    onDelete: { deleteTicket($0) },
+                    proposedWidth: ticketColumnWidth
                 )
-                .onPreferenceChange(TicketSlotFramesKey.self) { ticketSlotFrames = $0 }
+                .id(isLandscapeSplit)
+                .onPreferenceChange(TicketSlotFramesKey.self) { reported in
+                    ticketSlotFrames = TrainLayout.slotFrames(
+                        reported: reported,
+                        keeping: Set(stackTickets.map(\.id))
+                    )
+                }
             }
         }
         .padding(.top, TrainTheme.Space.sm)
@@ -412,8 +463,8 @@ struct HubView: View {
         return CGRect(
             x: slot.minX - overlayFrame.minX,
             y: slot.minY - overlayFrame.minY,
-            width: slot.width,
-            height: slot.height
+            width: fallbackSize.width,
+            height: fallbackSize.height
         )
     }
 
@@ -458,13 +509,8 @@ struct HubView: View {
     }
 
     private func presentedCardSize(overlayWidth: CGFloat, ticketID: UUID) -> CGSize {
-        let width: CGFloat
-        if let slot = ticketSlotFrames[ticketID], slot.width > 1 {
-            width = slot.width
-        } else {
-            width = max(1, overlayWidth - MarsTicketSpec.HubStack.horizontalInset * 2)
-        }
-        return CGSize(width: width, height: MarsTicketSpec.height(forWidth: width))
+        _ = ticketID
+        return TrainLayout.presentedCardSize(overlayWidth: overlayWidth)
     }
 
     private func finishPresentDrag(
@@ -723,6 +769,11 @@ private struct HubTicketPresentLayer: View {
                 settled = true
             }
         }
+        .onChange(of: overlaySize) { _, _ in
+            if looksSettled {
+                pose = .zero
+            }
+        }
     }
 
     private var flyingTicket: some View {
@@ -761,8 +812,8 @@ private struct HubTicketPresentLayer: View {
 
     @ViewBuilder
     private func coverClone(_ cover: HubPresentCover) -> some View {
-        let coverWidth = cover.slotLocal.width > 1 ? cover.slotLocal.width : size.width
-        let coverHeight = cover.slotLocal.height > 1 ? cover.slotLocal.height : size.height
+        let coverWidth = size.width
+        let coverHeight = size.height
         HubMarsTicketCard(
             ticket: cover.ticket,
             isLifted: false,

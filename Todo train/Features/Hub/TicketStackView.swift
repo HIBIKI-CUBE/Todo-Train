@@ -12,13 +12,6 @@ enum HubTicketCanvas {
     static let spaceName = "hubTicketCanvas"
 }
 
-private struct TicketStackHeightKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
-    }
-}
-
 struct TicketStackView: View {
     let tickets: [Ticket]
     let canBoard: Bool
@@ -32,8 +25,9 @@ struct TicketStackView: View {
     let onBoard: (Ticket) -> Void
     let onOpenDetail: (Ticket) -> Void
     let onDelete: (Ticket) -> Void
+    /// Parent-measured column width so the first layout pass is not a 390pt guess.
+    var proposedWidth: CGFloat = 0
 
-    @State private var reportedHeight: CGFloat = 0
     @State private var stackWidth: CGFloat = 0
 
     private var orderedIDs: [UUID] {
@@ -41,13 +35,16 @@ struct TicketStackView: View {
     }
 
     var body: some View {
-        let width = max(0, resolvedStackWidth - MarsTicketSpec.HubStack.horizontalInset * 2)
-        let faceHeight = MarsTicketSpec.height(forWidth: max(width, 1))
+        let containerWidth = TrainLayout.resolvedTicketContainerWidth(
+            measured: stackWidth,
+            proposed: proposedWidth
+        )
+        let face = TrainLayout.ticketFaceSize(containerWidth: containerWidth)
         let peekStep = MarsTicketSpec.HubStack.peekStep
         let yOffsets = TicketStackLayout.offsets(orderedIDs: orderedIDs, peekStep: peekStep)
         let totalH = TicketStackLayout.totalHeight(
             orderedCount: tickets.count,
-            faceHeight: faceHeight,
+            faceHeight: face.height,
             peekStep: peekStep
         )
         let visibleIDs = Set(yOffsets.keys)
@@ -67,8 +64,8 @@ struct TicketStackView: View {
                     ticket: ticket,
                     index: index,
                     y: y,
-                    width: width,
-                    faceHeight: faceHeight,
+                    width: face.width,
+                    faceHeight: face.height,
                     isHidden: isHidden,
                     isFocused: isFocused,
                     peerFocused: peerFocused,
@@ -77,31 +74,27 @@ struct TicketStackView: View {
                 )
             }
         }
-        .frame(maxWidth: .infinity)
-        .frame(height: reportedHeight > 0 ? reportedHeight : fallbackHeight, alignment: .top)
-        .background {
-            GeometryReader { geo in
-                Color.clear
-                    .onAppear { stackWidth = geo.size.width }
-                    .onChange(of: geo.size.width) { _, newValue in
-                        stackWidth = newValue
-                    }
+        .frame(maxWidth: .infinity, alignment: .top)
+        .frame(height: containerWidth > 1 ? totalH : 0, alignment: .top)
+        // ScrollView sizes content to children; pin to the column, not the last face width.
+        .containerRelativeFrame(.horizontal, alignment: .top)
+        .onGeometryChange(for: CGFloat.self) { proxy in
+            proxy.size.width
+        } action: { _, newWidth in
+            if abs(stackWidth - newWidth) > 0.5 {
+                stackWidth = newWidth
             }
         }
-        .preference(key: TicketStackHeightKey.self, value: totalH)
-        .onPreferenceChange(TicketStackHeightKey.self) { newValue in
-            guard abs(reportedHeight - newValue) > 0.5 else { return }
-            reportedHeight = newValue
+        .onChange(of: proposedWidth) { _, newWidth in
+            if newWidth > 1, stackWidth > newWidth + 1 {
+                stackWidth = newWidth
+            }
         }
         .onChange(of: orderedIDs) { _, ids in
             if let focusedTicketID, !ids.contains(focusedTicketID) {
                 self.focusedTicketID = nil
             }
         }
-    }
-
-    private var resolvedStackWidth: CGFloat {
-        stackWidth > 1 ? stackWidth : 390
     }
 
     @ViewBuilder
@@ -154,14 +147,6 @@ struct TicketStackView: View {
         .padding(.horizontal, MarsTicketSpec.HubStack.horizontalInset)
         .padding(.top, y)
         .zIndex(Double(index))
-    }
-
-    private var fallbackHeight: CGFloat {
-        let width: CGFloat = 320 - MarsTicketSpec.HubStack.horizontalInset * 2
-        return TicketStackLayout.totalHeight(
-            orderedCount: tickets.count,
-            faceHeight: MarsTicketSpec.height(forWidth: max(width, 1))
-        )
     }
 }
 

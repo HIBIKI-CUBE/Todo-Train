@@ -1,6 +1,6 @@
 # 08 — 現状ステータス
 
-最終更新: 2026-08-23（Focus 割り込み発券。マルス券を出して Zoom 発車）
+最終更新: 2026-08-23（Hub 券サイズはシーン幅に追従。回転／ミラーリングリサイズ）
 
 ## 結論
 
@@ -81,7 +81,7 @@ Todo trainTests/           Swift Testing（TicketStackLayout 含む）
 |------|------|
 | CloudKit | entitlement あり・未使用 |
 | Session LA からの Intent | 未実装（Alarm LA は `EndBellIntents` 済み） |
-| iPad 最適化 | v2 以降 |
+| iPad 最適化 | v2 以降。iPhone アプリの自由リサイズ（ミラーリング）は Hub がシーン幅に追従 |
 | 乗り継ぎキャンバスのゲージ統一 | Phase 2（Quick Add のみ線形スナップ・ゲージ） |
 
 ## テスト

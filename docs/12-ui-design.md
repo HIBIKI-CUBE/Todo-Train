@@ -151,17 +151,20 @@ Focus / 設定は HIG 骨格のまま。Hub の未乗車リストはマルス券
 | `Features/Hub/HubStationChevronSign.swift` | 提示中だけ中央固定の LED「>>> 発車 >>>」（ヒット透過） |
 | 履歴 / 設定 | 標準 List / Form |
 
-## 横向き（iPhone compact height）
+## シーンサイズ適応（WWDC26 resizable iPhone）
 
-トリガー: `verticalSizeClass == .compact`（`EnvironmentValues.isCompactHeight`）。iPad 分割ビューは v2 スコープ外。
+回転・iPhone ミラーリング・リサイズ可能シミュレータは **向きではなく bounds の変化**。`UIDevice` の向き・idiom・`UIScreen.main` は使わない。分岐はサイズクラスと **今のシーン／コンテナ幅**。
+
+トリガー（高さ）: `verticalSizeClass == .compact`（`EnvironmentValues.isCompactHeight`）。iPad 分割ビューの専用最適化は v2 スコープ外でも、狭い窓では 1 カラムに落とす。
 
 | 原則 | 内容 |
 |------|------|
 | 高さは希少 | large title を inline に、サマリー・ヘッダを 1 行化 |
 | 幅は密度 | 行内メタ・タグを横展開。空き幅のダッシュボード化はしない |
-| Hub 2 ペイン | compact 時は左 280pt に運行＋停車、右にマルス券スタック（単一 List の横伸びはしない） |
+| Hub 2 ペイン | compact height **かつ** 幅がサービスペイン＋最小券幅を満たすときだけ左ペイン（理想 280pt、狭い窓では縮小／非 split） |
+| 券サイズ | マルス比はコンテナの **今回の幅**。スロット枠は着地・戻しの位置だけ。古い幅は残さない |
 | 骨格維持 | Hub スタック + Form / cabin。マスター・ディテール分割・FAB は増やさない |
-| Focus 例外 | portrait は縦パネル格子。compact は計器 \| 操作の 2 ペイン（幅約 38%） |
+| Focus 例外 | 縦長は縦パネル格子。compact height は計器 \| 操作の 2 ペイン（幅約 38%） |
 
 実装: `DesignSystem/TrainLayout.swift`。
 

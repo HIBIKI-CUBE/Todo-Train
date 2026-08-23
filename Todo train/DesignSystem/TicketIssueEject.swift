@@ -180,8 +180,9 @@ struct TicketIssueEjectOverlay: View {
         let ticketWidth: CGFloat
         let ticketHeight: CGFloat
         if phase == .landing, let landing, landing.width > 8 {
-            ticketWidth = landing.width
-            ticketHeight = landing.height
+            let clamped = TrainLayout.clampedLandingRect(landing, containerSize: geo.size)
+            ticketWidth = clamped.width
+            ticketHeight = clamped.height
         } else {
             ticketWidth = defaultWidth
             ticketHeight = defaultHeight
@@ -262,20 +263,20 @@ struct TicketIssueEjectOverlay: View {
     ) -> CGPoint {
         switch phase {
         case .idle:
-            CGPoint(x: size.width / 2, y: hiddenCenterY)
+            return CGPoint(x: size.width / 2, y: hiddenCenterY)
         case .ejecting, .ejected:
-            CGPoint(
+            return CGPoint(
                 x: size.width / 2,
                 y: hiddenCenterY + (emergedCenterY - hiddenCenterY) * ejectProgress + dragY
             )
         case .upright:
-            CGPoint(x: size.width / 2, y: uprightCenterY + dragY)
+            return CGPoint(x: size.width / 2, y: uprightCenterY + dragY)
         case .landing:
             if let landing, landing.width > 8 {
-                CGPoint(x: landing.midX, y: landing.midY)
-            } else {
-                CGPoint(x: size.width / 2, y: uprightCenterY)
+                let clamped = TrainLayout.clampedLandingRect(landing, containerSize: size)
+                return CGPoint(x: clamped.midX, y: clamped.midY)
             }
+            return CGPoint(x: size.width / 2, y: uprightCenterY)
         }
     }
 
