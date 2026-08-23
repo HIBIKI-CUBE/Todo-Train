@@ -820,15 +820,18 @@ private struct HubTicketPresentLayer: View {
     }
 }
 
-#Preview {
-    let container = try! AppModelContainer.make(inMemory: true)
-    let manager = SessionManager(modelContext: container.mainContext)
-    return NavigationStack {
-        HubView()
-            .environment(manager)
-            .environment(AppSettings.shared)
-            .environment(DeletionUndoCenter())
-            .environment(TicketMotionBridge())
-            .modelContainer(container)
-    }
+#Preview("運行中・未乗車") {
+    HubPreviewSeed.hubView(scenario: .inService)
+}
+
+#Preview("停車あり") {
+    HubPreviewSeed.hubView(scenario: .inServiceWithPause)
+}
+
+#Preview("運行前") {
+    HubPreviewSeed.hubView(scenario: .backlogIdle)
+}
+
+#Preview("空のホーム") {
+    HubPreviewSeed.hubView(scenario: .empty)
 }
