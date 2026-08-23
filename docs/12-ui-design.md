@@ -56,7 +56,7 @@
 
 ## レイアウトとコントロール
 
-- Hub: 未乗車は `TicketStackView`（マルス券の **Wallet peek**。平リスト化しない）。フル券面を重ね、手前は全面可視。タップで **Hub 提示レイヤ**。LED「>>> 発車 >>>」は選択中だけ中央固定（高さは券の約 6 割。吹き出し文は出さない）。券がその枠へ移動（手前券の下から抜け、座ったら最前面）。**発車は明確な右投げだけ**。左／下／背面タップは戻す（看板は一緒に飛ばない。戻りは手前券の下へ潜る）。詳細はコンテキストメニュー。**発券後はリストに留まり祝祭を見せる**。タブ／ナビは提示中もレイアウト固定。発車は提示中の券を zoom source にして **即 Focus**。停車中はスタック外。並べ替えは `…` → `ReorderView`。削除はコンテキストメニュー。
+- Hub: 未乗車は `TicketStackView`（マルス券の **Wallet peek**。平リスト化しない）。フル券面を重ね、手前は全面可視。タップで **Hub 提示レイヤ**。LED「>>> 発車 >>>」は選択中だけ中央固定（高さは券の約 6 割。吹き出し文は出さない。字形は Hiragino 太ゴシックを **16×16** のセル被覆率で量子化した同一ピッチの粗いドットマトリクス。フォントマスクは使わない）。券がその枠へ移動（手前券の下から抜け、座ったら最前面）。**発車は明確な右投げだけ**。左／下／背面タップは戻す（看板は一緒に飛ばない。戻りは手前券の下へ潜る）。詳細はコンテキストメニュー。**発券後はリストに留まり祝祭を見せる**。タブ／ナビは提示中もレイアウト固定。発車は提示中の券を zoom source にして **即 Focus**。停車中はスタック外。並べ替えは `…` → `ReorderView`。削除はコンテキストメニュー。
 - 追加 UI: **親指発券帯**（`QuickAddSheet`）。タイトル即フォーカス、Return＝主発行、タグ横チップ常時、KB 直上に線形スナップ・ゲージ＋巨大数字。連続追加後もキーボード維持。
 - ボタン: 可能な限り `.bordered` / `.borderedProminent` / `role: .destructive`（発券の主経路は Return／ゲージ。Hub での発車は **右投げ**。コンテキストメニューにも発車）。タグチップ・ゲージノブは Liquid Glass。
 - Focus: エッジツーエッジのパネル格子（ヘッダ／タイマー／テレメトリ／操作）。丸角カードや大きな余白は使わない。
@@ -148,7 +148,7 @@ Focus / 設定は HIG 骨格のまま。Hub の未乗車リストはマルス券
 | `ContentView.swift` | TabView + Focus cover |
 | `Features/Hub/QuickAddBar.swift` | `QuickAddSheet`（親指発券帯） |
 | `Features/Hub/TicketStackView.swift` / `HubMarsTicketCard.swift` | Hub マルス peek。選択は Hub 提示レイヤ。出入りは手前券の下。右投げ発車 |
-| `Features/Hub/HubStationChevronSign.swift` | 提示中だけ中央固定の LED「>>> 発車 >>>」（ヒット透過） |
+| `Features/Hub/HubStationChevronSign.swift` | 提示中だけ中央固定の LED「>>> 発車 >>>」（16×16、字形パスの中心サンプリング。ヒット透過） |
 | 履歴 / 設定 | 標準 List / Form |
 
 ## シーンサイズ適応（WWDC26 resizable iPhone）

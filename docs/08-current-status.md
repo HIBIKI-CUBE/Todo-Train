@@ -55,7 +55,7 @@ Todo train/
   Features/
     Hub/                   HubView, QuickAddBar（親指発券帯）, ServiceSummaryBar,
                            TicketStackView（peek。選択中はスロットの実券を隠す。出入りは手前へ潜る）, HubMarsTicketCard,
-                           HubStationChevronSign（提示レイヤ LED）
+                           HubStationChevronSign（提示レイヤ LED。Hiragino 量子化ドット）
     Focus/                 FocusView, FocusControlsView, OvertimeSheet
     Arrival/               PauseLimitSheet, TransferCanvasPresenter
     History/               HistoryView, WeeklyReportView
@@ -63,7 +63,7 @@ Todo train/
     Reorder/               ReorderView
     Settings/              SettingsView
 TodoTrainWidget/           Home Widget + Session LA + Alarm LA
-Todo trainTests/           Swift Testing（TicketStackLayout 含む）
+Todo trainTests/           Swift Testing（TicketStackLayout / LEDMatrix 含む）
 ```
 
 ## 動作するユーザーフロー
