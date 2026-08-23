@@ -14,6 +14,8 @@ import UIKit
 
 struct ArrivalInvalidateOverlay: View {
     let moment: PunctualityMoment
+    /// Cover is still up — start already settled so dismiss *is* the reveal (no second entrance).
+    var skipEnter: Bool = false
     var onFinished: (() -> Void)?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -155,25 +157,21 @@ struct ArrivalInvalidateOverlay: View {
     }
 
     private func runEntrance() {
-        enter = 0
         press = 0
         impact = 0
         exit = 0
         locked = false
 
-        if reduceMotion {
+        if reduceMotion || skipEnter {
             enter = 1
+            resumeInvite()
             return
         }
 
+        enter = 0
         withAnimation(MarsTicketSpec.ArrivalMotion.enter) {
             enter = 1
-        }
-        // Invite is the leftover of the entrance — same spring family, no new “mode”.
-        Task { @MainActor in
-            try? await Task.sleep(
-                for: .milliseconds(MarsTicketSpec.ArrivalMotion.enterMilliseconds)
-            )
+        } completion: {
             resumeInvite()
         }
     }
@@ -234,22 +232,15 @@ struct ArrivalInvalidateOverlay: View {
         withAnimation(MarsTicketSpec.ArrivalMotion.slam) {
             press = 1
             impact = 1
-        }
-
-        Task { @MainActor in
-            try? await Task.sleep(
-                for: .milliseconds(MarsTicketSpec.ArrivalMotion.stampHoldMilliseconds)
-            )
+        } completion: {
             if punctuality == .onTime || punctuality == .early {
                 stampHaptic += 1
             }
             withAnimation(MarsTicketSpec.ArrivalMotion.exit) {
                 exit = 1
+            } completion: {
+                onFinished?()
             }
-            try? await Task.sleep(
-                for: .milliseconds(MarsTicketSpec.ArrivalMotion.exitMilliseconds)
-            )
-            onFinished?()
         }
     }
 

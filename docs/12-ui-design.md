@@ -9,7 +9,7 @@
 
 | 面 | 方針 |
 |----|------|
-| Hub | システム背景のうえ、未乗車は **マルス券 Wallet peek**（つまむ → 改札帯で発車 → 運転台）。運行・停車は標準ブロック |
+| Hub | システム背景のうえ、未乗車は **マルス券 Wallet peek**（タップ → 提示レイヤ → 右投げで発車 → 運転台）。運行・停車は標準ブロック |
 | 履歴 / 設定 | 標準の `List` / `Form`（`.insetGrouped`）。システム背景・セマンティック色 |
 | Quick Add | システム sheet + **親指発券帯**（タイトル・常時タグ・KB 直上ゲージ）。Form / Disclosure ではない |
 | Focus | 真っ黒ダッシュボード。超大タイマーが主役。hairline パネル格子＋ gapless 操作盤 |
@@ -56,9 +56,9 @@
 
 ## レイアウトとコントロール
 
-- Hub: 未乗車は `TicketStackView`（マルス券の **Wallet peek**。平リスト化しない）。フル券面を重ね、手前は全面可視。タップで **同じ券をつまみ上げ**。**発車は券面下端の改札帯**（印刷の一部。HIG ピルや Focus 黒盤は足さない）。券面タップは詳細。**発券後はリストに留まり祝祭を見せる**。タブ／ナビは focus 中もレイアウト固定。発車は短い黒吸い込みのあと Focus へ。停車中はスタック外。並べ替えは `…` → `ReorderView`。削除はコンテキストメニュー。
+- Hub: 未乗車は `TicketStackView`（マルス券の **Wallet peek**。平リスト化しない）。フル券面を重ね、手前は全面可視。タップで **Hub 提示レイヤ**。LED「>>> 発車 >>>」は選択中だけ中央固定（高さは券の約 6 割。吹き出し文は出さない）。券がその枠へ移動（手前券の下から抜け、座ったら最前面）。**発車は明確な右投げだけ**。左／下／背面タップは戻す（看板は一緒に飛ばない。戻りは手前券の下へ潜る）。詳細はコンテキストメニュー。**発券後はリストに留まり祝祭を見せる**。タブ／ナビは提示中もレイアウト固定。発車は提示中の券を zoom source にして **即 Focus**。停車中はスタック外。並べ替えは `…` → `ReorderView`。削除はコンテキストメニュー。
 - 追加 UI: **親指発券帯**（`QuickAddSheet`）。タイトル即フォーカス、Return＝主発行、タグ横チップ常時、KB 直上に線形スナップ・ゲージ＋巨大数字。連続追加後もキーボード維持。
-- ボタン: 可能な限り `.bordered` / `.borderedProminent` / `role: .destructive`（発券の主経路は Return／ゲージ。Hub での発車は **券の改札帯**）。タグチップ・ゲージノブは Liquid Glass。
+- ボタン: 可能な限り `.bordered` / `.borderedProminent` / `role: .destructive`（発券の主経路は Return／ゲージ。Hub での発車は **右投げ**。コンテキストメニューにも発車）。タグチップ・ゲージノブは Liquid Glass。
 - Focus: エッジツーエッジのパネル格子（ヘッダ／タイマー／テレメトリ／操作）。丸角カードや大きな余白は使わない。
 
 ### 破壊的操作（物理削除）
@@ -86,7 +86,7 @@ Undo があるので、[HIG Alerts](https://developer.apple.com/design/human-int
 - 発行は即コミット + 短時間 Undo。確認ダイアログなし
 - ゲージ: 指 X と塗りは分比例で一致。各停泊に sticky。**タイトル入力済みで発行するスクラブ中は detent を抑え**、祝祭はシート側の切符演出に一本化
 - 挿入: ゲージ長押し。任意分: 巨大数字の長押し
-- 発行フィードバック: **単発（デフォルト）**はコミット即 haptic＋Hub 上のマルス券排出（シート閉じと並列）。祝祭は読ませる尺（印字後 ~1.8s ホールド、合計 ~2.5–2.8s）。**連続掃き出しトグル ON** は速度優先（selection haptic ＋ Undo のみ、切符演出なし）。Return / ゲージは同一経路
+- 発行フィードバック: **単発（デフォルト）**はコミット即 haptic＋Hub 上のマルス券排出（シート閉じと並列）。排出中はデッキの実券を隠し、ホールド後に **同じ紙がスロットへ着地**（フェードで消さない）。祝祭は読ませる尺（印字後 ~1.8s ホールド、合計 ~2.5–2.8s）。下スワイプはホールドを飛ばして着地。**連続掃き出しトグル ON** は速度優先（selection haptic ＋ Undo のみ、切符演出なし）。Return / ゲージは同一経路
 - 連続トグルはシート dismiss で OFF に戻る
 
 ## 祝祭面の例外（発行 / 到着）
@@ -104,10 +104,10 @@ Focus / 設定は HIG 骨格のまま。Hub の未乗車リストはマルス券
 
 ## モーション（意図的に少ない）
 
-1. **発車**: Focus 出現はシステムフルスクリーン。内部タイマーは 1 秒 tick のみ。
+1. **発車**: つまんだ券を右に投げて即 `fullScreenCover`。投げている券が zoom source。内部タイマーは 1 秒 tick のみ。
 2. **超過突入**: タイマー色を amber→red へ、軽いスケールパルス 1 回。全面ディムは使わず操作盤を超過 3 択に差し替え。
-3. **切符発行 / ゲージ**: 単発はコミット即マルス排出（シートから 90°CW → 正立、`MarsTicketSpec.IssueMotion` 固定 ms）＋シート閉じ並列。連続は褒め最小（haptic ＋ Undo）。発行時はゲージ detent と喧嘩させない。スクラブのみ（未入力）の停泊越えは impact＋`Motion.gaugeSnap`。
-4. **到着**: Focus 閉鎖後に `ArrivalInvalidateOverlay`。検札印ハンドルが券の上で誘い、ユーザーが押す／タップするまで待つ。破りは使わない。定時・早着は印 / haptic の味付け。超過でも取り下げない。点数・コンフェッティ・情報カードの OK 待ち・延着表示は禁止。
+3. **切符発行 / ゲージ**: 単発はコミット即マルス排出（シートから 90°CW → 正立 → デッキ着地、`MarsTicketSpec.IssueMotion` 固定 ms）＋シート閉じ並列。シーン間のデッドウェイトは置かない。連続は褒め最小（haptic ＋ Undo）。発行時はゲージ detent と喧嘩させない。スクラブのみ（未入力）の停泊越えは impact＋`Motion.gaugeSnap`。
+4. **到着**: Focus 閉鎖の裏で `ArrivalInvalidateOverlay` を既に置いておく（閉鎖＝出現。二段入場しない）。検札印ハンドルが券の上で誘い、ユーザーが押す／タップするまで待つ。破りは使わない。定時・早着は印 / haptic の味付け。超過でも取り下げない。点数・コンフェッティ・情報カードの OK 待ち・延着表示は禁止。
 5. **定時運行**: 運行終了直後の短いカプセルのみ。
 
 シート presentation はシステム detents。発行祝祭に celebration spring の使い回しはしない。
@@ -136,8 +136,9 @@ Focus / 設定は HIG 骨格のまま。Hub の未乗車リストはマルス券
 | `DesignSystem/DeleteConfirmation.swift` | フルスワイプ削除 + Undo バナー |
 | `DesignSystem/EstimateSnapMapping.swift` | 見積もり分↔線形位置の純関数・sticky デテント |
 | `DesignSystem/EstimateSnapGauge.swift` | KB 直上の線形スナップ・ゲージ |
-| `DesignSystem/TicketIssueEject.swift` | 単発発行のマルス排出＋読ませるホールド（下スワイプで早めにはける） |
-| `DesignSystem/ArrivalInvalidateOverlay.swift` | 到着: 検札印を自分でドン |
+| `DesignSystem/TicketIssueEject.swift` | 単発発行: 排出→正立→デッキ着地（実券は飛行中隠す） |
+| `DesignSystem/TicketMotion.swift` | Focus zoom namespace とデッキ slot 座標 |
+| `DesignSystem/ArrivalInvalidateOverlay.swift` | 到着: 検札印を自分でドン（cover 裏に先置き） |
 | `DesignSystem/PunctualityMomentOverlay.swift` | 定時運行の短いカプセル |
 | `DesignSystem/TicketStackLayout.swift` | Hub 読める peek デッキの純関数レイアウト |
 | `Core/History/Punctuality.swift` | 帯域判定（当初見積もり）。スコアを持たない |
@@ -146,8 +147,8 @@ Focus / 設定は HIG 骨格のまま。Hub の未乗車リストはマルス券
 | `TodoTrainWidget/CockpitInstrumentViews.swift` | StandBy 2ペイン / LS ViewThatFits ダーク計器 |
 | `ContentView.swift` | TabView + Focus cover |
 | `Features/Hub/QuickAddBar.swift` | `QuickAddSheet`（親指発券帯） |
-| `Features/Hub/TicketStackView.swift` / `HubMarsTicketCard.swift` | Hub マルス peek。focus は同一券の持ち上げ |
-| `Features/Hub/HubTicketGateBand.swift` | 券面改札帯（発車）。Hub ドックや Focus 黒盤ではない |
+| `Features/Hub/TicketStackView.swift` / `HubMarsTicketCard.swift` | Hub マルス peek。選択は Hub 提示レイヤ。出入りは手前券の下。右投げ発車 |
+| `Features/Hub/HubStationChevronSign.swift` | 提示中だけ中央固定の LED「>>> 発車 >>>」（ヒット透過） |
 | 履歴 / 設定 | 標準 List / Form |
 
 ## 横向き（iPhone compact height）

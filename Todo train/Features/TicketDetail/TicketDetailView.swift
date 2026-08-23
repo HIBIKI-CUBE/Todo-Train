@@ -11,6 +11,7 @@ struct TicketDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @Environment(DeletionUndoCenter.self) private var undoCenter
+    @Environment(TicketMotionBridge.self) private var ticketMotion
     @Bindable var ticket: Ticket
 
     @Query(sort: \Tag.sortOrder) private var allTags: [Tag]
@@ -249,8 +250,10 @@ struct TicketDetailView: View {
 
     private func board() {
         do {
+            ticketMotion.zoomSourceID = ticket.id
             try sessionManager.board(ticket: ticket)
         } catch {
+            ticketMotion.zoomSourceID = nil
             errorMessage = error.localizedDescription
             showError = true
         }

@@ -16,6 +16,8 @@ struct ContentView: View {
     @State private var isFocusPresented = false
     @State private var didRecoverOnLaunch = false
     @State private var transferCanvas = TransferCanvasPresenter()
+    @State private var ticketMotion = TicketMotionBridge()
+    @Namespace private var focusZoom
 
     var body: some View {
         @Bindable var transferCanvas = transferCanvas
@@ -40,6 +42,9 @@ struct ContentView: View {
         }
         .tint(TrainTheme.rail)
         .environment(transferCanvas)
+        .environment(ticketMotion)
+        .environment(\.focusZoomNamespace, focusZoom)
+        .environment(\.isFocusCoverPresented, isFocusPresented)
         .safeAreaInset(edge: .bottom, spacing: 8) {
             if let message = undoCenter.bannerMessage {
                 DeletionUndoBanner(message: message) {
@@ -85,6 +90,14 @@ struct ContentView: View {
                 .environment(sessionManager)
                 .environment(transferCanvas)
                 .interactiveDismissDisabled()
+                .navigationTransition(
+                    .zoom(
+                        sourceID: ticketMotion.zoomSourceID
+                            ?? sessionManager.activeSession?.ticket?.id
+                            ?? TicketMotionBridge.missingSource,
+                        in: focusZoom
+                    )
+                )
         }
         .onChange(of: isFocusPresented) { wasPresented, presented in
             // Safety net if onDismiss and enqueue ordering ever races.
@@ -98,20 +111,21 @@ struct ContentView: View {
                 .presentationDragIndicator(.visible)
         }
         .overlay {
-            if !isFocusPresented, let moment = sessionManager.punctualityMoment {
-                Group {
-                    switch moment.kind {
-                    case .arrival:
-                        ArrivalInvalidateOverlay(moment: moment) {
-                            sessionManager.consumePunctualityMoment()
-                        }
-                    case .onTimeService:
+            if let moment = sessionManager.punctualityMoment {
+                switch moment.kind {
+                case .arrival:
+                    ArrivalInvalidateOverlay(moment: moment, skipEnter: true) {
+                        sessionManager.consumePunctualityMoment()
+                    }
+                    .id(moment.id)
+                case .onTimeService:
+                    if !isFocusPresented {
                         PunctualityMomentOverlay(moment: moment) {
                             sessionManager.consumePunctualityMoment()
                         }
+                        .id(moment.id)
                     }
                 }
-                .id(moment.id)
             }
         }
         // Arrival haptic is driven by the invalidate gesture; service moment keeps a light success.

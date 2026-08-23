@@ -5,6 +5,7 @@
 
 import SwiftUI
 import SwiftData
+import UIKit
 
 struct HubView: View {
     @Environment(SessionManager.self) private var sessionManager
@@ -23,9 +24,14 @@ struct HubView: View {
     /// Single-issue celebration playing on Hub (may overlap sheet dismiss).
     @State private var hubIssueEject: TicketIssueEjectEvent?
     @State private var focusedTicketID: UUID?
-    /// Full-cabin black beat before Focus cover.
-    @State private var cabinIngress = false
-    @State private var hubCanvasSize: CGSize = .zero
+    @State private var ticketSlotFrames: [UUID: CGRect] = [:]
+    @State private var departingTicketID: UUID?
+    @State private var isPuttingBack = false
+
+    @Environment(TicketMotionBridge.self) private var ticketMotion
+    @Environment(\.focusZoomNamespace) private var focusZoomNamespace
+    @Environment(\.isFocusCoverPresented) private var isFocusCoverPresented
+    @Namespace private var previewZoomNamespace
 
     private enum HubDestination: Hashable, Identifiable {
         case tags
@@ -41,6 +47,21 @@ struct HubView: View {
     /// Open tickets that are not currently paused (paused live in their own section).
     private var backlogTickets: [Ticket] {
         openTickets.filter { !isPaused($0) }
+    }
+
+    /// Keep the boarding ticket in the deck until Focus zoom has a source view.
+    private var stackTickets: [Ticket] {
+        var list = backlogTickets
+        if let departingTicketID,
+           let ticket = allTickets.first(where: { $0.id == departingTicketID }),
+           !list.contains(where: { $0.id == departingTicketID }) {
+            list.append(ticket)
+        }
+        return list
+    }
+
+    private var zoomNamespace: Namespace.ID {
+        focusZoomNamespace ?? previewZoomNamespace
     }
 
     private var canBoardGenerally: Bool {
@@ -66,11 +87,8 @@ struct HubView: View {
         verticalSizeClass == .compact
     }
 
-    /// Cabin ingress paints full-screen black; ticket focus uses dim overlay (no toolbar hide —
-    /// toolbar(.hidden) mid-flight caused layout がくつき).
-    private var isTicketFocusChromeActive: Bool {
-        cabinIngress
-    }
+    /// Ticket lift does not hide chrome (toolbar(.hidden) mid-flight caused layout がくつき).
+    /// Focus cover is the mode cut — no extra black wait on Hub.
 
     var body: some View {
         Group {
@@ -80,21 +98,7 @@ struct HubView: View {
                 portraitHub
             }
         }
-        .coordinateSpace(name: HubTicketCanvas.spaceName)
-        .background {
-            GeometryReader { geo in
-                Color.clear.preference(key: HubCanvasSizeKey.self, value: geo.size)
-            }
-        }
-        .onPreferenceChange(HubCanvasSizeKey.self) { size in
-            guard abs(hubCanvasSize.width - size.width) > 0.5
-                || abs(hubCanvasSize.height - size.height) > 0.5 else { return }
-            hubCanvasSize = size
-        }
-        // Only hide chrome during cabin ingress (full black). Focus dim covers content without
-        // resizing the tab/nav layout.
-        .toolbar(isTicketFocusChromeActive ? .hidden : .automatic, for: .tabBar)
-        .toolbar(isTicketFocusChromeActive ? .hidden : .automatic, for: .navigationBar)
+        .coordinateSpace(.named(HubTicketCanvas.spaceName))
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
@@ -151,19 +155,14 @@ struct HubView: View {
         }
         .overlay {
             if let hubIssueEject {
-                TicketIssueEjectOverlay(event: hubIssueEject) {
+                TicketIssueEjectOverlay(
+                    event: hubIssueEject,
+                    landingRect: ticketSlotFrames[hubIssueEject.ticketID]
+                ) {
                     if self.hubIssueEject?.id == hubIssueEject.id {
                         self.hubIssueEject = nil
                     }
                 }
-                .transition(.opacity)
-            }
-        }
-        .overlay {
-            if cabinIngress {
-                Color.black
-                    .ignoresSafeArea()
-                    .allowsHitTesting(true)
             }
         }
         .sheet(isPresented: $showServiceEndSheet) {
@@ -183,6 +182,16 @@ struct HubView: View {
         .onChange(of: sessionManager.phase) { _, _ in
             presentServiceEndIfNeeded()
         }
+        .onChange(of: isFocusCoverPresented) { _, presented in
+            guard presented else { return }
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                departingTicketID = nil
+                focusedTicketID = nil
+                isPuttingBack = false
+            }
+        }
     }
 
     // MARK: - Portrait
@@ -197,13 +206,15 @@ struct HubView: View {
                     }
                 }
                 .overlay { hubChromeDim }
+
                 ticketsBlock
             }
             .padding(.bottom, TrainTheme.Space.xl)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
         .scrollClipDisabled()
-        .scrollDisabled(focusedTicketID != nil)
-        .background(TrainTheme.platform)
+        .scrollDisabled(isPresentingOnDeck)
+        .overlay { hubPresentOverlay }
     }
 
     // MARK: - Landscape split
@@ -219,7 +230,7 @@ struct HubView: View {
                 }
                 .padding(.bottom, TrainTheme.Space.lg)
             }
-            .scrollDisabled(focusedTicketID != nil)
+            .scrollDisabled(isPresentingOnDeck)
             .overlay { hubChromeDim }
             .frame(width: TrainLayout.hubServicePaneWidth)
             .background(TrainTheme.platform)
@@ -229,8 +240,8 @@ struct HubView: View {
                     .padding(.bottom, TrainTheme.Space.lg)
             }
             .scrollClipDisabled()
-            .scrollDisabled(focusedTicketID != nil)
-            .background(TrainTheme.platform)
+            .scrollDisabled(isPresentingOnDeck)
+            .overlay { hubPresentOverlay }
         }
     }
 
@@ -294,88 +305,223 @@ struct HubView: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, isLandscapeSplit ? 8 : 24)
-            } else if backlogTickets.isEmpty {
+            } else if stackTickets.isEmpty {
                 Text("未乗車の切符はありません。停車中から再乗車するか、＋ で追加してください。")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, TrainTheme.Space.lg)
             } else {
                 TicketStackView(
-                    tickets: backlogTickets,
+                    tickets: stackTickets,
                     canBoard: canBoardGenerally,
                     boardDisabledReason: boardDisabledReason,
                     focusedTicketID: $focusedTicketID,
-                    canvasSize: hubCanvasSize,
+                    hiddenTicketID: hubIssueEject?.ticketID,
+                    isPuttingBack: isPuttingBack,
                     onFocusTicket: { focusTicket($0) },
+                    onDismissFocus: { dismissTicketFocus() },
                     onBoard: { boardFromFocus($0) },
                     onOpenDetail: { ticket in
-                        if focusedTicketID != nil {
-                            openDetailFromFocus(ticket)
-                        } else {
-                            detailTicket = ticket
-                        }
+                        detailTicket = ticket
                     },
                     onDelete: { deleteTicket($0) }
                 )
+                .onPreferenceChange(TicketSlotFramesKey.self) { ticketSlotFrames = $0 }
             }
         }
         .padding(.top, TrainTheme.Space.sm)
     }
 
-    @ViewBuilder
+    /// Overlay container stays mounted; this tracks whether a ticket is still the presented identity.
+    private var isPresentingOnDeck: Bool {
+        focusedTicketID != nil
+    }
+
+    /// Dim + tap-to-put-back on 運行 / 停車 only. Present overlay covers the deck.
     private var hubChromeDim: some View {
-        if focusedTicketID != nil && !cabinIngress {
-            Rectangle()
-                .fill(Color.black.opacity(MarsTicketSpec.HubStack.focusDimOpacity))
-                .onTapGesture(perform: dismissTicketFocus)
-                .accessibilityAddTraits(.isButton)
-                .accessibilityLabel("選択をやめる")
+        Rectangle()
+            .fill(
+                Color.black.opacity(
+                    focusedTicketID == nil || isPuttingBack ? 0 : MarsTicketSpec.HubStack.focusDimOpacity
+                )
+            )
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+
+    private var presentedTicket: Ticket? {
+        guard let focusedTicketID else { return nil }
+        return stackTickets.first(where: { $0.id == focusedTicketID })
+            ?? allTickets.first(where: { $0.id == focusedTicketID })
+    }
+
+    /// Wallet presentation: ticket flies from its slot; LED stays centered above rest.
+    /// GeometryReader stays mounted so safe-area overlay unmount does not shift the scroll view.
+    private var hubPresentOverlay: some View {
+        GeometryReader { geo in
+            let overlayFrame = geo.frame(in: .named(HubTicketCanvas.spaceName))
+            ZStack {
+                Color.clear.ignoresSafeArea()
+                if let ticket = presentedTicket {
+                    let size = presentedCardSize(in: geo, ticketID: ticket.id)
+                    let slotLocal = slotRectLocal(
+                        ticketID: ticket.id,
+                        overlayFrame: overlayFrame,
+                        overlaySize: geo.size,
+                        fallbackSize: size
+                    )
+                    HubTicketPresentLayer(
+                        ticket: ticket,
+                        size: size,
+                        overlaySize: geo.size,
+                        slotLocal: slotLocal,
+                        sourceTilt: presentedTilt,
+                        isPuttingBack: isPuttingBack,
+                        covers: presentCovers(
+                            overlayFrame: overlayFrame,
+                            overlaySize: geo.size
+                        ),
+                        canBoard: canBoardGenerally,
+                        disabledReason: boardDisabledReason,
+                        zoomNamespace: zoomNamespace,
+                        onDismiss: { dismissTicketFocus() },
+                        onHoldDragEnded: { finishPresentDrag($0, ticket: ticket) },
+                        onOpenDetail: { detailTicket = ticket },
+                        onBoard: { boardFromFocus(ticket) },
+                        onDelete: { deleteTicket(ticket) }
+                    )
+                }
+            }
         }
+        .allowsHitTesting(presentedTicket != nil)
+        .transition(.identity)
+    }
+
+    private func slotRectLocal(
+        ticketID: UUID,
+        overlayFrame: CGRect,
+        overlaySize: CGSize,
+        fallbackSize: CGSize
+    ) -> CGRect {
+        let slot = ticketSlotFrames[ticketID] ?? CGRect(
+            x: overlayFrame.minX + (overlaySize.width - fallbackSize.width) / 2,
+            y: overlayFrame.minY + (overlaySize.height - fallbackSize.height) / 2,
+            width: fallbackSize.width,
+            height: fallbackSize.height
+        )
+        return CGRect(
+            x: slot.minX - overlayFrame.minX,
+            y: slot.minY - overlayFrame.minY,
+            width: slot.width,
+            height: slot.height
+        )
+    }
+
+    /// Tickets in front of the focused one (Wallet: later index = on top).
+    /// Used for fly-out and put-back so the moving ticket tucks under peeks.
+    private func presentCovers(
+        overlayFrame: CGRect,
+        overlaySize: CGSize
+    ) -> [HubPresentCover] {
+        guard let focusedTicketID,
+              let focusedIndex = stackTickets.firstIndex(where: { $0.id == focusedTicketID })
+        else { return [] }
+        let count = stackTickets.count
+        return stackTickets.enumerated().compactMap { index, ticket in
+            guard index > focusedIndex else { return nil }
+            let size = presentedCardSize(
+                overlayWidth: overlaySize.width,
+                ticketID: ticket.id
+            )
+            return HubPresentCover(
+                ticket: ticket,
+                tilt: TicketStackLayout.tiltDegrees(index: index, count: count),
+                slotLocal: slotRectLocal(
+                    ticketID: ticket.id,
+                    overlayFrame: overlayFrame,
+                    overlaySize: overlaySize,
+                    fallbackSize: size
+                )
+            )
+        }
+    }
+
+    private var presentedTilt: Double {
+        guard let focusedTicketID,
+              let index = stackTickets.firstIndex(where: { $0.id == focusedTicketID })
+        else { return 0 }
+        return TicketStackLayout.tiltDegrees(index: index, count: stackTickets.count)
+    }
+
+    private func presentedCardSize(in geo: GeometryProxy, ticketID: UUID) -> CGSize {
+        presentedCardSize(overlayWidth: geo.size.width, ticketID: ticketID)
+    }
+
+    private func presentedCardSize(overlayWidth: CGFloat, ticketID: UUID) -> CGSize {
+        let width: CGFloat
+        if let slot = ticketSlotFrames[ticketID], slot.width > 1 {
+            width = slot.width
+        } else {
+            width = max(1, overlayWidth - MarsTicketSpec.HubStack.horizontalInset * 2)
+        }
+        return CGSize(width: width, height: MarsTicketSpec.height(forWidth: width))
+    }
+
+    private func finishPresentDrag(
+        _ value: DragGesture.Value,
+        ticket: Ticket
+    ) -> TicketStackLayout.HoldRelease {
+        let live = TicketStackLayout.holdOffset(rest: .zero, translation: value.translation)
+        let action = TicketStackLayout.holdRelease(
+            hold: live,
+            translation: value.translation,
+            predictedEnd: value.predictedEndTranslation,
+            canBoard: canBoardGenerally
+        )
+        switch action {
+        case .putBack:
+            let flicked = hypot(value.velocity.width, value.velocity.height) > 40
+                || hypot(live.width, live.height) > 12
+            dismissTicketFocus(
+                inertial: flicked
+            )
+        case .board:
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            boardFromFocus(ticket)
+        case .snap:
+            break
+        }
+        return action
     }
 
     private func focusTicket(_ id: UUID) {
-        guard focusedTicketID != id else { return }
-        withAnimation(MarsTicketSpec.HubStack.focus) {
+        guard focusedTicketID != id, !isPuttingBack else { return }
+        var insert = Transaction()
+        insert.animation = nil
+        withTransaction(insert) {
+            isPuttingBack = false
             focusedTicketID = id
-        }
-    }
-
-    private func openDetailFromFocus(_ ticket: Ticket) {
-        let id = ticket.id
-        withAnimation(MarsTicketSpec.HubStack.focus) {
-            focusedTicketID = nil
-        }
-        let wait = MarsTicketSpec.HubStack.focusMilliseconds
-        Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(wait))
-            detailTicket = backlogTickets.first(where: { $0.id == id })
-                ?? allTickets.first(where: { $0.id == id })
-                ?? ticket
         }
     }
 
     private func boardFromFocus(_ ticket: Ticket) {
         guard canBoardGenerally else { return }
-        withAnimation(MarsTicketSpec.HubStack.cabinIngress) {
-            cabinIngress = true
-        }
-        let ingressMs = MarsTicketSpec.HubStack.cabinIngressMilliseconds
-        Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(ingressMs))
-            board(ticket)
+        ticketMotion.zoomSourceID = ticket.id
+        departingTicketID = ticket.id
+        board(ticket)
+    }
+
+    private func dismissTicketFocus(inertial: Bool = false) {
+        guard focusedTicketID != nil, !isPuttingBack else { return }
+        withAnimation(inertial ? MarsTicketSpec.HubStack.putBack : MarsTicketSpec.HubStack.focus) {
+            isPuttingBack = true
+        } completion: {
             var transaction = Transaction()
             transaction.disablesAnimations = true
             withTransaction(transaction) {
                 focusedTicketID = nil
-                cabinIngress = false
+                isPuttingBack = false
             }
-        }
-    }
-
-    private func dismissTicketFocus() {
-        guard !cabinIngress else { return }
-        withAnimation(MarsTicketSpec.HubStack.focus) {
-            focusedTicketID = nil
         }
     }
 
@@ -423,10 +569,12 @@ struct HubView: View {
             .buttonStyle(.plain)
 
             Button("再乗車") {
+                ticketMotion.zoomSourceID = ticket.id
                 board(ticket)
             }
             .buttonStyle(.borderedProminent)
             .tint(TrainTheme.rail)
+            .matchedTransitionSource(id: ticket.id, in: zoomNamespace)
             .disabled(!canBoardGenerally)
             .accessibilityHint(canBoardGenerally ? "停車中の切符を再開" : boardDisabledReason)
         }
@@ -443,6 +591,8 @@ struct HubView: View {
         do {
             try sessionManager.board(ticket: ticket)
         } catch {
+            departingTicketID = nil
+            ticketMotion.zoomSourceID = nil
             errorMessage = error.localizedDescription
             showError = true
         }
@@ -472,6 +622,204 @@ struct HubView: View {
     }
 }
 
+/// Cover card cloned onto the present overlay so a returning ticket tucks under Wallet peeks.
+private struct HubPresentCover: Identifiable {
+    let ticket: Ticket
+    let tilt: Double
+    let slotLocal: CGRect
+    var id: UUID { ticket.id }
+}
+
+/// Centered ticket + LED. Tilt/shadow start as the deck card so the hero does not pop.
+private struct HubTicketPresentLayer: View {
+    let ticket: Ticket
+    let size: CGSize
+    let overlaySize: CGSize
+    let slotLocal: CGRect
+    let sourceTilt: Double
+    var isPuttingBack: Bool
+    var covers: [HubPresentCover]
+    let canBoard: Bool
+    let disabledReason: String?
+    var zoomNamespace: Namespace.ID
+    let onDismiss: () -> Void
+    var onHoldDragEnded: (DragGesture.Value) -> TicketStackLayout.HoldRelease
+    let onOpenDetail: () -> Void
+    let onBoard: () -> Void
+    let onDelete: () -> Void
+
+    @State private var settled = false
+    @State private var pose: CGSize?
+
+    private var looksSettled: Bool {
+        settled && !isPuttingBack
+    }
+
+    /// Peek covers stay in the overlay while the hero is in the stack's z-order.
+    /// Hidden once seated so they do not clip the centered ticket. Instant; no fade.
+    private var coverOpacity: Double {
+        if looksSettled { return 0 }
+        if isPuttingBack { return 1 }
+        return MarsTicketSpec.HubStack.focusPeerOpacity
+    }
+
+    private var restCenter: CGPoint {
+        CGPoint(x: overlaySize.width / 2, y: overlaySize.height / 2)
+    }
+
+    private var slotPose: CGSize {
+        CGSize(
+            width: slotLocal.midX - restCenter.x,
+            height: slotLocal.midY - restCenter.y
+        )
+    }
+
+    /// One vector for select, drag, and put-back. Nil before launch = still in the slot.
+    private var displayedPose: CGSize {
+        if isPuttingBack { return slotPose }
+        return pose ?? slotPose
+    }
+
+    private var signHeight: CGFloat {
+        size.height * MarsTicketSpec.HubStack.departSignHeightRatio
+    }
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(looksSettled ? MarsTicketSpec.HubStack.focusDimOpacity : 0)
+                .ignoresSafeArea()
+                .contentShape(Rectangle())
+                .onTapGesture(perform: onDismiss)
+                .allowsHitTesting(!isPuttingBack)
+                .accessibilityAddTraits(.isButton)
+                .accessibilityLabel("選択をやめる")
+
+            flyingTicket
+
+            ForEach(covers) { cover in
+                coverClone(cover)
+            }
+
+            HubDepartLEDSign(
+                canBoard: canBoard,
+                ticketWidth: size.width,
+                ticketHeight: size.height
+            )
+            .offset(
+                y: -(size.height / 2 + MarsTicketSpec.HubStack.departSignGap + signHeight / 2)
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+            .opacity(looksSettled ? 1 : 0)
+            .allowsHitTesting(false)
+        }
+        .onAppear {
+            var parked = Transaction()
+            parked.animation = nil
+            withTransaction(parked) {
+                pose = slotPose
+            }
+            withAnimation(MarsTicketSpec.HubStack.focus) {
+                pose = .zero
+                settled = true
+            }
+        }
+    }
+
+    private var flyingTicket: some View {
+        HubMarsTicketCard(
+            ticket: ticket,
+            isLifted: looksSettled,
+            isHeldVisually: looksSettled,
+            canBoard: canBoard,
+            disabledReason: disabledReason,
+            restOffset: .zero,
+            followsFinger: false,
+            onSelect: {},
+            onDismissLift: onDismiss,
+            onHoldDragEnded: onHoldDragEnded
+        )
+        .frame(width: size.width, height: size.height)
+        .rotation3DEffect(
+            .degrees(looksSettled ? 0 : sourceTilt),
+            axis: (x: 1, y: 0, z: 0),
+            anchor: .center,
+            perspective: 0.65
+        )
+        .matchedTransitionSource(id: ticket.id, in: zoomNamespace)
+        .allowsHitTesting(looksSettled)
+        .contextMenu {
+            Button("詳細", action: onOpenDetail)
+            if canBoard {
+                Button("発車", action: onBoard)
+            }
+            Button("削除", role: .destructive, action: onDelete)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        .offset(x: displayedPose.width, y: displayedPose.height)
+        .gesture(looksSettled ? holdDrag : nil)
+    }
+
+    @ViewBuilder
+    private func coverClone(_ cover: HubPresentCover) -> some View {
+        let coverWidth = cover.slotLocal.width > 1 ? cover.slotLocal.width : size.width
+        let coverHeight = cover.slotLocal.height > 1 ? cover.slotLocal.height : size.height
+        HubMarsTicketCard(
+            ticket: cover.ticket,
+            isLifted: false,
+            isHeldVisually: false,
+            canBoard: canBoard,
+            disabledReason: disabledReason,
+            restOffset: .zero,
+            followsFinger: false,
+            onSelect: {},
+            onDismissLift: {}
+        )
+        .frame(width: coverWidth, height: coverHeight)
+        .rotation3DEffect(
+            .degrees(cover.tilt),
+            axis: (x: 1, y: 0, z: 0),
+            anchor: .center,
+            perspective: 0.65
+        )
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        .offset(
+            x: cover.slotLocal.midX - restCenter.x,
+            y: cover.slotLocal.midY - restCenter.y
+        )
+        .opacity(coverOpacity)
+        .transaction { $0.animation = nil }
+    }
+
+    private var holdDrag: some Gesture {
+        DragGesture(minimumDistance: 12)
+            .onChanged { value in
+                var transaction = Transaction()
+                transaction.animation = nil
+                withTransaction(transaction) {
+                    pose = TicketStackLayout.holdOffset(
+                        rest: .zero,
+                        translation: value.translation
+                    )
+                }
+            }
+            .onEnded { value in
+                let action = onHoldDragEnded(value)
+                if action == .board {
+                    var transaction = Transaction()
+                    transaction.animation = nil
+                    withTransaction(transaction) {
+                        pose = TicketStackLayout.holdOffset(
+                            rest: .zero,
+                            translation: value.translation
+                        )
+                    }
+                }
+            }
+    }
+}
+
 #Preview {
     let container = try! AppModelContainer.make(inMemory: true)
     let manager = SessionManager(modelContext: container.mainContext)
@@ -480,6 +828,7 @@ struct HubView: View {
             .environment(manager)
             .environment(AppSettings.shared)
             .environment(DeletionUndoCenter())
+            .environment(TicketMotionBridge())
             .modelContainer(container)
     }
 }

@@ -1,6 +1,6 @@
 # 08 — 現状ステータス
 
-最終更新: 2026-08-13（発行＝マルス券排出 / 到着＝スワイプ無効化）
+最終更新: 2026-08-22（Hub 選択＝提示レイヤ。発車＝明確な右投げ。改札帯なし）
 
 ## 結論
 
@@ -50,12 +50,12 @@ Todo train/
     Coaching/              CoachingEngine
   DesignSystem/            TrainTheme, TrainChrome, TrainLayout, EstimateChips,
                            DeleteConfirmation, EstimateSnapMapping, EstimateSnapGauge,
-                           TicketIssueEject, ArrivalInvalidateOverlay, PunctualityMomentOverlay,
+                           TicketIssueEject, TicketMotion, ArrivalInvalidateOverlay, PunctualityMomentOverlay,
                            MarsTicketSpec, MarsTicketView, TicketStackLayout
   Features/
     Hub/                   HubView, QuickAddBar（親指発券帯）, ServiceSummaryBar,
-                           TicketStackView（読める peek＋同一券の持ち上げ）, HubMarsTicketCard,
-                           HubTicketGateBand（券面改札帯）
+                           TicketStackView（peek。選択中はスロットの実券を隠す。出入りは手前へ潜る）, HubMarsTicketCard,
+                           HubStationChevronSign（提示レイヤ LED）
     Focus/                 FocusView, FocusControlsView, OvertimeSheet
     Arrival/               PauseLimitSheet, TransferCanvasPresenter
     History/               HistoryView, WeeklyReportView

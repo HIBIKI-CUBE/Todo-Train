@@ -15,6 +15,11 @@ struct TicketIssueEjectTests {
         #expect(MarsTicketSpec.IssueMotion.readableHoldMilliseconds >= 1_600)
         #expect(MarsTicketSpec.IssueMotion.slotRotationDegrees == 90)
         #expect(MarsTicketSpec.IssueMotion.ejectMilliseconds >= 400)
+        let parts = MarsTicketSpec.IssueMotion.ejectMilliseconds
+            + MarsTicketSpec.IssueMotion.uprightMilliseconds
+            + MarsTicketSpec.IssueMotion.readableHoldMilliseconds
+            + MarsTicketSpec.IssueMotion.settleMilliseconds
+        #expect(TicketIssueEjectEvent.presentationMilliseconds == parts)
     }
 
     @Test func ejectEvent_storesTitleMinutesAndTags() {

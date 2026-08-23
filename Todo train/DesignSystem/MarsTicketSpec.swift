@@ -33,22 +33,24 @@ enum MarsTicketSpec {
     enum HubStack {
         /// Distance between ticket tops. Larger = airier peeks of covered cards.
         static let peekStep: CGFloat = 104
-        static let maxVisiblePeeks: Int = 8
+        static let maxVisiblePeeks: Int = Int.max
         static let horizontalInset: CGFloat = 16
         /// Front (bottom) card is nearly flat; back cards lean a little more.
         static let tiltNearDegrees: Double = 0.8
         static let tiltFarDegrees: Double = 5.5
-        static let focusDimOpacity: Double = 0.16
-        static let gateBandHeight: CGFloat = 46
-        /// Ticket lift target sits above the floating tab bar (no separate dock).
-        static let focusConsoleLayoutReserve: CGFloat = 96
-        /// Non-focused peers while one ticket is expanded (opacity only — no scale thrash).
-        static let focusPeerOpacity: Double = 0.4
-        static let cabinIngressMilliseconds = 260
-        /// Matched-geometry flight (keep short; avoid bouncy spring overshoot).
-        static let focusMilliseconds = 380
-        static let focus = Animation.easeInOut(duration: Double(focusMilliseconds) / 1_000)
-        static let cabinIngress = Animation.easeIn(duration: Double(cabinIngressMilliseconds) / 1_000)
+        static let focusDimOpacity: Double = 0.14
+        /// Pick up in place — not a flight to a vanished console.
+        static let liftRise: CGFloat = 22
+        static let liftScale: CGFloat = 1.025
+        /// LED 発車看板. Fraction of the Mars face height.
+        static let departSignHeightRatio: CGFloat = 0.6
+        static let departSignGap: CGFloat = 10
+        /// Non-focused peers while one ticket is held.
+        static let focusPeerOpacity: Double = 0.55
+        /// Lift. Low bounce so the card does not pop through neighbors.
+        static let focus = Animation.smooth(duration: 0.42)
+        /// Put-back from a swipe. Critically damped so it seats without chatter.
+        static let putBack = Animation.smooth(duration: 0.5)
 
         /// Legacy alias — step is the layout contract now (covering creates peeks).
         static var peekHeight: CGFloat { peekStep }
@@ -117,7 +119,7 @@ enum MarsTicketSpec {
         static let settleMilliseconds = 300
         /// Full single-issue budget after eject starts.
         static var presentationMilliseconds: Int {
-            ejectMilliseconds + 90 + uprightMilliseconds + readableHoldMilliseconds + settleMilliseconds
+            ejectMilliseconds + uprightMilliseconds + readableHoldMilliseconds + settleMilliseconds
         }
 
         /// Clockwise 90°: ticket left edge up / right edge down (as if from a slot).
