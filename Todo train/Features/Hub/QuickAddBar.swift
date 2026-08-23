@@ -9,7 +9,15 @@
 import SwiftUI
 import SwiftData
 
+enum QuickAddPresentation: Equatable {
+    /// Issue then Hub celebration. Continuous dump available.
+    case hub
+    /// Issue then caller boards immediately. No continuous dump.
+    case focusInterrupt
+}
+
 struct QuickAddSheet: View {
+    var presentation: QuickAddPresentation = .hub
     /// Single-issue handoff: Hub shows the ticket after this sheet dismisses.
     var onSingleIssued: ((TicketIssueEjectEvent) -> Void)?
 
@@ -51,6 +59,10 @@ struct QuickAddSheet: View {
 
     private var canAdd: Bool {
         !trimmedTitle.isEmpty
+    }
+
+    private var allowsContinuousDump: Bool {
+        presentation == .hub
     }
 
     private var estimateSuggestion: (minutes: Int, sampleCount: Int)? {
@@ -244,20 +256,22 @@ struct QuickAddSheet: View {
 
                 Spacer(minLength: 0)
 
-                VStack(alignment: .trailing, spacing: 6) {
-                    Toggle(isOn: $continuousDump) {
-                        Text("連続掃き出し")
-                    }
-                    .font(.subheadline.weight(.semibold))
-                    .tint(TrainTheme.rail)
-                    .accessibilityHint("オンでシートを開いたまま速く発行。オフで1枚発行して閉じ、Hubで切符を見せます")
+                if allowsContinuousDump {
+                    VStack(alignment: .trailing, spacing: 6) {
+                        Toggle(isOn: $continuousDump) {
+                            Text("連続掃き出し")
+                        }
+                        .font(.subheadline.weight(.semibold))
+                        .tint(TrainTheme.rail)
+                        .accessibilityHint("オンでシートを開いたまま速く発行。オフで1枚発行して閉じ、Hubで切符を見せます")
 
-                    if didAddOnce {
-                        Text("発行 \(addPulse)")
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(.secondary)
-                            .contentTransition(.numericText())
-                            .animation(TrainTheme.Motion.soft, value: addPulse)
+                        if didAddOnce {
+                            Text("発行 \(addPulse)")
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(.secondary)
+                                .contentTransition(.numericText())
+                                .animation(TrainTheme.Motion.soft, value: addPulse)
+                        }
                     }
                 }
             }
@@ -372,7 +386,7 @@ struct QuickAddSheet: View {
         didAddOnce = true
         addPulse += 1
 
-        if continuousDump {
+        if allowsContinuousDump && continuousDump {
             undoPayload = UndoPayload(
                 ticketID: ticket.id,
                 title: issuedTitle,

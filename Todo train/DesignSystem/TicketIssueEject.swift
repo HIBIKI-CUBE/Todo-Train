@@ -32,6 +32,18 @@ struct TicketIssueEjectEvent: Identifiable, Equatable {
         self.issuedAt = issuedAt
     }
 
+    init(ticket: Ticket) {
+        self.init(
+            ticketID: ticket.id,
+            title: ticket.title,
+            minutes: max(1, ticket.estimatedSeconds / 60),
+            tagNames: ticket.tags
+                .sorted { $0.sortOrder < $1.sortOrder }
+                .map(\.name),
+            issuedAt: ticket.createdAt
+        )
+    }
+
     var ticketContent: MarsTicketContent {
         MarsTicketContent(
             title: title,
@@ -46,14 +58,24 @@ struct TicketIssueEjectEvent: Identifiable, Equatable {
     }
 }
 
+enum TicketIssueEjectFinish: Equatable {
+    /// Hub: hold, then seat in the deck slot.
+    case landInDeck
+    /// Focus interrupt: after the ticket is readable, zoom into Focus.
+    case zoomIntoFocus
+}
+
 /// Hub celebration: emerge from bottom edge → upright → hold → land in deck slot.
+/// Interrupt: same eject, then the upright ticket becomes the Focus zoom source.
 struct TicketIssueEjectOverlay: View {
     let event: TicketIssueEjectEvent
     /// Resting frame of the real deck card, in `HubTicketCanvas` space.
     var landingRect: CGRect?
+    var finish: TicketIssueEjectFinish = .landInDeck
     var onFinished: (() -> Void)?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.focusZoomNamespace) private var focusZoomNamespace
 
     private enum Phase: Equatable {
         case idle
@@ -84,9 +106,13 @@ struct TicketIssueEjectOverlay: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("発券。\(event.title)。\(event.minutes)分")
-        .accessibilityHint("下にスワイプでデッキに収めます")
+        .accessibilityHint(
+            finish == .zoomIntoFocus
+                ? "表示のあと自動で発車します。下にスワイプですぐ発車"
+                : "下にスワイプでデッキに収めます"
+        )
         .accessibilityAction(.escape) {
-            landIntoDeck()
+            finishSequence()
         }
         .sensoryFeedback(.impact(weight: .medium, intensity: 1.0), trigger: ejectHaptic)
         .sensoryFeedback(.impact(weight: .light, intensity: 0.7), trigger: landHaptic)
@@ -111,7 +137,7 @@ struct TicketIssueEjectOverlay: View {
                     .position(x: geo.size.width / 2, y: layout.bottom - 1.5)
             }
 
-            MarsTicketView(content: event.ticketContent, titleReveal: 1)
+            ticketFace
                 .frame(width: layout.ticketWidth, height: layout.ticketHeight)
                 .rotation3DEffect(
                     .degrees(slotOriented ? MarsTicketSpec.IssueMotion.slotRotationDegrees : 0),
@@ -135,6 +161,16 @@ struct TicketIssueEjectOverlay: View {
         var ticketHeight: CGFloat
         var bottom: CGFloat
         var center: CGPoint
+    }
+
+    @ViewBuilder
+    private var ticketFace: some View {
+        let face = MarsTicketView(content: event.ticketContent, titleReveal: 1)
+        if finish == .zoomIntoFocus, let focusZoomNamespace {
+            face.matchedTransitionSource(id: event.ticketID, in: focusZoomNamespace)
+        } else {
+            face
+        }
     }
 
     private func layoutMetrics(in geo: GeometryProxy) -> LayoutMetrics {
@@ -180,7 +216,7 @@ struct TicketIssueEjectOverlay: View {
                 let dy = max(0, value.translation.height)
                 let predicted = max(dy, value.predictedEndTranslation.height)
                 if predicted > 90 || dy > 70 {
-                    landIntoDeck()
+                    finishSequence()
                 } else {
                     withAnimation(MarsTicketSpec.IssueMotion.upright) {
                         dragY = 0
@@ -243,6 +279,24 @@ struct TicketIssueEjectOverlay: View {
         }
     }
 
+    private func finishSequence() {
+        switch finish {
+        case .landInDeck:
+            landIntoDeck()
+        case .zoomIntoFocus:
+            commitZoom()
+        }
+    }
+
+    private func commitZoom() {
+        guard !finishing else { return }
+        finishing = true
+        runID = UUID()
+        landHaptic += 1
+        dragY = 0
+        onFinished?()
+    }
+
     private func landIntoDeck() {
         guard !finishing else { return }
         finishing = true
@@ -270,7 +324,7 @@ struct TicketIssueEjectOverlay: View {
                 phase = .upright
             } completion: {
                 guard runID == token, !finishing else { return }
-                landIntoDeck()
+                finishSequence()
             }
             return
         }
@@ -286,18 +340,19 @@ struct TicketIssueEjectOverlay: View {
                 phase = .upright
             } completion: {
                 guard runID == token, !finishing else { return }
-                holdThenLand(token: token)
+                holdThenFinish(token: token)
             }
         }
     }
 
-    private func holdThenLand(token: UUID) {
+    private func holdThenFinish(token: UUID) {
+        let hold = finish == .zoomIntoFocus
+            ? MarsTicketSpec.IssueMotion.interruptZoomHoldMilliseconds
+            : MarsTicketSpec.IssueMotion.readableHoldMilliseconds
         Task { @MainActor in
-            try? await Task.sleep(
-                for: .milliseconds(MarsTicketSpec.IssueMotion.readableHoldMilliseconds)
-            )
+            try? await Task.sleep(for: .milliseconds(hold))
             guard runID == token, !finishing else { return }
-            landIntoDeck()
+            finishSequence()
         }
     }
 }

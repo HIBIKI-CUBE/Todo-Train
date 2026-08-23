@@ -159,6 +159,66 @@ struct SessionManagerTests {
         }
     }
 
+    @Test func switchBoard_pausesCurrent_andRunsNew_withoutPausedPhase() throws {
+        let (manager, context, clock, _) = try makeHarness()
+        try manager.startService()
+        let a = try makeTicket(context, title: "A", seconds: 600)
+        let b = try makeTicket(context, title: "B", seconds: 300)
+
+        try manager.board(ticket: a)
+        clock.advance(by: 90)
+        manager.reconcile()
+
+        try manager.switchBoard(ticket: b)
+
+        #expect(manager.phase == .running)
+        #expect(manager.activeSession?.ticket?.id == b.id)
+        #expect(manager.pausedTicketCount == 1)
+        #expect(manager.pausedSessions.first?.ticket?.id == a.id)
+        #expect(manager.pausedSessions.first?.elapsedSeconds(at: clock.now) == 90)
+
+        clock.advance(by: 40)
+        manager.reconcile()
+        #expect(manager.elapsedSeconds == 40)
+        #expect(manager.pausedSessions.first?.elapsedSeconds(at: clock.now) == 90)
+    }
+
+    @Test func switchBoard_blocked_whenPauseLimitReached_keepsCurrentRunning() throws {
+        let (manager, context, _, _) = try makeHarness()
+        try manager.startService()
+        let a = try makeTicket(context, title: "A")
+        let b = try makeTicket(context, title: "B")
+        let c = try makeTicket(context, title: "C")
+        let d = try makeTicket(context, title: "D")
+
+        try manager.board(ticket: a)
+        try manager.pause()
+        try manager.board(ticket: b)
+        try manager.pause()
+        try manager.board(ticket: c)
+        #expect(manager.pausedTicketCount == 2)
+
+        #expect(throws: SessionError.pauseLimitReached) {
+            try manager.switchBoard(ticket: d)
+        }
+        #expect(manager.phase == .running)
+        #expect(manager.activeSession?.ticket?.id == c.id)
+        #expect(manager.pausedTicketCount == 2)
+    }
+
+    @Test func switchBoard_sameTicket_isNoOp() throws {
+        let (manager, context, _, _) = try makeHarness()
+        try manager.startService()
+        let ticket = try makeTicket(context)
+
+        try manager.board(ticket: ticket)
+        try manager.switchBoard(ticket: ticket)
+
+        #expect(manager.phase == .running)
+        #expect(manager.activeSession?.ticket?.id == ticket.id)
+        #expect(manager.pausedTicketCount == 0)
+    }
+
     @Test func arrive_closesSessionAndTicket() throws {
         let (manager, context, clock, _) = try makeHarness()
         try manager.startService()

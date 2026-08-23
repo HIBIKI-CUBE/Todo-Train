@@ -13,9 +13,13 @@ struct FocusView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @Environment(\.modelContext) private var modelContext
+    @Environment(TicketMotionBridge.self) private var ticketMotion
 
     @State private var showExtendChips = false
     @State private var showPauseLimitSheet = false
+    @State private var showInterruptIssue = false
+    @State private var pendingSwitchTicketID: UUID?
     @State private var errorMessage = ""
     @State private var showError = false
     @State private var didPlayOvertimeSound = false
@@ -46,14 +50,26 @@ struct FocusView: View {
             }
         }
         .sensoryFeedback(.warning, trigger: overtimeHaptic)
-        .sheet(isPresented: $showPauseLimitSheet) {
+        .sheet(isPresented: $showPauseLimitSheet, onDismiss: {
+            pendingSwitchTicketID = nil
+        }) {
             PauseLimitSheet(
                 onSlotFreedTryPause: {
-                    try? sessionManager.pause()
+                    if let pendingSwitchTicketID, let ticket = ticket(id: pendingSwitchTicketID) {
+                        presentIssuedInterrupt(TicketIssueEjectEvent(ticket: ticket), ticket: ticket)
+                        self.pendingSwitchTicketID = nil
+                    } else {
+                        try? sessionManager.pause()
+                    }
                 }
             )
             .environment(sessionManager)
             .environment(transferCanvas)
+        }
+        .sheet(isPresented: $showInterruptIssue) {
+            QuickAddSheet(presentation: .focusInterrupt) { event in
+                boardIssuedInterrupt(event)
+            }
         }
         .alert("エラー", isPresented: $showError) {
             Button("OK", role: .cancel) {}
@@ -252,7 +268,8 @@ struct FocusView: View {
                         withAnimation(TrainTheme.Motion.soft) {
                             showExtendChips.toggle()
                         }
-                    }
+                    },
+                    onInterrupt: { showInterruptIssue = true }
                 )
             }
         }
@@ -365,6 +382,35 @@ struct FocusView: View {
         }
     }
 
+    private func boardIssuedInterrupt(_ event: TicketIssueEjectEvent) {
+        guard let issued = ticket(id: event.ticketID) else { return }
+        presentIssuedInterrupt(event, ticket: issued)
+    }
+
+    private func presentIssuedInterrupt(_ event: TicketIssueEjectEvent, ticket issued: Ticket) {
+        do {
+            ticketMotion.presentInterruptTicket(event)
+            try sessionManager.switchBoard(ticket: issued)
+            pendingSwitchTicketID = nil
+        } catch let error as SessionError where error == .pauseLimitReached {
+            ticketMotion.cancelInterruptTicket()
+            pendingSwitchTicketID = issued.id
+            showPauseLimitSheet = true
+        } catch {
+            ticketMotion.cancelInterruptTicket()
+            errorMessage = error.localizedDescription
+            showError = true
+        }
+    }
+
+    private func ticket(id: UUID) -> Ticket? {
+        var descriptor = FetchDescriptor<Ticket>(
+            predicate: #Predicate { $0.id == id }
+        )
+        descriptor.fetchLimit = 1
+        return (try? modelContext.fetch(descriptor))?.first
+    }
+
     private func partialDisembarkAndShowCanvas() {
         guard let ticket = sessionManager.activeSession?.ticket else { return }
         let sessionID = sessionManager.activeSession?.id
@@ -403,4 +449,6 @@ struct FocusView: View {
         .environment(manager)
         .environment(AppSettings.shared)
         .environment(TransferCanvasPresenter())
+        .environment(TicketMotionBridge())
+        .modelContainer(container)
 }

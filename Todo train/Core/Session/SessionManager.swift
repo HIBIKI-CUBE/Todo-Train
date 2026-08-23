@@ -198,6 +198,36 @@ final class SessionManager {
         refreshEndBell(for: session, now: now)
     }
 
+    /// Pause the current ride in the store, then board `ticket`, without publishing `.paused`.
+    /// Focus stays up (`ContentView` only covers `.running` / `.overtime`).
+    func switchBoard(ticket: Ticket, now: Date? = nil) throws {
+        let now = now ?? clock.now
+        try ensureServiceAllowsBoarding(at: now)
+
+        guard ticket.isOpen else {
+            throw SessionError.ticketAlreadyClosed
+        }
+
+        if let running = fetchRunningSession() {
+            if running.ticket?.id == ticket.id {
+                activeSession = running
+                reconcile(now: now)
+                return
+            }
+
+            guard PauseLimitGuard.canPause(
+                currentPausedCount: pausedTicketCount,
+                limit: settings.pauseLimit
+            ) else {
+                throw SessionError.pauseLimitReached
+            }
+
+            try parkRunningSessionForSwitch(running, now: now)
+        }
+
+        try board(ticket: ticket, now: now)
+    }
+
     func pause(now: Date? = nil) throws {
         let now = now ?? clock.now
         guard let session = activeSession, session.isOpen else {
@@ -249,6 +279,19 @@ final class SessionManager {
         }
         try save()
         reconcile(now: now)
+    }
+
+    /// Park the running session without setting `phase` to `.paused` (no Focus cover tear-down).
+    private func parkRunningSessionForSwitch(_ session: WorkSession, now: Date) throws {
+        if let segmentStartedAt = session.segmentStartedAt {
+            session.accumulatedActiveSeconds += now.timeIntervalSince(segmentStartedAt)
+        }
+        session.segmentStartedAt = nil
+        session.pausedAt = now
+        overtimeNotifier.cancel(sessionID: session.id)
+        liveActivityManager.end()
+        alarmScheduler.cancel(sessionID: session.id)
+        try save()
     }
 
     /// StandBy / system AlarmKit pause → mirror into the open session (no AlarmKit echo).

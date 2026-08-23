@@ -45,7 +45,7 @@ UI tick（1秒）は表示専用のみ
 ## SessionManager 責務
 
 - 運行開始 / 終了
-- 発車 / 停車 / 再開 / 延長 / 到着・途中下車・放棄
+- 発車 / 停車 / 再開 / 延長 / 到着・途中下車・放棄 / 割り込み発車（`switchBoard`。`phase` を `.paused` にしない）
 - 停車上限ゲート（`PauseLimitGuard`）
 - 日付跨ぎ検知 → `needsServiceDayEndPrompt`
 - force-quit 後の open session 復元・複数 open の修復

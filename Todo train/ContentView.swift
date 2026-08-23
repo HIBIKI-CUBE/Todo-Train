@@ -21,6 +21,7 @@ struct ContentView: View {
 
     var body: some View {
         @Bindable var transferCanvas = transferCanvas
+        @Bindable var ticketMotion = ticketMotion
         TabView {
             Tab("切符", systemImage: "tram.fill") {
                 NavigationStack {
@@ -45,6 +46,13 @@ struct ContentView: View {
         .environment(ticketMotion)
         .environment(\.focusZoomNamespace, focusZoom)
         .environment(\.isFocusCoverPresented, isFocusPresented)
+        .overlay {
+            if let event = ticketMotion.interruptEject {
+                TicketIssueEjectOverlay(event: event, finish: .zoomIntoFocus) {
+                    ticketMotion.commitInterruptZoom()
+                }
+            }
+        }
         .safeAreaInset(edge: .bottom, spacing: 8) {
             if let message = undoCenter.bannerMessage {
                 DeletionUndoBanner(message: message) {
@@ -76,6 +84,15 @@ struct ContentView: View {
         .onChange(of: sessionManager.phase) { _, _ in
             syncFocusPresentation()
         }
+        .onChange(of: ticketMotion.suppressFocusCover) { _, suppress in
+            var transaction = Transaction()
+            if suppress {
+                transaction.disablesAnimations = true
+            }
+            withTransaction(transaction) {
+                syncFocusPresentation()
+            }
+        }
         .onOpenURL { url in
             guard url.scheme == "todotrain" else { return }
             sessionManager.reconcile()
@@ -89,6 +106,7 @@ struct ContentView: View {
             FocusView()
                 .environment(sessionManager)
                 .environment(transferCanvas)
+                .environment(ticketMotion)
                 .interactiveDismissDisabled()
                 .navigationTransition(
                     .zoom(
@@ -103,6 +121,14 @@ struct ContentView: View {
             // Safety net if onDismiss and enqueue ordering ever races.
             if wasPresented && !presented {
                 promoteTransferCanvasAfterFocusDismiss()
+            }
+            if presented {
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(500))
+                    if !ticketMotion.suppressFocusCover {
+                        ticketMotion.interruptEject = nil
+                    }
+                }
             }
         }
         .sheet(item: $transferCanvas.active) { launch in
@@ -141,7 +167,8 @@ struct ContentView: View {
     }
 
     private func syncFocusPresentation() {
-        let shouldShow = sessionManager.phase == .running || sessionManager.phase == .overtime
+        let shouldShow = (sessionManager.phase == .running || sessionManager.phase == .overtime)
+            && !ticketMotion.suppressFocusCover
         if isFocusPresented != shouldShow {
             isFocusPresented = shouldShow
         }

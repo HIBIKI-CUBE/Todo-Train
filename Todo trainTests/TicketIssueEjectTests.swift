@@ -13,6 +13,8 @@ struct TicketIssueEjectTests {
         #expect(TicketIssueEjectEvent.presentationMilliseconds >= 2_400)
         #expect(TicketIssueEjectEvent.presentationMilliseconds <= 3_600)
         #expect(MarsTicketSpec.IssueMotion.readableHoldMilliseconds >= 1_600)
+        #expect(MarsTicketSpec.IssueMotion.interruptZoomHoldMilliseconds < 800)
+        #expect(MarsTicketSpec.IssueMotion.interruptZoomHoldMilliseconds < MarsTicketSpec.IssueMotion.readableHoldMilliseconds)
         #expect(MarsTicketSpec.IssueMotion.slotRotationDegrees == 90)
         #expect(MarsTicketSpec.IssueMotion.ejectMilliseconds >= 400)
         let parts = MarsTicketSpec.IssueMotion.ejectMilliseconds

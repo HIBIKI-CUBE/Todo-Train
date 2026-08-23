@@ -116,6 +116,8 @@ enum MarsTicketSpec {
         /// Smooth upright settle after the ticket has cleared the lip.
         static let uprightMilliseconds = 360
         static let readableHoldMilliseconds = 1_800
+        /// Interrupt: ticket is readable, then zoom — shorter than Hub deck hold.
+        static let interruptZoomHoldMilliseconds = 450
         static let settleMilliseconds = 300
         /// Full single-issue budget after eject starts.
         static var presentationMilliseconds: Int {

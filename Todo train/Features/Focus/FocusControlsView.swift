@@ -10,6 +10,7 @@ struct FocusControlsView: View {
     let onPartialDisembark: () -> Void
     let onArrive: () -> Void
     let onExtendMenu: () -> Void
+    let onInterrupt: () -> Void
 
     var body: some View {
         GeometryReader { geo in
@@ -57,15 +58,31 @@ struct FocusControlsView: View {
 
                 FocusControlDivider()
 
-                FocusControlButton(
-                    title: "途中下車",
-                    systemImage: "arrow.turn.up.right",
-                    fill: FocusPanel.fill,
-                    foreground: FocusPanel.muted,
-                    prominence: .tertiary,
-                    action: onPartialDisembark
-                )
-                .accessibilityHint("途中下車して乗り継ぎ切符を掃き出します")
+                HStack(spacing: 0) {
+                    FocusControlButton(
+                        title: "割り込み",
+                        systemImage: "rectangle.stack.badge.plus",
+                        fill: FocusPanel.fillRaised,
+                        foreground: FocusPanel.ink,
+                        prominence: .secondary,
+                        action: onInterrupt
+                    )
+                    .accessibilityHint("新しい切符を発行し、今の切符を停車して発車します")
+                    .frame(maxWidth: .infinity)
+
+                    FocusControlVerticalDivider()
+
+                    FocusControlButton(
+                        title: "途中下車",
+                        systemImage: "arrow.turn.up.right",
+                        fill: FocusPanel.fill,
+                        foreground: FocusPanel.muted,
+                        prominence: .tertiary,
+                        action: onPartialDisembark
+                    )
+                    .accessibilityHint("途中下車して乗り継ぎ切符を掃き出します")
+                    .frame(maxWidth: .infinity)
+                }
                 .frame(height: row)
             }
             .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
