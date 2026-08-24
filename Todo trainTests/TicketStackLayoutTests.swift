@@ -176,4 +176,73 @@ struct TicketStackLayoutTests {
             ) == .putBack
         )
     }
+
+    @Test func leadingWidth_flipsWhenLeadingIsNegativeX() {
+        #expect(TicketStackLayout.leadingWidth(translationWidth: 40, leadingIsPositiveX: true) == 40)
+        #expect(TicketStackLayout.leadingWidth(translationWidth: 40, leadingIsPositiveX: false) == -40)
+    }
+
+    @Test func deckSwipeRelease_leadingBoards_trailingDeletes() {
+        let leading = CGSize(width: 160, height: 4)
+        let trailing = CGSize(width: -160, height: 6)
+        #expect(
+            TicketStackLayout.deckSwipeRelease(
+                translation: leading,
+                predictedEnd: CGSize(width: 200, height: 4),
+                canBoard: true,
+                leadingIsPositiveX: true
+            ) == .board
+        )
+        #expect(
+            TicketStackLayout.deckSwipeRelease(
+                translation: trailing,
+                predictedEnd: CGSize(width: -200, height: 6),
+                canBoard: true,
+                leadingIsPositiveX: true
+            ) == .delete
+        )
+        #expect(
+            TicketStackLayout.deckSwipeRelease(
+                translation: leading,
+                predictedEnd: CGSize(width: 200, height: 4),
+                canBoard: false,
+                leadingIsPositiveX: true
+            ) == .snap
+        )
+        #expect(
+            TicketStackLayout.deckSwipeRelease(
+                translation: CGSize(width: 90, height: 4),
+                predictedEnd: CGSize(width: 140, height: 4),
+                canBoard: true,
+                leadingIsPositiveX: true
+            ) == .snap
+        )
+        #expect(
+            TicketStackLayout.deckSwipeRelease(
+                translation: CGSize(width: 8, height: 160),
+                predictedEnd: CGSize(width: 8, height: 200),
+                canBoard: true,
+                leadingIsPositiveX: true
+            ) == .snap
+        )
+    }
+
+    @Test func deckSwipeRelease_rtlMapsPhysicalLeftToLeadingBoard() {
+        #expect(
+            TicketStackLayout.deckSwipeRelease(
+                translation: CGSize(width: -160, height: 4),
+                predictedEnd: CGSize(width: -200, height: 4),
+                canBoard: true,
+                leadingIsPositiveX: false
+            ) == .board
+        )
+        #expect(
+            TicketStackLayout.deckSwipeRelease(
+                translation: CGSize(width: 160, height: 4),
+                predictedEnd: CGSize(width: 200, height: 4),
+                canBoard: true,
+                leadingIsPositiveX: false
+            ) == .delete
+        )
+    }
 }

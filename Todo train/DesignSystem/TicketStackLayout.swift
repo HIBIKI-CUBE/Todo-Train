@@ -164,6 +164,13 @@ enum TicketStackLayout {
         case snap
     }
 
+    /// Resting-deck swipe: leading full-swipe boards, trailing deletes (HIG list edges).
+    enum DeckSwipeRelease: Equatable {
+        case board
+        case delete
+        case snap
+    }
+
     /// Board only on a committed right throw. Anything else puts the ticket back.
     static func holdRelease(
         hold: CGSize,
@@ -191,6 +198,79 @@ enum TicketStackLayout {
         translation.width >= boardDistance
             && translation.width > abs(translation.height)
             && predictedEnd.width >= translation.width
+    }
+
+    /// Positive = toward the leading edge (right in LTR, left in RTL).
+    static func leadingWidth(
+        translationWidth: CGFloat,
+        leadingIsPositiveX: Bool
+    ) -> CGFloat {
+        leadingIsPositiveX ? translationWidth : -translationWidth
+    }
+
+    static func isCommittedLeadingThrow(
+        translation: CGSize,
+        predictedEnd: CGSize,
+        leadingIsPositiveX: Bool,
+        boardDistance: CGFloat = 140
+    ) -> Bool {
+        let width = leadingWidth(
+            translationWidth: translation.width,
+            leadingIsPositiveX: leadingIsPositiveX
+        )
+        let predicted = leadingWidth(
+            translationWidth: predictedEnd.width,
+            leadingIsPositiveX: leadingIsPositiveX
+        )
+        return width >= boardDistance
+            && width > abs(translation.height)
+            && predicted >= width
+    }
+
+    static func isCommittedTrailingThrow(
+        translation: CGSize,
+        predictedEnd: CGSize,
+        leadingIsPositiveX: Bool,
+        boardDistance: CGFloat = 140
+    ) -> Bool {
+        let width = leadingWidth(
+            translationWidth: translation.width,
+            leadingIsPositiveX: leadingIsPositiveX
+        )
+        let predicted = leadingWidth(
+            translationWidth: predictedEnd.width,
+            leadingIsPositiveX: leadingIsPositiveX
+        )
+        return width <= -boardDistance
+            && -width > abs(translation.height)
+            && predicted <= width
+    }
+
+    /// Full swipe on an unselected peek. Partial swipes snap back (tap still presents).
+    static func deckSwipeRelease(
+        translation: CGSize,
+        predictedEnd: CGSize,
+        canBoard: Bool,
+        leadingIsPositiveX: Bool,
+        boardDistance: CGFloat = 140
+    ) -> DeckSwipeRelease {
+        if canBoard, isCommittedLeadingThrow(
+            translation: translation,
+            predictedEnd: predictedEnd,
+            leadingIsPositiveX: leadingIsPositiveX,
+            boardDistance: boardDistance
+        ) {
+            return .board
+        }
+        if isCommittedTrailingThrow(
+            translation: translation,
+            predictedEnd: predictedEnd,
+            leadingIsPositiveX: leadingIsPositiveX,
+            boardDistance: boardDistance
+        ) {
+            return .delete
+        }
+        return .snap
     }
 
     static func holdRelease(

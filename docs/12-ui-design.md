@@ -56,9 +56,9 @@
 
 ## レイアウトとコントロール
 
-- Hub: 未乗車は `TicketStackView`（マルス券の **Wallet peek**。平リスト化しない）。フル券面を重ね、手前は全面可視。タップで **Hub 提示レイヤ**。LED「>>> 発車 >>>」は選択中だけ中央固定（高さは券の約 6 割。吹き出し文は出さない。字形は Hiragino 太ゴシックを **16×16** のセル被覆率で量子化した同一ピッチの粗いドットマトリクス。フォントマスクは使わない）。券がその枠へ移動（手前券の下から抜け、座ったら最前面）。**発車は明確な右投げだけ**。左／下／背面タップは戻す（看板は一緒に飛ばない。戻りは手前券の下へ潜る）。詳細はコンテキストメニュー。**発券後はリストに留まり祝祭を見せる**。タブ／ナビは提示中もレイアウト固定。発車は提示中の券を zoom source にして **即 Focus**。停車中はスタック外。並べ替えは `…` → `ReorderView`。削除はコンテキストメニュー。
+- Hub: 未乗車は `TicketStackView`（マルス券の **Wallet peek**。平リスト化しない）。フル券面を重ね、手前は全面可視。タップで **Hub 提示レイヤ**。LED「>>> 発車 >>>」は選択中だけ中央固定（高さは券の約 6 割。吹き出し文は出さない。字形は Hiragino 太ゴシックを **16×16** のセル被覆率で量子化した同一ピッチの粗いドットマトリクス。フォントマスクは使わない）。券がその枠へ移動（手前券の下から抜け、座ったら最前面）。**提示中の発車は明確な右投げだけ**。左／下／背面タップは戻す（看板は一緒に飛ばない。戻りは手前券の下へ潜る）。**未選択の peek は iOS リストのエッジと同じフルスワイプ**（LTR では右＝発車、左＝削除。`leading` / `trailing` なので RTL では反転）。途中でボタンを止めて出さない（タップ提示と衝突するため。部分スワイプは `putBack`）。詳細・発車・削除はコンテキストメニューと VoiceOver アクションでも可（[Gestures](https://developer.apple.com/design/human-interface-guidelines/gestures) の「ジェスチャだけにしない」）。**発券後はリストに留まり祝祭を見せる**。タブ／ナビは提示中もレイアウト固定。発車は zoom source にして **即 Focus**。停車中はスタック外。並べ替えは `…` → `ReorderView`。
 - 追加 UI: **親指発券帯**（`QuickAddSheet`）。タイトル即フォーカス、Return＝主発行、タグ横チップ常時、KB 直上に線形スナップ・ゲージ＋巨大数字。連続追加後もキーボード維持。
-- ボタン: 可能な限り `.bordered` / `.borderedProminent` / `role: .destructive`（発券の主経路は Return／ゲージ。Hub での発車は **右投げ**。コンテキストメニューにも発車）。タグチップ・ゲージノブは Liquid Glass。
+- ボタン: 可能な限り `.bordered` / `.borderedProminent` / `role: .destructive`（発券の主経路は Return／ゲージ。Hub での発車は **提示中の右投げ**と **未選択の leading フルスワイプ**。コンテキストメニューにも発車）。タグチップ・ゲージノブは Liquid Glass。
 - Focus: エッジツーエッジのパネル格子（ヘッダ／タイマー／テレメトリ／操作）。丸角カードや大きな余白は使わない。
 
 ### 破壊的操作（物理削除）
@@ -67,9 +67,9 @@ Undo があるので、[HIG Alerts](https://developer.apple.com/design/human-int
 
 | 原則 | 内容 |
 |------|------|
-| 即削除可 | Hub スタックはコンテキストメニュー、詳細は削除ボタン。いずれも即反映 + `role: .destructive` |
+| 即削除可 | Hub スタックはコンテキストメニュー、未選択 trailing フルスワイプ、詳細は削除ボタン。いずれも即反映 + `role: .destructive`。Undo があるので [Alerts](https://developer.apple.com/design/human-interface-guidelines/alerts) どおり確認 Alert は出さない |
 | Undo | 下部バナー「取り消す」（約 8 秒）。スナップショット復元（UndoManager は使わない＝タイトル編集と混ざらない） |
-| Alert なし | コンテキストメニューも詳細の削除も即削除＋バナー |
+| Alert なし | コンテキストメニュー・フルスワイプ・詳細の削除も即削除＋バナー |
 | `role: .destructive` | 本当に消える操作だけ（期限クリアには使わない） |
 
 実装: `DeletionUndo` / `DeletionUndoCenter` / `DeleteConfirmation.swift`。
@@ -104,7 +104,7 @@ Focus / 設定は HIG 骨格のまま。Hub の未乗車リストはマルス券
 
 ## モーション（意図的に少ない）
 
-1. **発車**: つまんだ券を右に投げて即 `fullScreenCover`。投げている券が zoom source。内部タイマーは 1 秒 tick のみ。
+1. **発車**: つまんだ券を右に投げて即 `fullScreenCover`。未選択 peek は leading フルスワイプでも同じ。投げている／スワイプ中の券が zoom source。内部タイマーは 1 秒 tick のみ。
 2. **超過突入**: タイマー色を amber→red へ、軽いスケールパルス 1 回。全面ディムは使わず操作盤を超過 3 択に差し替え。
 3. **切符発行 / ゲージ**: 単発はコミット即マルス排出（シートから 90°CW → 正立 → デッキ着地、`MarsTicketSpec.IssueMotion` 固定 ms）＋シート閉じ並列。シーン間のデッドウェイトは置かない。連続は褒め最小（haptic ＋ Undo）。発行時はゲージ detent と喧嘩させない。スクラブのみ（未入力）の停泊越えは impact＋`Motion.gaugeSnap`。
 4. **到着**: Focus 閉鎖の裏で `ArrivalInvalidateOverlay` を既に置いておく（閉鎖＝出現。二段入場しない）。検札印ハンドルが券の上で誘い、ユーザーが押す／タップするまで待つ。破りは使わない。定時・早着は印 / haptic の味付け。超過でも取り下げない。点数・コンフェッティ・情報カードの OK 待ち・延着表示は禁止。
@@ -147,7 +147,7 @@ Focus / 設定は HIG 骨格のまま。Hub の未乗車リストはマルス券
 | `TodoTrainWidget/CockpitInstrumentViews.swift` | StandBy 2ペイン / LS ViewThatFits ダーク計器 |
 | `ContentView.swift` | TabView + Focus cover |
 | `Features/Hub/QuickAddBar.swift` | `QuickAddSheet`（親指発券帯） |
-| `Features/Hub/TicketStackView.swift` / `HubMarsTicketCard.swift` | Hub マルス peek。選択は Hub 提示レイヤ。出入りは手前券の下。右投げ発車 |
+| `Features/Hub/TicketStackView.swift` / `HubMarsTicketCard.swift` | Hub マルス peek。選択は Hub 提示レイヤ。未選択は leading 発車 / trailing 削除のフルスワイプ。出入りは手前券の下。提示中は右投げ発車 |
 | `Features/Hub/HubStationChevronSign.swift` | 提示中だけ中央固定の LED「>>> 発車 >>>」（16×16、字形パスの中心サンプリング。ヒット透過） |
 | 履歴 / 設定 | 標準 List / Form |
 
