@@ -28,7 +28,6 @@ struct TicketStackView: View {
     let onOpenDetail: (Ticket) -> Void
     let onDelete: (Ticket) -> Void
     var zoomNamespace: Namespace.ID? = nil
-    var onDeckSwipeActive: (Bool) -> Void = { _ in }
 
     private var orderedIDs: [UUID] {
         tickets.map(\.id)
@@ -81,7 +80,6 @@ struct TicketStackView: View {
             allowsDeckSwipe: !isHidden && !isFocused && !blockPeerHits,
             onSelect: { onFocusTicket(ticket.id) },
             onDismissLift: onDismissFocus,
-            onDeckSwipeActive: onDeckSwipeActive,
             onDeckSwipeEnded: { action in
                 switch action {
                 case .board:

@@ -21,13 +21,11 @@ struct HubMarsTicketCard: View {
     let onSelect: () -> Void
     var onDismissLift: () -> Void = {}
     var onHoldDragEnded: ((DragGesture.Value) -> TicketStackLayout.HoldRelease)?
-    var onDeckSwipeActive: (Bool) -> Void = { _ in }
     var onDeckSwipeEnded: (TicketStackLayout.DeckSwipeRelease) -> Void = { _ in }
 
     @Environment(\.layoutDirection) private var layoutDirection
     @State private var dragTranslation: CGSize = .zero
-    @State private var deckAxisLocked = false
-    @State private var deckAxisCancelled = false
+    @State private var deckX: CGFloat = 0
 
     private var content: MarsTicketContent {
         MarsTicketContent(ticket: ticket)
@@ -41,9 +39,19 @@ struct HubMarsTicketCard: View {
         TicketStackLayout.holdOffset(rest: restOffset, translation: dragTranslation)
     }
 
+    private var displayedOffset: CGSize {
+        if isLifted, followsFinger {
+            return liveHold
+        }
+        if allowsDeckSwipe, !isLifted {
+            return CGSize(width: deckX, height: 0)
+        }
+        return .zero
+    }
+
     private var leadingDrag: CGFloat {
         TicketStackLayout.leadingWidth(
-            translationWidth: liveHold.width,
+            translationWidth: deckX,
             leadingIsPositiveX: leadingIsPositiveX
         )
     }
@@ -57,8 +65,16 @@ struct HubMarsTicketCard: View {
                 .contentShape(Rectangle())
                 .onTapGesture(perform: handleTap)
                 .gesture(isLifted && followsFinger ? holdDrag : nil)
-                .simultaneousGesture(!isLifted && allowsDeckSwipe ? deckDrag : nil)
-                .offset(followsFinger || allowsDeckSwipe ? liveHold : .zero)
+                .gesture(
+                    DeckHorizontalPanGesture(
+                        isEnabled: allowsDeckSwipe && !isLifted,
+                        onChanged: { x in
+                            deckX = x
+                        },
+                        onEnded: finishDeckSwipe
+                    )
+                )
+                .offset(displayedOffset)
                 .shadow(
                     color: .black.opacity(isHeldVisually || isLifted ? 0.28 : 0.18),
                     radius: isHeldVisually || isLifted ? 16 : 10,
@@ -71,7 +87,7 @@ struct HubMarsTicketCard: View {
         .onChange(of: isLifted) { _, lifted in
             if !lifted {
                 dragTranslation = .zero
-                resetDeckAxis()
+                deckX = 0
             }
         }
     }
@@ -142,6 +158,26 @@ struct HubMarsTicketCard: View {
         }
     }
 
+    private func finishDeckSwipe(translationX: CGFloat, predictedX: CGFloat) {
+        let translation = CGSize(width: translationX, height: 0)
+        let predicted = CGSize(width: predictedX, height: 0)
+        let action = TicketStackLayout.deckSwipeRelease(
+            translation: translation,
+            predictedEnd: predicted,
+            canBoard: canBoard,
+            leadingIsPositiveX: leadingIsPositiveX
+        )
+        onDeckSwipeEnded(action)
+        switch action {
+        case .snap:
+            withAnimation(MarsTicketSpec.HubStack.putBack) {
+                deckX = 0
+            }
+        case .board, .delete:
+            break
+        }
+    }
+
     private var holdDrag: some Gesture {
         DragGesture(minimumDistance: 12)
             .onChanged { value in
@@ -159,55 +195,6 @@ struct HubMarsTicketCard: View {
                     }
                 }
             }
-    }
-
-    private var deckDrag: some Gesture {
-        DragGesture(minimumDistance: 12)
-            .onChanged { value in
-                if deckAxisCancelled { return }
-                if !deckAxisLocked {
-                    let t = value.translation
-                    if abs(t.width) > abs(t.height) {
-                        deckAxisLocked = true
-                        onDeckSwipeActive(true)
-                    } else {
-                        deckAxisCancelled = true
-                        return
-                    }
-                }
-                var transaction = Transaction()
-                transaction.animation = nil
-                withTransaction(transaction) {
-                    dragTranslation = value.translation
-                }
-            }
-            .onEnded { value in
-                let wasHorizontal = deckAxisLocked
-                if wasHorizontal {
-                    let action = TicketStackLayout.deckSwipeRelease(
-                        translation: value.translation,
-                        predictedEnd: value.predictedEndTranslation,
-                        canBoard: canBoard,
-                        leadingIsPositiveX: leadingIsPositiveX
-                    )
-                    onDeckSwipeEnded(action)
-                    switch action {
-                    case .snap:
-                        withAnimation(MarsTicketSpec.HubStack.putBack) {
-                            dragTranslation = .zero
-                        }
-                    case .board, .delete:
-                        break
-                    }
-                    onDeckSwipeActive(false)
-                }
-                resetDeckAxis()
-            }
-    }
-
-    private func resetDeckAxis() {
-        deckAxisLocked = false
-        deckAxisCancelled = false
     }
 }
 

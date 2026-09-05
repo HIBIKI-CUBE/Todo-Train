@@ -27,7 +27,6 @@ struct HubView: View {
     @State private var ticketSlotFrames: [UUID: CGRect] = [:]
     @State private var departingTicketID: UUID?
     @State private var isPuttingBack = false
-    @State private var isDeckSwiping = false
 
     @Environment(TicketMotionBridge.self) private var ticketMotion
     @Environment(\.focusZoomNamespace) private var focusZoomNamespace
@@ -200,7 +199,6 @@ struct HubView: View {
                 departingTicketID = nil
                 focusedTicketID = nil
                 isPuttingBack = false
-                isDeckSwiping = false
             }
         }
     }
@@ -224,7 +222,7 @@ struct HubView: View {
             .frame(maxWidth: .infinity, alignment: .topLeading)
         }
         .scrollClipDisabled()
-        .scrollDisabled(isPresentingOnDeck || isDeckSwiping)
+        .scrollDisabled(isPresentingOnDeck)
         .overlay { hubPresentOverlay }
     }
 
@@ -253,7 +251,7 @@ struct HubView: View {
                     .padding(.bottom, TrainTheme.Space.lg)
             }
             .scrollClipDisabled()
-            .scrollDisabled(isPresentingOnDeck || isDeckSwiping)
+            .scrollDisabled(isPresentingOnDeck)
             .overlay { hubPresentOverlay }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
@@ -340,10 +338,7 @@ struct HubView: View {
                         detailTicket = ticket
                     },
                     onDelete: { deleteTicket($0) },
-                    zoomNamespace: zoomNamespace,
-                    onDeckSwipeActive: { active in
-                        isDeckSwiping = active
-                    }
+                    zoomNamespace: zoomNamespace
                 )
                 .onPreferenceChange(TicketSlotFramesKey.self) { reported in
                     ticketSlotFrames = TrainLayout.slotFrames(
