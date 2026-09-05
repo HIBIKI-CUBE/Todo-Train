@@ -1,6 +1,6 @@
 # 08 — 現状ステータス
 
-最終更新: 2026-08-23（Hub 券幅は提案幅のみ。測ってキャッシュしない）
+最終更新: 2026-08-24（Hub 未選択 peek は leading 発車 / trailing 削除のフルスワイプ）
 
 ## 結論
 
@@ -54,7 +54,7 @@ Todo train/
                            MarsTicketSpec, MarsTicketView, TicketStackLayout
   Features/
     Hub/                   HubView, QuickAddBar（親指発券帯）, ServiceSummaryBar,
-                           TicketStackView（peek。選択中はスロットの実券を隠す。出入りは手前へ潜る）, HubMarsTicketCard,
+                           TicketStackView（peek。選択中はスロットの実券を隠す。未選択フルスワイプ。出入りは手前へ潜る）, HubMarsTicketCard,
                            HubStationChevronSign（提示レイヤ LED。Hiragino 量子化ドット）
     Focus/                 FocusView, FocusControlsView, OvertimeSheet
     Arrival/               PauseLimitSheet, TransferCanvasPresenter

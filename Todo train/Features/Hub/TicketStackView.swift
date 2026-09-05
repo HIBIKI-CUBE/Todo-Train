@@ -8,6 +8,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 enum HubTicketCanvas {
     static let spaceName = "hubTicketCanvas"
@@ -26,6 +27,8 @@ struct TicketStackView: View {
     let onBoard: (Ticket) -> Void
     let onOpenDetail: (Ticket) -> Void
     let onDelete: (Ticket) -> Void
+    var zoomNamespace: Namespace.ID? = nil
+    var onDeckSwipeActive: (Bool) -> Void = { _ in }
 
     private var orderedIDs: [UUID] {
         tickets.map(\.id)
@@ -75,8 +78,21 @@ struct TicketStackView: View {
             canBoard: canBoard,
             disabledReason: boardDisabledReason,
             restOffset: .zero,
+            allowsDeckSwipe: !isHidden && !isFocused && !blockPeerHits,
             onSelect: { onFocusTicket(ticket.id) },
-            onDismissLift: onDismissFocus
+            onDismissLift: onDismissFocus,
+            onDeckSwipeActive: onDeckSwipeActive,
+            onDeckSwipeEnded: { action in
+                switch action {
+                case .board:
+                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                    onBoard(ticket)
+                case .delete:
+                    onDelete(ticket)
+                case .snap:
+                    break
+                }
+            }
         )
         .rotation3DEffect(
             .degrees(tilt),
@@ -87,6 +103,16 @@ struct TicketStackView: View {
         .opacity(isHidden || isFocused ? 0 : (peerFocused ? MarsTicketSpec.HubStack.focusPeerOpacity : 1))
         .allowsHitTesting(!isHidden && !isFocused && !blockPeerHits)
         .accessibilityHidden(isHidden || isFocused)
+        .accessibilityAction(named: "詳細") { onOpenDetail(ticket) }
+        .accessibilityAction(named: "削除") { onDelete(ticket) }
+        .modifier(DeckBoardAccessibilityAction(enabled: canBoard, onBoard: { onBoard(ticket) }))
+        .modifier(
+            DeckMatchedTransitionSource(
+                ticketID: ticket.id,
+                namespace: zoomNamespace,
+                enabled: !isHidden && !isFocused
+            )
+        )
         .contextMenu {
             Button("詳細") { onOpenDetail(ticket) }
             if canBoard {
@@ -142,4 +168,31 @@ struct TicketStackView: View {
         }
     }
     return PreviewHost()
+}
+
+private struct DeckMatchedTransitionSource: ViewModifier {
+    let ticketID: UUID
+    let namespace: Namespace.ID?
+    let enabled: Bool
+
+    func body(content: Content) -> some View {
+        if enabled, let namespace {
+            content.matchedTransitionSource(id: ticketID, in: namespace)
+        } else {
+            content
+        }
+    }
+}
+
+private struct DeckBoardAccessibilityAction: ViewModifier {
+    let enabled: Bool
+    let onBoard: () -> Void
+
+    func body(content: Content) -> some View {
+        if enabled {
+            content.accessibilityAction(named: "発車") { onBoard() }
+        } else {
+            content
+        }
+    }
 }
