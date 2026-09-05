@@ -24,6 +24,7 @@ struct QuickAddSheet: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @Environment(AppSettings.self) private var settings
     @Query(sort: \Ticket.sortOrder) private var allTickets: [Ticket]
     @Query(sort: \Tag.sortOrder) private var allTags: [Tag]
     @Query private var allSessions: [WorkSession]
@@ -133,7 +134,9 @@ struct QuickAddSheet: View {
             .onAppear {
                 continuousDump = false
                 if !didSeedEstimate {
-                    pendingMinutes = highlightedEstimateMinutes
+                    pendingMinutes = estimateSuggestion?.minutes
+                        ?? settings.lastIssuedEstimateMinutes
+                        ?? EstimateHeuristic.defaultHighlightMinutes
                     didSeedEstimate = true
                 }
                 titleFocusNonce += 1
@@ -385,6 +388,7 @@ struct QuickAddSheet: View {
 
         didAddOnce = true
         addPulse += 1
+        settings.lastIssuedEstimateMinutes = issuedMinutes
 
         if allowsContinuousDump && continuousDump {
             undoPayload = UndoPayload(
@@ -438,5 +442,6 @@ struct QuickAddSheet: View {
 #Preview {
     let container = try! AppModelContainer.make(inMemory: true)
     return QuickAddSheet(onSingleIssued: nil)
+        .environment(AppSettings.shared)
         .modelContainer(container)
 }

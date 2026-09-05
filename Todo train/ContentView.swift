@@ -76,9 +76,11 @@ struct ContentView: View {
             if newPhase == .active {
                 // Foreground: recompute Date-based phase only.
                 // Do not re-run recoverOnLaunch (would re-schedule cancelled end bells).
-                sessionManager.reconcile()
+                sessionManager.endAwayWatch()
                 applyPendingFocusAction()
                 syncFocusPresentation()
+            } else {
+                sessionManager.beginAwayWatch()
             }
         }
         .onChange(of: sessionManager.phase) { _, _ in

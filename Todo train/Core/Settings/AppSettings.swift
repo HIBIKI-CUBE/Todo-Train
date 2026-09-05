@@ -16,6 +16,8 @@ final class AppSettings {
         static let overtimeSoundEnabled = "settings.overtimeSoundEnabled"
         static let endBellEnabled = "settings.endBellEnabled"
         static let keepAwakeWhileChargingInFocus = "settings.keepAwakeWhileChargingInFocus"
+        static let cabinAnnouncementsEnabled = "settings.cabinAnnouncementsEnabled"
+        static let lastIssuedEstimateMinutes = "settings.lastIssuedEstimateMinutes"
     }
 
     var pauseLimit: Int {
@@ -49,17 +51,39 @@ final class AppSettings {
         }
     }
 
+    /// Mid-ride 車内放送 (progress + away). Default ON; a tool the user can silence.
+    var cabinAnnouncementsEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(cabinAnnouncementsEnabled, forKey: Keys.cabinAnnouncementsEnabled)
+        }
+    }
+
+    /// Last issued estimate in minutes (1...60). Nil until the user has issued once this install.
+    var lastIssuedEstimateMinutes: Int? {
+        didSet {
+            if let minutes = lastIssuedEstimateMinutes {
+                UserDefaults.standard.set(Self.clampEstimateMinutes(minutes), forKey: Keys.lastIssuedEstimateMinutes)
+            } else {
+                UserDefaults.standard.removeObject(forKey: Keys.lastIssuedEstimateMinutes)
+            }
+        }
+    }
+
     static func makeForTesting(
         pauseLimit: Int = PauseLimitGuard.defaultLimit,
         overtimeSoundEnabled: Bool = true,
         endBellEnabled: Bool = false,
-        keepAwakeWhileChargingInFocus: Bool = true
+        keepAwakeWhileChargingInFocus: Bool = true,
+        cabinAnnouncementsEnabled: Bool = true,
+        lastIssuedEstimateMinutes: Int? = nil
     ) -> AppSettings {
         let settings = AppSettings()
         settings.pauseLimit = Self.clampPauseLimit(pauseLimit)
         settings.overtimeSoundEnabled = overtimeSoundEnabled
         settings.endBellEnabled = endBellEnabled
         settings.keepAwakeWhileChargingInFocus = keepAwakeWhileChargingInFocus
+        settings.cabinAnnouncementsEnabled = cabinAnnouncementsEnabled
+        settings.lastIssuedEstimateMinutes = lastIssuedEstimateMinutes.map(Self.clampEstimateMinutes)
         return settings
     }
 
@@ -84,9 +108,27 @@ final class AppSettings {
         } else {
             keepAwakeWhileChargingInFocus = UserDefaults.standard.bool(forKey: Keys.keepAwakeWhileChargingInFocus)
         }
+
+        if UserDefaults.standard.object(forKey: Keys.cabinAnnouncementsEnabled) == nil {
+            cabinAnnouncementsEnabled = true
+        } else {
+            cabinAnnouncementsEnabled = UserDefaults.standard.bool(forKey: Keys.cabinAnnouncementsEnabled)
+        }
+
+        if UserDefaults.standard.object(forKey: Keys.lastIssuedEstimateMinutes) == nil {
+            lastIssuedEstimateMinutes = nil
+        } else {
+            lastIssuedEstimateMinutes = Self.clampEstimateMinutes(
+                UserDefaults.standard.integer(forKey: Keys.lastIssuedEstimateMinutes)
+            )
+        }
     }
 
     nonisolated static func clampPauseLimit(_ value: Int) -> Int {
         value == 3 ? 3 : PauseLimitGuard.defaultLimit
+    }
+
+    nonisolated static func clampEstimateMinutes(_ value: Int) -> Int {
+        min(max(value, 1), Ticket.maxEstimatedSeconds / 60)
     }
 }

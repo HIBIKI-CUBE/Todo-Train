@@ -32,14 +32,20 @@ struct Todo_trainApp: App {
                 modelContext: context,
                 settings: AppSettings.shared,
                 overtimeNotifier: OvertimeNotifier.shared,
+                checkInNotifier: CheckInNotifier.shared,
+                coachingEngine: CoachingEngineFactory.make(),
                 liveActivityManager: liveActivity,
                 alarmScheduler: alarmScheduler
             )
             _sessionManager = State(initialValue: manager)
+            AppRuntime.modelContainer = container
+            AppRuntime.sessionManager = manager
             #if canImport(AlarmKit)
             AlarmKitScheduler.shared.bind(sessionManager: manager)
             #endif
+            OvertimeNotifier.shared.sessionManager = manager
             OvertimeNotifier.shared.configure()
+            CheckInNotifier.shared.configure()
         } catch {
             fatalError("Could not create ModelContainer: \(error)")
         }

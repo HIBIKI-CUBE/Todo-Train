@@ -33,10 +33,17 @@ struct SettingsView: View {
                     get: { settings.keepAwakeWhileChargingInFocus },
                     set: { settings.keepAwakeWhileChargingInFocus = $0 }
                 ))
+                Toggle("車内放送", isOn: Binding(
+                    get: { settings.cabinAnnouncementsEnabled },
+                    set: { settings.cabinAnnouncementsEnabled = $0 }
+                ))
             } header: {
                 Text("フォーカス")
             } footer: {
-                Text("発車中かつ充電中のとき、自動ロックしません。")
+                Text("発車中かつ充電中のとき、自動ロックしません。車内放送は長い乗務の途中と、アプリを離れたときに短い問いを出します。")
+            }
+            .onChange(of: settings.cabinAnnouncementsEnabled) { _, _ in
+                sessionManager.syncCabinAnnouncementsWithSettings()
             }
 
             Section {

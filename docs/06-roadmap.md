@@ -9,7 +9,8 @@
 | **v1** | Settings、履歴検索・今日に追加、並べ替えビュー、dueDate、カスタム見積、LA、Widget、AI stub | **完了**（CloudKit を除く） |
 | **v2** | AlarmKit + StandBy、週次レポート、UI polish、横向き compact | **完了**（iPad 等は未着手） |
 | **定時** | 定時到着 / 定時運行の短い案内（非通貨） | **完了** |
-| **次** | CloudKit 同期 | 未着手 |
+| **車内放送** | 乗務中チェックイン + 背面「まだ乗ってる？」+ 発券 Intent | **完了** |
+| **次** | CloudKit 同期 → その後 Mac 最小（走行中の停車） | CloudKit 未着手 |
 
 ## MVP（完了チェック）
 
@@ -47,8 +48,20 @@
 - [x] 週次レポート
 - [x] ダークコックピット Focus / LA UI
 - [x] iPhone 横向き compact レイアウト
-- [ ] App Intents / Siri 拡充
+- [x] App Intent「切符を発行」（Siri / ショートカット）。発車はしない
 - [ ] 系譜可視化、iPad
+
+## 車内放送（完了）
+
+- [x] `CheckInScheduling` 純関数（10 分以下 0、11–25 分 1、30 分以上は 2。ジッター帯）
+- [x] Focus 操作盤 4 択 + 背面 away 通知
+- [x] 発車時オンデバイス 1 行（失敗時 Heuristic）
+- [x] 設定トグル（既定 ON）
+
+## 次軌道（実装しない・前提）
+
+1. **WP-I CloudKit** — ローカル SwiftData のままでは Mac から停車できない
+2. **macOS 最小** — 走行中タイトル・残り・停車（メニューバーで足りる。Hub のマルス体験は iPhone に残す）
 
 ## 受入の芯（MVP・達成済みの意図）
 

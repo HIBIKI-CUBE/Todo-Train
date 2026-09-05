@@ -20,6 +20,8 @@ final class SessionManager {
     private let calendar: Calendar
     private let settings: AppSettings
     private let overtimeNotifier: any OvertimeNotifying
+    private let checkInNotifier: any CheckInNotifying
+    private let coachingEngine: any CoachingEngine
     private let overrideCounter: any OverrideCounting
     private let liveActivityManager: any LiveActivityManaging
     private let alarmScheduler: any AlarmScheduling
@@ -36,10 +38,21 @@ final class SessionManager {
     private(set) var punctualityQueue: [PunctualityMoment] = []
     /// Bumps when a 定時運行 moment is enqueued (haptic). Consume must not tick.
     private(set) var punctualityHapticTick: Int = 0
+    /// Bumps when a 車内放送 panel appears.
+    private(set) var checkInHapticTick: Int = 0
 
     var punctualityMoment: PunctualityMoment? { punctualityQueue.first }
 
     var pauseLimit: Int { settings.pauseLimit }
+
+    var pendingCheckIn: CheckInKind? { activeSession?.pendingCheckIn }
+
+    var checkInPromptLine: String {
+        if let line = activeSession?.checkInPromptLine, !line.isEmpty {
+            return line
+        }
+        return CheckInCopy.fallback(title: activeSession?.ticket?.title ?? "")
+    }
 
     /// True when Settings end-bell is on and AlarmKit is authorized (owns LA + alert).
     var isAlarmKitEndBellActive: Bool {
@@ -55,6 +68,8 @@ final class SessionManager {
         calendar: Calendar = .current,
         settings: AppSettings = .shared,
         overtimeNotifier: (any OvertimeNotifying)? = nil,
+        checkInNotifier: (any CheckInNotifying)? = nil,
+        coachingEngine: (any CoachingEngine)? = nil,
         overrideCounter: (any OverrideCounting)? = nil,
         liveActivityManager: (any LiveActivityManaging)? = nil,
         alarmScheduler: (any AlarmScheduling)? = nil
@@ -64,6 +79,8 @@ final class SessionManager {
         self.calendar = calendar
         self.settings = settings
         self.overtimeNotifier = overtimeNotifier ?? NoOpOvertimeNotifier()
+        self.checkInNotifier = checkInNotifier ?? NoOpCheckInNotifier()
+        self.coachingEngine = coachingEngine ?? HeuristicCoachingEngine()
         self.overrideCounter = overrideCounter ?? OverrideCounter.shared
         self.liveActivityManager = liveActivityManager ?? NoOpLiveActivityManager()
         self.alarmScheduler = alarmScheduler ?? NoOpAlarmScheduler()
@@ -118,6 +135,7 @@ final class SessionManager {
         needsServiceDayEndPrompt = false
         try save()
         overtimeNotifier.requestAuthorizationIfNeeded()
+        checkInNotifier.requestAuthorizationIfNeeded()
         alarmScheduler.requestAuthorizationIfNeeded()
         refreshTodayOverrideCount(at: now)
         reconcile(now: now)
@@ -152,6 +170,7 @@ final class SessionManager {
             phase = .idle
         }
         overtimeNotifier.cancelAll()
+        checkInNotifier.cancelAll()
         alarmScheduler.cancelAll()
         try save()
         reconcile(now: now)
@@ -189,6 +208,7 @@ final class SessionManager {
             ticket: ticket
         )
         modelContext.insert(session)
+        applyCheckInSchedule(to: session, title: ticket.title, estimatedSeconds: estimate)
         activeSession = session
         phase = .running
         try save()
@@ -196,6 +216,8 @@ final class SessionManager {
         refreshOvertimeNotification(for: session, now: now)
         refreshLiveActivity(for: session, now: now)
         refreshEndBell(for: session, now: now)
+        refreshProgressCheckInNotifications(for: session, now: now)
+        requestCheckInPrompt(for: session, title: ticket.title, estimatedMinutes: estimate / 60)
     }
 
     /// Pause the current ride in the store, then board `ticket`, without publishing `.paused`.
@@ -270,8 +292,11 @@ final class SessionManager {
         }
         session.segmentStartedAt = nil
         session.pausedAt = now
+        session.pendingCheckIn = nil
+        session.awayDueAt = nil
         phase = .paused
         overtimeNotifier.cancel(sessionID: session.id)
+        checkInNotifier.cancel(sessionID: session.id)
         liveActivityManager.end()
         // Always cancel (never pause) so AlarmKit Live Activities do not linger while paused.
         if syncAlarm {
@@ -288,7 +313,10 @@ final class SessionManager {
         }
         session.segmentStartedAt = nil
         session.pausedAt = now
+        session.pendingCheckIn = nil
+        session.awayDueAt = nil
         overtimeNotifier.cancel(sessionID: session.id)
+        checkInNotifier.cancel(sessionID: session.id)
         liveActivityManager.end()
         alarmScheduler.cancel(sessionID: session.id)
         try save()
@@ -334,6 +362,7 @@ final class SessionManager {
         refreshLiveActivity(for: session, now: now)
         // Reschedule from remaining time — do not resume a paused AlarmKit countdown.
         refreshEndBell(for: session, now: now)
+        refreshProgressCheckInNotifications(for: session, now: now)
     }
 
     /// StandBy / system AlarmKit resume is no longer a Live Activity path (paused alarms are cancelled).
@@ -349,6 +378,7 @@ final class SessionManager {
         refreshOvertimeNotification(for: session, now: now)
         refreshLiveActivity(for: session, now: now)
         refreshEndBell(for: session, now: now)
+        refreshProgressCheckInNotifications(for: session, now: now)
     }
 
     func extend(by seconds: TimeInterval, reason: String? = nil, now: Date? = nil) throws {
@@ -376,6 +406,7 @@ final class SessionManager {
         refreshOvertimeNotification(for: session, now: now)
         refreshLiveActivity(for: session, now: now)
         refreshEndBell(for: session, now: now)
+        refreshProgressCheckInNotifications(for: session, now: now)
     }
 
     func arrive(resolution: OvertimeResolution? = nil, now: Date? = nil) throws {
@@ -420,6 +451,112 @@ final class SessionManager {
             throw SessionError.noActiveSession
         }
         try close(session: session, outcome: .abandoned, closureKind: .abandoned, now: now)
+    }
+
+    /// 車内放送 4 択. `willExtend` only acknowledges; Focus shows the extend panel.
+    func answerCheckIn(_ answer: CheckInAnswerKind, now: Date? = nil) throws {
+        let now = now ?? clock.now
+        guard let session = activeSession, session.isOpen else {
+            throw SessionError.noActiveSession
+        }
+        guard session.pendingCheckIn != nil else { return }
+
+        consumePendingCheckIn(session, answer: answer, now: now)
+        session.awayDueAt = nil
+        try save()
+
+        switch answer {
+        case .stillOnIt, .willExtend:
+            reconcile(now: now)
+            refreshProgressCheckInNotifications(for: session, now: now)
+        case .paused:
+            try pause(now: now)
+        case .alreadyDone:
+            try arrive(resolution: .alreadyDone, now: now)
+        }
+    }
+
+    /// Start the away watch when the scene leaves `.active` while running.
+    func beginAwayWatch(now: Date? = nil) {
+        let now = now ?? clock.now
+        guard settings.cabinAnnouncementsEnabled else { return }
+        guard let session = activeSession, session.isOpen, !session.isPaused else { return }
+        guard session.remainingSeconds(at: now) > 0 else { return }
+        guard session.pendingCheckIn == nil else { return }
+        guard session.awayDueAt == nil else { return }
+
+        let delay = CheckInScheduling.awayDelay(
+            seed: session.id,
+            salt: UInt64(session.checkInFiredCount) &+ 99
+        )
+        session.awayDueAt = now.addingTimeInterval(delay)
+        try? save()
+        checkInNotifier.scheduleAway(
+            sessionID: session.id,
+            ticketTitle: session.ticket?.title ?? "切符",
+            body: CheckInCopy.away,
+            fireAt: session.awayDueAt ?? now.addingTimeInterval(delay)
+        )
+    }
+
+    /// Foreground: promote a due away broadcast, then clear the watch.
+    func endAwayWatch(now: Date? = nil) {
+        let now = now ?? clock.now
+        reconcile(now: now)
+        guard let session = activeSession, session.isOpen else { return }
+        session.awayDueAt = nil
+        try? save()
+        // Progress notifications stay; only the away request is session-scoped cancel of away id.
+        // `cancel(sessionID)` drops progress too — reschedule remaining progress after.
+        checkInNotifier.cancel(sessionID: session.id)
+        if !session.isPaused, session.remainingSeconds(at: now) > 0 {
+            refreshProgressCheckInNotifications(for: session, now: now)
+        }
+    }
+
+    func handleCheckInNotification(identifier: String, action: String) {
+        guard CheckInNotification.isCheckIn(identifier) else { return }
+        reconcile()
+        guard let session = activeSession, session.isOpen, !session.isPaused else { return }
+        guard session.remainingSeconds(at: clock.now) > CheckInScheduling.overtimeGuardSeconds else { return }
+
+        if session.pendingCheckIn == nil {
+            session.pendingCheckIn = CheckInNotification.isAway(identifier) ? .away : .progress
+            if session.pendingCheckIn == .progress, session.awayDueAt != nil {
+                session.awayDueAt = nil
+            }
+            checkInHapticTick += 1
+            try? save()
+        }
+
+        switch action {
+        case CheckInNotification.pauseAction:
+            try? answerCheckIn(.paused)
+        case CheckInNotification.stillOnItAction:
+            try? answerCheckIn(.stillOnIt)
+        default:
+            break
+        }
+    }
+
+    /// Settings toggle for 車内放送 — apply immediately to the active ride.
+    func syncCabinAnnouncementsWithSettings(now: Date? = nil) {
+        let now = now ?? clock.now
+        guard let session = activeSession, session.isOpen else {
+            checkInNotifier.cancelAll()
+            return
+        }
+        if !settings.cabinAnnouncementsEnabled {
+            session.pendingCheckIn = nil
+            session.awayDueAt = nil
+            checkInNotifier.cancel(sessionID: session.id)
+            try? save()
+            reconcile(now: now)
+            return
+        }
+        if !session.isPaused {
+            refreshProgressCheckInNotifications(for: session, now: now)
+        }
     }
 
     // MARK: - Physical deletion
@@ -486,6 +623,7 @@ final class SessionManager {
             phase = .idle
         }
         overtimeNotifier.cancel(sessionID: session.id)
+        checkInNotifier.cancel(sessionID: session.id)
         liveActivityManager.end()
         alarmScheduler.cancel(sessionID: session.id)
         suppressedEndBellSessionIDs.remove(session.id)
@@ -515,6 +653,7 @@ final class SessionManager {
             phase = .idle
         }
         overtimeNotifier.cancel(sessionID: session.id)
+        checkInNotifier.cancel(sessionID: session.id)
         liveActivityManager.end()
         alarmScheduler.cancel(sessionID: session.id)
         suppressedEndBellSessionIDs.remove(session.id)
@@ -558,7 +697,10 @@ final class SessionManager {
         let crossedIntoOvertime = phase != .overtime && nextPhase == .overtime
         phase = nextPhase
         if crossedIntoOvertime {
+            skipPendingCheckInForOvertime(session)
             refreshLiveActivity(for: session, now: now)
+        } else if nextPhase == .running {
+            refreshPendingCheckIn(session, now: now)
         }
     }
 
@@ -615,10 +757,12 @@ final class SessionManager {
             refreshOvertimeNotification(for: session, now: now)
             refreshLiveActivity(for: session, now: now)
             refreshEndBell(for: session, now: now)
+            refreshProgressCheckInNotifications(for: session, now: now)
         } else if let session = activeSession, session.isOpen, session.isPaused {
             // Paused rides must not keep an AlarmKit Live Activity.
             liveActivityManager.end()
             overtimeNotifier.cancel(sessionID: session.id)
+            checkInNotifier.cancel(sessionID: session.id)
             alarmScheduler.cancelAll()
         } else {
             liveActivityManager.end()
@@ -646,6 +790,144 @@ final class SessionManager {
             refreshLiveActivity(for: session, now: now)
         }
         publishWidgetSnapshot(at: now)
+    }
+
+    // MARK: - Check-in
+
+    private func applyCheckInSchedule(to session: WorkSession, title: String, estimatedSeconds: Int) {
+        session.checkInOffsetSeconds = CheckInScheduling.offsets(
+            estimatedSeconds: estimatedSeconds,
+            seed: session.id
+        )
+        session.checkInFiredCount = 0
+        session.pendingCheckInKindRaw = nil
+        session.awayDueAt = nil
+        session.checkInPromptLine = CheckInCopy.fallback(title: title)
+        session.checkInAnswersJSON = "[]"
+    }
+
+    private func requestCheckInPrompt(for session: WorkSession, title: String, estimatedMinutes: Int) {
+        guard settings.cabinAnnouncementsEnabled else { return }
+        let sessionID = session.id
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            let lines = await self.coachingEngine.checkInLines(
+                title: title,
+                estimatedMinutes: estimatedMinutes
+            )
+            guard let line = lines.first.map(Self.sanitizeCheckInLine), !line.isEmpty else { return }
+            guard let current = self.activeSession, current.id == sessionID, current.isOpen else { return }
+            current.checkInPromptLine = line
+            try? self.save()
+            self.refreshProgressCheckInNotifications(for: current, now: self.clock.now)
+        }
+    }
+
+    private static func sanitizeCheckInLine(_ raw: String) -> String {
+        let collapsed = raw
+            .replacingOccurrences(of: "\n", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !collapsed.isEmpty else { return "" }
+        if collapsed.count <= 40 { return collapsed }
+        let end = collapsed.index(collapsed.startIndex, offsetBy: 40)
+        return String(collapsed[..<end])
+    }
+
+    private func consumePendingCheckIn(
+        _ session: WorkSession,
+        answer: CheckInAnswerKind,
+        now: Date
+    ) {
+        guard let kind = session.pendingCheckIn else { return }
+        var answers = session.checkInAnswers
+        answers.append(CheckInAnswerRecord(kind: kind, answer: answer, answeredAt: now))
+        session.checkInAnswers = answers
+        if kind == .progress {
+            session.checkInFiredCount += 1
+        }
+        session.pendingCheckIn = nil
+    }
+
+    private func skipPendingCheckInForOvertime(_ session: WorkSession) {
+        if session.pendingCheckIn == .progress {
+            session.checkInFiredCount += 1
+        }
+        session.pendingCheckIn = nil
+        session.awayDueAt = nil
+        checkInNotifier.cancel(sessionID: session.id)
+        try? save()
+    }
+
+    private func refreshPendingCheckIn(_ session: WorkSession, now: Date) {
+        guard settings.cabinAnnouncementsEnabled else {
+            if session.pendingCheckIn != nil || session.awayDueAt != nil {
+                session.pendingCheckIn = nil
+                session.awayDueAt = nil
+                checkInNotifier.cancel(sessionID: session.id)
+                try? save()
+            }
+            return
+        }
+
+        let remaining = session.remainingSeconds(at: now)
+        if remaining <= CheckInScheduling.overtimeGuardSeconds {
+            return
+        }
+
+        if session.pendingCheckIn != nil {
+            return
+        }
+
+        let elapsed = session.elapsedSeconds(at: now)
+        if CheckInScheduling.dueProgressOffset(
+            offsets: session.checkInOffsets,
+            firedCount: session.checkInFiredCount,
+            elapsedSeconds: elapsed,
+            remainingSeconds: remaining,
+            hasPending: false
+        ) != nil {
+            session.pendingCheckIn = .progress
+            session.awayDueAt = nil
+            checkInHapticTick += 1
+            try? save()
+            return
+        }
+
+        if let due = session.awayDueAt, due <= now {
+            session.pendingCheckIn = .away
+            session.awayDueAt = nil
+            checkInHapticTick += 1
+            try? save()
+        }
+    }
+
+    private func refreshProgressCheckInNotifications(for session: WorkSession, now: Date) {
+        guard settings.cabinAnnouncementsEnabled else {
+            checkInNotifier.cancel(sessionID: session.id)
+            return
+        }
+        guard session.isOpen, !session.isPaused else {
+            checkInNotifier.cancel(sessionID: session.id)
+            return
+        }
+        let elapsed = session.elapsedSeconds(at: now)
+        let body = session.checkInPromptLine ?? CheckInCopy.fallback(title: session.ticket?.title ?? "")
+        let title = session.ticket?.title ?? "切符"
+        for (index, offset) in session.checkInOffsets.enumerated() {
+            guard index >= session.checkInFiredCount else { continue }
+            guard let fireAt = CheckInScheduling.wallFireAt(
+                offset: offset,
+                elapsedSeconds: elapsed,
+                now: now
+            ) else { continue }
+            checkInNotifier.scheduleProgress(
+                sessionID: session.id,
+                index: index,
+                ticketTitle: title,
+                body: body,
+                fireAt: fireAt
+            )
+        }
     }
 
     // MARK: - Queries

@@ -25,6 +25,7 @@ UI tick（1秒）は表示専用のみ
 - `Ticket` の「走行中」は open `WorkSession` から派生
 - Live Activity を消しても運行/セッションは DB が本尊
 - 定時判定は `Punctuality` の純関数（当初見積もり vs 実績）。到着の祝祭は完了が先。フィールドを足してスコア化しない
+- 車内放送の発火も `reconcile()` が Date / 経過秒で見る。スコアにはしない
 
 ## 主要モデル（実装済みの骨格）
 
@@ -45,7 +46,8 @@ UI tick（1秒）は表示専用のみ
 ## SessionManager 責務
 
 - 運行開始 / 終了
-- 発車 / 停車 / 再開 / 延長 / 到着・途中下車・放棄 / 割り込み発車（`switchBoard`。`phase` を `.paused` にしない）
+- 発車 / 停車 / 再開 / 延長 / 到着・途中下車 / 放棄 / 割り込み発車（`switchBoard`。`phase` を `.paused` にしない）
+- 車内放送（`answerCheckIn` / `beginAwayWatch` / `endAwayWatch`）
 - 停車上限ゲート（`PauseLimitGuard`）
 - 日付跨ぎ検知 → `needsServiceDayEndPrompt`
 - force-quit 後の open session 復元・複数 open の修復
@@ -83,7 +85,8 @@ CoachingEngine（プロトコル）
 
 - PCC entitlement: `com.apple.developer.private-cloud-compute`（早めに申請）
 - PCC はユーザー起動時のみ。注釈「Private Cloud で処理」必須
-- フォーカス中に AI 自動起動しない
+- フォーカス中に会話 AI を自動起動しない。車内放送 1 行は **発車時** にオンデバイスで用意してよい（失敗時は Heuristic）
+- `reconcile()` が進捗放送の発火も見る。オフセットは当初見積もりの経過秒（停車中は進まない）
 
 ## Live Activity（v1）
 
