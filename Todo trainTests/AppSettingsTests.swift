@@ -26,5 +26,12 @@ struct AppSettingsTests {
         #expect(settings.overtimeSoundEnabled == false)
         #expect(settings.endBellEnabled == true)
         #expect(settings.keepAwakeWhileChargingInFocus == false)
+        #expect(settings.cabinAnnouncementsEnabled == true)
+    }
+
+    @Test func clampEstimateMinutes_oneToSixty() {
+        #expect(AppSettings.clampEstimateMinutes(0) == 1)
+        #expect(AppSettings.clampEstimateMinutes(30) == 30)
+        #expect(AppSettings.clampEstimateMinutes(90) == 60)
     }
 }

@@ -35,7 +35,7 @@ struct CoachingEngineTests {
         try context.save()
 
         let engine = HeuristicCoachingEngine()
-        let review = await engine.dailyReview(sessions: [session])
-        #expect(review?.contains("1 件到着") == true)
+        let lines = await engine.checkInLines(title: "資料作成", estimatedMinutes: 30)
+        #expect(lines == ["まだ『資料作成』？"])
     }
 }

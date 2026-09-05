@@ -49,6 +49,8 @@ final class InMemoryOvertimeNotifier: OvertimeNotifying {
 final class OvertimeNotifier: NSObject, OvertimeNotifying, UNUserNotificationCenterDelegate {
     static let shared = OvertimeNotifier()
 
+    weak var sessionManager: SessionManager?
+
     private let center: UNUserNotificationCenter
     private var didConfigureDelegate = false
 
@@ -113,5 +115,16 @@ final class OvertimeNotifier: NSObject, OvertimeNotifying, UNUserNotificationCen
         willPresent notification: UNNotification
     ) async -> UNNotificationPresentationOptions {
         []
+    }
+
+    nonisolated func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse
+    ) async {
+        let identifier = response.notification.request.identifier
+        let action = response.actionIdentifier
+        await MainActor.run {
+            sessionManager?.handleCheckInNotification(identifier: identifier, action: action)
+        }
     }
 }

@@ -28,7 +28,7 @@ struct FocusView: View {
     @State private var extendReason: String?
     @State private var didConsumePendingAction = false
 
-    private let extendReasons = ["見積もりが甘かった", "割り込みが入った", "もう少しで終わる", "その他"]
+    private let extendReasons = ["仕事が膨らんだ", "割り込みが入った", "まだかかる", "その他"]
 
     /// Portrait: controls take ~38% of height. Compact: right pane ~40% of width.
     private let portraitControlFraction: CGFloat = 0.38
@@ -50,6 +50,7 @@ struct FocusView: View {
             }
         }
         .sensoryFeedback(.warning, trigger: overtimeHaptic)
+        .sensoryFeedback(.warning, trigger: sessionManager.checkInHapticTick)
         .sheet(isPresented: $showPauseLimitSheet, onDismiss: {
             pendingSwitchTicketID = nil
         }) {
@@ -148,10 +149,13 @@ struct FocusView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .accessibilityAddTraits(.isHeader)
 
-            if let label = currentTimerPhase.stateLabel {
+            if let label = headerStateLabel {
                 Text(label)
                     .font(.system(size: 20, weight: .bold, design: .default))
-                    .foregroundStyle(currentTimerPhase.accentColor)
+                    .foregroundStyle(headerStateColor)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.6)
+                    .multilineTextAlignment(.trailing)
                     .accessibilityAddTraits(.isHeader)
             }
         }
@@ -160,9 +164,15 @@ struct FocusView: View {
         .background(FocusPanel.fill)
         .overlay(alignment: .leading) {
             Rectangle()
-                .fill(currentTimerPhase.accentColor)
+                .fill(
+                    sessionManager.pendingCheckIn != nil && sessionManager.phase != .overtime
+                        ? TrainTheme.signalAmber
+                        : currentTimerPhase.accentColor
+                )
                 .frame(width: 3)
-                .opacity(currentTimerPhase == .cruise ? 0 : 1)
+                .opacity(
+                    currentTimerPhase == .cruise && sessionManager.pendingCheckIn == nil ? 0 : 1
+                )
         }
     }
 
@@ -259,6 +269,19 @@ struct FocusView: View {
                         }
                     }
                 )
+            } else if sessionManager.pendingCheckIn != nil {
+                CheckInControlsView(
+                    prompt: sessionManager.checkInPromptLine,
+                    onStillOnIt: { run { try sessionManager.answerCheckIn(.stillOnIt) } },
+                    onPause: { run { try sessionManager.answerCheckIn(.paused) } },
+                    onAlreadyDone: { run { try sessionManager.answerCheckIn(.alreadyDone) } },
+                    onWillExtend: {
+                        run { try sessionManager.answerCheckIn(.willExtend) }
+                        withAnimation(TrainTheme.Motion.soft) {
+                            showExtendChips = true
+                        }
+                    }
+                )
             } else {
                 FocusControlsView(
                     onPause: { run { try sessionManager.pause() } },
@@ -292,6 +315,23 @@ struct FocusView: View {
             remaining: sessionManager.remainingSeconds,
             budgetSeconds: currentBudgetSeconds
         )
+    }
+
+    private var headerStateLabel: String? {
+        if sessionManager.phase == .overtime {
+            return currentTimerPhase.stateLabel
+        }
+        if sessionManager.pendingCheckIn != nil {
+            return sessionManager.checkInPromptLine
+        }
+        return currentTimerPhase.stateLabel
+    }
+
+    private var headerStateColor: Color {
+        if sessionManager.pendingCheckIn != nil, sessionManager.phase != .overtime {
+            return TrainTheme.signalAmber
+        }
+        return currentTimerPhase.accentColor
     }
 
     private var estimateMetaText: String? {

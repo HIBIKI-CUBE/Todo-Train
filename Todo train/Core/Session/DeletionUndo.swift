@@ -37,6 +37,12 @@ enum DeletionUndo {
         var budgetSecondsAtStart: Int
         var outcomeRaw: String?
         var overtimeResolutionRaw: String?
+        var checkInOffsetSeconds: [Double]
+        var checkInFiredCount: Int
+        var pendingCheckInKindRaw: String?
+        var checkInPromptLine: String?
+        var checkInAnswersJSON: String
+        var awayDueAt: Date?
         var ticketID: UUID?
         var extensions: [ExtensionRecord]
     }
@@ -97,6 +103,12 @@ enum DeletionUndo {
             budgetSecondsAtStart: session.budgetSecondsAtStart,
             outcomeRaw: session.outcomeRaw,
             overtimeResolutionRaw: session.overtimeResolutionRaw,
+            checkInOffsetSeconds: session.checkInOffsetSeconds,
+            checkInFiredCount: session.checkInFiredCount,
+            pendingCheckInKindRaw: session.pendingCheckInKindRaw,
+            checkInPromptLine: session.checkInPromptLine,
+            checkInAnswersJSON: session.checkInAnswersJSON,
+            awayDueAt: session.awayDueAt,
             ticketID: session.ticket?.id,
             extensions: session.extensions.map {
                 ExtensionRecord(
@@ -174,6 +186,12 @@ enum DeletionUndo {
         session.budgetSecondsAtStart = record.budgetSecondsAtStart
         session.outcomeRaw = record.outcomeRaw
         session.overtimeResolutionRaw = record.overtimeResolutionRaw
+        session.checkInOffsetSeconds = record.checkInOffsetSeconds
+        session.checkInFiredCount = record.checkInFiredCount
+        session.pendingCheckInKindRaw = record.pendingCheckInKindRaw
+        session.checkInPromptLine = record.checkInPromptLine
+        session.checkInAnswersJSON = record.checkInAnswersJSON
+        session.awayDueAt = record.awayDueAt
         session.ticket = parent
         for ext in record.extensions {
             let existing = session.extensions.first { $0.id == ext.id } ?? {

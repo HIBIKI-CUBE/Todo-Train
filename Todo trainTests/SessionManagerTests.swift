@@ -14,21 +14,25 @@ struct SessionManagerTests {
         now: Date = Date(timeIntervalSince1970: 1_700_000_000),
         pauseLimit: Int = PauseLimitGuard.defaultLimit,
         endBellEnabled: Bool = false,
+        cabinAnnouncementsEnabled: Bool = true,
         overrideCounter: (any OverrideCounting)? = nil,
-        alarmScheduler: InMemoryAlarmScheduler? = nil
+        alarmScheduler: InMemoryAlarmScheduler? = nil,
+        checkInNotifier: (any CheckInNotifying)? = nil
     ) throws -> (SessionManager, ModelContext, FixedSessionClock, InMemoryAlarmScheduler) {
         let container = try AppModelContainer.make(inMemory: true)
         let context = ModelContext(container)
         let clock = FixedSessionClock(now)
         let settings = AppSettings.makeForTesting(
             pauseLimit: pauseLimit,
-            endBellEnabled: endBellEnabled
+            endBellEnabled: endBellEnabled,
+            cabinAnnouncementsEnabled: cabinAnnouncementsEnabled
         )
         let scheduler = alarmScheduler ?? InMemoryAlarmScheduler()
         let manager = SessionManager(
             modelContext: context,
             clock: clock,
             settings: settings,
+            checkInNotifier: checkInNotifier ?? NoOpCheckInNotifier(),
             overrideCounter: overrideCounter ?? InMemoryOverrideCounter(),
             alarmScheduler: scheduler
         )
@@ -1014,5 +1018,124 @@ struct SessionManagerTests {
         )
         manager.consumePunctualityMoment()
         #expect(manager.punctualityMoment?.kind == .onTimeService)
+    }
+
+    @Test func board_shortTrip_schedulesNoProgressCheckIns() throws {
+        let (manager, context, _, _) = try makeHarness()
+        try manager.startService()
+        let ticket = try makeTicket(context, seconds: 10 * 60)
+        try manager.board(ticket: ticket)
+        #expect(manager.activeSession?.checkInOffsets.isEmpty == true)
+        #expect(manager.pendingCheckIn == nil)
+    }
+
+    @Test func board_thirtyMinutes_schedulesTwoProgressCheckIns() throws {
+        let (manager, context, _, _) = try makeHarness()
+        try manager.startService()
+        let ticket = try makeTicket(context, seconds: 30 * 60)
+        try manager.board(ticket: ticket)
+        let offsets = manager.activeSession?.checkInOffsets ?? []
+        #expect(offsets.count == 2)
+        #expect(offsets[0] < offsets[1])
+    }
+
+    @Test func reconcile_firesProgressCheckIn_whenElapsedPassesOffset() throws {
+        let (manager, context, clock, _) = try makeHarness()
+        try manager.startService()
+        let ticket = try makeTicket(context, seconds: 30 * 60)
+        try manager.board(ticket: ticket)
+        let offset = try #require(manager.activeSession?.checkInOffsets.first)
+
+        clock.advance(by: max(offset - 1, 0))
+        manager.reconcile()
+        #expect(manager.pendingCheckIn == nil)
+
+        clock.advance(by: 2)
+        manager.reconcile()
+        #expect(manager.activeSession?.checkInOffsetSeconds.isEmpty == false)
+        #expect(manager.pendingCheckIn == .progress)
+        #expect(manager.checkInPromptLine.contains("A"))
+    }
+
+    @Test func pause_doesNotFireProgressCheckIn() throws {
+        let (manager, context, clock, _) = try makeHarness()
+        try manager.startService()
+        let ticket = try makeTicket(context, seconds: 30 * 60)
+        try manager.board(ticket: ticket)
+        let offset = try #require(manager.activeSession?.checkInOffsets.first)
+        try manager.pause()
+        clock.advance(by: offset + 60)
+        manager.reconcile()
+        #expect(manager.pendingCheckIn == nil)
+        #expect(manager.phase == .paused)
+    }
+
+    @Test func overtime_clearsPendingCheckIn_andDoesNotRestack() throws {
+        let (manager, context, clock, _) = try makeHarness()
+        try manager.startService()
+        let ticket = try makeTicket(context, seconds: 15 * 60)
+        try manager.board(ticket: ticket)
+        let offset = try #require(manager.activeSession?.checkInOffsets.first)
+        clock.advance(by: offset + 1)
+        manager.reconcile()
+        #expect(manager.pendingCheckIn == .progress)
+
+        clock.advance(by: 15 * 60)
+        manager.reconcile()
+        #expect(manager.phase == .overtime)
+        #expect(manager.pendingCheckIn == nil)
+    }
+
+    @Test func answerCheckIn_stillOnIt_clearsPending() throws {
+        let (manager, context, clock, _) = try makeHarness()
+        try manager.startService()
+        let ticket = try makeTicket(context, seconds: 30 * 60)
+        try manager.board(ticket: ticket)
+        let offset = try #require(manager.activeSession?.checkInOffsets.first)
+        clock.advance(by: offset + 1)
+        manager.reconcile()
+        try manager.answerCheckIn(.stillOnIt)
+        #expect(manager.pendingCheckIn == nil)
+        #expect(manager.activeSession?.checkInFiredCount == 1)
+        #expect(manager.activeSession?.checkInAnswers.count == 1)
+        #expect(manager.phase == .running)
+    }
+
+    @Test func cabinAnnouncementsOff_doesNotFire() throws {
+        let (manager, context, clock, _) = try makeHarness(cabinAnnouncementsEnabled: false)
+        try manager.startService()
+        let ticket = try makeTicket(context, seconds: 30 * 60)
+        try manager.board(ticket: ticket)
+        let offset = manager.activeSession?.checkInOffsets.first ?? 0
+        clock.advance(by: max(offset, 1))
+        manager.reconcile()
+        #expect(manager.pendingCheckIn == nil)
+    }
+
+    @Test func beginAwayWatch_promotesOnEndAfterDue() throws {
+        let (manager, context, clock, _) = try makeHarness()
+        try manager.startService()
+        let ticket = try makeTicket(context, seconds: 5 * 60)
+        try manager.board(ticket: ticket)
+        manager.beginAwayWatch()
+        #expect(manager.activeSession?.awayDueAt != nil)
+
+        clock.advance(by: 90)
+        manager.endAwayWatch()
+        #expect(manager.pendingCheckIn == .away)
+        #expect(manager.activeSession?.awayDueAt == nil)
+    }
+
+    @Test func progressDue_dropsAway() throws {
+        let (manager, context, clock, _) = try makeHarness()
+        try manager.startService()
+        let ticket = try makeTicket(context, seconds: 30 * 60)
+        try manager.board(ticket: ticket)
+        manager.beginAwayWatch()
+        let offset = try #require(manager.activeSession?.checkInOffsets.first)
+        clock.advance(by: offset + 1)
+        manager.reconcile()
+        #expect(manager.pendingCheckIn == .progress)
+        #expect(manager.activeSession?.awayDueAt == nil)
     }
 }
