@@ -8,26 +8,26 @@ import SwiftData
 
 @Model
 final class Ticket {
-    @Attribute(.unique) var id: UUID
-    var title: String
-    var estimatedSeconds: Int
-    var sortOrder: Int
-    var createdAt: Date
+    var id: UUID = UUID()
+    var title: String = ""
+    var estimatedSeconds: Int = 0
+    var sortOrder: Int = 0
+    var createdAt: Date = Date.now
     var dueDate: Date?
     var closedAt: Date?
     /// Raw value of `ClosureKind`
     var closureKindRaw: String?
 
-    var tags: [Tag]
+    var tags: [Tag] = []
 
     @Relationship(deleteRule: .cascade, inverse: \WorkSession.ticket)
-    var sessions: [WorkSession]
+    var sessions: [WorkSession] = []
 
     @Relationship(deleteRule: .nullify, inverse: \TaskLineage.parent)
-    var childLineages: [TaskLineage]
+    var childLineages: [TaskLineage] = []
 
     @Relationship(deleteRule: .nullify, inverse: \TaskLineage.child)
-    var parentLineages: [TaskLineage]
+    var parentLineages: [TaskLineage] = []
 
     var closureKind: ClosureKind? {
         get { closureKindRaw.flatMap(ClosureKind.init(rawValue:)) }

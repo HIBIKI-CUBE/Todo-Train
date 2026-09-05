@@ -25,6 +25,7 @@ final class SessionManager {
     private let overrideCounter: any OverrideCounting
     private let liveActivityManager: any LiveActivityManaging
     private let alarmScheduler: any AlarmScheduling
+    private let deviceIdentity: any DeviceIdentifying
 
     /// Today's temporary-pause override count (for UI).
     private(set) var todayOverrideCount: Int = 0
@@ -46,6 +47,17 @@ final class SessionManager {
     var pauseLimit: Int { settings.pauseLimit }
 
     var pendingCheckIn: CheckInKind? { activeSession?.pendingCheckIn }
+
+    /// Focus cover is only for a ride boarded on this device.
+    var shouldPresentFocusCover: Bool {
+        (phase == .running || phase == .overtime) && ownsActiveRide
+    }
+
+    /// `nil` boardedDeviceID is legacy local data — treat as this device.
+    var ownsActiveRide: Bool {
+        guard let activeSession else { return false }
+        return ownsDeviceSideEffects(activeSession)
+    }
 
     var checkInPromptLine: String {
         if let line = activeSession?.checkInPromptLine, !line.isEmpty {
@@ -72,7 +84,8 @@ final class SessionManager {
         coachingEngine: (any CoachingEngine)? = nil,
         overrideCounter: (any OverrideCounting)? = nil,
         liveActivityManager: (any LiveActivityManaging)? = nil,
-        alarmScheduler: (any AlarmScheduling)? = nil
+        alarmScheduler: (any AlarmScheduling)? = nil,
+        deviceIdentity: (any DeviceIdentifying)? = nil
     ) {
         self.modelContext = modelContext
         self.clock = clock
@@ -84,6 +97,7 @@ final class SessionManager {
         self.overrideCounter = overrideCounter ?? OverrideCounter.shared
         self.liveActivityManager = liveActivityManager ?? NoOpLiveActivityManager()
         self.alarmScheduler = alarmScheduler ?? NoOpAlarmScheduler()
+        self.deviceIdentity = deviceIdentity ?? SystemDeviceIdentity()
         self.todayOverrideCount = self.overrideCounter.count(
             forDayKey: ServiceDay.dayKey(for: clock.now, calendar: calendar)
         )
@@ -205,7 +219,8 @@ final class SessionManager {
         let session = WorkSession(
             startedAt: now,
             estimatedSecondsAtStart: estimate,
-            ticket: ticket
+            ticket: ticket,
+            boardedDeviceID: deviceIdentity.id
         )
         modelContext.insert(session)
         applyCheckInSchedule(to: session, title: ticket.title, estimatedSeconds: estimate)
@@ -481,6 +496,7 @@ final class SessionManager {
         let now = now ?? clock.now
         guard settings.cabinAnnouncementsEnabled else { return }
         guard let session = activeSession, session.isOpen, !session.isPaused else { return }
+        guard ownsDeviceSideEffects(session) else { return }
         guard session.remainingSeconds(at: now) > 0 else { return }
         guard session.pendingCheckIn == nil else { return }
         guard session.awayDueAt == nil else { return }
@@ -509,7 +525,7 @@ final class SessionManager {
         // Progress notifications stay; only the away request is session-scoped cancel of away id.
         // `cancel(sessionID)` drops progress too — reschedule remaining progress after.
         checkInNotifier.cancel(sessionID: session.id)
-        if !session.isPaused, session.remainingSeconds(at: now) > 0 {
+        if !session.isPaused, session.remainingSeconds(at: now) > 0, ownsDeviceSideEffects(session) {
             refreshProgressCheckInNotifications(for: session, now: now)
         }
     }
@@ -517,6 +533,7 @@ final class SessionManager {
     func handleCheckInNotification(identifier: String, action: String) {
         guard CheckInNotification.isCheckIn(identifier) else { return }
         reconcile()
+        guard ownsActiveRide else { return }
         guard let session = activeSession, session.isOpen, !session.isPaused else { return }
         guard session.remainingSeconds(at: clock.now) > CheckInScheduling.overtimeGuardSeconds else { return }
 
@@ -543,6 +560,10 @@ final class SessionManager {
     func syncCabinAnnouncementsWithSettings(now: Date? = nil) {
         let now = now ?? clock.now
         guard let session = activeSession, session.isOpen else {
+            checkInNotifier.cancelAll()
+            return
+        }
+        guard ownsDeviceSideEffects(session) else {
             checkInNotifier.cancelAll()
             return
         }
@@ -696,11 +717,13 @@ final class SessionManager {
         let nextPhase: SessionPhase = session.remainingSeconds(at: now) <= 0 ? .overtime : .running
         let crossedIntoOvertime = phase != .overtime && nextPhase == .overtime
         phase = nextPhase
-        if crossedIntoOvertime {
-            skipPendingCheckInForOvertime(session)
-            refreshLiveActivity(for: session, now: now)
-        } else if nextPhase == .running {
-            refreshPendingCheckIn(session, now: now)
+        if ownsDeviceSideEffects(session) {
+            if crossedIntoOvertime {
+                skipPendingCheckInForOvertime(session)
+                refreshLiveActivity(for: session, now: now)
+            } else if nextPhase == .running {
+                refreshPendingCheckIn(session, now: now)
+            }
         }
     }
 
@@ -751,30 +774,28 @@ final class SessionManager {
 
         try save()
         reconcile(now: now)
-        if let session = activeSession, session.isOpen, !session.isPaused {
-            // Tear down any leftover paused/orphan AlarmKit LAs from prior rides.
-            alarmScheduler.cancelAllExcept(sessionID: session.id)
-            refreshOvertimeNotification(for: session, now: now)
-            refreshLiveActivity(for: session, now: now)
-            refreshEndBell(for: session, now: now)
-            refreshProgressCheckInNotifications(for: session, now: now)
-        } else if let session = activeSession, session.isOpen, session.isPaused {
-            // Paused rides must not keep an AlarmKit Live Activity.
-            liveActivityManager.end()
-            overtimeNotifier.cancel(sessionID: session.id)
-            checkInNotifier.cancel(sessionID: session.id)
-            alarmScheduler.cancelAll()
-        } else {
-            liveActivityManager.end()
-            alarmScheduler.cancelAll()
-        }
+        refreshOwnedDeviceSideEffects(now: now)
         refreshTodayOverrideCount(at: now)
+    }
+
+    /// CloudKit remote save. Do not call `recoverOnLaunch` (that re-schedules dismissed end bells).
+    func handleRemoteStoreChange(now: Date? = nil) {
+        guard CloudKitSync.isConfigured else { return }
+        let now = now ?? clock.now
+        reconcile(now: now)
+        refreshOwnedDeviceSideEffects(now: now)
     }
 
     /// Settings toggle for end bell — apply immediately to the active ride.
     func syncEndBellWithSettings(now: Date? = nil) {
         let now = now ?? clock.now
         guard let session = activeSession, session.isOpen else {
+            alarmScheduler.cancelAll()
+            liveActivityManager.end()
+            publishWidgetSnapshot(at: now)
+            return
+        }
+        guard ownsDeviceSideEffects(session) else {
             alarmScheduler.cancelAll()
             liveActivityManager.end()
             publishWidgetSnapshot(at: now)
@@ -808,6 +829,7 @@ final class SessionManager {
 
     private func requestCheckInPrompt(for session: WorkSession, title: String, estimatedMinutes: Int) {
         guard settings.cabinAnnouncementsEnabled else { return }
+        guard ownsDeviceSideEffects(session) else { return }
         let sessionID = session.id
         Task { @MainActor [weak self] in
             guard let self else { return }
@@ -859,6 +881,7 @@ final class SessionManager {
     }
 
     private func refreshPendingCheckIn(_ session: WorkSession, now: Date) {
+        guard ownsDeviceSideEffects(session) else { return }
         guard settings.cabinAnnouncementsEnabled else {
             if session.pendingCheckIn != nil || session.awayDueAt != nil {
                 session.pendingCheckIn = nil
@@ -902,6 +925,10 @@ final class SessionManager {
     }
 
     private func refreshProgressCheckInNotifications(for session: WorkSession, now: Date) {
+        guard ownsDeviceSideEffects(session) else {
+            checkInNotifier.cancel(sessionID: session.id)
+            return
+        }
         guard settings.cabinAnnouncementsEnabled else {
             checkInNotifier.cancel(sessionID: session.id)
             return
@@ -932,12 +959,51 @@ final class SessionManager {
 
     // MARK: - Queries
 
+    /// Alarms / LA / 車内放送 are local-device only. `nil` is pre-CloudKit local data.
+    private func ownsDeviceSideEffects(_ session: WorkSession) -> Bool {
+        guard let boarded = session.boardedDeviceID else { return true }
+        return boarded == deviceIdentity.id
+    }
+
+    /// Refresh or tear down device-local effects after launch / remote change.
+    /// Does not collapse duplicate sessions (that stays in `recoverOnLaunch`).
+    private func refreshOwnedDeviceSideEffects(now: Date) {
+        guard let session = activeSession, session.isOpen else {
+            liveActivityManager.end()
+            alarmScheduler.cancelAll()
+            return
+        }
+        guard ownsDeviceSideEffects(session) else {
+            liveActivityManager.end()
+            overtimeNotifier.cancel(sessionID: session.id)
+            checkInNotifier.cancel(sessionID: session.id)
+            alarmScheduler.cancel(sessionID: session.id)
+            return
+        }
+        if session.isPaused {
+            liveActivityManager.end()
+            overtimeNotifier.cancel(sessionID: session.id)
+            checkInNotifier.cancel(sessionID: session.id)
+            alarmScheduler.cancelAll()
+            return
+        }
+        alarmScheduler.cancelAllExcept(sessionID: session.id)
+        refreshOvertimeNotification(for: session, now: now)
+        refreshLiveActivity(for: session, now: now)
+        refreshEndBell(for: session, now: now)
+        refreshProgressCheckInNotifications(for: session, now: now)
+    }
+
     private func refreshTodayOverrideCount(at now: Date) {
         let dayKey = ServiceDay.dayKey(for: now, calendar: calendar)
         todayOverrideCount = overrideCounter.count(forDayKey: dayKey)
     }
 
     private func refreshLiveActivity(for session: WorkSession, now: Date) {
+        guard ownsDeviceSideEffects(session) else {
+            liveActivityManager.end()
+            return
+        }
         // One LA at a time: AlarmKit StandBy countdown replaces Session LA.
         if settings.endBellEnabled {
             liveActivityManager.end()
@@ -980,6 +1046,10 @@ final class SessionManager {
     }
 
     private func refreshEndBell(for session: WorkSession, now: Date) {
+        guard ownsDeviceSideEffects(session) else {
+            alarmScheduler.cancel(sessionID: session.id)
+            return
+        }
         guard settings.endBellEnabled else {
             alarmScheduler.cancel(sessionID: session.id)
             return
@@ -1014,6 +1084,10 @@ final class SessionManager {
     }
 
     private func refreshOvertimeNotification(for session: WorkSession, now: Date) {
+        guard ownsDeviceSideEffects(session) else {
+            overtimeNotifier.cancel(sessionID: session.id)
+            return
+        }
         guard session.isOpen, !session.isPaused else {
             overtimeNotifier.cancel(sessionID: session.id)
             return

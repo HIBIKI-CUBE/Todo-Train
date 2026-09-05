@@ -8,10 +8,10 @@ import SwiftData
 
 @Model
 final class SessionExtension {
-    @Attribute(.unique) var id: UUID
-    var addedSeconds: Int
+    var id: UUID = UUID()
+    var addedSeconds: Int = 0
     var reason: String?
-    var createdAt: Date
+    var createdAt: Date = Date.now
     var session: WorkSession?
 
     init(

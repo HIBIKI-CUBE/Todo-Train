@@ -43,6 +43,7 @@ enum DeletionUndo {
         var checkInPromptLine: String?
         var checkInAnswersJSON: String
         var awayDueAt: Date?
+        var boardedDeviceID: String?
         var ticketID: UUID?
         var extensions: [ExtensionRecord]
     }
@@ -109,6 +110,7 @@ enum DeletionUndo {
             checkInPromptLine: session.checkInPromptLine,
             checkInAnswersJSON: session.checkInAnswersJSON,
             awayDueAt: session.awayDueAt,
+            boardedDeviceID: session.boardedDeviceID,
             ticketID: session.ticket?.id,
             extensions: session.extensions.map {
                 ExtensionRecord(
@@ -192,6 +194,7 @@ enum DeletionUndo {
         session.checkInPromptLine = record.checkInPromptLine
         session.checkInAnswersJSON = record.checkInAnswersJSON
         session.awayDueAt = record.awayDueAt
+        session.boardedDeviceID = record.boardedDeviceID
         session.ticket = parent
         for ext in record.extensions {
             let existing = session.extensions.first { $0.id == ext.id } ?? {

@@ -120,7 +120,7 @@
 | X-01 | SwiftUI + SwiftData、iOS 27 |
 | X-02 | SessionManager 先行（Date ベース） |
 | X-03 | AlarmKit + StandBy → **v2** |
-| X-04 | CloudKit → **v1**（MVP ローカル） |
+| X-04 | CloudKit → **v1**。スキーマは CloudKit 契約済み。実同期は有料 Apple Developer Program + iCloud Capability。Personal Team ではアプリデバッグ可・iCloud 同期不可 |
 | X-05 | Live Activity → **発車中のみ・v1**（全日運行 LA は不可） |
 | X-06 | 期限フィールド → **v1 defer** |
 | X-07 | JSON エクスポート → **不要** |

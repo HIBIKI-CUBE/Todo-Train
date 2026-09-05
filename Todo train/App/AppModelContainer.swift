@@ -17,7 +17,7 @@ enum AppModelContainer {
     ])
 
     static func make(inMemory: Bool = false) throws -> ModelContainer {
-        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: inMemory)
+        let configuration = CloudKitSync.configuration(schema: schema, inMemory: inMemory)
         return try ModelContainer(for: schema, configurations: [configuration])
     }
 }

@@ -10,7 +10,7 @@
 | **v2** | AlarmKit + StandBy、週次レポート、UI polish、横向き compact | **完了**（iPad 等は未着手） |
 | **定時** | 定時到着 / 定時運行の短い案内（非通貨） | **完了** |
 | **車内放送** | 乗務中チェックイン + 背面「まだ乗ってる？」+ 発券 Intent | **完了** |
-| **次** | CloudKit 同期 → その後 Mac 最小（走行中の停車） | CloudKit 未着手 |
+| **次** | CloudKit 同期 → その後 Mac 最小（走行中の停車） | WP-I 準備中（実同期は有料 Developer Program 待ち） |
 
 ## MVP（完了チェック）
 
@@ -40,7 +40,7 @@
 | F | Live Activity（**発車中のみ**） | ✅ |
 | G | Home Widget（運行状態） | ✅ |
 | H | AI / PCC（タップ起動・フォールバック必須） | stub 済 |
-| I | CloudKit（独立 PR 推奨） | 未着手 |
+| I | CloudKit（独立 PR 推奨） | 準備中。実同期は有料 ADP + iCloud Capability。Personal Team ではデバッグ可・同期不可 |
 
 ## v2（完了）
 
@@ -60,7 +60,7 @@
 
 ## 次軌道（実装しない・前提）
 
-1. **WP-I CloudKit** — ローカル SwiftData のままでは Mac から停車できない
+1. **WP-I CloudKit** — スキーマ / 自機ベル分離 / `.none` ストアまで。実 iCloud は有料 Apple Developer Program 後。Mac から停車するには同期が要る
 2. **macOS 最小** — 走行中タイトル・残り・停車（メニューバーで足りる。Hub のマルス体験は iPhone に残す）
 
 ## 受入の芯（MVP・達成済みの意図）

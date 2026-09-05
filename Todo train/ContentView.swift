@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SwiftData
+import CoreData
 
 struct ContentView: View {
     @Environment(SessionManager.self) private var sessionManager
@@ -82,6 +83,9 @@ struct ContentView: View {
             } else {
                 sessionManager.beginAwayWatch()
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .NSPersistentStoreRemoteChange)) { _ in
+            sessionManager.handleRemoteStoreChange()
         }
         .onChange(of: sessionManager.phase) { _, _ in
             syncFocusPresentation()
@@ -169,7 +173,7 @@ struct ContentView: View {
     }
 
     private func syncFocusPresentation() {
-        let shouldShow = (sessionManager.phase == .running || sessionManager.phase == .overtime)
+        let shouldShow = sessionManager.shouldPresentFocusCover
             && !ticketMotion.suppressFocusCover
         if isFocusPresented != shouldShow {
             isFocusPresented = shouldShow
