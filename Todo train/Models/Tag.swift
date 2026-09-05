@@ -8,14 +8,14 @@ import SwiftData
 
 @Model
 final class Tag {
-    @Attribute(.unique) var id: UUID
-    var name: String
-    var colorHex: String
-    var sortOrder: Int
-    var createdAt: Date
+    var id: UUID = UUID()
+    var name: String = ""
+    var colorHex: String = "#888888"
+    var sortOrder: Int = 0
+    var createdAt: Date = Date.now
 
     @Relationship(inverse: \Ticket.tags)
-    var tickets: [Ticket]
+    var tickets: [Ticket] = []
 
     init(
         id: UUID = UUID(),

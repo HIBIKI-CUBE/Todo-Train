@@ -54,6 +54,31 @@ struct DeletionUndoTests {
         #expect(restored.first?.tags.first?.name == "仕事")
     }
 
+    @Test func restoreSession_keepsBoardedDeviceID() throws {
+        let context = try makeContext()
+        let ticket = Ticket(title: "往復", estimatedSeconds: 600)
+        context.insert(ticket)
+        let session = WorkSession(
+            startedAt: .now,
+            estimatedSecondsAtStart: 600,
+            ticket: ticket,
+            boardedDeviceID: "phone-a"
+        )
+        session.endedAt = .now
+        context.insert(session)
+        try context.save()
+
+        let record = DeletionUndo.captureSession(session)
+        context.delete(session)
+        try context.save()
+
+        DeletionUndo.restoreSession(record, onto: ticket, into: context)
+        try context.save()
+
+        let restored = try context.fetch(FetchDescriptor<WorkSession>())
+        #expect(restored.first?.boardedDeviceID == "phone-a")
+    }
+
     @Test func undoCenter_undoRunsRestoreOnce() {
         let center = DeletionUndoCenter()
         var restored = 0

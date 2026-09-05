@@ -8,12 +8,12 @@ import SwiftData
 
 @Model
 final class TaskLineage {
-    @Attribute(.unique) var id: UUID
+    var id: UUID = UUID()
     /// Raw value of `LineageKind`
-    var kindRaw: String
-    var createdAt: Date
+    var kindRaw: String = "manual"
+    var createdAt: Date = Date.now
     var fromSessionID: UUID?
-    var aiGenerated: Bool
+    var aiGenerated: Bool = false
 
     var parent: Ticket?
     var child: Ticket?

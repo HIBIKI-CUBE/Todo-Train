@@ -31,4 +31,4 @@
 - ターゲット: **iPhone 15 Pro Max / iOS 27**
 - スタック: **SwiftUI + SwiftData**
 - **MVP / v1 / v2: `develop` にマージ済み**
-- **次: CloudKit（WP-I）**
+- **次: CloudKit（WP-I）準備中。実同期は有料 Apple Developer Program 待ち。Mac はその後**

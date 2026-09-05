@@ -40,7 +40,10 @@ UI tick（1秒）は表示専用のみ
 関連ルール（方針）:
 
 - Tag↔Ticket は多対多（`@Relationship` 明示）
-- CloudKit は v1 まで無効（entitlement の container ID は空のまま触らない）
+- CloudKit 私有同期は **ゲート付き**。`CloudKitSync.isConfigured == false` のあいだ store は `.none`（ローカル）。iCloud Capability は **有料 Apple Developer Program のあと** に足す。Personal Team に iCloud / CloudKit を付けると署名が失敗する
+- モデルは CloudKit 契約に合わせた（`@Attribute(.unique)` なし、リレーションは optional / `= []`、保存属性にデフォルト）
+- 走行のベル / LA / 車内放送は `WorkSession.boardedDeviceID` が自機のときだけ。`nil` は CloudKit 前のローカルデータとして自機扱い
+- リモート変更は `NSPersistentStoreRemoteChange` → `reconcile()` + 自機副作用の張り直し。`recoverOnLaunch` は呼ばない（取消済み終了ベルを復活させるため）
 - enum は String raw で保存（マイグレーション耐性）
 
 ## SessionManager 責務
@@ -52,6 +55,7 @@ UI tick（1秒）は表示専用のみ
 - 日付跨ぎ検知 → `needsServiceDayEndPrompt`
 - force-quit 後の open session 復元・複数 open の修復
 - `ScenePhase.active` 復帰時の `reconcile()`
+- CloudKit リモート変更時の `handleRemoteStoreChange()`（`isConfigured` のときだけ）
 
 ### 運行ルール（コードと一致）
 
@@ -105,8 +109,23 @@ Todo train/
 └── Services/   # 通知・Audio 等（必要に応じて）
 ```
 
+## CloudKit とデバッグ（Personal Team）
+
+| できる | できない |
+|--------|----------|
+| シミュレータ / Personal Team 実機でアプリ本体のデバッグ | 実 iCloud 同期 |
+| ローカル SwiftData（`cloudKitDatabase: .none`） | CloudKit Console / 私有 DB の中身確認 |
+| スキーマ準備・自機 ID の単体テスト | iCloud Capability を付けたままの Personal Team 署名 |
+
+実同期を足す手順（有料チーム後）:
+
+1. Apple Developer で App ID `dev.hibiki-cube.Todo-train` に iCloud（CloudKit）と Background Modes（remote notifications）
+2. コンテナ `iCloud.dev.hibiki-cube.Todo-train`
+3. `Todo_train.entitlements` に iCloud を足す（**いまは足さない**）
+4. `CloudKitSync.isConfigured` を `true` にする
+
 ## テスト
 
-- `SessionManagerTests` — Date 注入（`SessionClock`）
-- `PauseLimitGuard` / Lineage / HistoryStats
-- BG・通知は手動チェックリスト
+- `SessionManagerTests` — Date 注入（`SessionClock`）・自機/他機のベル抑制
+- `PauseLimitGuard` / Lineage / HistoryStats / `CloudKitSyncTests`
+- BG・通知・実同期は手動チェックリスト

@@ -1,11 +1,11 @@
 # 08 — 現状ステータス
 
-最終更新: 2026-09-05（車内放送 + 発券 App Intent）
+最終更新: 2026-09-06（CloudKit WP-I 準備。実同期は有料 ADP 待ち）
 
 ## 結論
 
 **MVP（Sprint 1–10）・v1・v2（AlarmKit / UI polish）・車内放送は実装済み。**  
-未着手の大きな塊は **CloudKit（WP-I）**。その後に Mac 最小面。実装マップと検証手順は本ファイルと [11-v2-alarmkit-setup.md](11-v2-alarmkit-setup.md) / [12-ui-design.md](12-ui-design.md) を参照。
+**CloudKit（WP-I）** はスキーマとゲート付きローカル store まで。実 iCloud 同期は有料 Apple Developer Program が必要。その後に Mac 最小面。実装マップと検証手順は本ファイルと [11-v2-alarmkit-setup.md](11-v2-alarmkit-setup.md) / [12-ui-design.md](12-ui-design.md) を参照。
 
 定時の喜びは **エフェメラ**。到着は完了ジェスチャ（切符の無効化）で祝う。ストリークや定時率は出さない。超過で案内は取り下げない。
 
@@ -23,7 +23,7 @@
 | WP-F Live Activity | ✅ | Session LA + AlarmKit 排他。[11](11-v2-alarmkit-setup.md) §6 で検証 |
 | WP-G Widget | ✅ | App Group スナップショット |
 | WP-H AI / PCC | 部分 | 分割・日次レビューは stub。車内放送 1 行は `OnDeviceCoachingEngine` |
-| WP-I CloudKit | 未着手 | 独立 PR 推奨。Mac 最小面の前提 |
+| WP-I CloudKit | 準備中 | unique 削除・`boardedDeviceID`・`.none` store。iCloud entitlement は未追加（Personal Team 署名を壊さない）。実同期は有料 ADP 後 |
 
 ### v2 進捗
 
@@ -43,6 +43,7 @@
 ```
 Todo train/
   ContentView.swift        TabView（切符 / 履歴 / 設定）+ Focus cover
+  App/                     AppModelContainer, CloudKitSync（`isConfigured` 既定 false）
   Core/
     Session/               SessionManager, TicketDeletion, DeletionUndo, CheckInScheduling
     Alarms/                AlarmScheduling, EndBellDelivery, SessionEndSchedule
@@ -84,7 +85,7 @@ Todo trainTests/           Swift Testing（CheckInScheduling / TicketIssuer 含�
 
 | 項目 | 備考 |
 |------|------|
-| CloudKit | entitlement あり・未使用 |
+| CloudKit | スキーマ準備済み。store は `.none`。**iCloud entitlement なし**（Personal Team でデバッグするため）。実同期は有料 ADP 後 |
 | Session LA からの Intent | 未実装（Alarm LA は `EndBellIntents` 済み） |
 | iPad 最適化 | v2 以降。iPhone アプリの自由リサイズ（ミラーリング）は Hub がシーン幅に追従 |
 | 乗り継ぎキャンバスのゲージ統一 | Phase 2（Quick Add のみ線形スナップ・ゲージ） |
@@ -121,3 +122,9 @@ xcodebuild test-without-building -scheme "Todo train" \
 - [ ] オンデバイス文面が出る／失敗時は固定文「まだ『…』？」
 - [ ] 発行祝祭と Return 一発発券が壊れていない
 - [ ] Siri / ショートカット「切符を発行」
+
+## Personal Team でできるデバッグ
+
+- [x] シミュレータ / Personal Team 実機でアプリ本体（CloudKit なし）
+- [ ] 実 iCloud 同期 — **有料 Apple Developer Program が必要**。いま iCloud Capability を足すと署名が壊れる
+

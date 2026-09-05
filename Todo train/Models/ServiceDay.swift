@@ -8,11 +8,11 @@ import SwiftData
 
 @Model
 final class ServiceDay {
-    @Attribute(.unique) var id: UUID
-    var startedAt: Date
+    var id: UUID = UUID()
+    var startedAt: Date = Date.now
     var endedAt: Date?
     /// Calendar day key, e.g. "2026-08-11" in the user's current calendar/timezone.
-    var calendarDayKey: String
+    var calendarDayKey: String = ""
 
     var isOpen: Bool { endedAt == nil }
 

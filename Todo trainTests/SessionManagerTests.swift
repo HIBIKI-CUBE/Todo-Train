@@ -17,7 +17,8 @@ struct SessionManagerTests {
         cabinAnnouncementsEnabled: Bool = true,
         overrideCounter: (any OverrideCounting)? = nil,
         alarmScheduler: InMemoryAlarmScheduler? = nil,
-        checkInNotifier: (any CheckInNotifying)? = nil
+        checkInNotifier: (any CheckInNotifying)? = nil,
+        deviceIdentity: (any DeviceIdentifying)? = nil
     ) throws -> (SessionManager, ModelContext, FixedSessionClock, InMemoryAlarmScheduler) {
         let container = try AppModelContainer.make(inMemory: true)
         let context = ModelContext(container)
@@ -34,7 +35,8 @@ struct SessionManagerTests {
             settings: settings,
             checkInNotifier: checkInNotifier ?? NoOpCheckInNotifier(),
             overrideCounter: overrideCounter ?? InMemoryOverrideCounter(),
-            alarmScheduler: scheduler
+            alarmScheduler: scheduler,
+            deviceIdentity: deviceIdentity ?? FixedDeviceIdentity(id: "test-device")
         )
         return (manager, context, clock, scheduler)
     }
@@ -1138,4 +1140,66 @@ struct SessionManagerTests {
         #expect(manager.pendingCheckIn == .progress)
         #expect(manager.activeSession?.awayDueAt == nil)
     }
+
+    @Test func board_stampsBoardedDeviceID() throws {
+        let (manager, context, _, _) = try makeHarness()
+        try manager.startService()
+        let ticket = try makeTicket(context)
+        try manager.board(ticket: ticket)
+        #expect(manager.activeSession?.boardedDeviceID == "test-device")
+        #expect(manager.ownsActiveRide)
+        #expect(manager.shouldPresentFocusCover)
+    }
+
+    @Test func recoverOnLaunch_remoteDevice_skipsAlarmsAndCheckIns() throws {
+        let checkIns = InMemoryCheckInNotifier()
+        let (manager, context, _, scheduler) = try makeHarness(
+            endBellEnabled: true,
+            checkInNotifier: checkIns,
+            deviceIdentity: FixedDeviceIdentity(id: "phone-a")
+        )
+        try manager.startService()
+        let ticket = try makeTicket(context, seconds: 30 * 60)
+        try manager.board(ticket: ticket)
+        #expect(!scheduler.requests.isEmpty)
+        #expect(!checkIns.progress.isEmpty)
+
+        manager.activeSession?.boardedDeviceID = "phone-b"
+        try context.save()
+        try manager.recoverOnLaunch()
+
+        #expect(manager.activeSession?.boardedDeviceID == "phone-b")
+        #expect(!manager.ownsActiveRide)
+        #expect(!manager.shouldPresentFocusCover)
+        #expect(manager.phase == .running)
+        #expect(scheduler.requests.isEmpty)
+        #expect(checkIns.progress.isEmpty)
+        #expect(checkIns.away.isEmpty)
+    }
+
+    @Test func handleRemoteStoreChange_noopsUnlessConfigured() throws {
+        let checkIns = InMemoryCheckInNotifier()
+        let (manager, context, _, scheduler) = try makeHarness(
+            endBellEnabled: true,
+            checkInNotifier: checkIns
+        )
+        try manager.startService()
+        let ticket = try makeTicket(context, seconds: 30 * 60)
+        try manager.board(ticket: ticket)
+        manager.activeSession?.boardedDeviceID = "other-phone"
+        try context.save()
+        #expect(!manager.ownsActiveRide)
+        #expect(!scheduler.requests.isEmpty)
+
+        CloudKitSync.isConfiguredOverride = false
+        manager.handleRemoteStoreChange()
+        #expect(!scheduler.requests.isEmpty)
+
+        CloudKitSync.isConfiguredOverride = true
+        defer { CloudKitSync.isConfiguredOverride = nil }
+        manager.handleRemoteStoreChange()
+        #expect(scheduler.requests.isEmpty)
+        #expect(checkIns.progress.isEmpty)
+    }
 }
+

@@ -8,17 +8,17 @@ import SwiftData
 
 @Model
 final class WorkSession {
-    @Attribute(.unique) var id: UUID
-    var startedAt: Date
+    var id: UUID = UUID()
+    var startedAt: Date = Date.now
     var endedAt: Date?
     /// Start of the current active segment while running.
     var segmentStartedAt: Date?
     var pausedAt: Date?
     /// Accumulated active seconds from completed (non-paused) segments.
-    var accumulatedActiveSeconds: TimeInterval
-    var estimatedSecondsAtStart: Int
+    var accumulatedActiveSeconds: TimeInterval = 0
+    var estimatedSecondsAtStart: Int = 0
     /// Budget including extensions.
-    var budgetSecondsAtStart: Int
+    var budgetSecondsAtStart: Int = 0
     /// Raw value of `SessionOutcome`
     var outcomeRaw: String?
     /// Raw value of `OvertimeResolution` when closed from overtime UI.
@@ -36,11 +36,13 @@ final class WorkSession {
     var checkInAnswersJSON: String = "[]"
     /// Wall-clock due for the current away watch. Cleared on foreground or answer.
     var awayDueAt: Date?
+    /// Device that boarded this ride. Alarms / 車内放送 / LA は自機だけ。
+    var boardedDeviceID: String?
 
     var ticket: Ticket?
 
     @Relationship(deleteRule: .cascade, inverse: \SessionExtension.session)
-    var extensions: [SessionExtension]
+    var extensions: [SessionExtension] = []
 
     var outcome: SessionOutcome? {
         get { outcomeRaw.flatMap(SessionOutcome.init(rawValue:)) }
@@ -59,7 +61,8 @@ final class WorkSession {
         id: UUID = UUID(),
         startedAt: Date,
         estimatedSecondsAtStart: Int,
-        ticket: Ticket? = nil
+        ticket: Ticket? = nil,
+        boardedDeviceID: String? = nil
     ) {
         self.id = id
         self.startedAt = startedAt
@@ -77,6 +80,7 @@ final class WorkSession {
         self.checkInPromptLine = nil
         self.checkInAnswersJSON = "[]"
         self.awayDueAt = nil
+        self.boardedDeviceID = boardedDeviceID
         self.ticket = ticket
         self.extensions = []
     }

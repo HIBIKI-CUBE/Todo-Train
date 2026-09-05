@@ -139,7 +139,20 @@
 
 ---
 
-## 6. 主要出典リンク
+## 6. CloudKit / Apple Developer Program
+
+SwiftData の `cloudKitDatabase: .private` は **有料 Apple Developer Program** の iCloud CloudKit container が要る。
+
+- Personal Team（無料）: アプリのシミュレータ / 実機デバッグは可
+- Personal Team に iCloud / CloudKit entitlement を足すと **署名失敗**
+- CloudKit Console も有料チーム向け
+- `@Attribute(.unique)` は SwiftData+CloudKit で使えないので、同期オンの前に外す
+
+このリポジトリは `CloudKitSync.isConfigured == false` のあいだ `.none` でローカル保存する。Mac から停車するには、有料登録後にフラグを立ててから実同期を検証する。
+
+---
+
+## 7. 主要出典リンク
 
 - [ActivityKit — Displaying live data](https://developer.apple.com/documentation/activitykit/displaying-live-data-with-live-activities)
 - [ActivityKit push notifications](https://developer.apple.com/documentation/activitykit/starting-and-updating-live-activities-with-activitykit-push-notifications)
@@ -147,3 +160,4 @@
 - [WWDC25 Foundation Models](https://developer.apple.com/videos/play/wwdc2025/286/)
 - [WWDC25 AlarmKit](https://developer.apple.com/videos/play/wwdc2025/230/)
 - [Private Cloud Compute](https://developer.apple.com/private-cloud-compute/)
+- [SwiftData CloudKit](https://developer.apple.com/documentation/swiftdata/syncing-model-data-across-a-persons-devices)
