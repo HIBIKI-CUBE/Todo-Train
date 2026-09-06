@@ -16,7 +16,7 @@ Mac の体験は別紙 [14-mac-companion-ux.md](14-mac-companion-ux.md)（確認
 | 機密 | 正規ユーザー以外は中身を見られない。Apple / 自前サーバ / 押収を含む |
 | 起こし | **求めない。** iOS は前面、または `ScenePhase.active` 復帰で送受信 |
 | 手間 | アカウント・CRDT・APNs・LAN スタック・切符全件レプリカを足さない |
-| 認証 | アカウントなし。QR は使い捨てオファーのみ。長期鍵は載せない。SAS 一致のあとマスター鍵を確定 |
+| 認証 | アカウントなし。QR はオファーのみ。鍵は画面に出さない。双方の端末で本人確認が重なったときだけ確定 |
 
 **採用: ペアリング + E2E + CF Durable Object。**  
 **不採用: SwiftData CloudKit（この土管）、LAN Bonjour（v1）、アカウント、WebAuthn PRF 主鍵、APNs。**
@@ -56,15 +56,25 @@ iPhone（本尊）                         relay（読めない）              
 
 メール / パスワード / パスキーアカウントは出さない。画面の出し方は [14](14-mac-companion-ux.md)。
 
-**QR / スクリーンショット / 録画に長期秘密を載せない。** 撮られても中身の暗号は解けない。オファーを先に取られた場合は、iPhone の許可が出る前に正規 Mac 側が失敗するので、番号が自分の Mac と一致しない限り拒否できる。
+### 脅威（この契約の範囲）
 
-### 長期秘密（許可が終わったあと Keychain）
+| 範囲 | 内容 |
+|------|------|
+| 中 | iPhone と Mac の画面が **常時録画**されている。スクショ、後ろ撮り、後から映像を繰り返し見る |
+| 中 | 映像を見ながら別のマシンで QR を読む |
+| 外 | 端末に入力を打てるマルウェア、または本人の顔 / パスコードを使って `LocalAuthentication` を通せる状態。それは端末を操作しているのと同じ |
+
+映像からペアできる状態にしてはいけない。画面に出るものはすべて漏れる前提。確定に必要なものは **画面に出ない秘密** と **その場の本人確認** だけにする。
+
+### 長期秘密（双方の本人確認が終わったあと Keychain）
 
 | 値 | 長さ | サーバ |
 |----|------|--------|
 | `pairingId` | UUID | 識別子。公開してよい |
-| `masterKey` | 32 bytes | **送らない。QR にも出さない** |
-| `writeToken` | 32 bytes | SHA-256 ハッシュだけ保存。QR に出さない |
+| `masterKey` | 32 bytes | **送らない。画面にも QR にも出さない** |
+| `writeToken` | 32 bytes | SHA-256 ハッシュだけ保存。画面にも QR にも出さない |
+
+DH の共有秘密・HKDF の出力・confirm の HMAC も画面に出さない。照合数字（SAS）だけ出してよい。SAS は切り詰めで、鍵に戻せない。
 
 ### オファー（QR に載せてよいもの）
 
@@ -74,28 +84,31 @@ iPhone（本尊）                         relay（読めない）              
 todotrain://pair?p=<pairingId>&o=<offerId>&x=<iPhone_eph_pub_b64u>
 ```
 
-ここにあるのは識別子と **一時的な公開鍵だけ**。マスター鍵も write token も入らない。テキスト貼り付けも同じペイロードで、同じく秘密ではない。
+識別子と一時公開鍵だけ。テキスト貼り付けも同じで、秘密ではない。
 
 ### 手順
 
 1. iPhone が X25519 一時鍵を作り、リレーにオファーを置く
 2. 購読者が QR を読み、自分の一時鍵で `accept`（先着のみ）
-3. 双方が DH → HKDF で `masterKey` / `writeToken` / SAS（短い照合数字）を派生する。この時点では **まだ Keychain に確定しない**
-4. 双方が同じ SAS を出す。iPhone だけが「許可 / 拒否」。SAS は鍵ではない（切り詰めた照合用）
-5. 許可: Keychain に長期秘密を書き、`tokenHash` をリレーへ。オファーは捨てる
-6. 拒否・期限切れ・スクリーンショット / 画面収録を検出: オファーを捨てて作り直す。確定済みの鍵はまだ無い
+3. 双方が DH → HKDF で `masterKey` / `writeToken` / SAS を派生する。**まだ Keychain に書かない**
+4. 双方が同じ SAS を出す（鍵ではない）
+5. **iPhone で Face ID またはデバイスパスコード**（`LocalAuthentication`）。成功したら画面に出ない `HMAC(DH, "confirm"|iphone|offerId)` をリレーへ
+6. **Mac で Touch ID またはログインパスワード**。同様に `confirm|mac` を送る
+7. リレーは **両方の confirm が数秒以内に重なったときだけ** ペアを確定する。片方だけ・時間外・HMAC 不一致は捨てる
+8. 確定後に Keychain へ書き、`tokenHash` を残す。オファーは捨てる
+9. 拒否・期限切れ・背面へ行く・スクリーンショット / 画面収録: オファーを捨てて作り直す。確定前の鍵は残さない
 
-先に他人が `accept` すると、正規 Mac は「この QR は使われました」。iPhone は他人の SAS を出す。自分の Mac に同じ数字が無いので拒否する。録画に QR だけ残っていても、許可なしではマスター鍵は確定しない。録画に SAS が写っていても、SAS から鍵は戻らない。
+映像に QR と SAS とボタンが全部写っていても、HMAC も生体も再生できない。別マシンで QR を読んでも、iPhone 本体の Face ID と、その DH 相手の Mac 本体の本人確認が同時に要る。録画を見ている第三者は、どちらの端末も操作していないので確定できない。
 
-スクリーンショット通知と `UIScreen.isCaptured` ではオファーを無効化する（防御の重ね。主防御は QR に秘密が無いこと）。点滅 QR で秘密を分割する方法は使わない。録画で全フレームが残る。
+先に他人が `accept` すると、正規 Mac は「この QR は使われました」。iPhone の SAS は他人側と一致する。自分の Mac と違うので Face ID しない。
 
-リカバリを出すなら書き写し用の語または hex だけ。**リカバリを QR にしない**（撮影耐性を再び捨てる）。画面収録中は隠す。ウィザードで強制保存はしない。
+点滅 QR は使わない。録画で全フレームが残るうえ、本人確認の代わりにならない。
 
-WebAuthn PRF は主鍵にしない。Face ID は Keychain のアクセス制御で足りる。
+リカバリを出すなら書き写し用の語または hex だけ。**QR にしない。** 収録中は隠す。ウィザードで強制しない。書き写しはペア確定後の任意で、常時録画への耐性はペアリング本体とは別（紙に残した鍵の管理）。
 
-改ざん: AES-GCM なので、トークンを盗んだ攻撃者はキューを壊せてもクライアントは復号失敗で捨てる。ロールバックは `rev` の単調増加だけ採用。サーバ侵害の残りは削除 DoS。許容する。
+WebAuthn PRF は主鍵にしない。Face ID は確定の本人確認と Keychain 保護の両方に使う。
 
-残る攻撃は、他人が先に `accept` した SAS を、ユーザーが照合せず許可すること。コピーは「Mac に同じ番号があるときだけ許可。番号を教える必要はない」。
+改ざん: AES-GCM。ロールバックは `rev` 単調増加。サーバ侵害の残りは削除 DoS。許容する。
 
 ---
 
@@ -106,8 +119,9 @@ HKDF-SHA256 の入力は、許可後は `masterKey`。ペアリング中は DH �
 | 派生鍵 | info | 用途 |
 |--------|------|------|
 | `enc` | `todotrain/v1/enc` | AES-256-GCM |
-| `sas` | `todotrain/v1/sas` | 照合数字（鍵ではない） |
-| `tok` | `todotrain/v1/tok` | writeToken。enc と混ぜない |
+| `sas` | `todotrain/v1/sas` | 照合数字（鍵ではない。画面に出してよい） |
+| `tok` | `todotrain/v1/tok` | writeToken |
+| `cfm` | `todotrain/v1/cfm` | confirm HMAC。画面に出さない |
 
 エンベロープ: `n`（12-byte nonce）+ `ct`。AAD は `pairingId || kind || rev`。`kind` は `snap` / `cmd` / `ack`。
 
@@ -162,9 +176,10 @@ iPhone が cmd を処理したら、成否を暗号化した ack を置く。購
 |----|------|
 | `POST /v1/offers` | iPhone。短命オファー（eph pub、TTL） |
 | `POST /v1/offers/:id/accept` | 購読者。先着 1 回。相手の eph pub を返す |
-| `POST /v1/offers/:id/confirm` | iPhone 許可。このあと `tokenHash` が生きる |
-| `DELETE /v1/offers/:id` | 拒否・期限切れ・収録検出 |
-| `PUT /v1/pairings/:id` | confirm 後。`tokenHash` を登録 |
+| `POST /v1/offers/:id/confirm-iphone` | iPhone。LA 成功後の HMAC。画面の数字ではない |
+| `POST /v1/offers/:id/confirm-mac` | Mac。同様。両方の到着が重なったときだけ確定 |
+| `DELETE /v1/offers/:id` | 拒否・期限切れ・収録検出・背面 |
+| `PUT /v1/pairings/:id` | 確定後。`tokenHash` を登録 |
 | `GET /v1/snap` | 最新 snap エンベロープ |
 | `PUT /v1/snap` | iPhone が snap を置く。`rev` は単調 |
 | `POST /v1/cmd` | 購読者が cmd を置く。短い FIFO |
@@ -212,6 +227,8 @@ iOS 前面と購読者が両方 WS にいるとき、cmd は即時。iOS が背�
 | QR / 貼り付けに masterKey や writeToken を載せる | 録画・後ろからの撮影で中身ごと奪える |
 | 点滅 QR で秘密を分割する | 画面収録で全フレームが残る |
 | リカバリ鍵を QR にする | 同じ撮影耐性を捨てる |
+| 片側のタップだけでペア確定 | 映像の再生や遠隔の片側操作で足りてしまう。双方 LA の重なりが要る |
+| SAS や録画フレームを confirm の材料にする | 両方の画面が撮られていれば第三者でも再現できる |
 
 将来足してよいもの: フレンドリな LAN、APNs 起こし、PRF wrapping、`resume` など追加 `op`、完全レプリカ。v1 のエンベロープを壊さない範囲で。
 
@@ -220,6 +237,6 @@ iOS 前面と購読者が両方 WS にいるとき、cmd は即時。iOS が背�
 ## 実装順（同期側）
 
 1. リレー（Hono + DO）とエンベロープの契約テスト
-2. iOS: Keychain、オファー QR、SAS 許可、snap / cmd / ack
+2. iOS: Keychain、オファー QR、Face ID、双方 confirm、snap / cmd / ack
 
 購読者 UI は [14](14-mac-companion-ux.md) が固まってから。いまのリポジトリではゲートもサーバも足さない。

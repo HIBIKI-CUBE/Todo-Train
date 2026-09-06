@@ -125,7 +125,7 @@
 | X-06 | 期限フィールド → **v1 defer** |
 | X-07 | JSON エクスポート → **不要** |
 | X-08 | PLAN はリポジトリの `docs/` に集約（本ドキュメント群） |
-| X-09 | 同期: アカウントなしペアリング + クライアント E2E + Hono/CF Durable Object。QR に長期鍵を載せない。SAS 許可後にマスター鍵を確定。iOS 起こしなし。LAN 直結は v1 にしない。[13-sync-mac-companion.md](13-sync-mac-companion.md) |
+| X-09 | 同期: アカウントなしペアリング + クライアント E2E + CF Durable Object。画面に長期鍵を出さない。双方の LocalAuthentication が重なったときだけ確定。起こしなし。LAN 直結は v1 にしない。[13-sync-mac-companion.md](13-sync-mac-companion.md) |
 | X-10 | Mac 体験: 未確定。提案は [14-mac-companion-ux.md](14-mac-companion-ux.md)。土管（X-09）と切り分けて確認する |
 
 ### 定時（喜び / ハック耐性）
@@ -159,7 +159,8 @@
 | Mac 土管に SwiftData CloudKit | 正規ユーザー以外不可（Apple 含む）を満たさない。X-09 |
 | Mac v1 の LAN / Bonjour | 社内 Wi-Fi でクライアント分離があり得る。インターネットリレー |
 | Mac 同期のアカウント発行 | ペアリング + 許可後の鍵 |
-| QR に masterKey を載せる | 短命オファー + SAS 許可。録画・後ろ撮りで中身を解けなくする |
+| QR に masterKey を載せる | 短命オファー + 画面に出ない confirm HMAC + 双方 LA |
+| 画面録画だけでペアできること | 両方の画面が常時録画でも、端末を操作して LA する本人だけが確定できる |
 | WebAuthn PRF を内容の主鍵にする | Keychain のマスター鍵。PRF は後回しの wrapping |
 | 同期のための APNs / 背面起こし | 前面または `ScenePhase.active` 復帰で逐次反映 |
 | ストリーク / XP / 定時率 | エフェメラな到着案内のみ。KPI 化すると見積もり水増しが合理になる |
@@ -180,5 +181,5 @@
 | FAB 即キーボード UX | 仮説 |
 | セーフティロック Override 感触 | 仮説（v0.5） |
 | Mac 同期の経路 | **確定。** X-09 / [13-sync-mac-companion.md](13-sync-mac-companion.md) |
-| Mac 同期の認証 | **確定。** アカウントなし。QR はオファーのみ。SAS 許可後に鍵確定。WebAuthn PRF は主鍵にしない |
+| Mac 同期の認証 | **確定。** アカウントなし。鍵は画面に出さない。双方 LA の重なりで確定 |
 | Mac コンパニオン体験 | **確認待ち。** X-10 / [14-mac-companion-ux.md](14-mac-companion-ux.md) |
