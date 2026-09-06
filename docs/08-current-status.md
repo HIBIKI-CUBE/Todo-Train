@@ -1,11 +1,11 @@
 # 08 — 現状ステータス
 
-最終更新: 2026-09-06（CloudKit WP-I 準備。Mac 同期経路は [13](13-sync-mac-companion.md) で未決）
+最終更新: 2026-09-06（Mac 同期は X-09 / [13](13-sync-mac-companion.md) で確定。実装は次）
 
 ## 結論
 
 **MVP（Sprint 1–10）・v1・v2（AlarmKit / UI polish）・車内放送は実装済み。**  
-**CloudKit（WP-I）** はスキーマとゲート付きローカル store まで。実 iCloud 同期は有料 Apple Developer Program が必要。Mac 最小面の土管は CloudKit 以外もあり得る（[13-sync-mac-companion.md](13-sync-mac-companion.md)、未決）。実装マップと検証手順は本ファイルと [11-v2-alarmkit-setup.md](11-v2-alarmkit-setup.md) / [12-ui-design.md](12-ui-design.md) を参照。
+**CloudKit（WP-I）** はスキーマとゲート付きローカル store まで。Mac 土管には使わない。同期はペアリング + E2E + CF Workers（[13-sync-mac-companion.md](13-sync-mac-companion.md)）。実装マップと検証手順は本ファイルと [11-v2-alarmkit-setup.md](11-v2-alarmkit-setup.md) / [12-ui-design.md](12-ui-design.md) を参照。
 
 定時の喜びは **エフェメラ**。到着は完了ジェスチャ（切符の無効化）で祝う。ストリークや定時率は出さない。超過で案内は取り下げない。
 
@@ -23,7 +23,7 @@
 | WP-F Live Activity | ✅ | Session LA + AlarmKit 排他。[11](11-v2-alarmkit-setup.md) §6 で検証 |
 | WP-G Widget | ✅ | App Group スナップショット |
 | WP-H AI / PCC | 部分 | 分割・日次レビューは stub。車内放送 1 行は `OnDeviceCoachingEngine` |
-| WP-I CloudKit | 準備中 | unique 削除・`boardedDeviceID`・`.none` store。iCloud entitlement は未追加（Personal Team 署名を壊さない）。実同期は有料 ADP 後 |
+| WP-I CloudKit | ゲート維持 | unique 削除・`boardedDeviceID`・`.none` store。Mac 土管には使わない |
 
 ### v2 進捗
 
@@ -85,11 +85,11 @@ Todo trainTests/           Swift Testing（CheckInScheduling / TicketIssuer 含�
 
 | 項目 | 備考 |
 |------|------|
-| CloudKit | スキーマ準備済み。store は `.none`。**iCloud entitlement なし**（Personal Team でデバッグするため）。実同期は有料 ADP 後 |
+| CloudKit | スキーマ準備済み。store は `.none`。**iCloud entitlement なし**。Mac 土管には使わない |
 | Session LA からの Intent | 未実装（Alarm LA は `EndBellIntents` 済み） |
 | iPad 最適化 | v2 以降。iPhone アプリの自由リサイズ（ミラーリング）は Hub がシーン幅に追従 |
 | 乗り継ぎキャンバスのゲージ統一 | Phase 2（Quick Add のみ線形スナップ・ゲージ） |
-| Mac Companion | 同期経路は [13](13-sync-mac-companion.md) で未決。メニューバーで走行中・停車。今回は未着手 |
+| Mac Companion | 経路確定（[13](13-sync-mac-companion.md)）。メニューバーで走行中・停車。実装は未着手 |
 
 ## テスト
 

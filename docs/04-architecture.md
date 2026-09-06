@@ -117,12 +117,7 @@ Todo train/
 | ローカル SwiftData（`cloudKitDatabase: .none`） | CloudKit Console / 私有 DB の中身確認 |
 | スキーマ準備・自機 ID の単体テスト | iCloud Capability を付けたままの Personal Team 署名 |
 
-実同期を足す手順（有料チーム後）:
-
-1. Apple Developer で App ID `dev.hibiki-cube.Todo-train` に iCloud（CloudKit）と Background Modes（remote notifications）
-2. コンテナ `iCloud.dev.hibiki-cube.Todo-train`
-3. `Todo_train.entitlements` に iCloud を足す（**いまは足さない**）
-4. `CloudKitSync.isConfigured` を `true` にする
+Mac 連携の土管は CloudKit ではない（X-09 / [13-sync-mac-companion.md](13-sync-mac-companion.md)）。iCloud entitlement は足さない。`isConfigured` は false のまま。
 
 ## テスト
 

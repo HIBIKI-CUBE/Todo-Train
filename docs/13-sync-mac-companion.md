@@ -1,235 +1,179 @@
-# 13 — Mac 連携と同期（検討・未決）
+# 13 — Mac 連携と同期（確定）
 
-最終更新: 2026-09-06。実装しない。方針が決まるまで CloudKit ゲートは現状維持。
+最終更新: 2026-09-06。この PR では実装しない。次の実装 PR の契約。
 
-Mac メニューバー（走行中タイトル / 残り / 停車）のために、CloudKit 私有同期と自前ホスト（Hono + Cloudflare Workers）を比べたメモ。要件の芯は **遅延の小さい同期** と **中身がサーバ側から読めないこと**。
+## 決めたこと
 
-## 先に答えてほしいこと
+机の Mac メニューバー（走行中タイトル / 残り / 停車）用。要件:
 
-方針がここで分かれる。答えが来るまで実装に入らない。
+| 項目 | 決定 |
+|------|------|
+| 用途 | A。机から停車。Hub / 履歴の完全レプリカはしない |
+| ローカル通信 | **主経路にしない。** 社内 Wi-Fi はクライアント分離・mDNS 遮断があり得る |
+| 機密 | 正規ユーザー以外は中身を見られない。Apple / 自前サーバ / 押収を含む |
+| 起こし | **求めない。** iOS は前面で生きている前提。背面なら `ScenePhase.active` 復帰時に逐次反映 |
+| 手間 | 最小。アカウント・CRDT・APNs・LAN スタックを足さない |
 
-1. **Mac の主用途**
-   - A. 同じ Wi-Fi の机（iPhone はポケット / Focus 中、Mac から停車）
-   - B. 外出中の iPhone を、家や別ネットの Mac からも操作したい
-   - C. Mac でも Hub / 履歴まで含めた完全レプリカが欲しい
-2. **E2E の敵**
-   - 自前サーバ（運用者・押収）に見えなければいい。Apple 私有 DB は許容
-   - Apple 含め、サーバを持っていても明文が出てはだめ
-   - できるだけ見えない方がいいが、停車の速さ・工数のほうが優先
+**採用: ペアリング + E2E + Hono on Cloudflare Workers + Durable Object。**  
+**不採用: SwiftData CloudKit（Mac 土管）、LAN Bonjour（v1）、アカウント、WebAuthn PRF 主鍵、APNs。**
 
----
-
-## 結論（仮定つき）
-
-**Hono + CFW で ADP 課金を避ける、は成立しない。** iPhone が背面のときに Mac から停車を届けるなら、信頼できる起こし方は APNs で、本番プッシュは有料 Apple Developer Program が要る。CloudKit をやめてもこの壁は残る。
-
-いまの SwiftData 私有 CloudKitは **Apple に対する E2E ではない。** 通信と保管は暗号化されるが鍵は Apple 側。鯖缶相当（Apple / 法執行）では中身が見える。`CKRecord.encryptedValues` は真の E2E だが SwiftData 自動同期は使わない。
-
-推奨の並べ方:
-
-| 条件 | 第一選択 | ADP | 真の E2E | 遅延 |
-|------|----------|-----|----------|------|
-| 机の同じ LAN が主 | **ローカルペアリング**（Network.framework） | 不要 | トラフィックが家から出ない | 数十 ms |
-| インターネット越し + Apple に見えてよい | **いまの CloudKit 計画** | 要 | いいえ | 秒〜十数秒（サイレントプッシュ） |
-| インターネット越し + Apple にも見せない | **ペアリング鍵 + 暗号化ブロブ + CF Durable Object** | Push 用に要 | はい（正しく実装すれば） | 前面は WS で即時。背面は APNs 起こし + 取得 |
-| ADP 回避が最優先 | LAN ペアリングにスコープを切る。外出先からの停車は「次にアプリを開いたとき」 | 不要 | はい | 背面では遅延を受け入れ |
-
-**アカウントは発行しない。** 1 人・少数端末ならペアリング + リカバリキーが認証より先。WebAuthn PRF は日常の内容暗号の主鍵にしない（リカバリの wrapping に限る）。
-
-「結局 CloudKit」もあり得る。そのときは **E2E（Apple 含む）を要件から外す** と明記する。スキーマ準備は無駄にならない。
+CloudKit ゲート（`CloudKitSync.isConfigured == false`）は維持。WP-I のスキーマ準備は残すが、Mac は待たない。有料 Apple Developer Program はこのフェーズでは不要（App Store / 本番プッシュを出すときまで）。
 
 ---
 
-## 1. いまのコードが前提にしていること
+## なぜこの形か
 
-ロードマップの「次」は CloudKit → Mac 最小（走行中の停車）。実装はゲートまで:
+Hono + CFW で ADP を避ける、は「背面起こし」が要るときに崩れる。今回は起こしを捨てたので、自前 HTTPS + WebSocket は Personal Team のまま動く。課金回避は成立する。
 
-- [`CloudKitSync.swift`](../Todo%20train/App/CloudKitSync.swift) — `isConfigured == false` のあいだ `cloudKitDatabase: .none`
-- モデルは CloudKit 契約（`@Attribute(.unique)` なし、optional リレーション、String enum）
-- `WorkSession.boardedDeviceID` — ベル / LA / 車内放送は発車した端末だけ
-- リモート変更フック — `NSPersistentStoreRemoteChange` → `SessionManager.handleRemoteStoreChange()`
-- Mac 面・ネットワーキング・Keychain 暗号・ペアリングは未着手
+LAN 直結は遅延も E2E も最強だが、社内ネットでは届かないことが多い。インターネット上の不透明リレーが机の主経路になる。LAN は後で足せる最適化であり、v1 に入れない。
 
-iPhone が本尊。Mac は当初メニューバーの薄い操作面。Hub のマルス体験は iPhone に残す想定（[06-roadmap.md](06-roadmap.md)）。
+CloudKit はペアリング不要で工数は最小だが、鍵が Apple 側なので「正規ユーザー以外不可」を満たさない。暗号文だけ載せるなら SwiftData 自動同期の旨味が消え、自前同期と同じ仕事になる。
 
 ---
 
-## 2. ADP が買っているもの
-
-有料 Apple Developer Program は CloudKit 専用課金ではない。
-
-| 能力 | 無料 Personal Team | 有料 ADP |
-|------|-------------------|----------|
-| シミュレータ / 実機デバッグ | 可（証明書 7 日） | 可 |
-| SwiftData 私有 CloudKit | 不可（entitlement で署名失敗） | 可 |
-| 本番 APNs | 不可 | 可 |
-| App Store / TestFlight | 不可 | 可 |
-| 同じ LAN の Network.framework | 可 | 可 |
-| 自前 HTTPS への URLSession | 可 | 可 |
-
-Mac から「ポケットの iPhone を停車」するとき、サーバを自前にしても **背面の iOS を起こす手段** が要る。前面同士の WebSocket は ADP なしでできる。iOS は背面ソケットをすぐ切る。本番で起こすなら APNs → **ADP が残る。**
-
-だから「CloudKit が嫌だから CFW」は、課金回避にはならない。回避できるのは **背面配信を捨てる**（LAN のみ、または次回起動時に同期）ときだけ。
-
----
-
-## 3. CloudKit で足りること / 足りないこと
-
-足りる:
-
-- 同一 Apple ID の端末間レプリカ。ペアリング UI なし
-- SwiftData のまま。いまの WP-I 準備をそのまま使える
-- サイレントプッシュでストア更新。ポーリング不要
-- `boardedDeviceID` の他機ベル抑制と相性が良い
-
-足りない:
-
-- **真の E2E。** 私有 DB でも鍵は Apple。Advanced Data Protection の対象一覧に、サードパーティ SwiftData コンテナは入らない
-- 遅延の上限保証がない。数秒が普通で、背面だとさらに伸びる
-- 競合は属性単位の last-write-wins。リレーションと `sortOrder` は汚れやすい
-- サーバ側で「このセッションを停車」のようなコマンド面はない。双方がレコードを書く
-
-E2E を CloudKit 上でやるなら、レコードを不透明な暗号文にする → SwiftData 自動同期の旨味が消え、自前同期と同じ仕事になる。その土管が CloudKit である必然は薄い。
-
----
-
-## 4. 認証: アカウントよりペアリング
-
-個人利用・端末 2〜3 台が前提なら、メール/パスキーのアカウントはコストだけ先に来る（発行、復旧、セッション、利用規約、サーバ上の個人情報）。
-
-**推奨:** アカウントなし。一度きりのペアリング。
+## 役割
 
 ```
-iPhone（本尊）                    Mac
-  256-bit マスター鍵を生成
-  QR = pairingId || 公開情報
-       || 鍵そのもの or SPAKE2+ 用の短いコード
-        ---------------------->  カメラ / コード入力
-  双方 Keychain にマスター鍵
-  サーバを使うなら pairingId だけが識別子
+iPhone（本尊）                         relay（読めない）              Mac（リモコン）
+ SwiftData / SessionManager            pairing 1 = Durable Object     メニューバー
+ 前面: WebSocket                       ciphertext + rev だけ          スナップショット購読
+ 復帰時: 取得 + コマンド適用            コマンドキュー（暗号化）         停車コマンドを置く
 ```
 
-サーバ認証は「誰のアカウントか」ではなく **このペアリングの鍵を持っているか。** HMAC（時刻 + nonce）か、ペアリング時に登録した端末 Ed25519。サーバーは `pairingId` 以外の個人情報を持たない。
-
-リカバリ: マスター鍵を 24 語または hex で一度だけ出す。両方の端末を失い、紙も無いなら中身は戻らない。E2E ではこれが正常。iCloud に鍵を置くと Apple 依存に戻る。
-
-WebAuthn PRF（passkey から鍵導出）:
-
-- 日常の AES 鍵にしない。PRF の対応差、毎回の assertion、iCloud 同期パスキーだと再び Apple 隣接
-- 使える場所: **リカバリ用 wrapping。** マスター鍵は Keychain。新規端末だけパスキーでアンラップ
-- Face ID で中身を守るなら、Secure Enclave / Keychain で足りる。WebAuthn を経由しない
+- 発車の真実はいまどおり open `WorkSession`。Mac はストアを持たない
+- ベル / LA / 車内放送は既存の `boardedDeviceID`。停車コマンドは iPhone の `SessionManager` が実行する
+- サーバはタイトルを見ない。復号できない正本をマージしない
 
 ---
 
-## 5. 暗号: サーバが缶でも読めない
+## 認証: アカウントなしペアリング
 
-目標: サーバ（と押収）は ciphertext とメタデータ（`pairingId`、revision、時刻）しか見ない。タイトルも見積もりも乗務結果も平文にしない。
+メール / パスワード / パスキーアカウントは出さない。
 
-| 層 | 選択 |
+iPhone が一度だけ生成して Keychain に置く:
+
+| 値 | 長さ | サーバ |
+|----|------|--------|
+| `pairingId` | UUID | 識別子。公開してよい |
+| `masterKey` | 32 bytes | **送らない** |
+| `writeToken` | 32 bytes | SHA-256 ハッシュだけ保存 |
+
+QR（または同じ内容のテキスト）:
+
+```
+todotrain://pair?p=<pairingId>&k=<masterKey_b64u>&t=<writeToken_b64u>
+```
+
+Mac が読み、同じ 3 つを Keychain へ。以降の HTTP / WS は `pairingId` + `writeToken`（TLS 上の Bearer）。サーバは `sha256(writeToken)` と照合するだけ。
+
+リカバリは QR と同じ 3 値を一度だけ紙またはパスワードマネージャへ。両方の端末と紙を失ったら戻さない。iCloud にマスター鍵を置かない（Apple 隣接になる）。
+
+WebAuthn PRF は主鍵にしない。新規端末の wrapping は後回し。Face ID は Keychain のアクセス制御で足りる。
+
+改ざん: 中身は AES-GCM なので、トークンを盗んだ攻撃者はキューを壊せても Mac / iPhone は復号失敗で捨てる。ロールバックはクライアントが `rev` の単調増加だけ採用して防ぐ。サーバ侵害の残りは削除 DoS。許容する。
+
+---
+
+## 暗号
+
+HKDF-SHA256(`masterKey`) で用途を分ける。サーバに渡すのは ciphertext だけ。
+
+| 派生鍵 | info | 用途 |
+|--------|------|------|
+| `enc` | `todotrain/v1/enc` | AES-256-GCM |
+| （token は別乱数） | — | サーバ認証。enc と混ぜない |
+
+エンベロープ:
+
+- `n`: 12-byte nonce
+- `ct`: ciphertext
+- AAD: `pairingId || kind || rev`（`kind` は `snap` または `cmd`）
+
+スナップショット平文（小さい。切符全件ではない）:
+
+```json
+{
+  "rev": 42,
+  "sessionId": "…",
+  "ticketId": "…",
+  "title": "…",
+  "phase": "running",
+  "startedAt": 0,
+  "estimatedSeconds": 1500,
+  "pausedAccumulated": 0,
+  "pausedAt": null,
+  "boardedDeviceID": "…"
+}
+```
+
+時刻は Unix。Mac の残り表示は iPhone と同じ Date 計算（`SessionClock` 相当）。残り秒を送ってポーリングしない。運行なし / 停車済みは `sessionId: null` のスナップショット。
+
+コマンド平文:
+
+```json
+{ "op": "pause", "sessionId": "…", "at": 0 }
+```
+
+v1 の op は `pause` だけ。再開は iPhone。
+
+---
+
+## リレー（Hono + Durable Object）
+
+ペアリング 1 つ = Durable Object 1 つ。永続は DO ストレージで足りる（R2 不要）。ポーリングしない。
+
+| 面 | 役割 |
 |----|------|
-| マスター鍵 | 32 bytes。端末 Keychain。サーバに送らない |
-| 内容 | AES-GCM。レコードまたは op ごと。AAD に `pairingId` + 型 + id |
-| 鍵導出 | HKDF で payload / コマンド / 端末認証を分ける |
-| サーバメタ | `pairingId`、`rev`、`deviceId` のハッシュ、サイズ、時刻。タイトルは載せない |
-| APNs | 本文は入れない。起こす ping だけ。本体は WS か短い GET |
+| `PUT /v1/pairings/:id` | 初回。`tokenHash` を登録 |
+| `GET /v1/snap` | 最新エンベロープ。`rev` 付き |
+| `PUT /v1/snap` | iPhone が暗号化スナップショットを置く。`rev` は単調 |
+| `POST /v1/cmd` | Mac が暗号化コマンドを置く。短い FIFO |
+| `GET /v1/cmd` | iPhone が未適用分を取る（復帰時の保険） |
+| `WS /v1/ws` | 接続中の端末へ snap / cmd を即時配信。Hibernation 可 |
 
-Mac v1 なら切符全件を暗号化レプリカしなくてよい。暗号化する最小面:
+認証: すべての面で Bearer `writeToken`。CORS はアプリだけ。
 
-- いまの走行スナップショット（タイトル、残り、phase、`sessionId`）
-- コマンド（停車 / 再開）。コマンドも暗号化。サーバは「不透明な envelope が来た」とだけ知る
-
-完全レプリカが要るなら、サーバを SwiftData の正本にしない。端末が復号して既存の `ModelContext` に適用する。サーバは暗号化 op ログ、または暗号化スナップショット + バージョンベクトル。競合は端末側（LWW か、`sortOrder` だけ CRDT）。
+iOS 前面（Focus / アプリ active）と Mac メニューバー常駐が両方 WS にいるとき、停車は即時。iOS が背面なら DO にコマンドが残り、次の `active` で適用して新しい snap を返す。
 
 ---
 
-## 6. 同期の形（ポーリングしない）
+## クライアントの振る舞い
 
-「DB を正本にする」と「iPhone がスタート合図だけ出す」は別問題。v1 Mac は後者に近い。
+**iPhone**
 
-```
-                    ┌─ 前面: Hibernatable WebSocket ─
- iPhone ─── 暗号化 ─┤
-                    └─ 背面: APNs ping → 短い取得 ──  Durable Object（pairing 1 つ）
- Mac    ─── 暗号化 ─┘                                      ciphertext だけ保持
-```
+- `ScenePhase.active` と発車 / 停車 / 延長 / 到着のたびに snap を置く
+- active 中は WS。切れたら出し直す。定期ポーリングはしない
+- 受信 cmd を復号 → `sessionId` が今の open と一致 → `SessionManager` で停車 → 新 snap
+- 不一致・復号失敗は捨ててログ
 
-| やり方 | 使うか | 理由 |
-|--------|--------|------|
-| ポーリング | 使わない | 遅延とバッテリー。要件に反する |
-| 前面 WebSocket | 使う（自前同期のとき） | 机の前面同士なら即時。ADP 不要 |
-| APNs | インターネット + 背面なら使う | iOS を起こす。ADP 要 |
-| CloudKit サイレントプッシュ | CloudKit 経路のとき | ポーリングではない。遅延は秒単位 |
-| LAN TCP/QUIC | 机が主なら第一 | サーバも ADP も不要 |
-| サーバ側 SwiftData / 正本 DB | 使わない（E2E 時） | 復号できない正本はマージできない |
+**Mac（未着手・最小）**
 
-最適化の芯は差分アルゴリズムより **起こし方。** 走行中スナップショットは小さい。全履歴の CRDT は C（完全レプリカ）になるまで不要。
-
-iPhone を正本にするコマンド面:
-
-1. Mac は暗号化コマンドを DO に置く（または LAN で直接）
-2. iPhone が復号し、`SessionManager` で停車する（他機ベル抑制は既存）
-3. 新しいスナップショットを暗号化して戻す
-4. Mac メニューバーはスナップショットだけ描く。Hub は持たない
-
-「これをスタート」を iPhone 起点にするなら、Mac は購読者。発車の真実はいまどおり open `WorkSession`。
+- メニューバー: タイトル、Date ベースの残り、停車ボタン
+- Hub は持たない
+- WS で snap を描く。停車は cmd を置くだけ。ローカル SwiftData なし
 
 ---
 
-## 7. 経路の比較
+## 工数を増やさないためにやらないこと
 
-### 経路 L — 同じ LAN のペアリング
+| やらない | 理由 |
+|----------|------|
+| アカウント / OAuth / WebAuthn | ペアリングで足りる |
+| 切符・履歴の暗号化レプリカ / CRDT | Mac v1 に不要 |
+| APNs / Background Modes | 起こしを求めない |
+| LAN / Bonjour / Multipeer | 社内ネットで届かない |
+| サーバ側正本 DB / SwiftData 同期 | 復号できない |
+| CloudKit を true にする | Apple が読める。ADP が要る |
+| JSON エクスポートを同期代わり | 要件 X-07 |
 
-Network.framework（Bonjour）。QR / PIN。TLS か Noise。iPhone が本尊、Mac はリモコン。
-
-- ADP なし、真の E2E（家から出ない）、遅延は最小
-- 別ネットワークでは動かない
-- iPhone 背面のローカルリスンは OS に殺されやすい。机で Focus 前面、または同じ Wi-Fi で生きているあいだ、が現実的なスコープ
-- Mac v1 の「机から停車」と最も合う
-
-### 経路 K — 有料 ADP + SwiftData CloudKit
-
-WP-I のフラグを立て、同じコンテナで Mac を足す。
-
-- 工数が最小。アカウントも暗号も自前にしない
-- E2E（Apple 含む）は満たさない
-- 遅延はサイレントプッシュ次第
-- メニューバー停車は「両方のストアが open session を更新する」になり、コマンド面より競合に弱い。Mac は `endedAt` / `phase` を書く。`boardedDeviceID` でベルは iPhone 側
-
-### 経路 E — ペアリング + E2E + CF Durable Object
-
-Hono は HTTP 面（ペアリング登録、スナップショット POST、コマンド POST）。リアルタイムは DO の WebSocket。R2/KV に ciphertext。
-
-- サーバ缶では読めない、を満たせる
-- アカウント不要
-- 背面の即時性は APNs → ADP は残る。課金回避にはならない
-- 工数は CloudKit より桁で大きい（ペアリング、鍵、競合、起こし、Mac/iOS のバックグラウンド）
-- Cloudflare の従量は 1 ユーザーなら無料枠で足りる。高いのは実装
-
-Hono + CFW 自体は経路 E の置き方として妥当。疑問なのは「ADP の代わり」という動機。
+将来足してよいもの: フレンドリな LAN のショートカット、APNs 起こし、PRF wrapping、再開コマンド、完全レプリカ。v1 の契約を壊さない範囲で。
 
 ---
 
-## 8. 決め方
+## 実装順（次の PR 群）
 
-```
-Mac は同じ LAN の机が主？
-  yes → 経路 L。CloudKit / CFW は後回し
-  no  → 背面でもインターネット越しに停車する？
-          no  → 次回前面で同期。ADP なしで経路 E の WS だけも可
-          yes → ADP は払う
-                 Apple にタイトルが見えてよい？
-                   yes → 経路 K（いまの計画）
-                   no  → 経路 E（CFW は土管。E2E はクライアント）
-```
+1. リレー（Hono + DO）とエンベロープの契約テスト
+2. iOS: Keychain、ペアリング QR、snap 送信、cmd 適用
+3. macOS メニューバー最小
 
-WebAuthn PRF を主鍵にする案は、どの経路でも第一選択にしない。
-
----
-
-## 9. やらないこと（このメモの範囲）
-
-- いま `CloudKitSync.isConfigured` を true にしない
-- サーバ実装・Mac ターゲットをこの PR で足さない
-- JSON エクスポートを同期の代わりにしない（要件 X-07）
-
-未決の 2 問が埋まってから、経路 L / K / E のどれかを [02-requirements.md](02-requirements.md) と [06-roadmap.md](06-roadmap.md) に確定として書く。
+いまのリポジトリではゲートもサーバも足さない。

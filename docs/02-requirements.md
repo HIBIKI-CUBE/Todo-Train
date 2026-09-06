@@ -120,11 +120,12 @@
 | X-01 | SwiftUI + SwiftData、iOS 27 |
 | X-02 | SessionManager 先行（Date ベース） |
 | X-03 | AlarmKit + StandBy → **v2** |
-| X-04 | CloudKit → **v1**。スキーマは CloudKit 契約済み。実同期は有料 Apple Developer Program + iCloud Capability。Personal Team ではアプリデバッグ可・iCloud 同期不可 |
+| X-04 | CloudKit 私有同期は **ゲート維持**（`.none`）。スキーマ契約は残す。Mac 土管には使わない（Apple が読める）。有料 ADP + iCloud は App Store / 本番プッシュまで不要 |
 | X-05 | Live Activity → **発車中のみ・v1**（全日運行 LA は不可） |
 | X-06 | 期限フィールド → **v1 defer** |
 | X-07 | JSON エクスポート → **不要** |
 | X-08 | PLAN はリポジトリの `docs/` に集約（本ドキュメント群） |
+| X-09 | Mac 同期: アカウントなしペアリング + クライアント E2E + Hono/CF Durable Object。iOS 起こし（APNs）なし。LAN 直結は v1 にしない。詳細 [13-sync-mac-companion.md](13-sync-mac-companion.md) |
 
 ### 定時（喜び / ハック耐性）
 
@@ -154,6 +155,11 @@
 | 初期タグプリセット | なしスタート |
 | 全日運行 Live Activity | 発車中 LA + Widget（v1） |
 | 24h 自動 Pause | 運行開始/終了 |
+| Mac 土管に SwiftData CloudKit | 正規ユーザー以外不可（Apple 含む）を満たさない。X-09 |
+| Mac v1 の LAN / Bonjour | 社内 Wi-Fi でクライアント分離があり得る。インターネットリレー |
+| Mac 同期のアカウント発行 | ペアリング + リカバリキー |
+| WebAuthn PRF を内容の主鍵にする | Keychain のマスター鍵。PRF は後回しの wrapping |
+| 同期のための APNs / 背面起こし | 前面または `ScenePhase.active` 復帰で逐次反映 |
 | ストリーク / XP / 定時率 | エフェメラな到着案内のみ。KPI 化すると見積もり水増しが合理になる |
 | 早着を祝わない | 早着はいい結果。見出し「早着」＋見積/実績。定時到着とは別見出し |
 | 超過到着の祝祭取り下げ | 完了を先に祝う。超過は記録・超過 UI に留め、到着の喜びは取り上げない |
@@ -171,5 +177,5 @@
 | 7プリセットの最適性 | 仮説 — 使用頻度で調整 |
 | FAB 即キーボード UX | 仮説 |
 | セーフティロック Override 感触 | 仮説（v0.5） |
-| Mac 同期の経路（LAN / CloudKit / E2E+CFW） | **未決。** [13-sync-mac-companion.md](13-sync-mac-companion.md)。用途（机の LAN vs 外出先）と E2E の敵（自前サーバのみ vs Apple 含む）で分岐 |
-| Mac 同期の認証 | **未決。** 推奨はアカウントなしペアリング。WebAuthn PRF は主鍵にしない |
+| Mac 同期の経路 | **確定。** X-09 / [13-sync-mac-companion.md](13-sync-mac-companion.md) |
+| Mac 同期の認証 | **確定。** アカウントなしペアリング。WebAuthn PRF は主鍵にしない |
