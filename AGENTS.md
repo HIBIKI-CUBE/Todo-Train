@@ -18,7 +18,8 @@
 9. [docs/07-research.md](docs/07-research.md) — 根拠・Live Activity 制限
 10. [docs/11-v2-alarmkit-setup.md](docs/11-v2-alarmkit-setup.md) — Widget / LA / AlarmKit 配線・検証
 11. [docs/12-ui-design.md](docs/12-ui-design.md) — UI 方針
-12. [docs/13-sync-mac-companion.md](docs/13-sync-mac-companion.md) — Mac 同期の契約（ペアリング + E2E + CFW）
+12. [docs/13-sync-mac-companion.md](docs/13-sync-mac-companion.md) — 同期構成（土管。確定）
+13. [docs/14-mac-companion-ux.md](docs/14-mac-companion-ux.md) — Mac コンパニオン体験（確認待ち）
 
 ## 作業時の原則
 

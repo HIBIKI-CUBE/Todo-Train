@@ -1,11 +1,11 @@
 # 08 — 現状ステータス
 
-最終更新: 2026-09-06（Mac 同期は X-09 / [13](13-sync-mac-companion.md) で確定。実装は次）
+最終更新: 2026-09-06（同期は X-09 / [13](13-sync-mac-companion.md)。Mac 体験は [14](14-mac-companion-ux.md) で確認待ち）
 
 ## 結論
 
 **MVP（Sprint 1–10）・v1・v2（AlarmKit / UI polish）・車内放送は実装済み。**  
-**CloudKit（WP-I）** はスキーマとゲート付きローカル store まで。Mac 土管には使わない。同期はペアリング + E2E + CF Workers（[13-sync-mac-companion.md](13-sync-mac-companion.md)）。実装マップと検証手順は本ファイルと [11-v2-alarmkit-setup.md](11-v2-alarmkit-setup.md) / [12-ui-design.md](12-ui-design.md) を参照。
+**CloudKit（WP-I）** はスキーマとゲート付きローカル store まで。Mac 土管には使わない。同期構成は [13-sync-mac-companion.md](13-sync-mac-companion.md)。Mac の画面は [14-mac-companion-ux.md](14-mac-companion-ux.md)（確認待ち）。実装マップと検証手順は本ファイルと [11-v2-alarmkit-setup.md](11-v2-alarmkit-setup.md) / [12-ui-design.md](12-ui-design.md) を参照。
 
 定時の喜びは **エフェメラ**。到着は完了ジェスチャ（切符の無効化）で祝う。ストリークや定時率は出さない。超過で案内は取り下げない。
 
@@ -89,7 +89,7 @@ Todo trainTests/           Swift Testing（CheckInScheduling / TicketIssuer 含�
 | Session LA からの Intent | 未実装（Alarm LA は `EndBellIntents` 済み） |
 | iPad 最適化 | v2 以降。iPhone アプリの自由リサイズ（ミラーリング）は Hub がシーン幅に追従 |
 | 乗り継ぎキャンバスのゲージ統一 | Phase 2（Quick Add のみ線形スナップ・ゲージ） |
-| Mac Companion | 経路確定（[13](13-sync-mac-companion.md)）。メニューバーで走行中・停車。実装は未着手 |
+| Mac Companion | 土管は [13](13-sync-mac-companion.md)。体験は [14](14-mac-companion-ux.md) 確認待ち。実装は未着手 |
 
 ## テスト
 

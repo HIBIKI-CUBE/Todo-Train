@@ -15,7 +15,8 @@
 | [08-current-status.md](08-current-status.md) | **現状の実装マップ・テスト手順** |
 | [11-v2-alarmkit-setup.md](11-v2-alarmkit-setup.md) | Widget / Live Activity / AlarmKit セットアップ・検証 |
 | [12-ui-design.md](12-ui-design.md) | UI / ビジュアル方針（列車テーマ） |
-| [13-sync-mac-companion.md](13-sync-mac-companion.md) | Mac 連携の同期契約（ペアリング + E2E + CF Workers）。**確定** |
+| [13-sync-mac-companion.md](13-sync-mac-companion.md) | 同期構成（ペアリング + E2E + CF Workers）。**確定** |
+| [14-mac-companion-ux.md](14-mac-companion-ux.md) | Mac コンパニオン体験。**確認待ち** |
 
 ルートの [AGENTS.md](../AGENTS.md) が作業開始時の短い入口です。
 
@@ -26,11 +27,11 @@
 3. 用語・要件で迷ったら [03](03-terminology.md) / [02](02-requirements.md)
 4. LA / Widget / AlarmKit を触るなら [11](11-v2-alarmkit-setup.md)
 5. UI を触るなら [12](12-ui-design.md)
-6. Mac / 同期を触るなら [13](13-sync-mac-companion.md)
+6. 同期の土管なら [13](13-sync-mac-companion.md)。Mac の画面なら [14](14-mac-companion-ux.md)
 
 ## ステータス
 
 - ターゲット: **iPhone 15 Pro Max / iOS 27**
 - スタック: **SwiftUI + SwiftData**
 - **MVP / v1 / v2: `develop` にマージ済み**
-- **次: Mac 同期（X-09 / [13](13-sync-mac-companion.md)）。CloudKit ゲートは維持。このフェーズに有料 ADP は不要**
+- **次: 同期実装は [13](13-sync-mac-companion.md)。Mac 体験は [14](14-mac-companion-ux.md) の確認待ち。CloudKit ゲートは維持**

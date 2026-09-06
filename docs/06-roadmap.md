@@ -10,7 +10,7 @@
 | **v2** | AlarmKit + StandBy、週次レポート、UI polish、横向き compact | **完了**（iPad 等は未着手） |
 | **定時** | 定時到着 / 定時運行の短い案内（非通貨） | **完了** |
 | **車内放送** | 乗務中チェックイン + 背面「まだ乗ってる？」+ 発券 Intent | **完了** |
-| **次** | E2E リレー + Mac 最小（走行中の停車） | 経路確定。[13](13-sync-mac-companion.md)。実装は次 PR |
+| **次** | 同期リレー（[13](13-sync-mac-companion.md)）と Mac 体験確認（[14](14-mac-companion-ux.md)） | 土管は確定。体験は確認待ち |
 
 ## MVP（完了チェック）
 
@@ -60,9 +60,9 @@
 
 ## 次軌道
 
-1. **リレー** — Hono + Durable Object。暗号化スナップショットと停車コマンド。ポーリングなし。APNs なし
-2. **iOS ペアリング** — QR、Keychain、前面 / `active` 復帰で送受信。`SessionManager` が停車を実行
-3. **macOS 最小** — メニューバーで走行中タイトル・残り・停車。Hub のマルス体験は iPhone に残す
+1. **同期リレー** — [13](13-sync-mac-companion.md)。Hono + Durable Object。体験に依存しない
+2. **iOS 同期クライアント** — Keychain、ペアリングペイロード、snap / cmd / ack
+3. **Mac 体験** — [14](14-mac-companion-ux.md) が確定してからメニューバー面
 4. **WP-I CloudKit** — ゲート維持。Mac は待たない
 
 ## 受入の芯（MVP・達成済みの意図）

@@ -148,7 +148,7 @@ SwiftData の `cloudKitDatabase: .private` は **有料 Apple Developer Program*
 - CloudKit Console も有料チーム向け
 - `@Attribute(.unique)` は SwiftData+CloudKit で使えないので、同期オンの前に外す
 
-このリポジトリは `CloudKitSync.isConfigured == false` のあいだ `.none` でローカル保存する。Mac 土管は CloudKit にしない（Apple が読める）。起こし（APNs）を求めないので、このフェーズの同期に有料 ADP は不要。契約は [13-sync-mac-companion.md](13-sync-mac-companion.md)。
+このリポジトリは `CloudKitSync.isConfigured == false` のあいだ `.none` でローカル保存する。同期の土管は CloudKit にしない（Apple が読める）。起こし（APNs）を求めないので、このフェーズの同期に有料 ADP は不要。契約は [13-sync-mac-companion.md](13-sync-mac-companion.md)。Mac 体験は [14-mac-companion-ux.md](14-mac-companion-ux.md)。
 
 ---
 

@@ -125,7 +125,8 @@
 | X-06 | 期限フィールド → **v1 defer** |
 | X-07 | JSON エクスポート → **不要** |
 | X-08 | PLAN はリポジトリの `docs/` に集約（本ドキュメント群） |
-| X-09 | Mac 同期: アカウントなしペアリング + クライアント E2E + Hono/CF Durable Object。iOS 起こし（APNs）なし。LAN 直結は v1 にしない。詳細 [13-sync-mac-companion.md](13-sync-mac-companion.md) |
+| X-09 | 同期: アカウントなしペアリング + クライアント E2E + Hono/CF Durable Object。iOS 起こし（APNs）なし。LAN 直結は v1 にしない。[13-sync-mac-companion.md](13-sync-mac-companion.md) |
+| X-10 | Mac 体験: 未確定。提案は [14-mac-companion-ux.md](14-mac-companion-ux.md)。土管（X-09）と切り分けて確認する |
 
 ### 定時（喜び / ハック耐性）
 
@@ -179,3 +180,4 @@
 | セーフティロック Override 感触 | 仮説（v0.5） |
 | Mac 同期の経路 | **確定。** X-09 / [13-sync-mac-companion.md](13-sync-mac-companion.md) |
 | Mac 同期の認証 | **確定。** アカウントなしペアリング。WebAuthn PRF は主鍵にしない |
+| Mac コンパニオン体験 | **確認待ち。** X-10 / [14-mac-companion-ux.md](14-mac-companion-ux.md) |

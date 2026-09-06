@@ -117,7 +117,7 @@ Todo train/
 | ローカル SwiftData（`cloudKitDatabase: .none`） | CloudKit Console / 私有 DB の中身確認 |
 | スキーマ準備・自機 ID の単体テスト | iCloud Capability を付けたままの Personal Team 署名 |
 
-Mac 連携の土管は CloudKit ではない（X-09 / [13-sync-mac-companion.md](13-sync-mac-companion.md)）。iCloud entitlement は足さない。`isConfigured` は false のまま。
+同期の土管は CloudKit ではない（X-09 / [13-sync-mac-companion.md](13-sync-mac-companion.md)）。Mac の画面は [14-mac-companion-ux.md](14-mac-companion-ux.md)。iCloud entitlement は足さない。`isConfigured` は false のまま。
 
 ## テスト
 
