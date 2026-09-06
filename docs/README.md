@@ -15,6 +15,7 @@
 | [08-current-status.md](08-current-status.md) | **現状の実装マップ・テスト手順** |
 | [11-v2-alarmkit-setup.md](11-v2-alarmkit-setup.md) | Widget / Live Activity / AlarmKit セットアップ・検証 |
 | [12-ui-design.md](12-ui-design.md) | UI / ビジュアル方針（列車テーマ） |
+| [13-sync-mac-companion.md](13-sync-mac-companion.md) | Mac 連携の同期検討（CloudKit vs 自前 / ペアリング / E2E）。**未決** |
 
 ルートの [AGENTS.md](../AGENTS.md) が作業開始時の短い入口です。
 
@@ -25,10 +26,11 @@
 3. 用語・要件で迷ったら [03](03-terminology.md) / [02](02-requirements.md)
 4. LA / Widget / AlarmKit を触るなら [11](11-v2-alarmkit-setup.md)
 5. UI を触るなら [12](12-ui-design.md)
+6. Mac / 同期を触るなら [13](13-sync-mac-companion.md)（経路は未決）
 
 ## ステータス
 
 - ターゲット: **iPhone 15 Pro Max / iOS 27**
 - スタック: **SwiftUI + SwiftData**
 - **MVP / v1 / v2: `develop` にマージ済み**
-- **次: CloudKit（WP-I）準備中。実同期は有料 Apple Developer Program 待ち。Mac はその後**
+- **次: CloudKit（WP-I）準備中。Mac 同期の経路は [13](13-sync-mac-companion.md) で検討中（未決）。実 iCloud は有料 Apple Developer Program**

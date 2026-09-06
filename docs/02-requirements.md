@@ -171,3 +171,5 @@
 | 7プリセットの最適性 | 仮説 — 使用頻度で調整 |
 | FAB 即キーボード UX | 仮説 |
 | セーフティロック Override 感触 | 仮説（v0.5） |
+| Mac 同期の経路（LAN / CloudKit / E2E+CFW） | **未決。** [13-sync-mac-companion.md](13-sync-mac-companion.md)。用途（机の LAN vs 外出先）と E2E の敵（自前サーバのみ vs Apple 含む）で分岐 |
+| Mac 同期の認証 | **未決。** 推奨はアカウントなしペアリング。WebAuthn PRF は主鍵にしない |

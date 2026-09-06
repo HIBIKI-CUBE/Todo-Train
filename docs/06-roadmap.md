@@ -10,7 +10,7 @@
 | **v2** | AlarmKit + StandBy、週次レポート、UI polish、横向き compact | **完了**（iPad 等は未着手） |
 | **定時** | 定時到着 / 定時運行の短い案内（非通貨） | **完了** |
 | **車内放送** | 乗務中チェックイン + 背面「まだ乗ってる？」+ 発券 Intent | **完了** |
-| **次** | CloudKit 同期 → その後 Mac 最小（走行中の停車） | WP-I 準備中（実同期は有料 Developer Program 待ち） |
+| **次** | 同期経路の確定 → Mac 最小（走行中の停車） | WP-I 準備中。経路は [13](13-sync-mac-companion.md) で未決 |
 
 ## MVP（完了チェック）
 
@@ -60,8 +60,9 @@
 
 ## 次軌道（実装しない・前提）
 
-1. **WP-I CloudKit** — スキーマ / 自機ベル分離 / `.none` ストアまで。実 iCloud は有料 Apple Developer Program 後。Mac から停車するには同期が要る
-2. **macOS 最小** — 走行中タイトル・残り・停車（メニューバーで足りる。Hub のマルス体験は iPhone に残す）
+1. **WP-I CloudKit** — スキーマ / 自機ベル分離 / `.none` ストアまで。実 iCloud は有料 Apple Developer Program 後
+2. **Mac 同期の経路** — 未決。[13-sync-mac-companion.md](13-sync-mac-companion.md)。机の LAN ペアリング / CloudKit / E2E+CFW で分岐。Hono+CFW は ADP 回避にはならない（背面起こしは APNs）
+3. **macOS 最小** — 走行中タイトル・残り・停車（メニューバーで足りる。Hub のマルス体験は iPhone に残す）。同期経路が決まってから
 
 ## 受入の芯（MVP・達成済みの意図）
 
