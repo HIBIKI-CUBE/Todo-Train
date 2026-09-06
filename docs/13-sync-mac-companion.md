@@ -3,7 +3,7 @@
 最終更新: 2026-09-06。土管・暗号・ペアリング契約。**画面の話はしない。**  
 Mac の体験は別紙 [14-mac-companion-ux.md](14-mac-companion-ux.md)（確認待ち）。
 
-この PR では実装しない。次の実装 PR の契約。
+この PR ではアプリも Worker も足さない。実装は [15-agent-work-plan.md](15-agent-work-plan.md) のチケットへ。
 
 ## 決めたこと
 

@@ -126,7 +126,8 @@
 | X-07 | JSON エクスポート → **不要** |
 | X-08 | PLAN はリポジトリの `docs/` に集約（本ドキュメント群） |
 | X-09 | 同期: アカウントなしペアリング + クライアント E2E + CF Durable Object。画面に長期鍵を出さない。相手端末は画面を Mac に向ける同時光学交換（iPhone はセルフィー）。照合数字は人に頼らない。双方 LA は本人確認。起こしなし。LAN 直結は v1 にしない。[13-sync-mac-companion.md](13-sync-mac-companion.md) |
-| X-10 | Mac 体験: 未確定。提案は [14-mac-companion-ux.md](14-mac-companion-ux.md)。土管（X-09）と切り分けて確認する |
+| X-10 | Mac 体験: 確認リストは提案値を実装デフォルトとする。[14-mac-companion-ux.md](14-mac-companion-ux.md)。覆すなら SYNC-4 前に更新 |
+| X-11 | 同期の置き場: 別リポにも JS モノレポにもしない。このリポの `sync/` + `Packages/TodoTrainSync`。[15-agent-work-plan.md](15-agent-work-plan.md) |
 
 ### 定時（喜び / ハック耐性）
 
@@ -184,4 +185,5 @@
 | セーフティロック Override 感触 | 仮説（v0.5） |
 | Mac 同期の経路 | **確定。** X-09 / [13-sync-mac-companion.md](13-sync-mac-companion.md) |
 | Mac 同期の認証 | **確定。** セルフィー同時交換で相手を束縛。照合数字は人に頼らない。双方 LA は本人確認 |
-| Mac コンパニオン体験 | **確認待ち。** X-10 / [14-mac-companion-ux.md](14-mac-companion-ux.md) |
+| Mac コンパニオン体験 | **提案値で着手可。** X-10 / [14](14-mac-companion-ux.md)。覆すなら SYNC-4 前 |
+| 同期コードの置き場 | **確定。** 別リポ / turbo しない。X-11 / [15](15-agent-work-plan.md) |

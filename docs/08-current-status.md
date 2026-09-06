@@ -1,6 +1,6 @@
 # 08 — 現状ステータス
 
-最終更新: 2026-09-06（同期は X-09 / [13](13-sync-mac-companion.md)。Mac 体験は [14](14-mac-companion-ux.md) で確認待ち）
+最終更新: 2026-09-06（同期作業は [15](15-agent-work-plan.md) で分割。実装は未着手）
 
 ## 結論
 
@@ -89,7 +89,7 @@ Todo trainTests/           Swift Testing（CheckInScheduling / TicketIssuer 含�
 | Session LA からの Intent | 未実装（Alarm LA は `EndBellIntents` 済み） |
 | iPad 最適化 | v2 以降。iPhone アプリの自由リサイズ（ミラーリング）は Hub がシーン幅に追従 |
 | 乗り継ぎキャンバスのゲージ統一 | Phase 2（Quick Add のみ線形スナップ・ゲージ） |
-| Mac Companion | 土管は [13](13-sync-mac-companion.md)。体験は [14](14-mac-companion-ux.md) 確認待ち。実装は未着手 |
+| Mac Companion | 土管 [13](13-sync-mac-companion.md)。体験 [14](14-mac-companion-ux.md)。作業切り分け [15](15-agent-work-plan.md)。実装は未着手 |
 
 ## テスト
 

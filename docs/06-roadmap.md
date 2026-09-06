@@ -10,7 +10,7 @@
 | **v2** | AlarmKit + StandBy、週次レポート、UI polish、横向き compact | **完了**（iPad 等は未着手） |
 | **定時** | 定時到着 / 定時運行の短い案内（非通貨） | **完了** |
 | **車内放送** | 乗務中チェックイン + 背面「まだ乗ってる？」+ 発券 Intent | **完了** |
-| **次** | 同期リレー（[13](13-sync-mac-companion.md)）と Mac 体験確認（[14](14-mac-companion-ux.md)） | 土管は確定。体験は確認待ち |
+| **次** | 同期実装をチケット分割（[15](15-agent-work-plan.md)） | 契約 [13](13-sync-mac-companion.md)。画面 [14](14-mac-companion-ux.md) は提案値で着手可 |
 
 ## MVP（完了チェック）
 
@@ -60,9 +60,9 @@
 
 ## 次軌道
 
-1. **同期リレー** — [13](13-sync-mac-companion.md)。Hono + Durable Object。体験に依存しない
-2. **iOS 同期クライアント** — Keychain、セルフィー同時交換、Face ID、双方 confirm、snap / cmd / ack
-3. **Mac 体験** — [14](14-mac-companion-ux.md) が確定してからメニューバー面
+1. **SYNC-0 契約** — `sync/contract`。[15](15-agent-work-plan.md)
+2. **SYNC-1 リレー** と **SYNC-2 Swift パッケージ** — 並列。Worker と Xcode を混ぜない
+3. **SYNC-3 iOS** と **SYNC-4 macOS** — 並列。どちらも Mac + Xcode
 4. **WP-I CloudKit** — ゲート維持。Mac は待たない
 
 ## 受入の芯（MVP・達成済みの意図）
