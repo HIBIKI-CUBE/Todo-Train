@@ -16,7 +16,7 @@ Mac の体験は別紙 [14-mac-companion-ux.md](14-mac-companion-ux.md)（確認
 | 機密 | 正規ユーザー以外は中身を見られない。Apple / 自前サーバ / 押収を含む |
 | 起こし | **求めない。** iOS は前面、または `ScenePhase.active` 復帰で送受信 |
 | 手間 | アカウント・CRDT・APNs・LAN スタック・切符全件レプリカを足さない |
-| 認証 | アカウントなし。QR はオファーのみ。鍵は画面に出さない。双方の端末で本人確認が重なったときだけ確定 |
+| 認証 | アカウントなし。双方向スキャンで相手端末を束縛。数字照合は人に頼らない。双方 LA は本人確認 |
 
 **採用: ペアリング + E2E + CF Durable Object。**  
 **不採用: SwiftData CloudKit（この土管）、LAN Bonjour（v1）、アカウント、WebAuthn PRF 主鍵、APNs。**
@@ -74,54 +74,55 @@ iPhone（本尊）                         relay（読めない）              
 | `masterKey` | 32 bytes | **送らない。画面にも QR にも出さない** |
 | `writeToken` | 32 bytes | SHA-256 ハッシュだけ保存。画面にも QR にも出さない |
 
-DH の共有秘密・HKDF の出力・confirm の HMAC も画面に出さない。照合数字（SAS）だけ出してよい。SAS は切り詰めで、鍵に戻せない。
+DH の共有秘密・HKDF の出力・confirm の HMAC も画面に出さない。照合数字は **人の防御に使わない**（見ない前提）。
 
-### オファー（QR に載せてよいもの）
+### オファー（最初の QR に載せてよいもの）
 
-短命。TTL 約 90 秒。先着 1 回だけ accept できる。
+短命。TTL 約 90 秒。
 
 ```
 todotrain://pair?p=<pairingId>&o=<offerId>&x=<iPhone_eph_pub_b64u>
 ```
 
-識別子と一時公開鍵だけ。テキスト貼り付けも同じで、秘密ではない。
+識別子と一時公開鍵だけ。テキスト貼り付けも同じで、秘密ではない。これだけではペアは確定しない。リレーもまだ相手を固定しない。
+
+### 返し（Mac が出す QR）
+
+Mac が最初の QR（または貼り付け）を読んだら、自分の一時公開鍵を **画面の QR** にする。秘密ではない。
+
+```
+todotrain://pair-ack?o=<offerId>&y=<Mac_eph_pub_b64u>
+```
+
+iPhone のカメラがこれを読んだときだけ、DH の相手がその Mac に固定される。
 
 ### 手順
 
-1. iPhone が X25519 一時鍵を作り、リレーにオファーを置く
-2. 購読者が QR を読み、自分の一時鍵で `accept`（先着のみ）
-3. 双方が DH → HKDF で `masterKey` / `writeToken` / SAS を派生する。**まだ Keychain に書かない**
-4. 双方が同じ SAS を出す（鍵ではない）
-5. **iPhone で Face ID またはデバイスパスコード**（`LocalAuthentication`）。成功したら画面に出ない `HMAC(DH, "confirm"|iphone|offerId)` をリレーへ
-6. **Mac で Touch ID またはログインパスワード**。同様に `confirm|mac` を送る
-7. リレーは **両方の confirm が数秒以内に重なったときだけ** ペアを確定する。片方だけ・時間外・HMAC 不一致は捨てる
-8. 確定後に Keychain へ書き、`tokenHash` を残す。オファーは捨てる
-9. 拒否・期限切れ・背面へ行く・スクリーンショット / 画面収録: オファーを捨てて作り直す。確定前の鍵は残さない
+1. iPhone が X25519 一時鍵を作り、リレーにオファーを置く。QR を出す
+2. Mac がそれを読む（カメラでも貼り付けでもよい）。**この時点ではリレーに accept しない**
+3. Mac が返し QR を大きく出す
+4. iPhone がカメラに切り替わり、机の Mac を読む。読めた `y` で DH する。ここで初めてリレーに `bind`
+5. **そのあと** Face ID / パスコード。裏で画面に出ない `HMAC(DH, "confirm"|iphone|offerId)`
+6. Mac は Touch ID / パスワード。同様に `confirm|mac`
+7. リレーは bind 済み、かつ両方の confirm が数秒以内に重なったときだけ確定
+8. Keychain に書き、`tokenHash` を残す。オファーは捨てる
+9. 拒否・期限切れ・背面・収録検出: 破棄。確定前の鍵は残さない
 
-映像に QR と SAS とボタンが全部写っていても、HMAC も生体も再生できない。別マシンで QR を読んでも、iPhone 本体の Face ID と、その DH 相手の Mac 本体の本人確認が同時に要る。録画を見ている第三者は、どちらの端末も操作していないので確定できない。
+録画を見ている他人が最初の QR を読んでも、返し QR は **その人の画面** に出る。確定には iPhone 本体のカメラがその画面を見る必要がある。利用者は机の Mac を向ける。他人のノートを意図せず読む、は数字を見比べるより起きにくい。
 
-先に他人が `accept` すると、正規 Mac は「この QR は使われました」。iPhone の SAS は他人側と一致する。自分の Mac と違うので Face ID しない。
+他人が先に読んでも、iPhone に「許可しますか」は出ない。出るのは「Mac の画面を読んでください」。机の Mac に返し QR が無ければ（読んでいなければ）失敗して終わる。Face ID のゴム印で他人と組む、が起きない。
 
-### 照合数字は「自分が読んだ」と冗長か
+### 人は照合数字を見ない
 
-成功パスでは冗長に感じるのが自然。自分が Mac で QR を読んだなら、DH の相手はその Mac で、数字は必ず一致する。ここだけ見るとクイズに見える。
+Bluetooth の数値比較と同じで、一致確認は成功すると冗長に見え、失敗してもほとんど見ない。見ないなら防御ではない。残すと「許可」シートが攻撃者のリクエストになる。
 
-それでも残すのは合理的。理由は失敗パスで、**本人確認は「どの Mac か」を束縛しない**から。
+「どの Mac か」はカメラが机の画面を読む行為で束縛する。本人かは Face ID / Touch ID。役割を混ぜない。
 
-| 起きること | 双方 LA だけ | 双方 LA + 照合 |
-|------------|--------------|----------------|
-| 自分が読んだ（成功） | 通る | 通る。数字は一致しているので一目で終わる |
-| 録画や後ろ撮りで他人が先に `accept` | 他人の Mac が Touch ID、自分が Face ID すれば **他人と確定する** | iPhone の数字は他人側。机の Mac と違う / 机の Mac は「使われました」。Face ID しない |
+点滅 QR で秘密を分割しない。録画で全フレームが残る。
 
-「読んだのは自分」は意図であって、オファーの先着事実ではない。画面が録画される前提では、読んだ主体をアプリは区別できない。照合数字は DH 相手の指紋で、名前（「Hibiki の MacBook」）は相手が名乗れるので代用できない。
+リカバリを出すなら書き写し用の語または hex だけ。**QR にしない。** 収録中は隠す。ウィザードで強制しない。書き写しはペア確定後の任意。
 
-体験では別画面のクイズにしない。Mac が読み終わって数字を出した瞬間が、iPhone の Face ID シート（「この Mac ですか」）と重なる。打ち直しもしない。詳細は [14](14-mac-companion-ux.md)。
-
-点滅 QR は使わない。録画で全フレームが残るうえ、本人確認の代わりにならない。
-
-リカバリを出すなら書き写し用の語または hex だけ。**QR にしない。** 収録中は隠す。ウィザードで強制しない。書き写しはペア確定後の任意で、常時録画への耐性はペアリング本体とは別（紙に残した鍵の管理）。
-
-WebAuthn PRF は主鍵にしない。Face ID は確定の本人確認と Keychain 保護の両方に使う。
+WebAuthn PRF は主鍵にしない。Face ID は確定の本人確認と Keychain 保護に使う。
 
 改ざん: AES-GCM。ロールバックは `rev` 単調増加。サーバ侵害の残りは削除 DoS。許容する。
 
@@ -134,7 +135,6 @@ HKDF-SHA256 の入力は、許可後は `masterKey`。ペアリング中は DH �
 | 派生鍵 | info | 用途 |
 |--------|------|------|
 | `enc` | `todotrain/v1/enc` | AES-256-GCM |
-| `sas` | `todotrain/v1/sas` | 照合数字（鍵ではない。画面に出してよい） |
 | `tok` | `todotrain/v1/tok` | writeToken |
 | `cfm` | `todotrain/v1/cfm` | confirm HMAC。画面に出さない |
 
@@ -190,8 +190,8 @@ iPhone が cmd を処理したら、成否を暗号化した ack を置く。購
 | 面 | 役割 |
 |----|------|
 | `POST /v1/offers` | iPhone。短命オファー（eph pub、TTL） |
-| `POST /v1/offers/:id/accept` | 購読者。先着 1 回。相手の eph pub を返す |
-| `POST /v1/offers/:id/confirm-iphone` | iPhone。LA 成功後の HMAC。画面の数字ではない |
+| `POST /v1/offers/:id/bind` | iPhone。カメラで読んだ Mac の eph pub を固定。これより前に相手を決めない |
+| `POST /v1/offers/:id/confirm-iphone` | iPhone。bind 後、LA 成功後の HMAC |
 | `POST /v1/offers/:id/confirm-mac` | Mac。同様。両方の到着が重なったときだけ確定 |
 | `DELETE /v1/offers/:id` | 拒否・期限切れ・収録検出・背面 |
 | `PUT /v1/pairings/:id` | 確定後。`tokenHash` を登録 |
@@ -203,7 +203,7 @@ iPhone が cmd を処理したら、成否を暗号化した ack を置く。購
 | `GET /v1/ack` | 購読者が結果を取る（復帰時の保険） |
 | `WS /v1/ws` | snap / cmd / ack を接続中へ即時配信。Hibernation 可 |
 
-認証: snap / cmd / ack / WS は Bearer `writeToken`（confirm 後）。オファー面は TTL と先着だけで、長期権限を与えない。
+認証: snap / cmd / ack / WS は Bearer `writeToken`（確定後）。オファー面は TTL だけ。最初の QR を読んだだけでは長期権限も bind も与えない。
 
 iOS 前面と購読者が両方 WS にいるとき、cmd は即時。iOS が背面なら FIFO に残り、次の `active` で適用 → snap + ack。
 
@@ -243,7 +243,8 @@ iOS 前面と購読者が両方 WS にいるとき、cmd は即時。iOS が背�
 | 点滅 QR で秘密を分割する | 画面収録で全フレームが残る |
 | リカバリ鍵を QR にする | 同じ撮影耐性を捨てる |
 | 片側のタップだけでペア確定 | 映像の再生や遠隔の片側操作で足りてしまう。双方 LA の重なりが要る |
-| SAS や録画フレームを confirm の材料にする | 両方の画面が撮られていれば第三者でも再現できる |
+| 照合数字を人の防御にする | 見ない。Face ID が攻撃者リクエストのゴム印になる |
+| 最初の QR を読んだだけでリレーに相手を固定する | 録画からの先着が「許可しますか」になる |
 
 将来足してよいもの: フレンドリな LAN、APNs 起こし、PRF wrapping、`resume` など追加 `op`、完全レプリカ。v1 のエンベロープを壊さない範囲で。
 
@@ -252,6 +253,6 @@ iOS 前面と購読者が両方 WS にいるとき、cmd は即時。iOS が背�
 ## 実装順（同期側）
 
 1. リレー（Hono + DO）とエンベロープの契約テスト
-2. iOS: Keychain、オファー QR、Face ID、双方 confirm、snap / cmd / ack
+2. iOS: Keychain、オファー QR、返し QR の読取、Face ID、双方 confirm、snap / cmd / ack
 
 購読者 UI は [14](14-mac-companion-ux.md) が固まってから。いまのリポジトリではゲートもサーバも足さない。

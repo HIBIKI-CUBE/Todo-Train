@@ -61,7 +61,7 @@
 ## 次軌道
 
 1. **同期リレー** — [13](13-sync-mac-companion.md)。Hono + Durable Object。体験に依存しない
-2. **iOS 同期クライアント** — Keychain、オファー QR、Face ID、双方 confirm、snap / cmd / ack
+2. **iOS 同期クライアント** — Keychain、オファー QR、返し QR の読取、Face ID、双方 confirm、snap / cmd / ack
 3. **Mac 体験** — [14](14-mac-companion-ux.md) が確定してからメニューバー面
 4. **WP-I CloudKit** — ゲート維持。Mac は待たない
 
