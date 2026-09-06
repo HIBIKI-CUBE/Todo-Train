@@ -125,7 +125,7 @@
 | X-06 | 期限フィールド → **v1 defer** |
 | X-07 | JSON エクスポート → **不要** |
 | X-08 | PLAN はリポジトリの `docs/` に集約（本ドキュメント群） |
-| X-09 | 同期: アカウントなしペアリング + クライアント E2E + CF Durable Object。画面に長期鍵を出さない。相手端末は双方向スキャンで束縛（照合数字は人に頼らない）。双方 LA は本人確認。起こしなし。LAN 直結は v1 にしない。[13-sync-mac-companion.md](13-sync-mac-companion.md) |
+| X-09 | 同期: アカウントなしペアリング + クライアント E2E + CF Durable Object。画面に長期鍵を出さない。相手端末は画面を Mac に向ける同時光学交換（iPhone はセルフィー）。照合数字は人に頼らない。双方 LA は本人確認。起こしなし。LAN 直結は v1 にしない。[13-sync-mac-companion.md](13-sync-mac-companion.md) |
 | X-10 | Mac 体験: 未確定。提案は [14-mac-companion-ux.md](14-mac-companion-ux.md)。土管（X-09）と切り分けて確認する |
 
 ### 定時（喜び / ハック耐性）
@@ -161,7 +161,7 @@
 | Mac 同期のアカウント発行 | ペアリング + 許可後の鍵 |
 | QR に masterKey を載せる | 短命オファー + 画面に出ない confirm HMAC + 双方 LA |
 | 画面録画だけでペアできること | 両方の画面が常時録画でも、端末を操作して LA する本人だけが確定できる |
-| 照合数字（SAS）を人の防御にする | 見ない。Face ID が攻撃者リクエストのゴム印になる。相手は iPhone が机の Mac の返し QR を読んで束縛する |
+| 照合数字（SAS）を人の防御にする | 見ない。相手は画面を Mac に向ける同時光学交換で束縛する |
 | 最初の QR 読取だけでリレーに相手を固定する | 録画からの先着が「許可しますか」になる |
 | WebAuthn PRF を内容の主鍵にする | Keychain のマスター鍵。PRF は後回しの wrapping |
 | 同期のための APNs / 背面起こし | 前面または `ScenePhase.active` 復帰で逐次反映 |
@@ -183,5 +183,5 @@
 | FAB 即キーボード UX | 仮説 |
 | セーフティロック Override 感触 | 仮説（v0.5） |
 | Mac 同期の経路 | **確定。** X-09 / [13-sync-mac-companion.md](13-sync-mac-companion.md) |
-| Mac 同期の認証 | **確定。** 双方向スキャンで相手を束縛。照合数字は人に頼らない。双方 LA は本人確認 |
+| Mac 同期の認証 | **確定。** セルフィー同時交換で相手を束縛。照合数字は人に頼らない。双方 LA は本人確認 |
 | Mac コンパニオン体験 | **確認待ち。** X-10 / [14-mac-companion-ux.md](14-mac-companion-ux.md) |
