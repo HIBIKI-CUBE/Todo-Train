@@ -25,7 +25,7 @@ Hono + pairing 1 = Durable Object 1。サーバは ciphertext とメタだけ。
 - ポーリング API を「クライアントが回せ」と書かない。WS + 復帰時の GET 保険だけ
 - 単体テスト: 契約の黄金バイト / JSON を fixture として読む。復号鍵はテストに持たない（平文フィクスチャは contract 側。Worker テストは opaque の載せ降とし）
 
-デプロイ先の本番アカウントは必須にしない。`wrangler dev` / テストが通れば完了。アカウントが Issue に書いてあれば preview まで。
+デプロイ先の本番アカウントは必須にしない。`wrangler dev` / テストが通れば完了。人間の Mac は不要。
 
 ## 完了条件
 

@@ -20,7 +20,7 @@
 11. [docs/12-ui-design.md](docs/12-ui-design.md) — UI 方針
 12. [docs/13-sync-mac-companion.md](docs/13-sync-mac-companion.md) — 同期構成（土管。確定）
 13. [docs/14-mac-companion-ux.md](docs/14-mac-companion-ux.md) — Mac コンパニオン体験（確認待ち。実装は提案値）
-14. [docs/15-agent-work-plan.md](docs/15-agent-work-plan.md) — 同期のチケット切り分け。自分の `docs/issues/SYNC-*` 以外のパスを触らない
+14. [docs/15-agent-work-plan.md](docs/15-agent-work-plan.md) — 同期の切り分け。自分のチケットの「触ってよいパス」だけを触る
 
 ## 作業時の原則
 
@@ -38,7 +38,7 @@
 - 純関数化 + `Todo trainTests` へのテスト追加を優先。
 - Live Activity / Widget / 通知 / PCC の実行確認は PR の **Needs Mac verification** に委ねる。
 - PR 本文に Mac 検証チェックリストを載せる（[11-v2-alarmkit-setup.md](docs/11-v2-alarmkit-setup.md) §6 参照）。
-- 同期: Linux 向きは SYNC-0 / SYNC-1（と SYNC-2 の純関数）。SYNC-3 / SYNC-4 は Mac + Xcode。切り分けは [docs/15-agent-work-plan.md](docs/15-agent-work-plan.md)
+- 同期: **今振れるのは Linux**（SYNC-0 / 1 / 2 / 5）。SYNC-3 / 4 の UI は実機待ち。切り分けは [docs/15-agent-work-plan.md](docs/15-agent-work-plan.md)
 
 ## ブランチ
 

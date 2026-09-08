@@ -36,4 +36,4 @@
 - ターゲット: **iPhone 15 Pro Max / iOS 27**
 - スタック: **SwiftUI + SwiftData**
 - **MVP / v1 / v2: `develop` にマージ済み**
-- **次: 同期実装は [15](15-agent-work-plan.md) でチケット分割。契約は [13](13-sync-mac-companion.md)。Mac 画面は [14](14-mac-companion-ux.md) の提案値**
+- **次: Linux で SYNC-0/1/2/5（[15](15-agent-work-plan.md)）。Mac 起動は UI まで不要**

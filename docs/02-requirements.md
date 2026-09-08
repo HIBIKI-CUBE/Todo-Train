@@ -186,4 +186,4 @@
 | Mac 同期の経路 | **確定。** X-09 / [13-sync-mac-companion.md](13-sync-mac-companion.md) |
 | Mac 同期の認証 | **確定。** セルフィー同時交換で相手を束縛。照合数字は人に頼らない。双方 LA は本人確認 |
 | Mac コンパニオン体験 | **提案値で着手可。** X-10 / [14](14-mac-companion-ux.md)。覆すなら SYNC-4 前 |
-| 同期コードの置き場 | **確定。** 別リポ / turbo しない。X-11 / [15](15-agent-work-plan.md) |
+| 同期コードの置き場 | **確定。** 別リポ / turbo しない。Linux で 0/1/2/5。X-11 / [15](15-agent-work-plan.md) |

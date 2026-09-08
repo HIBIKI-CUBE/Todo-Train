@@ -10,7 +10,7 @@
 | **v2** | AlarmKit + StandBy、週次レポート、UI polish、横向き compact | **完了**（iPad 等は未着手） |
 | **定時** | 定時到着 / 定時運行の短い案内（非通貨） | **完了** |
 | **車内放送** | 乗務中チェックイン + 背面「まだ乗ってる？」+ 発券 Intent | **完了** |
-| **次** | 同期実装をチケット分割（[15](15-agent-work-plan.md)） | 契約 [13](13-sync-mac-companion.md)。画面 [14](14-mac-companion-ux.md) は提案値で着手可 |
+| **次** | Linux で同期の芯（[15](15-agent-work-plan.md) SYNC-0/1/2/5） | UI は実機待ち |
 
 ## MVP（完了チェック）
 
@@ -60,10 +60,9 @@
 
 ## 次軌道
 
-1. **SYNC-0 契約** — `sync/contract`。[15](15-agent-work-plan.md)
-2. **SYNC-1 リレー** と **SYNC-2 Swift パッケージ** — 並列。Worker と Xcode を混ぜない
-3. **SYNC-3 iOS** と **SYNC-4 macOS** — 並列。どちらも Mac + Xcode
-4. **WP-I CloudKit** — ゲート維持。Mac は待たない
+1. **SYNC-0〜2, 5** — Linux Cloud Agent。[15](15-agent-work-plan.md)。Mac 起動不要
+2. **SYNC-3 / 4** — 実機 UI。今は振らない
+3. **WP-I CloudKit** — ゲート維持
 
 ## 受入の芯（MVP・達成済みの意図）
 
