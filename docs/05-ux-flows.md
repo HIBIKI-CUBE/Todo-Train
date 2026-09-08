@@ -17,6 +17,7 @@
 | Emergency Override | ✅ | セーフティカバー + スライドホールド（MVP 済） |
 | Settings | ✅ | 停車上限 2/3、終了ベル、超過音 |
 | Weekly Report | ✅ | 週次レポート（履歴タブ内） |
+| Mac companion | 提案 | メニューバー。体験は [14](14-mac-companion-ux.md)（確認待ち）。土管は [13](13-sync-mac-companion.md) |
 
 ## Hub
 

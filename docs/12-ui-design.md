@@ -145,7 +145,6 @@ Focus / 設定は HIG 骨格のまま。Hub の未乗車リストはマルス券
 | `Core/History/Punctuality.swift` | 帯域判定（当初見積もり）。スコアを持たない |
 | `Core/History/SessionTimeline.swift` | 履歴の日時計レイアウト（純関数。空きは折り畳まない） |
 | `TodoTrainWidget/FocusTimerPhase.swift` | App + Widget 共有の段階色ロジック |
-| `TodoTrainWidget/FocusTimerPhase.swift` | App + Widget 共有の段階色ロジック |
 | `TodoTrainWidget/CockpitLayoutContract.swift` | Live Activity 公称サイズ契約・密度選択 |
 | `TodoTrainWidget/CockpitInstrumentViews.swift` | StandBy 2ペイン / LS ViewThatFits ダーク計器 |
 | `ContentView.swift` | TabView + Focus cover |
