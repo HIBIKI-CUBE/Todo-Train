@@ -13,7 +13,7 @@
 | 履歴 | その日の時計キャンバス（システム背景・セマンティック色。空き時間は乗車と同じ 1pt/分）。設定は標準 `Form` |
 | Quick Add | システム sheet + **親指発券帯**（タイトル・常時タグ・KB 直上ゲージ）。Form / Disclosure ではない |
 | Focus | 真っ黒ダッシュボード。超大タイマーが主役。hairline パネル格子＋ gapless 操作盤 |
-| 超過 / 臨時停車 | 信号色は意味を持たせる（緑・琥珀・赤） |
+| 超過 | 信号色は意味を持たせる（緑・琥珀・赤） |
 
 道具であること（`01-vision.md`）を崩さない。カスタムカード乱立・グラデ背景・FAB 祭りはしない。
 
@@ -181,8 +181,8 @@ Focus ダッシュボードの **ダーク計器エコー**。Lock Screen / Stan
 | 情報階層 | **残時間 → 状態語 → タイトル / 予定**。小さい文字は補助のみ |
 | 段階色 | `FocusTimerPhase`（予算比 25% / 10%）。固定1分ルールではない |
 | 状態語 | 平常は非表示。終盤 / まもなく / 超過 / 更新待ち（stale） |
-| StandBy 操作 | Alarm LA のみ **右ペイン縦計器セル**（停車 / 停止）。2×2 操作盤は廃止 |
-| Lock Screen 操作 | Alarm LA のみ inset Capsule 1 つ。余白 **14pt**（compact 時は 8pt）。Session LA は表示専用 |
+| StandBy 操作 | **右ペイン縦計器セル** 単一操作（停車 / 再乗車 / 停止）。2×2 操作盤は廃止 |
+| Lock Screen 操作 | inset Capsule 1 つ。余白 **14pt**（compact 時は 8pt）。走行中の Session LA は表示専用、停車中は再乗車 |
 | StandBy レイアウト | **横長 2 ペイン**（左〜68% 計器 / 右〜32% 操作）。固定クロム（margin / タイトル / 進捗 / 予定）＋**タイマーが残り高を充填**。比率マジック禁止。120pt 未満はタイトル・予定を省略 |
 | サイズ契約 | `CockpitLayoutContract`。LS/expanded DI は 408×84…160。StandBy は提案高をクランプせず、固定クロム＋残り高充填 |
 | compact DI | tram マーク + **`Text(timerInterval:)` 秒更新**。幅は hidden 最大桁テンプレ（`0:00` / `00:00` / `0:00:00`）で決定。HIG 片側 **≤62.33pt** |
@@ -190,12 +190,12 @@ Focus ダッシュボードの **ダーク計器エコー**。Lock Screen / Stan
 | expanded DI | center にタイマー + タイトル。trailing は状態語のみ。Alarm 時のみ bottom 単一操作（≤40pt） |
 | 鳴動アラート | システム描画。`tintColor` は amber（黒不可）。タイトルは切符名 |
 | Deep link | `todotrain://focus`。到着・延長はアプリ内 Focus |
-| やらない | Clock 級フルスクリーン・4 分割操作盤・停車中 LA の残留・途中下車ボタン・compact の静的ラベルだけ化・StandBy 比率チューニング競争 |
+| やらない | Clock 級フルスクリーン・4 分割操作盤・8 時間放置の LA・途中下車ボタン・compact の静的カウントダウン・StandBy 比率チューニング競争 |
 
 ### ライフサイクル（表示と同期）
 
-- **走行中 1 件だけ**が Alarm / LA を持つ。停車時は AlarmKit を `cancel`（`pause` で残さない）
-- 再乗車はアプリから残時間で再 schedule
+- **走行中または直近の停車中 1 件**が Alarm / LA を持つ。停車時は AlarmKit を `pause`、Session LA は `update`（StandBy を残す）。2 時間で破棄は次の起動。別発車で切替
+- 再乗車は同じ Alarm を `resume`。LA が期限切れなら残り時間で再 schedule
 - 終了ベル ON かつ認可済 → AlarmKit が終了通知を独占（ローカル通知・アプリ超過音と重ねない）
 
 ### StandBy Preview ↔ 実機

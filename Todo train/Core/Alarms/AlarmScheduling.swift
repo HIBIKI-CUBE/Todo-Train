@@ -17,9 +17,15 @@ protocol AlarmScheduling: Sendable {
     var isAuthorized: Bool { get }
     func requestAuthorizationIfNeeded()
     func scheduleEndBell(sessionID: UUID, ticketTitle: String, fireAt: Date, budgetSeconds: Int)
+    /// Freeze the countdown Live Activity without tearing it down.
+    func pause(sessionID: UUID)
+    /// Resume a paused countdown. Returns false when no paused alarm remains (caller should schedule).
+    @discardableResult
+    func resume(sessionID: UUID) -> Bool
+    func hasAlarm(sessionID: UUID) -> Bool
     func cancel(sessionID: UUID)
     func cancelAll()
-    /// Cancel every tracked alarm except the running session (paused LAs must not linger).
+    /// Cancel every tracked alarm except the given session (running or paused).
     func cancelAllExcept(sessionID: UUID?)
 }
 
@@ -27,6 +33,9 @@ struct NoOpAlarmScheduler: AlarmScheduling {
     var isAuthorized: Bool { false }
     func requestAuthorizationIfNeeded() {}
     func scheduleEndBell(sessionID: UUID, ticketTitle: String, fireAt: Date, budgetSeconds: Int) {}
+    func pause(sessionID: UUID) {}
+    func resume(sessionID: UUID) -> Bool { false }
+    func hasAlarm(sessionID: UUID) -> Bool { false }
     func cancel(sessionID: UUID) {}
     func cancelAll() {}
     func cancelAllExcept(sessionID: UUID?) {}
@@ -36,6 +45,8 @@ struct NoOpAlarmScheduler: AlarmScheduling {
 final class InMemoryAlarmScheduler: AlarmScheduling, @unchecked Sendable {
     private let lock = NSLock()
     private(set) var requests: [EndBellRequest] = []
+    private(set) var pausedSessionIDs: Set<UUID> = []
+    private(set) var resumedSessionIDs: [UUID] = []
     private(set) var cancelledSessionIDs: [UUID] = []
     private(set) var cancelAllCount = 0
     private(set) var authorizationRequestCount = 0
@@ -48,14 +59,43 @@ final class InMemoryAlarmScheduler: AlarmScheduling, @unchecked Sendable {
 
     func scheduleEndBell(sessionID: UUID, ticketTitle: String, fireAt: Date, budgetSeconds: Int) {
         lock.withLock {
+            pausedSessionIDs.remove(sessionID)
             requests.removeAll { $0.sessionID == sessionID }
             requests.append(EndBellRequest(sessionID: sessionID, ticketTitle: ticketTitle, fireAt: fireAt))
+        }
+    }
+
+    func pause(sessionID: UUID) {
+        lock.withLock {
+            if requests.contains(where: { $0.sessionID == sessionID }) {
+                pausedSessionIDs.insert(sessionID)
+            }
+        }
+    }
+
+    @discardableResult
+    func resume(sessionID: UUID) -> Bool {
+        lock.withLock {
+            guard pausedSessionIDs.contains(sessionID),
+                  requests.contains(where: { $0.sessionID == sessionID }) else {
+                return false
+            }
+            pausedSessionIDs.remove(sessionID)
+            resumedSessionIDs.append(sessionID)
+            return true
+        }
+    }
+
+    func hasAlarm(sessionID: UUID) -> Bool {
+        lock.withLock {
+            requests.contains { $0.sessionID == sessionID }
         }
     }
 
     func cancel(sessionID: UUID) {
         lock.withLock {
             cancelledSessionIDs.append(sessionID)
+            pausedSessionIDs.remove(sessionID)
             requests.removeAll { $0.sessionID == sessionID }
         }
     }
@@ -66,6 +106,7 @@ final class InMemoryAlarmScheduler: AlarmScheduling, @unchecked Sendable {
             for request in requests {
                 cancelledSessionIDs.append(request.sessionID)
             }
+            pausedSessionIDs.removeAll()
             requests.removeAll()
         }
     }
@@ -76,8 +117,14 @@ final class InMemoryAlarmScheduler: AlarmScheduling, @unchecked Sendable {
             let doomed = requests.filter { $0.sessionID != kept }
             for request in doomed {
                 cancelledSessionIDs.append(request.sessionID)
+                pausedSessionIDs.remove(request.sessionID)
             }
             requests.removeAll { $0.sessionID != kept }
+            if let kept {
+                pausedSessionIDs = pausedSessionIDs.filter { $0 == kept }
+            } else {
+                pausedSessionIDs.removeAll()
+            }
         }
     }
 }
@@ -139,6 +186,34 @@ final class AlarmKitScheduler: AlarmScheduling {
                 budgetSeconds: budgetSeconds
             )
         }
+    }
+
+    func pause(sessionID: UUID) {
+        let alarmID = SessionEndSchedule.alarmID(sessionID: sessionID)
+        sessionOriginatedIDs.insert(alarmID)
+        try? AlarmManager.shared.pause(id: alarmID)
+    }
+
+    @discardableResult
+    func resume(sessionID: UUID) -> Bool {
+        let alarmID = SessionEndSchedule.alarmID(sessionID: sessionID)
+        sessionOriginatedIDs.insert(alarmID)
+        do {
+            try AlarmManager.shared.resume(id: alarmID)
+            return true
+        } catch {
+            Self.log.error("Alarm resume failed: \(String(describing: error), privacy: .public)")
+            return false
+        }
+    }
+
+    func hasAlarm(sessionID: UUID) -> Bool {
+        let alarmID = SessionEndSchedule.alarmID(sessionID: sessionID)
+        if trackedAlarmIDs.contains(alarmID) { return true }
+        if let systemAlarms = try? AlarmManager.shared.alarms {
+            return systemAlarms.contains { $0.id == alarmID }
+        }
+        return false
     }
 
     func cancel(sessionID: UUID) {
@@ -217,8 +292,7 @@ final class AlarmKitScheduler: AlarmScheduling {
         )
 
         // iOS 26.1+: stop is system-provided; custom stopButton is deprecated.
-        // Paused presentation retained for AlarmKit template fallback only — we cancel on pause
-        // so paused Live Activities do not linger on the Lock Screen.
+        // Paused presentation is the StandBy / Lock Screen resume UI.
         // tintColor tints the system alert title/countdown — must not match black background.
         let alertTitle = ticketTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             ? "見積もり終了"
@@ -290,8 +364,8 @@ final class AlarmKitScheduler: AlarmScheduling {
                 continue
             }
             // StandBy dismiss during countdown — keep bell off across recover.
-            // Natural removal after alerting does not need suppress (overtime has no fireAt).
-            if previous == .countdown || previous == .paused {
+            // Paused dismiss only drops the LA; the session stays paused and can resume from Hub.
+            if previous == .countdown {
                 sessionManager?.suppressEndBell(sessionID: staleID)
             }
         }
@@ -307,7 +381,7 @@ final class AlarmKitScheduler: AlarmScheduling {
             guard let manager = sessionManager,
                   manager.activeSession?.id == alarm.id
             else {
-                // Orphan / non-active ride alarm — tear down so only the running session keeps an LA.
+                // Orphan / non-active ride alarm — tear down so only one session keeps an LA.
                 if alarm.state == .paused || alarm.state == .countdown {
                     cancel(sessionID: alarm.id)
                 }
@@ -318,12 +392,11 @@ final class AlarmKitScheduler: AlarmScheduling {
             case .paused:
                 if previous != .paused {
                     try? manager.pauseFromAlarmKit()
-                    // Cancel immediately so paused Alarm LA does not remain on Lock Screen.
-                    cancel(sessionID: alarm.id)
                 }
             case .countdown:
-                // Resume-from-paused is no longer a LA path; ignore system resume echoes.
-                break
+                if previous == .paused {
+                    try? manager.resumeFromAlarmKit()
+                }
             default:
                 break
             }

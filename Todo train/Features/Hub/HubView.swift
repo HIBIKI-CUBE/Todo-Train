@@ -21,6 +21,8 @@ struct HubView: View {
     @State private var detailTicket: Ticket?
     @State private var errorMessage = ""
     @State private var showError = false
+    @State private var showPauseLimitSheet = false
+    @State private var pendingBoardTicket: Ticket?
     /// Single-issue celebration playing on Hub (may overlap sheet dismiss).
     @State private var hubIssueEject: TicketIssueEjectEvent?
     @State private var focusedTicketID: UUID?
@@ -79,6 +81,9 @@ struct HubView: View {
         }
         if sessionManager.phase == .running || sessionManager.phase == .overtime {
             return "すでに走行中の切符があります"
+        }
+        if sessionManager.pausedTicketCount >= sessionManager.pauseLimit {
+            return "停車が上限です。先に片付けるか、停車中から再乗車してください"
         }
         return "発車できません"
     }
@@ -156,6 +161,16 @@ struct HubView: View {
             }
         }
         .errorAlert(isPresented: $showError, message: errorMessage)
+        .sheet(isPresented: $showPauseLimitSheet) {
+            PauseLimitSheet(
+                pendingTicket: pendingBoardTicket,
+                onSlotFreedTryBoard: {
+                    if let pendingBoardTicket {
+                        board(pendingBoardTicket)
+                    }
+                }
+            )
+        }
         .sheet(isPresented: $showQuickAdd) {
             QuickAddSheet { event in
                 hubIssueEject = event
@@ -604,6 +619,11 @@ struct HubView: View {
     private func board(_ ticket: Ticket) {
         do {
             try sessionManager.board(ticket: ticket)
+        } catch let error as SessionError where error == .pauseLimitReached {
+            departingTicketID = nil
+            ticketMotion.zoomSourceID = nil
+            pendingBoardTicket = ticket
+            showPauseLimitSheet = true
         } catch {
             departingTicketID = nil
             ticketMotion.zoomSourceID = nil

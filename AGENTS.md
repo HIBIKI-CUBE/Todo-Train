@@ -30,7 +30,7 @@
 - モデル名は **`Ticket`**（Swift の `Task` と衝突するため）。
 - 走行中セッションの真実源は **`WorkSession`（`endedAt == nil`）+ `SessionManager.reconcile()`**。タイマーは Date ベース。
 - 同一切符の大幅書き換えはしない。残りは **途中下車 → 乗り継ぎ（新切符）**。
-- Live Activity は **発車中のみ**（全日運行 LA は不可。詳細は `07-research.md`）。
+- Live Activity は **発車中 + 停車中（最大 2 時間）**。全日運行 LA は不可。詳細は `07-research.md`。
 
 ## Cloud Agent / Linux 向け注意
 
