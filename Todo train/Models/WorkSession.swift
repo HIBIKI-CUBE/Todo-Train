@@ -44,6 +44,9 @@ final class WorkSession {
     @Relationship(deleteRule: .cascade, inverse: \SessionExtension.session)
     var extensions: [SessionExtension] = []
 
+    @Relationship(deleteRule: .cascade, inverse: \SessionPause.session)
+    var pauses: [SessionPause] = []
+
     var outcome: SessionOutcome? {
         get { outcomeRaw.flatMap(SessionOutcome.init(rawValue:)) }
         set { outcomeRaw = newValue?.rawValue }
@@ -83,6 +86,7 @@ final class WorkSession {
         self.boardedDeviceID = boardedDeviceID
         self.ticket = ticket
         self.extensions = []
+        self.pauses = []
     }
 
     var pendingCheckIn: CheckInKind? {

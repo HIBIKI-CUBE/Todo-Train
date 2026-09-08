@@ -32,7 +32,9 @@ UI tick（1秒）は表示専用のみ
 | モデル | 役割 |
 |--------|------|
 | `Ticket` | 切符。見積もり上限 3600 秒。`closedAt` / `closureKind` |
-| `WorkSession` | 1 回の乗車。pause 累積、予算秒、outcome |
+| `WorkSession` | 1 回の乗車。pause 累積、予算秒、outcome、延長・停車区間 |
+| `SessionExtension` | 延長 1 回。`addedSeconds` / `createdAt` |
+| `SessionPause` | 停車 1 区間。`startedAt` / `endedAt`（再開または終了で閉じる） |
 | `ServiceDay` | 運行日。`calendarDayKey`（例: `2026-08-11`） |
 | `TaskLineage` | 親→子の乗り継ぎ（continuation / split / discovered / manual） |
 | `Tag` | タグ（名前・色・sortOrder） |
@@ -49,7 +51,7 @@ UI tick（1秒）は表示専用のみ
 ## SessionManager 責務
 
 - 運行開始 / 終了
-- 発車 / 停車 / 再開 / 延長 / 到着・途中下車 / 放棄 / 割り込み発車（`switchBoard`。`phase` を `.paused` にしない）
+- 発車 / 停車 / 再開 / 延長 / 到着・途中下車 / 放棄 / 割り込み発車（`switchBoard`。`phase` を `.paused` にしない）。停車は `SessionPause` 区間を残す
 - 車内放送（`answerCheckIn` / `beginAwayWatch` / `endAwayWatch`）
 - 停車上限ゲート（`PauseLimitGuard`）
 - 日付跨ぎ検知 → `needsServiceDayEndPrompt`

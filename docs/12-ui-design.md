@@ -10,7 +10,7 @@
 | 面 | 方針 |
 |----|------|
 | Hub | システム背景のうえ、未乗車は **マルス券 Wallet peek**（タップ → 提示レイヤ → 右投げで発車 → 運転台）。運行・停車は標準ブロック |
-| 履歴 / 設定 | 標準の `List` / `Form`（`.insetGrouped`）。システム背景・セマンティック色 |
+| 履歴 | その日の時計キャンバス（システム背景・セマンティック色。空き時間は乗車と同じ 1pt/分）。設定は標準 `Form` |
 | Quick Add | システム sheet + **親指発券帯**（タイトル・常時タグ・KB 直上ゲージ）。Form / Disclosure ではない |
 | Focus | 真っ黒ダッシュボード。超大タイマーが主役。hairline パネル格子＋ gapless 操作盤 |
 | 超過 / 臨時停車 | 信号色は意味を持たせる（緑・琥珀・赤） |
@@ -67,7 +67,7 @@ Undo があるので、[HIG Alerts](https://developer.apple.com/design/human-int
 
 | 原則 | 内容 |
 |------|------|
-| 即削除可 | Hub スタックはコンテキストメニュー、未選択 trailing フルスワイプ、詳細は削除ボタン。いずれも即反映 + `role: .destructive`。Undo があるので [Alerts](https://developer.apple.com/design/human-interface-guidelines/alerts) どおり確認 Alert は出さない |
+| 即削除可 | Hub スタックはコンテキストメニュー、未選択 trailing フルスワイプ、詳細は削除ボタン。履歴の乗車はコンテキストメニューと VoiceOver。いずれも即反映 + `role: .destructive`。Undo があるので [Alerts](https://developer.apple.com/design/human-interface-guidelines/alerts) どおり確認 Alert は出さない |
 | Undo | 下部バナー「取り消す」（約 8 秒）。スナップショット復元（UndoManager は使わない＝タイトル編集と混ざらない） |
 | Alert なし | コンテキストメニュー・フルスワイプ・詳細の削除も即削除＋バナー |
 | `role: .destructive` | 本当に消える操作だけ（期限クリアには使わない） |
@@ -143,6 +143,7 @@ Focus / 設定は HIG 骨格のまま。Hub の未乗車リストはマルス券
 | `DesignSystem/PunctualityMomentOverlay.swift` | 定時運行の短いカプセル |
 | `DesignSystem/TicketStackLayout.swift` | Hub 読める peek デッキの純関数レイアウト |
 | `Core/History/Punctuality.swift` | 帯域判定（当初見積もり）。スコアを持たない |
+| `Core/History/SessionTimeline.swift` | 履歴の日時計レイアウト（純関数。空きは折り畳まない） |
 | `TodoTrainWidget/FocusTimerPhase.swift` | App + Widget 共有の段階色ロジック |
 | `TodoTrainWidget/CockpitLayoutContract.swift` | Live Activity 公称サイズ契約・密度選択 |
 | `TodoTrainWidget/CockpitInstrumentViews.swift` | StandBy 2ペイン / LS ViewThatFits ダーク計器 |
@@ -150,7 +151,7 @@ Focus / 設定は HIG 骨格のまま。Hub の未乗車リストはマルス券
 | `Features/Hub/QuickAddBar.swift` | `QuickAddSheet`（親指発券帯） |
 | `Features/Hub/TicketStackView.swift` / `HubMarsTicketCard.swift` | Hub マルス peek。選択は Hub 提示レイヤ。未選択は leading 発車 / trailing 削除のフルスワイプ。出入りは手前券の下。提示中は右投げ発車 |
 | `Features/Hub/HubStationChevronSign.swift` | 提示中だけ中央固定の LED「>>> 発車 >>>」（16×16、字形パスの中心サンプリング。ヒット透過） |
-| 履歴 / 設定 | 標準 List / Form |
+| 履歴 / 設定 | 履歴は日時計キャンバス。設定は標準 Form |
 
 ## シーンサイズ適応（WWDC26 resizable iPhone）
 

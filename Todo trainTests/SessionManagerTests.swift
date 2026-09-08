@@ -122,6 +122,80 @@ struct SessionManagerTests {
         #expect(manager.elapsedSeconds == 90)
     }
 
+    @Test func pause_recordsInterval_untilResume() throws {
+        let (manager, context, clock, _) = try makeHarness()
+        try manager.startService()
+        let ticket = try makeTicket(context, seconds: 600)
+
+        try manager.board(ticket: ticket)
+        clock.advance(by: 60)
+        try manager.pause()
+
+        let session = try #require(manager.activeSession)
+        #expect(session.pauses.count == 1)
+        #expect(session.pauses.first?.startedAt == clock.now)
+        #expect(session.pauses.first?.endedAt == nil)
+
+        clock.advance(by: 180)
+        try manager.resume()
+
+        let pause = try #require(session.pauses.first)
+        #expect(pause.endedAt == clock.now)
+        #expect(pause.endedAt?.timeIntervalSince(pause.startedAt) == 180)
+        #expect(session.pauses.filter { $0.endedAt == nil }.isEmpty)
+    }
+
+    @Test func pause_secondInterval_appendsAnotherRecord() throws {
+        let (manager, context, clock, _) = try makeHarness()
+        try manager.startService()
+        let ticket = try makeTicket(context, seconds: 600)
+        try manager.board(ticket: ticket)
+        try manager.pause()
+        clock.advance(by: 30)
+        try manager.resume()
+        clock.advance(by: 20)
+        try manager.pause()
+        clock.advance(by: 40)
+        try manager.resume()
+
+        let session = try #require(manager.activeSession)
+        let pauses = session.pauses.sorted { $0.startedAt < $1.startedAt }
+        #expect(pauses.count == 2)
+        #expect(pauses[0].endedAt?.timeIntervalSince(pauses[0].startedAt) == 30)
+        #expect(pauses[1].endedAt?.timeIntervalSince(pauses[1].startedAt) == 40)
+    }
+
+    @Test func switchBoard_recordsPauseOnParkedRide() throws {
+        let (manager, context, clock, _) = try makeHarness()
+        try manager.startService()
+        let a = try makeTicket(context, title: "A", seconds: 600)
+        let b = try makeTicket(context, title: "B", seconds: 300)
+        try manager.board(ticket: a)
+        clock.advance(by: 90)
+        try manager.switchBoard(ticket: b)
+
+        let parked = try #require(manager.pausedSessions.first)
+        #expect(parked.pauses.count == 1)
+        #expect(parked.pauses.first?.endedAt == nil)
+        #expect(parked.pauses.first?.startedAt == clock.now)
+    }
+
+    @Test func arrive_whilePaused_closesOpenPause() throws {
+        let (manager, context, clock, _) = try makeHarness()
+        try manager.startService()
+        let ticket = try makeTicket(context, seconds: 600)
+        try manager.board(ticket: ticket)
+        clock.advance(by: 30)
+        try manager.pause()
+        clock.advance(by: 50)
+        try manager.arrive()
+
+        let session = try #require(ticket.sessions.first)
+        let pause = try #require(session.pauses.first)
+        #expect(pause.endedAt == session.endedAt)
+        #expect(pause.endedAt?.timeIntervalSince(pause.startedAt) == 50)
+    }
+
     @Test func pause_blocked_whenTwoPaused() throws {
         let (manager, context, _, _) = try makeHarness()
         try manager.startService()

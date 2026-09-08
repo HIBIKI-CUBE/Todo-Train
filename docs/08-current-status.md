@@ -1,6 +1,6 @@
 # 08 — 現状ステータス
 
-最終更新: 2026-09-06（同期作業は [15](15-agent-work-plan.md) で分割。実装は未着手）
+最終更新: 2026-09-08（履歴をその日の時計に。停車区間を永続化。同期作業は [15](15-agent-work-plan.md) で分割）
 
 ## 結論
 
@@ -33,7 +33,7 @@
 | StandBy / Session LA | ✅ コックピット計器 UI + サイズ契約。検証は [11](11-v2-alarmkit-setup.md) §6 |
 | 週次レポート | ✅ `WeeklyReportView` + 純関数テスト |
 | UI polish | ✅ `TrainTheme` / `TrainChrome` / 横向き compact（[12](12-ui-design.md)） |
-| 切符・履歴の削除 | ✅ フルスワイプ + バナー Undo（[12](12-ui-design.md)） |
+| 切符・履歴の削除 | ✅ Hub はフルスワイプ。履歴はコンテキストメニュー + バナー Undo（[12](12-ui-design.md)） |
 | 定時到着 / 定時運行 | ✅ 到着は完了として案内。定時・早着はいい結果の見出し。超過でも取り下げない |
 | 車内放送 | ✅ `CheckInScheduling` + Focus 4 択 + 背面通知。設定トグル |
 | 発券 App Intent | ✅ `IssueTicketIntent`。見積は Heuristic / 直前発行 |
@@ -48,7 +48,7 @@ Todo train/
     Session/               SessionManager, TicketDeletion, DeletionUndo, CheckInScheduling
     Alarms/                AlarmScheduling, EndBellDelivery, SessionEndSchedule
     Notifications/         OvertimeNotifier, CheckInNotifier
-    History/               HistorySearch, TicketReissue, WeeklyReport, Punctuality
+    History/               HistorySearch, TicketReissue, WeeklyReport, Punctuality, SessionTimeline
     Settings/              AppSettings
     Coaching/              CoachingEngine（Heuristic + OnDevice 1 行）
     Intents/               IssueTicketIntent
@@ -63,7 +63,7 @@ Todo train/
                            HubStationChevronSign（提示レイヤ LED。Hiragino 量子化ドット）
     Focus/                 FocusView, FocusControlsView（車内放送 4 択含む）, OvertimeSheet
     Arrival/               PauseLimitSheet, TransferCanvasPresenter
-    History/               HistoryView, WeeklyReportView
+    History/               HistoryView, HistoryDayClockView, WeeklyReportView
     LiveActivity/          LiveActivityManaging
     Reorder/               ReorderView
     Settings/              SettingsView
@@ -77,7 +77,7 @@ Todo trainTests/           Swift Testing（CheckInScheduling / TicketIssuer 含�
 2. 発車 → Focus（停車 / 到着 / 延長 / 超過 / 割り込み発券 / 車内放送）。到着したら短い案内。定時なら定時到着、早着なら早着
 3. 長い乗務: 予測不能な車内放送。ホーム退避: 「まだ乗ってる？」
 4. 停車上限 → 解決シート / 途中下車キャンバス / 臨時停車
-5. 履歴で振り返り・乗り継ぎリンク・今日に追加（定時はバッジのみ）
+5. 履歴でその日の時計を振り返る（空き時間は折り畳まない）。乗り継ぎリンク・今日に追加（定時はバッジのみ）
 6. 運行終了 → 停車中の持ち越し禁止 / 途中下車 / 放棄。遅延がなければ短い「定時運行」（早着可）
 7. 終了ベル ON → AlarmKit LA（StandBy）/ OFF → Session LA
 

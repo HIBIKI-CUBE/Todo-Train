@@ -79,6 +79,39 @@ struct DeletionUndoTests {
         #expect(restored.first?.boardedDeviceID == "phone-a")
     }
 
+    @Test func restoreSession_bringsBackPauseIntervals() throws {
+        let context = try makeContext()
+        let ticket = Ticket(title: "往復", estimatedSeconds: 600)
+        context.insert(ticket)
+        let session = WorkSession(
+            startedAt: Date(timeIntervalSince1970: 1_700_000_000),
+            estimatedSecondsAtStart: 600,
+            ticket: ticket
+        )
+        session.endedAt = Date(timeIntervalSince1970: 1_700_003_600)
+        session.outcome = .arrived
+        context.insert(session)
+        let pause = SessionPause(
+            startedAt: Date(timeIntervalSince1970: 1_700_001_200),
+            endedAt: Date(timeIntervalSince1970: 1_700_001_800),
+            session: session
+        )
+        context.insert(pause)
+        try context.save()
+
+        let record = DeletionUndo.captureSession(session)
+        context.delete(session)
+        try context.save()
+
+        DeletionUndo.restoreSession(record, onto: ticket, into: context)
+        try context.save()
+
+        let restored = try context.fetch(FetchDescriptor<WorkSession>())
+        let restoredPause = try #require(restored.first?.pauses.first)
+        #expect(restoredPause.startedAt == Date(timeIntervalSince1970: 1_700_001_200))
+        #expect(restoredPause.endedAt == Date(timeIntervalSince1970: 1_700_001_800))
+    }
+
     @Test func undoCenter_undoRunsRestoreOnce() {
         let center = DeletionUndoCenter()
         var restored = 0

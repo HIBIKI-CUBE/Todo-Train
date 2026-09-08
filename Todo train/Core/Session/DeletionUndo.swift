@@ -46,6 +46,7 @@ enum DeletionUndo {
         var boardedDeviceID: String?
         var ticketID: UUID?
         var extensions: [ExtensionRecord]
+        var pauses: [PauseRecord]
     }
 
     struct ExtensionRecord: Equatable {
@@ -53,6 +54,12 @@ enum DeletionUndo {
         var addedSeconds: Int
         var reason: String?
         var createdAt: Date
+    }
+
+    struct PauseRecord: Equatable {
+        var id: UUID
+        var startedAt: Date
+        var endedAt: Date?
     }
 
     struct LineageRecord: Equatable {
@@ -118,6 +125,13 @@ enum DeletionUndo {
                     addedSeconds: $0.addedSeconds,
                     reason: $0.reason,
                     createdAt: $0.createdAt
+                )
+            },
+            pauses: session.pauses.map {
+                PauseRecord(
+                    id: $0.id,
+                    startedAt: $0.startedAt,
+                    endedAt: $0.endedAt
                 )
             }
         )
@@ -211,6 +225,21 @@ enum DeletionUndo {
             existing.addedSeconds = ext.addedSeconds
             existing.reason = ext.reason
             existing.createdAt = ext.createdAt
+            existing.session = session
+        }
+        for pause in record.pauses {
+            let existing = session.pauses.first { $0.id == pause.id } ?? {
+                let created = SessionPause(
+                    id: pause.id,
+                    startedAt: pause.startedAt,
+                    endedAt: pause.endedAt,
+                    session: session
+                )
+                context.insert(created)
+                return created
+            }()
+            existing.startedAt = pause.startedAt
+            existing.endedAt = pause.endedAt
             existing.session = session
         }
     }
