@@ -1,0 +1,34 @@
+{
+  "method": "GET",
+  "path": "/v1/ws",
+  "upgrade": "websocket",
+  "auth": "bearer",
+  "authHeader": "Authorization: Bearer <writeToken unpadded base64url>",
+  "protocol": "json-text-frames",
+  "polling": false,
+  "hibernation": true,
+  "frame": {
+    "t": ["snap", "cmd", "ack"],
+    "envelope": {
+      "rev": 42,
+      "kind": "snap",
+      "n": "ha_Fwfr-03T8OAOV",
+      "ct": "<unpadded base64url>"
+    }
+  },
+  "example": {
+    "t": "snap",
+    "envelope": {
+      "rev": 42,
+      "kind": "snap",
+      "n": "ha_Fwfr-03T8OAOV",
+      "ct": "NpGl3kGFaMKJ-e-egG5-rYgNQEuiFUUDlicTmvJesSCySoUrb7meW57CzPWi-VDlYHdHReDwgf6Jm2mtxd1pmuqfpHk6HIqZafcL1P-enL1O9TpXMg2QB8WUX2o7aUOmp7H5tIMmi5zkwjOciBiS3QTPh467dP5gyX37yzkSLzlprR7219gwAvaNmL86z_85I5icgOzxM5vXyXY2ipxy8qAexTI8AmwnA-CefeY4yt_oR5TWH9QproGJEo-DME-6Fxh5B_AaNLibKwc1TBBfI_qg1YfGHutw1lj_J6Q8In648czl9lFXNibIp3mpczr2lU5R45AmtyMmglOQjXvmz7FhsuD_iADIy4bNAOj-Qq6uKPbDI6xSY2mwB4C_tz0"
+    }
+  },
+  "serverPush": [
+    "PUT /v1/snap → t=snap to subscribers",
+    "POST /v1/cmd → t=cmd to the iPhone connection",
+    "PUT /v1/ack → t=ack to subscribers"
+  ],
+  "notes": "Bearer on the HTTP Upgrade request identifies the pairing. Do not invent a query-token scheme. Do not ask clients to poll."
+}
