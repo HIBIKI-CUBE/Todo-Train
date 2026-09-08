@@ -1,0 +1,23 @@
+{
+  "name": "todotrain-sync-worker",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "wrangler dev",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "hono": "^4.9.8"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "0.22.0",
+    "@cloudflare/workers-types": "5.20260908.1",
+    "typescript": "^5.9.2",
+    "vitest": "4.1.11",
+    "wrangler": "4.129.1"
+  }
+}
