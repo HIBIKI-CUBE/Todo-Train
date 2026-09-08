@@ -20,6 +20,6 @@ npm test
 npx wrangler dev
 ```
 
-`npm test` は契約バイトのドリフト検査、src の不透明度検査、vitest（Workers 実行時）、`tsc` まで走る。
+`npm test` は契約バイトのドリフト検査、src の不透明度検査、vitest（Workers 実行時）、`tsc` まで走る。同じコマンドを GitHub Actions `sync-worker` が PR と `develop` / `main` で回す（`sync/worker` か `sync/contract` が変わったとき）。
 
 本番アカウントは不要。Linux で `npm test` が終端 0 なら完了。

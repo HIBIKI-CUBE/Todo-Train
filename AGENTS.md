@@ -39,6 +39,7 @@
 - Live Activity / Widget / 通知 / PCC の実行確認は PR の **Needs Mac verification** に委ねる。
 - PR 本文に Mac 検証チェックリストを載せる（[11-v2-alarmkit-setup.md](docs/11-v2-alarmkit-setup.md) §6 参照）。
 - 同期: **今振れるのは Linux**（SYNC-0 / 1 / 2 / 5）。SYNC-3 / 4 の UI は実機待ち。切り分けは [docs/15-agent-work-plan.md](docs/15-agent-work-plan.md)
+- `sync/worker` の品質ゲートは GitHub Actions `sync-worker`（中身は `cd sync/worker && npm test`）。Mac / Xcode は不要。
 
 ## ブランチ
 

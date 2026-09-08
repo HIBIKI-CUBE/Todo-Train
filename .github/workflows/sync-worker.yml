@@ -1,0 +1,46 @@
+# Linux gate for the Hono + Durable Object relay (SYNC-1).
+# Same command as local: cd sync/worker && npm test
+# (contract golden bytes, opacity, vitest in workerd, tsc)
+
+name: sync-worker
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [develop, main]
+    paths:
+      - "sync/worker/**"
+      - "sync/contract/**"
+      - ".github/workflows/sync-worker.yml"
+  pull_request:
+    paths:
+      - "sync/worker/**"
+      - "sync/contract/**"
+      - ".github/workflows/sync-worker.yml"
+
+concurrency:
+  group: sync-worker-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: npm test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: sync/worker
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: sync/worker/package-lock.json
+      - name: Install
+        run: npm ci
+      - name: Contract drift, opacity, vitest, tsc
+        run: npm test
