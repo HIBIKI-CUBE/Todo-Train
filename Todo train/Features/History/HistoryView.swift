@@ -52,7 +52,7 @@ struct HistoryView: View {
                 }
             } else {
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
+                    LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
                         ForEach(groups, id: \.dayKey) { group in
                             Section {
                                 HistoryDayClockView(
@@ -60,6 +60,7 @@ struct HistoryView: View {
                                     onReissue: reissue,
                                     onDelete: deleteSession
                                 )
+                                .frame(maxWidth: .infinity, alignment: .top)
                                 .padding(.horizontal, TrainTheme.Space.md)
                                 .padding(.bottom, TrainTheme.Space.xl)
                             } header: {

@@ -23,109 +23,83 @@ struct HistoryDayClockView: View {
 
     var body: some View {
         if let layout = SessionTimeline.layout(rides: rides) {
-            GeometryReader { proxy in
-                clockCanvas(layout: layout, width: proxy.size.width)
+            HStack(alignment: .top, spacing: 0) {
+                timeGutter(layout: layout)
+                laneStack(layout: layout)
             }
-            .frame(height: CGFloat(layout.height) + Self.labelSlack)
+            .frame(maxWidth: .infinity, alignment: .top)
+            .frame(height: canvasHeight(layout), alignment: .top)
+            .clipped()
+            .accessibilityElement(children: .contain)
         }
     }
 
-    private func clockCanvas(layout: DayClockLayout, width: CGFloat) -> some View {
-        let laneWidth = max(
-            72,
-            (width - Self.gutter) / CGFloat(layout.laneCount)
-        )
-        return ZStack(alignment: .topLeading) {
-            hourGrid(layout: layout, width: width)
-
-            ForEach(rides) { ride in
-                if let session = sessionByID[ride.id] {
-                    rideLayer(
-                        ride: ride,
-                        session: session,
-                        layout: layout,
-                        laneWidth: laneWidth
-                    )
-                }
-            }
-        }
-        .frame(width: width, height: CGFloat(layout.height) + Self.labelSlack, alignment: .topLeading)
+    private func canvasHeight(_ layout: DayClockLayout) -> CGFloat {
+        CGFloat(layout.height) + Self.labelSlack
     }
 
-    private func hourGrid(layout: DayClockLayout, width: CGFloat) -> some View {
-        ZStack(alignment: .topLeading) {
-            Rectangle()
-                .fill(TrainTheme.track)
-                .frame(width: 1, height: CGFloat(layout.height))
-                .offset(x: Self.gutter - 1)
-
+    private func timeGutter(layout: DayClockLayout) -> some View {
+        ZStack(alignment: .topTrailing) {
             ForEach(layout.hourTicks, id: \.self) { tick in
-                let y = CGFloat(layout.y(for: tick))
-                Rectangle()
-                    .fill(TrainTheme.track.opacity(0.7))
-                    .frame(width: max(0, width - Self.gutter + 1), height: 1)
-                    .offset(x: Self.gutter - 1, y: y)
                 Text(Self.timeFormatter.string(from: tick))
-                    .font(.caption2.weight(.semibold).monospacedDigit())
-                    .foregroundStyle(.secondary)
-                    .frame(width: Self.gutter - 8, alignment: .trailing)
-                    .offset(y: y - 7)
+                    .font(.caption.weight(.semibold).monospacedDigit())
+                    .foregroundStyle(.primary)
+                    .padding(.top, CGFloat(layout.y(for: tick)))
             }
 
             if !layout.hourTicks.contains(where: { abs($0.timeIntervalSince(layout.start)) < 1 }) {
                 Text(Self.timeFormatter.string(from: layout.start))
-                    .font(.caption2.monospacedDigit())
-                    .foregroundStyle(.tertiary)
-                    .frame(width: Self.gutter - 8, alignment: .trailing)
-                    .offset(y: -7)
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
             }
         }
+        .frame(width: Self.gutter, height: canvasHeight(layout), alignment: .topTrailing)
+        .padding(.trailing, 8)
         .accessibilityHidden(true)
     }
 
-    private func rideLayer(
+    private func laneStack(layout: DayClockLayout) -> some View {
+        ZStack(alignment: .topLeading) {
+            HourGridCanvas(layout: layout, rides: rides)
+                .frame(maxWidth: .infinity)
+                .frame(height: CGFloat(layout.height))
+                .allowsHitTesting(false)
+
+            HStack(alignment: .top, spacing: Self.laneSpacing) {
+                ForEach(0..<layout.laneCount, id: \.self) { lane in
+                    laneColumn(lane, layout: layout)
+                }
+            }
+            .padding(.leading, Self.stripWidth + 10)
+        }
+        .frame(maxWidth: .infinity, minHeight: canvasHeight(layout), alignment: .topLeading)
+    }
+
+    private func laneColumn(_ lane: Int, layout: DayClockLayout) -> some View {
+        let laneRides = rides.filter { layout.laneIndex(for: $0.id) == lane }
+        return ZStack(alignment: .topLeading) {
+            ForEach(laneRides) { ride in
+                if let session = sessionByID[ride.id] {
+                    rideLabels(ride: ride, session: session, layout: layout)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, minHeight: canvasHeight(layout), alignment: .topLeading)
+    }
+
+    private func rideLabels(
         ride: TimelineRide,
         session: WorkSession,
-        layout: DayClockLayout,
-        laneWidth: CGFloat
+        layout: DayClockLayout
     ) -> some View {
-        let lane = layout.laneIndex(for: ride.id)
-        let x = Self.gutter + CGFloat(lane) * laneWidth
         let startY = CGFloat(layout.y(for: ride.startedAt))
         let endY = CGFloat(layout.y(for: ride.endedAt))
-        let barHeight = max(endY - startY, 2)
-        let scheduleY = CGFloat(layout.y(for: ride.originalScheduleAt))
-        let color = stripColor(for: ride)
         let markers = SessionTimeline.markers(for: ride).filter { marker in
             if case .boarded = marker.kind { return false }
             return true
         }
 
         return ZStack(alignment: .topLeading) {
-            if ride.originalScheduleAt > ride.endedAt {
-                Rectangle()
-                    .fill(color.opacity(0.25))
-                    .frame(width: 2, height: max(0, scheduleY - endY))
-                    .offset(x: 3, y: endY)
-            }
-
-            RoundedRectangle(cornerRadius: 3, style: .continuous)
-                .fill(color.opacity(0.28))
-                .frame(width: Self.stripWidth, height: barHeight)
-                .offset(y: startY)
-                .contextMenu {
-                    rideContextMenu(session: session)
-                }
-
-            ForEach(ride.pauses, id: \.id) { pause in
-                let pauseY = CGFloat(layout.y(for: pause.startedAt))
-                let pauseHeight = max(CGFloat(layout.height(from: pause.startedAt, to: pause.endedAt)), 2)
-                RoundedRectangle(cornerRadius: 3, style: .continuous)
-                    .fill(TrainTheme.signalAmber)
-                    .frame(width: Self.stripWidth, height: pauseHeight)
-                    .offset(y: pauseY)
-            }
-
             Group {
                 if let ticket = session.ticket {
                     NavigationLink {
@@ -138,17 +112,14 @@ struct HistoryDayClockView: View {
                     titleBlock(for: ride)
                 }
             }
-            .offset(x: Self.stripWidth + 8, y: startY - 2)
+            .padding(.top, startY)
             .contextMenu {
                 rideContextMenu(session: session)
             }
 
             ForEach(markers) { marker in
                 markerRow(marker)
-                    .offset(
-                        x: Self.stripWidth + 8,
-                        y: CGFloat(layout.y(for: marker.at)) - 7
-                    )
+                    .padding(.top, CGFloat(layout.y(for: marker.at)))
             }
 
             VStack(alignment: .leading, spacing: 6) {
@@ -162,10 +133,9 @@ struct HistoryDayClockView: View {
                 }
                 transferLinks(session: session)
             }
-            .offset(x: Self.stripWidth + 8, y: endY + 12)
+            .padding(.top, endY + 14)
         }
-        .offset(x: x)
-        .frame(width: laneWidth, alignment: .topLeading)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(SessionTimeline.spokenSummary(for: ride, timeFormatter: Self.timeFormatter))
         .accessibilityAction(named: "削除") {
@@ -202,7 +172,7 @@ struct HistoryDayClockView: View {
                 HistoryOutcomeBadge(outcome: ride.outcome, punctuality: ride.punctuality)
             }
             Text("発車 \(Self.timeFormatter.string(from: ride.startedAt))")
-                .font(.caption2.monospacedDigit())
+                .font(.caption.monospacedDigit())
                 .foregroundStyle(.secondary)
         }
     }
@@ -211,16 +181,17 @@ struct HistoryDayClockView: View {
         HStack(spacing: 6) {
             Circle()
                 .fill(markerColor(marker.kind))
-                .frame(width: 6, height: 6)
+                .frame(width: 8, height: 8)
             Text(SessionTimeline.markerLabel(marker))
-                .font(.caption2.weight(.medium))
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.primary)
             Text(Self.timeFormatter.string(from: marker.at))
-                .font(.caption2.monospacedDigit())
+                .font(.caption.monospacedDigit())
                 .foregroundStyle(.secondary)
             if case .extensionStep(_, _, let reason) = marker.kind, let reason, !reason.isEmpty {
                 Text(reason)
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
         }
@@ -256,24 +227,6 @@ struct HistoryDayClockView: View {
         }
     }
 
-    private func stripColor(for ride: TimelineRide) -> Color {
-        switch ride.outcome {
-        case .abandoned:
-            return TrainTheme.signalRed
-        case .partialDisembark:
-            return TrainTheme.signalAmber
-        case .arrived:
-            switch ride.punctuality {
-            case .onTime, .early:
-                return TrainTheme.signalGreen
-            default:
-                return TrainTheme.rail
-            }
-        default:
-            return TrainTheme.rail
-        }
-    }
-
     private func markerColor(_ kind: TimelineMarkerKind) -> Color {
         switch kind {
         case .boarded:
@@ -293,13 +246,99 @@ struct HistoryDayClockView: View {
         }
     }
 
-    private static let gutter: CGFloat = 48
-    private static let stripWidth: CGFloat = 8
-    private static let labelSlack: CGFloat = 36
+    private static let gutter: CGFloat = 52
+    static let stripWidth: CGFloat = 12
+    private static let laneSpacing: CGFloat = 8
+    private static let labelSlack: CGFloat = 48
 
     private static let timeFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "HH:mm"
         return formatter
     }()
+}
+
+private struct HourGridCanvas: View {
+    let layout: DayClockLayout
+    let rides: [TimelineRide]
+
+    var body: some View {
+        Canvas { context, size in
+            let height = CGFloat(layout.height)
+            let laneWidth = max(1, size.width / CGFloat(layout.laneCount))
+
+            var spine = Path()
+            spine.move(to: CGPoint(x: HistoryDayClockView.stripWidth / 2, y: 0))
+            spine.addLine(to: CGPoint(x: HistoryDayClockView.stripWidth / 2, y: height))
+            context.stroke(spine, with: .color(TrainTheme.track), lineWidth: 2)
+
+            for tick in layout.hourTicks {
+                let y = CGFloat(layout.y(for: tick))
+                var line = Path()
+                line.move(to: CGPoint(x: 0, y: y))
+                line.addLine(to: CGPoint(x: size.width, y: y))
+                context.stroke(line, with: .color(TrainTheme.track.opacity(0.8)), lineWidth: 1)
+            }
+
+            for ride in rides {
+                let lane = CGFloat(layout.laneIndex(for: ride.id))
+                let x = lane * laneWidth
+                let startY = CGFloat(layout.y(for: ride.startedAt))
+                let barHeight = max(CGFloat(layout.height(from: ride.startedAt, to: ride.endedAt)), 3)
+                let color = stripColor(for: ride)
+                let bar = CGRect(
+                    x: x,
+                    y: startY,
+                    width: HistoryDayClockView.stripWidth,
+                    height: barHeight
+                )
+                context.fill(
+                    Path(roundedRect: bar, cornerRadius: 3),
+                    with: .color(color.opacity(0.55))
+                )
+
+                if ride.originalScheduleAt > ride.endedAt {
+                    let endY = CGFloat(layout.y(for: ride.endedAt))
+                    let scheduleY = CGFloat(layout.y(for: ride.originalScheduleAt))
+                    var ghost = Path()
+                    ghost.move(to: CGPoint(x: x + HistoryDayClockView.stripWidth / 2, y: endY))
+                    ghost.addLine(to: CGPoint(x: x + HistoryDayClockView.stripWidth / 2, y: scheduleY))
+                    context.stroke(ghost, with: .color(color.opacity(0.45)), lineWidth: 2)
+                }
+
+                for pause in ride.pauses {
+                    let pauseRect = CGRect(
+                        x: x,
+                        y: CGFloat(layout.y(for: pause.startedAt)),
+                        width: HistoryDayClockView.stripWidth,
+                        height: max(CGFloat(layout.height(from: pause.startedAt, to: pause.endedAt)), 3)
+                    )
+                    context.fill(
+                        Path(roundedRect: pauseRect, cornerRadius: 3),
+                        with: .color(TrainTheme.signalAmber)
+                    )
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .accessibilityHidden(true)
+    }
+
+    private func stripColor(for ride: TimelineRide) -> Color {
+        switch ride.outcome {
+        case .abandoned:
+            return TrainTheme.signalRed
+        case .partialDisembark:
+            return TrainTheme.signalAmber
+        case .arrived:
+            switch ride.punctuality {
+            case .onTime, .early:
+                return TrainTheme.signalGreen
+            default:
+                return TrainTheme.rail
+            }
+        default:
+            return TrainTheme.rail
+        }
+    }
 }
