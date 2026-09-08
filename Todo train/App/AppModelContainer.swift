@@ -11,6 +11,7 @@ enum AppModelContainer {
         Ticket.self,
         WorkSession.self,
         SessionExtension.self,
+        SessionPause.self,
         Tag.self,
         TaskLineage.self,
         ServiceDay.self,

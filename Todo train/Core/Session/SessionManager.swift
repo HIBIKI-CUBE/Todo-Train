@@ -307,6 +307,7 @@ final class SessionManager {
         }
         session.segmentStartedAt = nil
         session.pausedAt = now
+        beginPauseRecord(on: session, now: now)
         session.pendingCheckIn = nil
         session.awayDueAt = nil
         phase = .paused
@@ -328,6 +329,7 @@ final class SessionManager {
         }
         session.segmentStartedAt = nil
         session.pausedAt = now
+        beginPauseRecord(on: session, now: now)
         session.pendingCheckIn = nil
         session.awayDueAt = nil
         overtimeNotifier.cancel(sessionID: session.id)
@@ -335,6 +337,18 @@ final class SessionManager {
         liveActivityManager.end()
         alarmScheduler.cancel(sessionID: session.id)
         try save()
+    }
+
+    private func beginPauseRecord(on session: WorkSession, now: Date) {
+        if session.pauses.contains(where: { $0.endedAt == nil }) { return }
+        let record = SessionPause(startedAt: now, session: session)
+        modelContext.insert(record)
+    }
+
+    private func endOpenPauseRecord(on session: WorkSession, now: Date) {
+        for pause in session.pauses where pause.endedAt == nil {
+            pause.endedAt = now
+        }
     }
 
     /// StandBy / system AlarmKit pause → mirror into the open session (no AlarmKit echo).
@@ -368,6 +382,7 @@ final class SessionManager {
             throw SessionError.notPaused
         }
 
+        endOpenPauseRecord(on: session, now: now)
         session.pausedAt = nil
         session.segmentStartedAt = now
         phase = .running
@@ -385,6 +400,7 @@ final class SessionManager {
     func resumeFromAlarmKit(now: Date? = nil) throws {
         let now = now ?? clock.now
         guard let session = activeSession, session.isOpen, session.isPaused else { return }
+        endOpenPauseRecord(on: session, now: now)
         session.pausedAt = nil
         session.segmentStartedAt = now
         phase = .running
@@ -660,6 +676,7 @@ final class SessionManager {
             session.accumulatedActiveSeconds += now.timeIntervalSince(segmentStartedAt)
             session.segmentStartedAt = nil
         }
+        endOpenPauseRecord(on: session, now: now)
         session.pausedAt = nil
         session.endedAt = now
         session.outcome = outcome
