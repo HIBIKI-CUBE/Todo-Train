@@ -1,0 +1,157 @@
+# Linux gate + Cloudflare deploy for the Hono + Durable Object relay (SYNC-1).
+#
+# Test: cd sync/worker && npm test
+# Deploy uses a *separate Worker name* per target. Aliased preview URLs
+# (wrangler versions upload --preview-alias) do not support Durable Objects.
+#
+#   pull_request → todotrain-sync-pr-<n>
+#   push develop → todotrain-sync-develop
+#   push main    → todotrain-sync
+#
+# Job-level `if` cannot read `secrets`. A small gate job maps repo/org
+# secrets to an output. Environment-only secrets are invisible here.
+# Fork PRs never deploy (empty secrets + head-repo check).
+
+name: sync-worker
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [develop, main]
+    paths:
+      - "sync/worker/**"
+      - "sync/contract/**"
+      - ".github/workflows/sync-worker.yml"
+      - ".github/actions/deploy-sync-worker/**"
+  pull_request:
+    paths:
+      - "sync/worker/**"
+      - "sync/contract/**"
+      - ".github/workflows/sync-worker.yml"
+      - ".github/actions/deploy-sync-worker/**"
+
+concurrency:
+  group: sync-worker-${{ github.event.pull_request.number && format('pr-{0}', github.event.pull_request.number) || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: npm test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: sync/worker
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: sync/worker/package-lock.json
+      - name: Install
+        run: npm ci
+      - name: Contract drift, opacity, vitest, tsc
+        run: npm test
+
+  cloudflare-creds:
+    name: cloudflare credentials
+    needs: test
+    runs-on: ubuntu-latest
+    outputs:
+      present: ${{ steps.gate.outputs.present }}
+    steps:
+      - id: gate
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -n "$CLOUDFLARE_API_TOKEN" ] && [ -n "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID が無いので deploy は skip"
+          fi
+
+  deploy-preview:
+    name: deploy preview
+    needs: [test, cloudflare-creds]
+    if: >-
+      github.event_name == 'pull_request'
+      && github.event.pull_request.head.repo.full_name == github.repository
+      && needs.cloudflare-creds.outputs.present == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      deployments: write
+      pull-requests: write
+    environment:
+      name: sync-preview-pr-${{ github.event.pull_request.number }}
+      url: ${{ steps.deploy.outputs.deployment-url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy PR worker
+        id: deploy
+        uses: ./.github/actions/deploy-sync-worker
+        with:
+          worker-name: todotrain-sync-pr-${{ github.event.pull_request.number }}
+          api-token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          comment-pr: "true"
+
+  deploy-develop:
+    name: deploy develop
+    needs: [test, cloudflare-creds]
+    if: >-
+      github.event_name == 'push'
+      && github.ref == 'refs/heads/develop'
+      && needs.cloudflare-creds.outputs.present == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      deployments: write
+    environment:
+      name: sync-develop
+      url: ${{ steps.deploy.outputs.deployment-url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy develop worker
+        id: deploy
+        uses: ./.github/actions/deploy-sync-worker
+        with:
+          worker-name: todotrain-sync-develop
+          api-token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+  deploy-production:
+    name: deploy production
+    needs: [test, cloudflare-creds]
+    if: >-
+      github.event_name == 'push'
+      && github.ref == 'refs/heads/main'
+      && needs.cloudflare-creds.outputs.present == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      deployments: write
+    environment:
+      name: sync-production
+      url: ${{ steps.deploy.outputs.deployment-url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy production worker
+        id: deploy
+        uses: ./.github/actions/deploy-sync-worker
+        with:
+          worker-name: todotrain-sync
+          api-token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}

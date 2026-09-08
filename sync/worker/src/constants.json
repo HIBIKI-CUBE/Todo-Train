@@ -1,0 +1,5 @@
+{
+  "offerTtlSeconds": 120,
+  "confirmOverlapWindowSeconds": 15,
+  "cmdFifoMax": 8
+}
