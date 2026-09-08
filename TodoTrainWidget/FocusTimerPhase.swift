@@ -167,6 +167,7 @@ struct CockpitDisplayModel: Equatable {
         budgetSeconds: Int,
         isOvertime: Bool,
         isStale: Bool,
+        isPaused: Bool = false,
         now: Date = .now
     ) -> CockpitDisplayModel {
         let snapshot = CockpitInstrumentSnapshot.session(
@@ -176,28 +177,50 @@ struct CockpitDisplayModel: Equatable {
             isStale: isStale,
             now: now
         )
+        let remaining = max(0, snapshot.remaining)
         let clock: CockpitClockStyle
-        if isStale, !isOvertime {
+        let headerState: String?
+        let pausedProgress: Double?
+        if isPaused {
+            clock = .paused(remaining: remaining)
+            headerState = "停車中"
+            pausedProgress = CockpitFormat.progress(
+                elapsed: TimeInterval(budgetSeconds) - remaining,
+                budget: TimeInterval(max(budgetSeconds, 1))
+            )
+        } else if isStale, !isOvertime {
             clock = .stale
+            headerState = snapshot.headerState
+            pausedProgress = nil
         } else if isOvertime || snapshot.remaining <= 0 {
             clock = .overtime
+            headerState = snapshot.headerState
+            pausedProgress = nil
         } else {
             clock = .countdown(end: deadline)
+            headerState = snapshot.headerState
+            pausedProgress = nil
         }
         return CockpitDisplayModel(
             title: title,
             clock: clock,
-            phase: snapshot.phase,
-            headerState: snapshot.headerState,
-            deadlineLabel: CockpitPresentation.deadlineLabel(from: snapshot),
+            phase: isPaused ? FocusTimerPhase(remaining: remaining, budgetSeconds: TimeInterval(budgetSeconds)) : snapshot.phase,
+            headerState: headerState,
+            deadlineLabel: isPaused ? "停車中" : CockpitPresentation.deadlineLabel(from: snapshot),
             budgetSeconds: budgetSeconds,
-            pausedProgress: nil,
+            pausedProgress: pausedProgress,
             isStale: isStale,
-            accessibilityTimer: CockpitFormat.accessibilityTimerValue(
-                remaining: snapshot.remaining,
-                isStale: isStale,
-                isOvertime: isOvertime || snapshot.remaining <= 0
-            )
+            accessibilityTimer: isPaused
+                ? CockpitFormat.accessibilityTimerValue(
+                    remaining: remaining,
+                    isStale: false,
+                    isOvertime: false
+                )
+                : CockpitFormat.accessibilityTimerValue(
+                    remaining: snapshot.remaining,
+                    isStale: isStale,
+                    isOvertime: isOvertime || snapshot.remaining <= 0
+                )
         )
     }
 }

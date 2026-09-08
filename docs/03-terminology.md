@@ -19,7 +19,7 @@ UI 文言・ドメイン名・コード識別子で言い換えない。特に�
 | **途中下車** | `partialDisembark` | 区間終了だが全体未完了 |
 | **乗り継ぎ** | `TaskLineage` | 途中下車から生まれた新切符へのリンク |
 | **放棄** | `abandoned` | もう乗らない。ループを閉じる |
-| **臨時停車許可** | Emergency Override | 停車上限を超えて停車する緊急手段 |
+| **臨時停車許可** | Emergency Override | **廃止**。停車は常に可。上限は新規発車 |
 | **到着整理** | Remaining tickets canvas | 到着/途中下車後に残作業を新切符として掃き出す UI |
 | **超過** | `SessionPhase.overtime` | 見積もり超過 |
 | **延長** | Extend | 見積もり時間を追加（フォーカス継続） |

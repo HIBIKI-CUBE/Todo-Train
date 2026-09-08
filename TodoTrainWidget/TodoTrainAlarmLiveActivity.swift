@@ -5,7 +5,7 @@
 //  Dark cockpit for Lock Screen + StandBy (AlarmKit).
 //  StandBy = isActivityFullscreen. Background: showsWidgetContainerBackground
 //  for Lock Screen container; activityBackgroundTint for StandBy edge fill.
-//  Single essential control (停車 / 停止). Arrive / extend via app deep link.
+//  Single essential control (停車 / 再乗車 / 停止). Arrive / extend via app deep link.
 //
 
 import AppIntents
@@ -52,7 +52,6 @@ struct TodoTrainAlarmLiveActivity: Widget {
             } minimal: {
                 CockpitMinimalTimer(clock: presentation.clock, phase: presentation.phase)
                     .accessibilityLabel("残り時間")
-                    .accessibilityValue(presentation.display.accessibilityTimer)
             }
             .keylineTint(presentation.phase.accentColor)
             .widgetURL(URL(string: "todotrain://focus"))
@@ -72,7 +71,6 @@ private struct AlarmCompactTrailingTimer: View {
             limitedWidth: limitedWidth
         )
         .accessibilityLabel("残り時間")
-        .accessibilityValue(presentation.display.accessibilityTimer)
     }
 }
 

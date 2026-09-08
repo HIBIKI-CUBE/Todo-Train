@@ -2,16 +2,19 @@
 //  PauseLimitSheet.swift
 //  Todo train
 //
+//  Shown when the user tries to 発車 a new ticket while paused rides
+//  already sit at the WIP cap. Pause itself is always allowed.
+//
 
 import SwiftUI
 
 struct PauseLimitSheet: View {
     @Environment(SessionManager.self) private var sessionManager
-    @Environment(TransferCanvasPresenter.self) private var transferCanvas
     @Environment(\.dismiss) private var dismiss
 
-    /// After freeing a slot, try pausing the current ride again.
-    var onSlotFreedTryPause: () -> Void
+    /// Ticket the user tried to board. After a slot is freed, retry this ride.
+    var pendingTicket: Ticket?
+    var onSlotFreedTryBoard: () -> Void
 
     @State private var canvasLaunch: CanvasLaunch?
     @State private var errorMessage = ""
@@ -23,15 +26,11 @@ struct PauseLimitSheet: View {
         let sessionID: UUID?
     }
 
-    private var currentTitle: String {
-        sessionManager.activeSession?.ticket?.title ?? "今の切符"
-    }
-
     var body: some View {
         NavigationStack {
             List {
                 Section {
-                    Text("停車枠がいっぱいです（\(sessionManager.pausedTicketCount)/\(sessionManager.pauseLimit)）")
+                    Text("停車が \(sessionManager.pauseLimit) 件あるので、新しい切符は発車できません。先に片付けるか、停車中から再乗車してください。")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -55,49 +54,27 @@ struct PauseLimitSheet: View {
                         }
                     }
                 } header: {
-                    Text("先に停車中を解決")
+                    Text("停車中を解決")
                 }
 
-                Section("今の切符「\(currentTitle)」") {
-                    Button("途中下車して整理") {
-                        disembarkCurrent()
-                    }
-                    Button("放棄", role: .destructive) {
-                        abandonCurrent()
-                    }
-                }
-
-                if sessionManager.pausedTicketCount < sessionManager.pauseLimit,
-                   sessionManager.phase == .running || sessionManager.phase == .overtime {
+                if let pendingTicket,
+                   sessionManager.pausedTicketCount < sessionManager.pauseLimit {
                     Section {
-                        Button("このまま停車") {
-                            onSlotFreedTryPause()
+                        Button("「\(pendingTicket.title)」を発車") {
+                            onSlotFreedTryBoard()
                             dismiss()
                         }
                         .buttonStyle(.borderedProminent)
                     }
                 }
-
-                if sessionManager.pausedTicketCount >= sessionManager.pauseLimit,
-                   sessionManager.phase == .running || sessionManager.phase == .overtime {
-                    Section("臨時停車") {
-                        SafetyLockOverrideControl(
-                            todayCount: sessionManager.todayOverrideCount
-                        ) {
-                            forcePauseCurrent()
-                        }
-                        .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16))
-                    }
-                }
             }
-            .navigationTitle("停車の整理")
+            .navigationTitle("発車の前に")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("閉じる") { dismiss() }
                 }
             }
-            // Nested sheet is fine here: Focus stays up while resolving paused tickets.
             .sheet(item: $canvasLaunch) { launch in
                 RemainingTicketsCanvas(parent: launch.parent, fromSessionID: launch.sessionID)
             }
@@ -144,7 +121,11 @@ struct PauseLimitSheet: View {
 
     private func resumePaused(_ ticket: Ticket) {
         do {
-            try sessionManager.board(ticket: ticket)
+            if sessionManager.phase == .running || sessionManager.phase == .overtime {
+                try sessionManager.switchBoard(ticket: ticket)
+            } else {
+                try sessionManager.board(ticket: ticket)
+            }
             dismiss()
         } catch {
             present(error)
@@ -154,38 +135,6 @@ struct PauseLimitSheet: View {
     private func abandonPaused(_ session: WorkSession) {
         do {
             try sessionManager.abandon(session: session)
-        } catch {
-            present(error)
-        }
-    }
-
-    private func disembarkCurrent() {
-        guard let ticket = sessionManager.activeSession?.ticket else { return }
-        let sessionID = sessionManager.activeSession?.id
-        do {
-            // Focus dismisses with the session — host canvas from ContentView after cover tears down.
-            transferCanvas.enqueueAfterFocusDismiss(parent: ticket, sessionID: sessionID)
-            try sessionManager.partialDisembark()
-            dismiss()
-        } catch {
-            transferCanvas.clearPending()
-            present(error)
-        }
-    }
-
-    private func abandonCurrent() {
-        do {
-            try sessionManager.abandon()
-            dismiss()
-        } catch {
-            present(error)
-        }
-    }
-
-    private func forcePauseCurrent() {
-        do {
-            _ = try sessionManager.forcePause()
-            dismiss()
         } catch {
             present(error)
         }

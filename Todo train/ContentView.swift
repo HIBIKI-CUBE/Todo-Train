@@ -185,6 +185,10 @@ struct ContentView: View {
         guard let pending = FocusPendingActionStore.peek() else { return }
         // Extend always needs Focus; leave the queue for FocusView.
         if pending.kind == .extend { return }
+        if pending.kind == .pause || pending.kind == .resume {
+            _ = sessionManager.applyPendingLiveActivityAction()
+            return
+        }
         guard let consumed = FocusPendingActionStore.consume() else { return }
         guard consumed.sessionID == sessionManager.activeSession?.id else { return }
         if consumed.kind == .arrive, sessionManager.phase != .overtime {

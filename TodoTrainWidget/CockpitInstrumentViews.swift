@@ -114,7 +114,6 @@ struct CockpitLockScreenInstrument<Controls: View>: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .frame(height: density == .regular ? 40 : 28)
             .accessibilityLabel("残り時間")
-            .accessibilityValue(accessibilityTimer)
 
             if showsTitle {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
@@ -268,7 +267,6 @@ struct CockpitStandByInstrument<Controls: View>: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
             .layoutPriority(0)
             .accessibilityLabel("残り時間")
-            .accessibilityValue(accessibilityTimer)
 
             CockpitLiveProgress(
                 clock: clock,
@@ -339,6 +337,7 @@ struct CockpitLiveTimer: View {
                     height: geo.size.height,
                     alignment: .leading
                 )
+                .accessibilityLabel("残り時間")
         }
     }
 
@@ -353,13 +352,14 @@ struct CockpitLiveTimer: View {
                 showsHours: false
             )
         case .paused(let remaining):
-            let end = Date.now.addingTimeInterval(max(0, remaining))
-            Text(
-                timerInterval: CockpitTimerInterval.countdown(to: end),
-                pauseTime: Date.now,
-                countsDown: true,
-                showsHours: false
-            )
+            Text(CockpitFormat.timerLabel(remaining: remaining))
+                .accessibilityValue(
+                    CockpitFormat.accessibilityTimerValue(
+                        remaining: remaining,
+                        isStale: false,
+                        isOvertime: false
+                    )
+                )
         case .alert:
             Text("終了")
         case .overtime:
@@ -380,16 +380,16 @@ struct CockpitCompactTimer: View {
         Group {
             switch clock {
             case .countdown(let end):
-                if limitedWidth {
-                    Text(CockpitFormat.shortTimerLabel(
-                        remaining: end.timeIntervalSinceNow,
-                        limitedWidth: true
-                    ))
-                } else {
-                    liveCountdown(end: end)
-                }
+                liveCountdown(end: end)
             case .paused(let remaining):
                 Text(CockpitFormat.shortTimerLabel(remaining: remaining, limitedWidth: limitedWidth))
+                    .accessibilityValue(
+                        CockpitFormat.accessibilityTimerValue(
+                            remaining: remaining,
+                            isStale: false,
+                            isOvertime: false
+                        )
+                    )
             case .alert:
                 Text("終了")
             case .overtime:
@@ -573,8 +573,11 @@ struct CockpitAlarmControlRow: View {
             .buttonStyle(.plain)
             .accessibilityLabel("終了ベルを停止")
         case .paused:
-            // Paused Alarm LAs are cancelled by SessionManager; keep a no-op placeholder.
-            EmptyView()
+            Button(intent: EndBellResumeIntent(alarmID: alarmID)) {
+                islandChip(title: "再乗車", systemImage: "play.fill", tint: CockpitColors.green)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("再乗車")
         @unknown default:
             EmptyView()
         }
@@ -622,7 +625,17 @@ struct CockpitAlarmControlRow: View {
             .buttonStyle(.plain)
             .accessibilityLabel("終了ベルを停止")
         case .paused:
-            EmptyView()
+            Button(intent: EndBellResumeIntent(alarmID: alarmID)) {
+                CockpitControlCell(
+                    title: "再乗車",
+                    systemImage: "play.fill",
+                    foreground: CockpitColors.green,
+                    fill: CockpitColors.fillRaised,
+                    density: density
+                )
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("再乗車")
         @unknown default:
             EmptyView()
         }
@@ -706,7 +719,6 @@ struct CockpitIslandExpandedCenter: View {
             .lineLimit(1)
             .frame(maxWidth: 140)
             .accessibilityLabel("残り時間")
-            .accessibilityValue(presentation.accessibilityTimer)
         case .paused(let remaining):
             Text(CockpitFormat.timerLabel(remaining: remaining))
                 .font(.title2.weight(.bold).monospacedDigit())

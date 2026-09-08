@@ -1,6 +1,6 @@
 # 08 — 現状ステータス
 
-最終更新: 2026-09-08（履歴をその日の時計に。停車区間を永続化。同期作業は [15](15-agent-work-plan.md) で分割）
+最終更新: 2026-09-08（停車 LA を残す / WIP は新規発車。履歴時計・停車区間・同期作業は [15](15-agent-work-plan.md)）
 
 ## 結論
 
@@ -15,12 +15,12 @@
 
 | WP | 状態 | 備考 |
 |----|------|------|
-| WP-A Settings | ✅ | 停車上限 2/3、超過音、充電中は消さない、車内放送 |
+| WP-A Settings | ✅ | 停車上限 2/3（新規発車ゲート）、超過音、充電中は消さない、車内放送 |
 | WP-B History | ✅ | 検索 + 今日に追加 |
 | WP-C Reorder | ✅ | フィルタ強調 + D&D |
 | WP-D dueDate | ✅ | 任意期限、自動ソートなし |
 | WP-E Custom estimate | ✅ | 1–60 分任意入力 |
-| WP-F Live Activity | ✅ | Session LA + AlarmKit 排他。[11](11-v2-alarmkit-setup.md) §6 で検証 |
+| WP-F Live Activity | ✅ | Session LA + AlarmKit 排他。停車中も LA を残す（2h） |
 | WP-G Widget | ✅ | App Group スナップショット |
 | WP-H AI / PCC | 部分 | 分割・日次レビューは stub。車内放送 1 行は `OnDeviceCoachingEngine` |
 | WP-I CloudKit | ゲート維持 | unique 削除・`boardedDeviceID`・`.none` store。Mac 土管には使わない |
@@ -76,17 +76,17 @@ Todo trainTests/           Swift Testing（CheckInScheduling / TicketIssuer 含�
 1. 運行開始 → ツールバー `＋` で親指発券帯（Return / スナップ・ゲージで掃き出し）。Siri「切符を発行」でも可
 2. 発車 → Focus（停車 / 到着 / 延長 / 超過 / 割り込み発券 / 車内放送）。到着したら短い案内。定時なら定時到着、早着なら早着
 3. 長い乗務: 予測不能な車内放送。ホーム退避: 「まだ乗ってる？」
-4. 停車上限 → 解決シート / 途中下車キャンバス / 臨時停車
+4. 停車はいつでも。Live Activity は残り、StandBy などから再乗車できる。停車が満杯の新規発車 / 割り込みは整理シート
 5. 履歴でその日の時計を振り返る（空き時間は折り畳まない）。乗り継ぎリンク・今日に追加（定時はバッジのみ）
 6. 運行終了 → 停車中の持ち越し禁止 / 途中下車 / 放棄。遅延がなければ短い「定時運行」（早着可）
-7. 終了ベル ON → AlarmKit LA（StandBy）/ OFF → Session LA
+7. 終了ベル ON → AlarmKit LA（StandBy）/ OFF → Session LA。停車中も同じ経路の LA が残る
 
 ## 既知のギャップ（意図的）
 
 | 項目 | 備考 |
 |------|------|
 | CloudKit | スキーマ準備済み。store は `.none`。**iCloud entitlement なし**。Mac 土管には使わない |
-| Session LA からの Intent | 未実装（Alarm LA は `EndBellIntents` 済み） |
+| Session LA からの Intent | 停車中の再乗車は `SessionResumeIntent`。到着・延長は deep link |
 | iPad 最適化 | v2 以降。iPhone アプリの自由リサイズ（ミラーリング）は Hub がシーン幅に追従 |
 | 乗り継ぎキャンバスのゲージ統一 | Phase 2（Quick Add のみ線形スナップ・ゲージ） |
 | Mac Companion | 土管 [13](13-sync-mac-companion.md)。体験 [14](14-mac-companion-ux.md)。作業切り分け [15](15-agent-work-plan.md)。実装は未着手 |

@@ -28,6 +28,9 @@ struct EndBellPauseIntent: LiveActivityIntent {
     func perform() async throws -> some IntentResult {
         guard let id = UUID(uuidString: alarmID) else { return .result() }
         try AlarmManager.shared.pause(id: id)
+        FocusPendingActionStore.enqueue(
+            FocusPendingAction(kind: .pause, sessionID: id, createdAt: .now)
+        )
         return .result()
     }
 }
@@ -48,6 +51,9 @@ struct EndBellResumeIntent: LiveActivityIntent {
     func perform() async throws -> some IntentResult {
         guard let id = UUID(uuidString: alarmID) else { return .result() }
         try AlarmManager.shared.resume(id: id)
+        FocusPendingActionStore.enqueue(
+            FocusPendingAction(kind: .resume, sessionID: id, createdAt: .now)
+        )
         return .result()
     }
 }
