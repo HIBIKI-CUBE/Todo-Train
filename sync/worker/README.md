@@ -9,6 +9,7 @@
 - サーバは `rev` / `kind` と不透明な `n` / `ct` だけ見る。`ct` を `JSON.parse` しない
 - confirm HMAC は画面に出ない不透明バイト。cfm 鍵では検証しない（サーバは鍵を持たない）
 - snap / cmd / ack の配信は `WS /v1/ws`（Hibernation）。ポーリング API は書かない
+- ログに ct / hmac / token / 平文タイトルを出さない
 
 ## コマンド
 
@@ -18,5 +19,7 @@ npm install
 npm test
 npx wrangler dev
 ```
+
+`npm test` は契約バイトのドリフト検査、src の不透明度検査、vitest（Workers 実行時）、`tsc` まで走る。
 
 本番アカウントは不要。Linux で `npm test` が終端 0 なら完了。

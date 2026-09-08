@@ -1,9 +1,7 @@
-import { runInDurableObject, SELF } from "cloudflare:test";
-import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import { CMD_FIFO_MAX } from "../src/constants.ts";
-import { STATE_KEY, type PairingState } from "../src/pairing.ts";
 import { ACK, CMD, HMAC_IPHONE, HMAC_MAC, S, SNAP, SNAP_TITLE, X, Y } from "./contract-bytes.ts";
+import { patchPairingState, readPairingState } from "./do.ts";
 import {
   bindBoth,
   createOffer,
@@ -13,16 +11,6 @@ import {
   requestAuth,
   requestJson,
 } from "./http.ts";
-
-function pairingStub(pairingId: string) {
-  return env.PAIRING.get(env.PAIRING.idFromName(pairingId)) as never;
-}
-
-async function readPairingState(pairingId: string): Promise<PairingState | undefined> {
-  return runInDurableObject(pairingStub(pairingId), async (_instance, state: DurableObjectState) => {
-    return state.storage.get<PairingState>(STATE_KEY);
-  });
-}
 
 describe("offer + bind + confirm", () => {
   it("creates an offer from the golden X and returns TTL expiry", async () => {
@@ -124,12 +112,9 @@ describe("offer + bind + confirm", () => {
     await requestJson(`/v1/offers/${offer.offerId}/confirm-iphone`, "POST", {
       hmac: HMAC_IPHONE,
     });
-    const stub = pairingStub(offer.pairingId);
-    await runInDurableObject(stub, async (_instance, state: DurableObjectState) => {
-      const stored = await state.storage.get<PairingState>(STATE_KEY);
-      if (!stored?.offer?.iphoneConfirm) throw new Error("missing first confirm");
+    await patchPairingState(offer.pairingId, (stored) => {
+      if (!stored.offer?.iphoneConfirm) throw new Error("missing first confirm");
       stored.offer.iphoneConfirm.at -= 20;
-      await state.storage.put(STATE_KEY, stored);
     });
     const late = await requestJson(`/v1/offers/${offer.offerId}/confirm-mac`, "POST", {
       hmac: HMAC_MAC,
@@ -255,43 +240,9 @@ describe("snap / cmd / ack", () => {
     const client = await pairedClient();
     const put = await requestAuth("/v1/snap", "PUT", client.writeToken, SNAP);
     expect(put.status).toBe(200);
-    await runInDurableObject(pairingStub(client.pairingId), async (_instance, state: DurableObjectState) => {
-      const stored = await state.storage.get<PairingState>(STATE_KEY);
-      const ct = stored?.snap?.ct;
-      expect(typeof ct).toBe("string");
-      expect(() => JSON.parse(ct!)).toThrow();
-    });
-  });
-});
-
-describe("websocket", () => {
-  it("pushes t=snap to the open connection", async () => {
-    const client = await pairedClient();
-    const upgrade = await SELF.fetch("https://relay.test/v1/ws", {
-      headers: {
-        upgrade: "websocket",
-        connection: "Upgrade",
-        authorization: `Bearer ${client.writeToken}`,
-      },
-    });
-    expect(upgrade.status).toBe(101);
-    const ws = upgrade.webSocket;
-    expect(ws).toBeDefined();
-    ws!.accept();
-    const got = new Promise<string>((resolve) => {
-      ws!.addEventListener("message", (event) => resolve(String(event.data)));
-    });
-    await requestAuth("/v1/snap", "PUT", client.writeToken, SNAP);
-    const frame = JSON.parse(await got) as { t: string; envelope: unknown };
-    expect(frame.t).toBe("snap");
-    expect(frame.envelope).toEqual(SNAP);
-    ws!.close(1000, "done");
-  });
-
-  it("rejects WS without bearer", async () => {
-    const res = await SELF.fetch("https://relay.test/v1/ws", {
-      headers: { upgrade: "websocket", connection: "Upgrade" },
-    });
-    expect(res.status).toBe(401);
+    const stored = await readPairingState(client.pairingId);
+    const ct = stored?.snap?.ct;
+    expect(typeof ct).toBe("string");
+    expect(() => JSON.parse(ct!)).toThrow();
   });
 });

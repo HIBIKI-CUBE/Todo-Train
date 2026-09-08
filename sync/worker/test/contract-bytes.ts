@@ -4,6 +4,7 @@ import type { WireEnvelope } from "../src/envelope.ts";
 export const X = "6cUEjnLPwR0PtWYzHUVx7rfJ4kbso5tubUYqdeFHIRI";
 export const Y = "UgKyT75SOaUjcnm8rdNOZvC3qC3oVkNtdt-WlgkO9rI";
 export const S = "c1c2c3c4-d1d2-4e3e-8f4f-a5a6a7a8a9aa";
+export const S_OTHER = "d1d2d3d4-e1e2-4f3f-8a4a-b5b6b7b8b9bb";
 export const HMAC_IPHONE = "i4YEw3MQx6r36PyeMuX65fXGBexumZ_n0qqUZtYgQNg";
 export const HMAC_MAC = "_Zwat9LFmivpBGJ2xzUc2J5kYqspRQSWqp856P5kl-8";
 

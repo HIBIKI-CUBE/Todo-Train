@@ -63,17 +63,17 @@ export async function createOffer(x = X) {
   return body;
 }
 
+export async function bindIphone(offerId: string, s = S, y = Y) {
+  return requestJson(`/v1/offers/${offerId}/bind`, "POST", { role: "iphone", s, y });
+}
+
+export async function bindMac(offerId: string, s = S, x = X) {
+  return requestJson(`/v1/offers/${offerId}/bind`, "POST", { role: "mac", s, x });
+}
+
 export async function bindBoth(offerId: string) {
-  const iphone = await requestJson(`/v1/offers/${offerId}/bind`, "POST", {
-    role: "iphone",
-    s: S,
-    y: Y,
-  });
-  const mac = await requestJson(`/v1/offers/${offerId}/bind`, "POST", {
-    role: "mac",
-    s: S,
-    x: X,
-  });
+  const iphone = await bindIphone(offerId);
+  const mac = await bindMac(offerId);
   return { iphone, mac };
 }
 

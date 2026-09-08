@@ -7,7 +7,8 @@
   },
   "scripts": {
     "dev": "wrangler dev",
-    "test": "vitest run",
+    "test": "node scripts/assert-golden.mjs && node scripts/assert-opacity.mjs && vitest run && tsc --noEmit",
+    "test:unit": "vitest run",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
