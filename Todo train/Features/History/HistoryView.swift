@@ -36,7 +36,7 @@ struct HistoryView: View {
     }
 
     var body: some View {
-        List {
+        Group {
             if filteredSessions.isEmpty {
                 ContentUnavailableView {
                     Label(
@@ -50,27 +50,35 @@ struct HistoryView: View {
                             : "発車して到着・途中下車するとここに残ります。"
                     )
                 }
-            } else if isSearching {
-                ForEach(filteredSessions, id: \.id) { session in
-                    historyRow(session)
-                }
             } else {
-                ForEach(groups, id: \.dayKey) { group in
-                    Section {
-                        ForEach(group.sessions, id: \.id) { session in
-                            historyRow(session)
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
+                        ForEach(groups, id: \.dayKey) { group in
+                            Section {
+                                HistoryDayClockView(
+                                    sessions: group.sessions,
+                                    onReissue: reissue,
+                                    onDelete: deleteSession
+                                )
+                                .padding(.horizontal, TrainTheme.Space.md)
+                                .padding(.bottom, TrainTheme.Space.xl)
+                            } header: {
+                                DailyStatsHeader(
+                                    dayKey: group.dayKey,
+                                    aggregate: HistoryStats.aggregate(sessions: group.sessions)
+                                )
+                                .textCase(nil)
+                                .padding(.horizontal, TrainTheme.Space.md)
+                                .padding(.vertical, TrainTheme.Space.sm)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(TrainTheme.platform)
+                            }
                         }
-                    } header: {
-                        DailyStatsHeader(
-                            dayKey: group.dayKey,
-                            aggregate: HistoryStats.aggregate(sessions: group.sessions)
-                        )
-                        .textCase(nil)
                     }
                 }
+                .background(TrainTheme.platform)
             }
         }
-        .listStyle(.insetGrouped)
         .navigationTitle("履歴")
         .navigationBarTitleDisplayMode(
             TrainLayout.navigationBarTitleDisplayMode(verticalSizeClass: verticalSizeClass)
@@ -86,16 +94,6 @@ struct HistoryView: View {
             }
         }
         .errorAlert(isPresented: $showError, message: errorMessage)
-    }
-
-    @ViewBuilder
-    private func historyRow(_ session: WorkSession) -> some View {
-        HistorySessionRow(session: session, onReissue: reissue)
-            .deleteSwipeAction(
-                accessibilityName: session.ticket?.title ?? "この履歴"
-            ) {
-                deleteSession(session)
-            }
     }
 
     private func deleteSession(_ session: WorkSession) {
@@ -158,6 +156,7 @@ struct HistoryView: View {
 
 #Preview {
     let container = try! AppModelContainer.make(inMemory: true)
+    HistoryPreviewSeed.insertSampleDay(into: container.mainContext)
     let manager = SessionManager(modelContext: container.mainContext)
     return NavigationStack {
         HistoryView()
