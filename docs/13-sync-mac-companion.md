@@ -1,9 +1,9 @@
 # 13 — 同期構成（確定）
 
-最終更新: 2026-09-06。土管・暗号・ペアリング契約。**画面の話はしない。**  
+最終更新: 2026-09-08。土管・暗号・ペアリング契約。**画面の話はしない。**  
 Mac の体験は別紙 [14-mac-companion-ux.md](14-mac-companion-ux.md)（確認待ち）。
 
-この PR ではアプリも Worker も足さない。実装は [15-agent-work-plan.md](15-agent-work-plan.md) のチケットへ。
+ワイヤの正本は [`sync/contract/`](../sync/contract/README.md)。実装は [15-agent-work-plan.md](15-agent-work-plan.md) のチケットへ。経路も `op` もここから増やさない。
 
 ## 決めたこと
 
@@ -90,7 +90,9 @@ todotrain://pair?p=<pairingId>&o=<offerId>&x=<iPhone_eph_pub_b64u>
 todotrain://pair-mac?s=<macSession>&y=<Mac_eph_pub_b64u>
 ```
 
-リレーは、**両方の光学読取が揃うまで** 相手を固定しない。iPhone が `y` を読めただけでは足りない。Mac 側も `x` を読めたことを報告する。
+`x` / `y` は X25519 公開鍵 raw 32 byte の unpadded base64url。ABNF と例は `sync/contract/pairing-url.abnf`。
+
+リレーは、**両方の光学読取が揃うまで** 相手を固定しない。iPhone が `y` を読めただけでは足りない。Mac 側も `x` を読めたことを報告する。新経路は作らず、`POST /v1/offers/:id/bind` を双方が各 1 回（iPhone は光学の `s`+`y`、Mac は光学の `x` と自分の `s`）。
 
 ### 手順
 
@@ -124,7 +126,9 @@ WebAuthn PRF は主鍵にしない。Face ID は確定の本人確認と Keychai
 
 ## 暗号
 
-HKDF-SHA256 の入力は、許可後は `masterKey`。ペアリング中は DH 共有秘密。サーバに渡すのは ciphertext と、オファー用の一時公開鍵だけ。
+DH は X25519。共有秘密 32 byte が許可後 Keychain の `masterKey`。ペアリング中の HKDF IKM も同じ値。サーバに渡すのは ciphertext と、オファー用の一時公開鍵だけ。
+
+HKDF-SHA256、L=32。salt は `pairingId` の RFC 4122 16 byte。info はこれ以外を足さない。ワイヤのバイト列はすべて **unpadded base64url**（hex にしない）。
 
 | 派生鍵 | info | 用途 |
 |--------|------|------|
@@ -132,7 +136,11 @@ HKDF-SHA256 の入力は、許可後は `masterKey`。ペアリング中は DH �
 | `tok` | `todotrain/v1/tok` | writeToken |
 | `cfm` | `todotrain/v1/cfm` | confirm HMAC。画面に出さない |
 
-エンベロープ: `n`（12-byte nonce）+ `ct`。AAD は `pairingId || kind || rev`。`kind` は `snap` / `cmd` / `ack`。
+エンベロープ JSON: `{ "rev", "kind", "n", "ct" }`。`n` は 12-byte nonce。`ct` は ciphertext + 16-byte tag。サーバは `ct` を JSON.parse しない。
+
+AAD は UTF-8 `{pairingId}|{kind}|{rev}`（UUID は小文字 canonical、`kind` は `snap` / `cmd` / `ack`、`rev` は先頭ゼロなし十進）。区切り無しの結合は kind 長が可変で衝突する。
+
+confirm HMAC は `HMAC-SHA256(cfmKey, UTF-8("{pairingId}|{offerId}|iphone"))` と `...|mac`。画面に出さない。両方の到着が 15 秒以内に重なったときだけ確定。
 
 ### スナップショット平文
 
@@ -153,9 +161,19 @@ HKDF-SHA256 の入力は、許可後は `masterKey`。ペアリング中は DH �
 }
 ```
 
-時刻は Unix。購読者の残り表示は Date 計算（`SessionClock` 相当）。残り秒を送ってポーリングしない。乗務なしは `sessionId: null`。
+時刻は Unix **整数秒**。`estimatedSeconds` は当初見積ではなく **いまの予算（延長込み = `WorkSession.budgetSecondsAtStart`）**。残り秒を送ってポーリングしない。乗務なしは `sessionId: null`、他の乗務欄も `null`、`phase` は `idle`。
 
-`phase` は既存の `SessionPhase` 文字列（`running` / `paused` / `overtime` 等）。未知値は表示だけ保守的に落とす。
+購読者の残り（Date 計算、`SessionClock` 相当）:
+
+```
+pausedTotal   = pausedAccumulated + (pausedAt != null ? now - pausedAt : 0)
+elapsedActive = now - startedAt - pausedTotal
+remaining     = estimatedSeconds - elapsedActive
+```
+
+`pausedAccumulated` は完了した停車区間の合計秒（いま停車中なら `pausedAt` 以降は第二項）。
+
+`phase` は既存の `SessionPhase` 文字列（`idle` / `running` / `paused` / `overtime`）。未知値は表示だけ保守的に落とす。
 
 ### コマンド平文
 
@@ -173,7 +191,7 @@ iPhone が cmd を処理したら、成否を暗号化した ack を置く。購
 { "cmdId": "uuid", "ok": false, "error": "pauseLimitReached" }
 ```
 
-`error` は `SessionError` に寄せる（`pauseLimitReached` / `noActiveService` / `sessionMismatch` 等）。平文のタイトルは載せない。
+ワイヤの `error` は `pauseLimitReached` / `noActiveService` / `sessionMismatch` / `decryptFailed` だけ。`sessionMismatch` と `decryptFailed` はワイヤ専用（iOS の `SessionError` には無い）。`noActiveSession` は `noActiveService` に落とす。`SessionError` の残りは載せない。平文のタイトルは載せない。`ok: true` のとき `error` キーは置かない。
 
 ---
 
@@ -184,9 +202,9 @@ iPhone が cmd を処理したら、成否を暗号化した ack を置く。購
 | 面 | 役割 |
 |----|------|
 | `POST /v1/offers` | iPhone。短命オファー（eph pub、TTL） |
-| `POST /v1/offers/:id/bind` | 双方の光学読取が揃ったあと。片方のカメラだけは不可 |
+| `POST /v1/offers/:id/bind` | 双方が各 1 回。片方のカメラだけは不可 |
 | `POST /v1/offers/:id/confirm-iphone` | iPhone。bind 後、LA 成功後の HMAC |
-| `POST /v1/offers/:id/confirm-mac` | Mac。同様。両方の到着が重なったときだけ確定 |
+| `POST /v1/offers/:id/confirm-mac` | Mac。同様。両方の到着が 15 秒以内に重なったときだけ確定 |
 | `DELETE /v1/offers/:id` | 拒否・期限切れ・収録検出・背面 |
 | `PUT /v1/pairings/:id` | 確定後。`tokenHash` を登録 |
 | `GET /v1/snap` | 最新 snap エンベロープ |
@@ -197,7 +215,9 @@ iPhone が cmd を処理したら、成否を暗号化した ack を置く。購
 | `GET /v1/ack` | 購読者が結果を取る（復帰時の保険） |
 | `WS /v1/ws` | snap / cmd / ack を接続中へ即時配信。Hibernation 可 |
 
-認証: snap / cmd / ack / WS は Bearer `writeToken`（確定後）。オファー面は TTL だけ。QR を片側が読んだだけでは bind しない。
+認証: snap / cmd / ack / WS は Bearer `writeToken`（確定後。`Authorization: Bearer <writeToken b64u>`）。オファー面は TTL だけ。QR を片側が読んだだけでは bind しない。
+
+定数: offer TTL **120 秒**、confirm 重なり窓 **15 秒**、cmd FIFO **8**。機械可読な経路は `sync/contract/http.json`。
 
 iOS 前面と購読者が両方 WS にいるとき、cmd は即時。iOS が背面なら FIFO に残り、次の `active` で適用 → snap + ack。
 
@@ -247,7 +267,8 @@ iOS 前面と購読者が両方 WS にいるとき、cmd は即時。iOS が背�
 
 ## 実装順（同期側）
 
-1. リレー（Hono + DO）とエンベロープの契約テスト
-2. iOS: Keychain、セルフィー同時交換、Face ID、双方 confirm、snap / cmd / ack
+1. 契約ファイル（`sync/contract/`。SYNC-0）
+2. リレー（Hono + DO）と Swift パッケージは契約を fixture として読む（SYNC-1 / 2）
+3. iOS UI と Mac メニューバーは実機（SYNC-3 / 4）
 
-購読者 UI は [14](14-mac-companion-ux.md) が固まってから。いまのリポジトリではゲートもサーバも足さない。
+購読者 UI は [14](14-mac-companion-ux.md)。CloudKit ゲートは触らない。

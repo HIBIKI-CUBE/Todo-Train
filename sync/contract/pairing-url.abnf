@@ -1,0 +1,24 @@
+; Pairing QR URLs. Query names match docs/13. No extra parameters.
+; UUIDs are lowercase canonical. Binary is unpadded base64url.
+; Parsers accept any query order. Builders emit the order below.
+
+pair-url        = "todotrain://pair?" pair-query
+pair-mac-url    = "todotrain://pair-mac?" pair-mac-query
+
+pair-query      = "p=" uuid "&o=" uuid "&x=" b64u-32
+pair-mac-query  = "s=" uuid "&y=" b64u-32
+
+; p = pairingId, o = offerId, x = iPhone X25519 public (raw 32 bytes)
+; s = macSession (Mac-generated UUID), y = Mac X25519 public (raw 32 bytes)
+
+uuid            = 8hex "-" 4hex "-" 4hex "-" 4hex "-" 12hex
+8hex            = 8HEXDIG
+4hex            = 4HEXDIG
+12hex           = 12HEXDIG
+HEXDIG          = DIGIT / %x61-66   ; 0-9 / a-f  (lowercase only on the wire)
+
+; 32 bytes → 43 unpadded base64url characters
+b64u-32         = 43b64u-char
+b64u-char       = ALPHA / DIGIT / "-" / "_"
+
+; DIGIT / ALPHA from RFC 5234

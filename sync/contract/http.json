@@ -1,0 +1,276 @@
+{
+  "basePath": "/v1",
+  "auth": {
+    "none": "Offer surface. TTL only. No Bearer.",
+    "bearer": "Authorization: Bearer <writeToken unpadded base64url>. Pairing is the tokenHash lookup."
+  },
+  "errorBody": { "error": "invalid" },
+  "errorCodes": [
+    "invalid",
+    "notFound",
+    "expired",
+    "unauthorized",
+    "notBound",
+    "confirmWindow",
+    "hmacMismatch",
+    "tokenHashMismatch",
+    "revConflict",
+    "fifoFull"
+  ],
+  "routes": [
+    {
+      "id": "createOffer",
+      "method": "POST",
+      "path": "/v1/offers",
+      "auth": "none",
+      "request": { "x": "6cUEjnLPwR0PtWYzHUVx7rfJ4kbso5tubUYqdeFHIRI" },
+      "success": {
+        "status": 201,
+        "body": {
+          "offerId": "b1b2b3b4-c1c2-4d3d-8e4e-f5f6f7f8f9fb",
+          "pairingId": "a1a2a3a4-b1b2-4c3c-8d4d-e5e6e7e8e9ea",
+          "expiresAt": 1768000120
+        }
+      },
+      "failure": [{ "status": 400, "error": "invalid" }],
+      "notes": "iPhone. Server allocates offerId and pairingId. x is iPhone X25519 pub. TTL from constants.offerTtlSeconds."
+    },
+    {
+      "id": "bindOffer",
+      "method": "POST",
+      "path": "/v1/offers/:id/bind",
+      "auth": "none",
+      "requestIphone": {
+        "role": "iphone",
+        "s": "c1c2c3c4-d1d2-4e3e-8f4f-a5a6a7a8a9aa",
+        "y": "UgKyT75SOaUjcnm8rdNOZvC3qC3oVkNtdt-WlgkO9rI"
+      },
+      "requestMac": {
+        "role": "mac",
+        "s": "c1c2c3c4-d1d2-4e3e-8f4f-a5a6a7a8a9aa",
+        "x": "6cUEjnLPwR0PtWYzHUVx7rfJ4kbso5tubUYqdeFHIRI"
+      },
+      "successPartial": { "status": 200, "body": { "bound": false } },
+      "successBound": {
+        "status": 200,
+        "body": {
+          "bound": true,
+          "pairingId": "a1a2a3a4-b1b2-4c3c-8d4d-e5e6e7e8e9ea",
+          "s": "c1c2c3c4-d1d2-4e3e-8f4f-a5a6a7a8a9aa",
+          "x": "6cUEjnLPwR0PtWYzHUVx7rfJ4kbso5tubUYqdeFHIRI",
+          "y": "UgKyT75SOaUjcnm8rdNOZvC3qC3oVkNtdt-WlgkO9rI"
+        }
+      },
+      "failure": [
+        { "status": 400, "error": "invalid" },
+        { "status": 404, "error": "notFound" },
+        { "status": 409, "error": "invalid" },
+        { "status": 410, "error": "expired" }
+      ],
+      "notes": "Each side POSTs once. iPhone sends optically-read s+y. Mac sends optically-read x and its s. Do not bind on one camera. Same role+payload is idempotent 200. Same role different payload is 409. Mac x must match the offer's x. Both s values must match."
+    },
+    {
+      "id": "confirmIphone",
+      "method": "POST",
+      "path": "/v1/offers/:id/confirm-iphone",
+      "auth": "none",
+      "request": { "hmac": "i4YEw3MQx6r36PyeMuX65fXGBexumZ_n0qqUZtYgQNg" },
+      "successWaiting": { "status": 200, "body": { "confirmed": false } },
+      "successBoth": {
+        "status": 200,
+        "body": {
+          "confirmed": true,
+          "pairingId": "a1a2a3a4-b1b2-4c3c-8d4d-e5e6e7e8e9ea"
+        }
+      },
+      "failure": [
+        { "status": 401, "error": "hmacMismatch" },
+        { "status": 404, "error": "notFound" },
+        { "status": 409, "error": "notBound" },
+        { "status": 410, "error": "confirmWindow" }
+      ],
+      "notes": "After bind and LocalAuthentication. HMAC in envelope.md. Both confirms must arrive within constants.confirmOverlapWindowSeconds of the first."
+    },
+    {
+      "id": "confirmMac",
+      "method": "POST",
+      "path": "/v1/offers/:id/confirm-mac",
+      "auth": "none",
+      "request": { "hmac": "_Zwat9LFmivpBGJ2xzUc2J5kYqspRQSWqp856P5kl-8" },
+      "successWaiting": { "status": 200, "body": { "confirmed": false } },
+      "successBoth": {
+        "status": 200,
+        "body": {
+          "confirmed": true,
+          "pairingId": "a1a2a3a4-b1b2-4c3c-8d4d-e5e6e7e8e9ea"
+        }
+      },
+      "failure": [
+        { "status": 401, "error": "hmacMismatch" },
+        { "status": 404, "error": "notFound" },
+        { "status": 409, "error": "notBound" },
+        { "status": 410, "error": "confirmWindow" }
+      ],
+      "notes": "Same window as confirm-iphone. Pairing is established only when both succeed inside the window."
+    },
+    {
+      "id": "deleteOffer",
+      "method": "DELETE",
+      "path": "/v1/offers/:id",
+      "auth": "none",
+      "request": null,
+      "success": { "status": 204, "body": null },
+      "failure": [
+        { "status": 404, "error": "notFound" }
+      ],
+      "notes": "Reject, TTL abort, capture detected, or device flipped away. Drops the offer."
+    },
+    {
+      "id": "putPairing",
+      "method": "PUT",
+      "path": "/v1/pairings/:id",
+      "auth": "none",
+      "request": { "tokenHash": "VHE2sFq9H-skouexC1QZ9rvD4PRr8shboGTF7qG9NPg" },
+      "success": {
+        "status": 200,
+        "body": { "pairingId": "a1a2a3a4-b1b2-4c3c-8d4d-e5e6e7e8e9ea" }
+      },
+      "failure": [
+        { "status": 404, "error": "notFound" },
+        { "status": 409, "error": "tokenHashMismatch" }
+      ],
+      "notes": "After both confirms. tokenHash is SHA-256(writeToken), unpadded base64url. First PUT stores. Same hash is idempotent 200. Different hash is 409. Bearer on snap/cmd/ack/ws works only after this."
+    },
+    {
+      "id": "getSnap",
+      "method": "GET",
+      "path": "/v1/snap",
+      "auth": "bearer",
+      "request": null,
+      "success": {
+        "status": 200,
+        "body": {
+          "rev": 42,
+          "kind": "snap",
+          "n": "ha_Fwfr-03T8OAOV",
+          "ct": "NpGl3kGFaMKJ-e-egG5-rYgNQEuiFUUDlicTmvJesSCySoUrb7meW57CzPWi-VDlYHdHReDwgf6Jm2mtxd1pmuqfpHk6HIqZafcL1P-enL1O9TpXMg2QB8WUX2o7aUOmp7H5tIMmi5zkwjOciBiS3QTPh467dP5gyX37yzkSLzlprR7219gwAvaNmL86z_85I5icgOzxM5vXyXY2ipxy8qAexTI8AmwnA-CefeY4yt_oR5TWH9QproGJEo-DME-6Fxh5B_AaNLibKwc1TBBfI_qg1YfGHutw1lj_J6Q8In648czl9lFXNibIp3mpczr2lU5R45AmtyMmglOQjXvmz7FhsuD_iADIy4bNAOj-Qq6uKPbDI6xSY2mwB4C_tz0"
+        }
+      },
+      "failure": [
+        { "status": 401, "error": "unauthorized" },
+        { "status": 404, "error": "notFound" }
+      ],
+      "notes": "Latest snap envelope. 404 if none yet. Do not parse ct."
+    },
+    {
+      "id": "putSnap",
+      "method": "PUT",
+      "path": "/v1/snap",
+      "auth": "bearer",
+      "request": {
+        "rev": 42,
+        "kind": "snap",
+        "n": "ha_Fwfr-03T8OAOV",
+        "ct": "NpGl3kGFaMKJ-e-egG5-rYgNQEuiFUUDlicTmvJesSCySoUrb7meW57CzPWi-VDlYHdHReDwgf6Jm2mtxd1pmuqfpHk6HIqZafcL1P-enL1O9TpXMg2QB8WUX2o7aUOmp7H5tIMmi5zkwjOciBiS3QTPh467dP5gyX37yzkSLzlprR7219gwAvaNmL86z_85I5icgOzxM5vXyXY2ipxy8qAexTI8AmwnA-CefeY4yt_oR5TWH9QproGJEo-DME-6Fxh5B_AaNLibKwc1TBBfI_qg1YfGHutw1lj_J6Q8In648czl9lFXNibIp3mpczr2lU5R45AmtyMmglOQjXvmz7FhsuD_iADIy4bNAOj-Qq6uKPbDI6xSY2mwB4C_tz0"
+      },
+      "success": { "status": 200, "body": { "rev": 42 } },
+      "failure": [
+        { "status": 400, "error": "invalid" },
+        { "status": 401, "error": "unauthorized" },
+        { "status": 409, "error": "revConflict" }
+      ],
+      "notes": "iPhone. kind must be snap. rev must be strictly greater than stored snap rev. Push t=snap on WS."
+    },
+    {
+      "id": "postCmd",
+      "method": "POST",
+      "path": "/v1/cmd",
+      "auth": "bearer",
+      "request": {
+        "rev": 1,
+        "kind": "cmd",
+        "n": "ha_Fwfr-03T8OAOV",
+        "ct": "<opaque>"
+      },
+      "success": { "status": 201, "body": { "queued": true } },
+      "failure": [
+        { "status": 400, "error": "invalid" },
+        { "status": 401, "error": "unauthorized" },
+        { "status": 409, "error": "fifoFull" }
+      ],
+      "notes": "Subscriber. kind must be cmd. FIFO max constants.cmdFifoMax. Do not parse ct. Push t=cmd on WS. No client polling loop."
+    },
+    {
+      "id": "getCmd",
+      "method": "GET",
+      "path": "/v1/cmd",
+      "auth": "bearer",
+      "request": null,
+      "success": {
+        "status": 200,
+        "body": {
+          "items": [
+            {
+              "rev": 1,
+              "kind": "cmd",
+              "n": "ha_Fwfr-03T8OAOV",
+              "ct": "<opaque>"
+            }
+          ]
+        }
+      },
+      "failure": [{ "status": 401, "error": "unauthorized" }],
+      "notes": "iPhone resume insurance. Oldest-first pending envelopes. Empty list if none. Drop a cmd from the FIFO after PUT /v1/ack for that command."
+    },
+    {
+      "id": "putAck",
+      "method": "PUT",
+      "path": "/v1/ack",
+      "auth": "bearer",
+      "request": {
+        "rev": 1,
+        "kind": "ack",
+        "n": "ha_Fwfr-03T8OAOV",
+        "ct": "<opaque>"
+      },
+      "success": { "status": 200, "body": { "stored": true } },
+      "failure": [
+        { "status": 400, "error": "invalid" },
+        { "status": 401, "error": "unauthorized" }
+      ],
+      "notes": "iPhone. kind must be ack. Replaces the latest ack envelope. Push t=ack on WS. Do not parse ct."
+    },
+    {
+      "id": "getAck",
+      "method": "GET",
+      "path": "/v1/ack",
+      "auth": "bearer",
+      "request": null,
+      "success": {
+        "status": 200,
+        "body": {
+          "rev": 1,
+          "kind": "ack",
+          "n": "ha_Fwfr-03T8OAOV",
+          "ct": "<opaque>"
+        }
+      },
+      "failure": [
+        { "status": 401, "error": "unauthorized" },
+        { "status": 404, "error": "notFound" }
+      ],
+      "notes": "Subscriber resume insurance. Latest ack envelope. 404 if none."
+    },
+    {
+      "id": "ws",
+      "method": "GET",
+      "path": "/v1/ws",
+      "auth": "bearer",
+      "upgrade": "websocket",
+      "request": null,
+      "success": { "status": 101 },
+      "failure": [{ "status": 401, "error": "unauthorized" }],
+      "notes": "See ws.json. Frames are JSON text. Hibernation allowed."
+    }
+  ]
+}
