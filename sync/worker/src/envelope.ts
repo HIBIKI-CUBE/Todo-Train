@@ -12,7 +12,7 @@ export type WireEnvelope = {
 
 /**
  * Validate a wire envelope. Look at rev / kind / n / ct as opaque fields.
- * Never JSON.parse `ct`. Never decode `ct` into structured plaintext.
+ * Never JSON.parse `ct`. Never decode `ct` into structured fields.
  */
 export function parseEnvelope(
   input: unknown,

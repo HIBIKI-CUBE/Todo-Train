@@ -15,5 +15,5 @@
     "noUnusedParameters": true,
     "exactOptionalPropertyTypes": false
   },
-  "include": ["src/**/*.ts", "test/**/*.ts", "vitest.config.ts", "env.d.ts"]
+  "include": ["src/**/*.ts", "src/**/*.json", "test/**/*.ts", "vitest.config.ts", "env.d.ts"]
 }

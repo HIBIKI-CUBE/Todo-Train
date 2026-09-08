@@ -1,10 +1,14 @@
 import { DurableObject } from "cloudflare:workers";
+import { parseBind, parseHmacBody } from "./bind-body.ts";
 import { CMD_FIFO_MAX } from "./constants.ts";
 import type { WireEnvelope } from "./envelope.ts";
 import { parseEnvelope } from "./envelope.ts";
-import { isHmac32, isPub32, isTokenHash32, isUuid } from "./ids.ts";
+import { isPub32, isTokenHash32, isUuid } from "./ids.ts";
 import { jsonError, jsonOk, type RpcResult } from "./result.ts";
 import { confirmOverlapOk, isOfferExpired, offerExpiresAt } from "./time.ts";
+import { encodeWsFrame } from "./ws-frame.ts";
+
+// 永続するのは ciphertext とメタだけ。ct / hmac / token をログに出さない。
 
 type BindIphone = { s: string; y: string };
 type BindMac = { s: string; x: string };
@@ -276,7 +280,7 @@ export class PairingDurableObject extends DurableObject<unknown> {
     // Clients do not send protocol frames. Ignore.
   }
 
-  async webSocketClose(ws: WebSocket, code: number, reason: string): Promise<void> {
+  async webSocketClose(ws: WebSocket, code: number, reason: string, _wasClean: boolean): Promise<void> {
     try {
       ws.close(code, reason);
     } catch {
@@ -291,7 +295,7 @@ export class PairingDurableObject extends DurableObject<unknown> {
   }
 
   private broadcast(t: WireEnvelope["kind"], envelope: WireEnvelope): void {
-    const frame = JSON.stringify({ t, envelope });
+    const frame = encodeWsFrame(t, envelope);
     for (const ws of this.ctx.getWebSockets()) {
       try {
         ws.send(frame);
@@ -304,33 +308,6 @@ export class PairingDurableObject extends DurableObject<unknown> {
       }
     }
   }
-}
-
-function parseBind(
-  body: unknown,
-): { role: "iphone"; s: string; y: string } | { role: "mac"; s: string; x: string } | null {
-  if (body === null || typeof body !== "object" || Array.isArray(body)) return null;
-  const o = body as Record<string, unknown>;
-  if (o.role === "iphone") {
-    if (typeof o.s !== "string" || typeof o.y !== "string") return null;
-    if (!isUuid(o.s) || !isPub32(o.y)) return null;
-    return { role: "iphone", s: o.s, y: o.y };
-  }
-  if (o.role === "mac") {
-    if (typeof o.s !== "string" || typeof o.x !== "string") return null;
-    if (!isUuid(o.s) || !isPub32(o.x)) return null;
-    return { role: "mac", s: o.s, x: o.x };
-  }
-  return null;
-}
-
-function parseHmacBody(body: unknown): string | "missing" | "bad" {
-  if (body === null || typeof body !== "object" || Array.isArray(body)) return "missing";
-  const o = body as Record<string, unknown>;
-  if (!("hmac" in o)) return "missing";
-  if (typeof o.hmac !== "string") return "missing";
-  if (!isHmac32(o.hmac)) return "bad";
-  return o.hmac;
 }
 
 export { STATE_KEY };

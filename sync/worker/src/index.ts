@@ -218,6 +218,8 @@ app.get("/v1/ws", async (c) => {
 
 app.notFound(() => errorJson(404, "notFound"));
 
+app.onError(() => errorJson(500, "invalid"));
+
 export { DirectoryDurableObject } from "./directory.ts";
 export { PairingDurableObject } from "./pairing.ts";
 export default app;
