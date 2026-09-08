@@ -242,6 +242,13 @@ final class SessionManager {
                 return
             }
 
+            if let paused = openPausedSessions().first(where: { $0.ticket?.id == ticket.id }) {
+                try parkRunningSessionForSwitch(running, now: now)
+                activeSession = paused
+                try resume(now: now)
+                return
+            }
+
             // Gate on paused tickets already sitting, before parking the current ride.
             guard PauseLimitGuard.canBoardNewRide(
                 pausedCount: pausedTicketCount,

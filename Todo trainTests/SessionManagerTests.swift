@@ -305,6 +305,27 @@ struct SessionManagerTests {
         #expect(manager.pausedTicketCount == 2)
     }
 
+    @Test func switchBoard_toPausedTicket_allowedAtLimit() throws {
+        let (manager, context, _, _) = try makeHarness()
+        try manager.startService()
+        let a = try makeTicket(context, title: "A")
+        let b = try makeTicket(context, title: "B")
+        let c = try makeTicket(context, title: "C")
+
+        try manager.board(ticket: a)
+        try manager.pause()
+        try manager.board(ticket: b)
+        try manager.pause()
+        try manager.board(ticket: c)
+        #expect(manager.pausedTicketCount == 2)
+
+        try manager.switchBoard(ticket: a)
+        #expect(manager.phase == .running)
+        #expect(manager.activeSession?.ticket?.id == a.id)
+        #expect(manager.pausedTicketCount == 2)
+        #expect(manager.pausedSessions.contains { $0.ticket?.id == c.id })
+    }
+
     @Test func switchBoard_sameTicket_isNoOp() throws {
         let (manager, context, _, _) = try makeHarness()
         try manager.startService()
