@@ -1,6 +1,10 @@
+# Production script name. CI overrides with `wrangler deploy --name` for
+# develop (`todotrain-sync-develop`) and PRs (`todotrain-sync-pr-<n>`).
+# Do not put account_id here; Actions passes CLOUDFLARE_ACCOUNT_ID.
 name = "todotrain-sync"
 main = "src/index.ts"
 compatibility_date = "2026-08-22"
+workers_dev = true
 
 [[durable_objects.bindings]]
 name = "PAIRING"

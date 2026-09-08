@@ -1,0 +1,39 @@
+# Delete the per-PR Worker when the PR closes.
+# No path filters: close events do not change files, so a filter would miss teardowns.
+# Shares concurrency with sync-worker.yml so an in-flight preview deploy is cancelled first.
+
+name: sync-worker-preview-teardown
+
+on:
+  pull_request:
+    types: [closed]
+
+concurrency:
+  group: sync-worker-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  teardown:
+    name: delete preview worker
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository
+      && secrets.CLOUDFLARE_API_TOKEN != ''
+      && secrets.CLOUDFLARE_ACCOUNT_ID != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Delete PR worker
+        continue-on-error: true
+        uses: cloudflare/wrangler-action@v4
+        env:
+          WRANGLER_SEND_METRICS: "false"
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: sync/worker
+          wranglerVersion: "4.129.1"
+          command: delete --name todotrain-sync-pr-${{ github.event.pull_request.number }} --force

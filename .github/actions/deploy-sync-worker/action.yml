@@ -1,0 +1,116 @@
+name: Deploy sync worker
+description: Deploy sync/worker with an isolated Worker name (Durable Objects cannot use aliased preview URLs).
+
+inputs:
+  worker-name:
+    description: Cloudflare Worker script name
+    required: true
+  api-token:
+    description: Cloudflare API token
+    required: true
+  account-id:
+    description: Cloudflare account ID
+    required: true
+  github-token:
+    description: GITHUB_TOKEN for sticky PR comments
+    required: true
+  comment-pr:
+    description: Post or update a sticky comment on the current PR
+    required: false
+    default: "false"
+
+outputs:
+  deployment-url:
+    description: workers.dev URL for this Worker
+    value: ${{ steps.url.outputs.url }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: "22"
+        cache: npm
+        cache-dependency-path: sync/worker/package-lock.json
+
+    - name: Deploy
+      id: deploy
+      uses: cloudflare/wrangler-action@v4
+      env:
+        WRANGLER_SEND_METRICS: "false"
+      with:
+        apiToken: ${{ inputs.api-token }}
+        accountId: ${{ inputs.account-id }}
+        workingDirectory: sync/worker
+        packageManager: npm
+        wranglerVersion: "4.129.1"
+        gitHubToken: ${{ inputs.github-token }}
+        command: deploy --name ${{ inputs.worker-name }}
+
+    - name: Resolve workers.dev URL
+      id: url
+      shell: bash
+      env:
+        DEPLOY_URL: ${{ steps.deploy.outputs.deployment-url }}
+        CMD_OUTPUT: ${{ steps.deploy.outputs.command-output }}
+        WORKER_NAME: ${{ inputs.worker-name }}
+      run: |
+        set -euo pipefail
+        url="${DEPLOY_URL:-}"
+        if [ -z "$url" ] || ! grep -q 'workers.dev' <<<"$url"; then
+          extracted="$(printf '%s\n' "$CMD_OUTPUT" | grep -Eo 'https://[A-Za-z0-9.-]+\.workers\.dev' | head -n1 || true)"
+          if [ -n "$extracted" ]; then
+            url="$extracted"
+          fi
+        fi
+        echo "url=$url" >> "$GITHUB_OUTPUT"
+        echo "Worker ${WORKER_NAME} → ${url:-<none>}"
+
+    - name: Sticky PR comment
+      if: ${{ inputs.comment-pr == 'true' }}
+      uses: actions/github-script@v7
+      env:
+        DEPLOY_URL: ${{ steps.url.outputs.url }}
+        WORKER_NAME: ${{ inputs.worker-name }}
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          const marker = '<!-- todotrain-sync-preview -->';
+          const url = process.env.DEPLOY_URL || '';
+          const worker = process.env.WORKER_NAME;
+          const urlLine = url
+            ? `- URL: ${url}`
+            : `- URL: \`https://${worker}.<account-subdomain>.workers.dev\`（ログから URL を取れなかった）`;
+          const body = [
+            marker,
+            '### Sync worker preview',
+            '',
+            urlLine,
+            `- Worker: \`${worker}\``,
+            '',
+            'Durable Objects は本番 / develop と別インスタンスです。この PR を閉じると Worker は削除されます。',
+            '',
+          ].join('\n');
+
+          const { data: comments } = await github.rest.issues.listComments({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+            per_page: 100,
+          });
+          const existing = comments.find((c) => c.body && c.body.includes(marker));
+          if (existing) {
+            await github.rest.issues.updateComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: existing.id,
+              body,
+            });
+          } else {
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            });
+          }
