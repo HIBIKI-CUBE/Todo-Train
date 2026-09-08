@@ -8,6 +8,7 @@ import {
   bindBoth,
   createOffer,
   pairedClient,
+  randomWriteToken,
   request,
   requestAuth,
   requestJson,
@@ -243,9 +244,11 @@ describe("snap / cmd / ack", () => {
     const noAuth = await request("/v1/snap");
     expect(noAuth.status).toBe(401);
     expect(noAuth.body).toEqual({ error: "unauthorized" });
-    const client = await pairedClient();
-    const bad = await requestAuth("/v1/snap", "GET", client.writeToken.replaceAll("A", "B"));
+    await pairedClient();
+    const bad = await requestAuth("/v1/snap", "GET", randomWriteToken());
     expect(bad.status).toBe(401);
+    const malformed = await requestAuth("/v1/snap", "GET", "not-a-token");
+    expect(malformed.status).toBe(401);
   });
 
   it("does not parse ct even when it is valid JSON text disguised as ciphertext shape", async () => {
