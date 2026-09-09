@@ -18,6 +18,7 @@ final class AppSettings {
         static let keepAwakeWhileChargingInFocus = "settings.keepAwakeWhileChargingInFocus"
         static let cabinAnnouncementsEnabled = "settings.cabinAnnouncementsEnabled"
         static let lastIssuedEstimateMinutes = "settings.lastIssuedEstimateMinutes"
+        static let companionRelayURL = "settings.companionRelayURL"
     }
 
     var pauseLimit: Int {
@@ -69,13 +70,31 @@ final class AppSettings {
         }
     }
 
+    /// Relay for Mac companion. Empty until the user pastes a Worker URL.
+    var companionRelayURLString: String {
+        didSet {
+            UserDefaults.standard.set(companionRelayURLString, forKey: Keys.companionRelayURL)
+        }
+    }
+
+    var companionRelayURL: URL? {
+        let trimmed = companionRelayURLString.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let url = URL(string: trimmed), let scheme = url.scheme else { return nil }
+        if scheme == "https" { return url }
+        #if DEBUG
+        if scheme == "http" { return url }
+        #endif
+        return nil
+    }
+
     static func makeForTesting(
         pauseLimit: Int = PauseLimitGuard.defaultLimit,
         overtimeSoundEnabled: Bool = true,
         endBellEnabled: Bool = false,
         keepAwakeWhileChargingInFocus: Bool = true,
         cabinAnnouncementsEnabled: Bool = true,
-        lastIssuedEstimateMinutes: Int? = nil
+        lastIssuedEstimateMinutes: Int? = nil,
+        companionRelayURLString: String = ""
     ) -> AppSettings {
         let settings = AppSettings()
         settings.pauseLimit = Self.clampPauseLimit(pauseLimit)
@@ -84,6 +103,7 @@ final class AppSettings {
         settings.keepAwakeWhileChargingInFocus = keepAwakeWhileChargingInFocus
         settings.cabinAnnouncementsEnabled = cabinAnnouncementsEnabled
         settings.lastIssuedEstimateMinutes = lastIssuedEstimateMinutes.map(Self.clampEstimateMinutes)
+        settings.companionRelayURLString = companionRelayURLString
         return settings
     }
 
@@ -121,6 +141,16 @@ final class AppSettings {
             lastIssuedEstimateMinutes = Self.clampEstimateMinutes(
                 UserDefaults.standard.integer(forKey: Keys.lastIssuedEstimateMinutes)
             )
+        }
+
+        if let storedRelay = UserDefaults.standard.string(forKey: Keys.companionRelayURL) {
+            companionRelayURLString = storedRelay
+        } else {
+            #if DEBUG
+            companionRelayURLString = "http://127.0.0.1:8787"
+            #else
+            companionRelayURLString = ""
+            #endif
         }
     }
 
