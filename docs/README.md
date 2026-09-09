@@ -36,4 +36,4 @@
 - ターゲット: **iPhone 15 Pro Max / iOS 27**
 - スタック: **SwiftUI + SwiftData**
 - **MVP / v1 / v2: `develop` にマージ済み**
-- **次: Linux で SYNC-0/1/2/5（[15](15-agent-work-plan.md)）。Mac 起動は UI まで不要**
+- **同期の Linux 芯（SYNC-0/1/2/5）は `develop` 済み。次は実機 UI（SYNC-3 / 4、[15](15-agent-work-plan.md)）**
