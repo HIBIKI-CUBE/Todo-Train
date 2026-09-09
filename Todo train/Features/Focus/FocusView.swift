@@ -163,13 +163,13 @@ struct FocusView: View {
         .overlay(alignment: .leading) {
             Rectangle()
                 .fill(
-                    sessionManager.pendingCheckIn != nil && sessionManager.phase != .overtime
+                    sessionManager.pendingCheckIn == .progress && sessionManager.phase != .overtime
                         ? TrainTheme.signalAmber
                         : currentTimerPhase.accentColor
                 )
                 .frame(width: 3)
                 .opacity(
-                    currentTimerPhase == .cruise && sessionManager.pendingCheckIn == nil ? 0 : 1
+                    currentTimerPhase == .cruise && sessionManager.pendingCheckIn != .progress ? 0 : 1
                 )
         }
     }
@@ -267,7 +267,7 @@ struct FocusView: View {
                         }
                     }
                 )
-            } else if sessionManager.pendingCheckIn != nil {
+            } else if sessionManager.pendingCheckIn == .progress {
                 CheckInControlsView(
                     prompt: sessionManager.checkInPromptLine,
                     onStillOnIt: { run { try sessionManager.answerCheckIn(.stillOnIt) } },
@@ -319,14 +319,14 @@ struct FocusView: View {
         if sessionManager.phase == .overtime {
             return currentTimerPhase.stateLabel
         }
-        if sessionManager.pendingCheckIn != nil {
+        if sessionManager.pendingCheckIn == .progress {
             return sessionManager.checkInPromptLine
         }
         return currentTimerPhase.stateLabel
     }
 
     private var headerStateColor: Color {
-        if sessionManager.pendingCheckIn != nil, sessionManager.phase != .overtime {
+        if sessionManager.pendingCheckIn == .progress, sessionManager.phase != .overtime {
             return TrainTheme.signalAmber
         }
         return currentTimerPhase.accentColor
@@ -418,7 +418,9 @@ struct FocusView: View {
                 showExtendChips = true
             }
         case .pause:
-            break
+            if sessionManager.phase == .running || sessionManager.phase == .overtime {
+                run { try sessionManager.pause() }
+            }
         case .resume:
             run { try sessionManager.resume() }
         }

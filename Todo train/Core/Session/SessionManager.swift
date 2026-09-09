@@ -6,6 +6,9 @@
 import Foundation
 import Observation
 import SwiftData
+#if canImport(UIKit)
+import UIKit
+#endif
 
 @Observable
 @MainActor
@@ -26,6 +29,12 @@ final class SessionManager {
     private let liveActivityManager: any LiveActivityManaging
     private let alarmScheduler: any AlarmScheduling
     private let deviceIdentity: any DeviceIdentifying
+    private let deviceLock: any DeviceLockReading
+
+    private var awayFireTask: Task<Void, Never>?
+    #if canImport(UIKit)
+    private var awayBackgroundTask = UIBackgroundTaskIdentifier.invalid
+    #endif
 
     /// Today's temporary-pause override count (for UI).
     private(set) var todayOverrideCount: Int = 0
@@ -85,7 +94,8 @@ final class SessionManager {
         overrideCounter: (any OverrideCounting)? = nil,
         liveActivityManager: (any LiveActivityManaging)? = nil,
         alarmScheduler: (any AlarmScheduling)? = nil,
-        deviceIdentity: (any DeviceIdentifying)? = nil
+        deviceIdentity: (any DeviceIdentifying)? = nil,
+        deviceLock: (any DeviceLockReading)? = nil
     ) {
         self.modelContext = modelContext
         self.clock = clock
@@ -98,6 +108,7 @@ final class SessionManager {
         self.liveActivityManager = liveActivityManager ?? NoOpLiveActivityManager()
         self.alarmScheduler = alarmScheduler ?? NoOpAlarmScheduler()
         self.deviceIdentity = deviceIdentity ?? SystemDeviceIdentity()
+        self.deviceLock = deviceLock ?? SystemDeviceLock()
         self.todayOverrideCount = self.overrideCounter.count(
             forDayKey: ServiceDay.dayKey(for: clock.now, calendar: calendar)
         )
@@ -320,6 +331,7 @@ final class SessionManager {
         phase = .paused
         overtimeNotifier.cancel(sessionID: session.id)
         checkInNotifier.cancel(sessionID: session.id)
+        cancelAwayFireTask()
         if syncAlarm {
             if isAlarmKitEndBellActive {
                 alarmScheduler.pause(sessionID: session.id)
@@ -343,6 +355,7 @@ final class SessionManager {
         session.awayDueAt = nil
         overtimeNotifier.cancel(sessionID: session.id)
         checkInNotifier.cancel(sessionID: session.id)
+        cancelAwayFireTask()
         liveActivityManager.end()
         alarmScheduler.cancel(sessionID: session.id)
         try save()
@@ -508,10 +521,15 @@ final class SessionManager {
         }
     }
 
-    /// Start the away watch when the scene leaves `.active` while running.
+    /// Unlocked background only. Locked / end-bell LA / cabin-off: no away watch.
     func beginAwayWatch(now: Date? = nil) {
+        if deviceLock.isLocked {
+            cancelAwayWatch(now: now)
+            return
+        }
         let now = now ?? clock.now
         guard settings.cabinAnnouncementsEnabled else { return }
+        guard awayInterruptChannel != .none else { return }
         guard let session = activeSession, session.isOpen, !session.isPaused else { return }
         guard ownsDeviceSideEffects(session) else { return }
         guard session.remainingSeconds(at: now) > 0 else { return }
@@ -522,29 +540,47 @@ final class SessionManager {
             seed: session.id,
             salt: UInt64(session.checkInFiredCount) &+ 99
         )
-        session.awayDueAt = now.addingTimeInterval(delay)
+        let fireAt = now.addingTimeInterval(delay)
+        session.awayDueAt = fireAt
         try? save()
-        checkInNotifier.scheduleAway(
-            sessionID: session.id,
-            ticketTitle: session.ticket?.title ?? "切符",
-            body: CheckInCopy.away,
-            fireAt: session.awayDueAt ?? now.addingTimeInterval(delay)
-        )
+        if awayInterruptChannel == .localNotification {
+            checkInNotifier.scheduleAway(
+                sessionID: session.id,
+                ticketTitle: session.ticket?.title ?? "切符",
+                body: CheckInCopy.away,
+                fireAt: fireAt
+            )
+        }
+        armAwayFire(at: fireAt, sessionID: session.id)
     }
 
-    /// Foreground: promote a due away broadcast, then clear the watch.
-    func endAwayWatch(now: Date? = nil) {
+    /// Lock screen: drop the watch. Do not promote a pending `.away` panel.
+    func cancelAwayWatch(now: Date? = nil) {
         let now = now ?? clock.now
-        reconcile(now: now)
+        cancelAwayFireTask()
         guard let session = activeSession, session.isOpen else { return }
-        session.awayDueAt = nil
-        try? save()
-        // Progress notifications stay; only the away request is session-scoped cancel of away id.
-        // `cancel(sessionID)` drops progress too — reschedule remaining progress after.
+        var changed = false
+        if session.awayDueAt != nil {
+            session.awayDueAt = nil
+            changed = true
+        }
+        if session.pendingCheckIn == .away {
+            session.pendingCheckIn = nil
+            changed = true
+        }
+        if changed { try? save() }
         checkInNotifier.cancel(sessionID: session.id)
         if !session.isPaused, session.remainingSeconds(at: now) > 0, ownsDeviceSideEffects(session) {
             refreshProgressCheckInNotifications(for: session, now: now)
+            refreshLiveActivity(for: session, now: now)
         }
+    }
+
+    /// Foreground: clear the watch without turning away into a Focus 4-choice.
+    func endAwayWatch(now: Date? = nil) {
+        let now = now ?? clock.now
+        cancelAwayWatch(now: now)
+        reconcile(now: now)
     }
 
     func handleCheckInNotification(identifier: String, action: String) {
@@ -554,10 +590,19 @@ final class SessionManager {
         guard let session = activeSession, session.isOpen, !session.isPaused else { return }
         guard session.remainingSeconds(at: clock.now) > CheckInScheduling.overtimeGuardSeconds else { return }
 
+        let isAway = CheckInNotification.isAway(identifier)
+        if isAway {
+            if action == CheckInNotification.pauseAction {
+                try? pause()
+            }
+            return
+        }
+
         if session.pendingCheckIn == nil {
-            session.pendingCheckIn = CheckInNotification.isAway(identifier) ? .away : .progress
-            if session.pendingCheckIn == .progress, session.awayDueAt != nil {
+            session.pendingCheckIn = .progress
+            if session.awayDueAt != nil {
                 session.awayDueAt = nil
+                cancelAwayFireTask()
             }
             checkInHapticTick += 1
             try? save()
@@ -567,10 +612,16 @@ final class SessionManager {
         case CheckInNotification.pauseAction:
             try? answerCheckIn(.paused)
         case CheckInNotification.stillOnItAction:
+            guard session.pendingCheckIn == .progress else { return }
             try? answerCheckIn(.stillOnIt)
         default:
             break
         }
+    }
+
+    func pauseRide(sessionID: UUID) {
+        guard activeSession?.id == sessionID else { return }
+        try? pause()
     }
 
     /// Settings toggle for 車内放送 — apply immediately to the active ride.
@@ -587,6 +638,7 @@ final class SessionManager {
         if !settings.cabinAnnouncementsEnabled {
             session.pendingCheckIn = nil
             session.awayDueAt = nil
+            cancelAwayFireTask()
             checkInNotifier.cancel(sessionID: session.id)
             try? save()
             reconcile(now: now)
@@ -662,6 +714,7 @@ final class SessionManager {
         }
         overtimeNotifier.cancel(sessionID: session.id)
         checkInNotifier.cancel(sessionID: session.id)
+        cancelAwayFireTask()
         liveActivityManager.end()
         alarmScheduler.cancel(sessionID: session.id)
         suppressedEndBellSessionIDs.remove(session.id)
@@ -693,6 +746,7 @@ final class SessionManager {
         }
         overtimeNotifier.cancel(sessionID: session.id)
         checkInNotifier.cancel(sessionID: session.id)
+        cancelAwayFireTask()
         liveActivityManager.end()
         alarmScheduler.cancel(sessionID: session.id)
         suppressedEndBellSessionIDs.remove(session.id)
@@ -931,6 +985,7 @@ final class SessionManager {
         }
         session.pendingCheckIn = nil
         session.awayDueAt = nil
+        cancelAwayFireTask()
         checkInNotifier.cancel(sessionID: session.id)
         try? save()
     }
@@ -941,6 +996,7 @@ final class SessionManager {
             if session.pendingCheckIn != nil || session.awayDueAt != nil {
                 session.pendingCheckIn = nil
                 session.awayDueAt = nil
+                cancelAwayFireTask()
                 checkInNotifier.cancel(sessionID: session.id)
                 try? save()
             }
@@ -966,16 +1022,14 @@ final class SessionManager {
         ) != nil {
             session.pendingCheckIn = .progress
             session.awayDueAt = nil
+            cancelAwayFireTask()
             checkInHapticTick += 1
             try? save()
             return
         }
 
         if let due = session.awayDueAt, due <= now {
-            session.pendingCheckIn = .away
-            session.awayDueAt = nil
-            checkInHapticTick += 1
-            try? save()
+            fireAwayInterrupt(session, now: now, presentAlert: true)
         }
     }
 
@@ -1063,7 +1117,7 @@ final class SessionManager {
         todayOverrideCount = overrideCounter.count(forDayKey: dayKey)
     }
 
-    private func refreshLiveActivity(for session: WorkSession, now: Date) {
+    private func refreshLiveActivity(for session: WorkSession, now: Date, presentAwayAlert: Bool = false) {
         guard ownsDeviceSideEffects(session) else {
             liveActivityManager.end()
             return
@@ -1085,15 +1139,74 @@ final class SessionManager {
         let remaining = session.remainingSeconds(at: now)
         let title = session.ticket?.title ?? "切符"
         let deadline = now.addingTimeInterval(remaining)
+        let awayPrompt = (!session.isPaused && session.pendingCheckIn == .away) ? CheckInCopy.away : nil
         liveActivityManager.startOrUpdate(
-            sessionID: session.id,
-            title: title,
-            deadline: deadline,
-            isOvertime: remaining <= 0 && !session.isPaused,
-            budgetSeconds: session.budgetSecondsAtStart,
-            isPaused: session.isPaused,
-            pausedAt: session.pausedAt
+            LiveActivitySessionContent(
+                sessionID: session.id,
+                title: title,
+                deadline: deadline,
+                isOvertime: remaining <= 0 && !session.isPaused,
+                budgetSeconds: session.budgetSecondsAtStart,
+                isPaused: session.isPaused,
+                pausedAt: session.pausedAt,
+                checkInPrompt: awayPrompt,
+                alertTitle: presentAwayAlert ? CheckInCopy.away : nil,
+                alertBody: presentAwayAlert ? title : nil
+            )
         )
+    }
+
+    private var awayInterruptChannel: AwayInterruptChannel {
+        CheckInScheduling.awayInterruptChannel(
+            cabinEnabled: settings.cabinAnnouncementsEnabled,
+            alarmKitOwnsLiveActivity: isAlarmKitEndBellActive,
+            sessionLiveActivityEnabled: liveActivityManager.areActivitiesEnabled
+        )
+    }
+
+    private func fireAwayInterrupt(_ session: WorkSession, now: Date, presentAlert: Bool) {
+        cancelAwayFireTask()
+        session.awayDueAt = nil
+        session.pendingCheckIn = .away
+        try? save()
+        refreshLiveActivity(for: session, now: now, presentAwayAlert: presentAlert)
+    }
+
+    private func armAwayFire(at date: Date, sessionID: UUID) {
+        cancelAwayFireTask()
+        // Tests inject FixedSessionClock and call `reconcile()` themselves.
+        // A wall-clock sleep would keep the test runner alive for 45–90s.
+        guard clock is SystemSessionClock else { return }
+        #if canImport(UIKit)
+        awayBackgroundTask = UIApplication.shared.beginBackgroundTask(withName: "todotrain.away") { [weak self] in
+            self?.endAwayBackgroundTask()
+        }
+        #endif
+        awayFireTask = Task { @MainActor [weak self] in
+            let delay = date.timeIntervalSince(self?.clock.now ?? Date())
+            if delay > 0 {
+                try? await Task.sleep(for: .seconds(delay))
+            }
+            guard !Task.isCancelled else { return }
+            guard let self else { return }
+            guard self.activeSession?.id == sessionID else { return }
+            self.reconcile()
+            self.endAwayBackgroundTask()
+        }
+    }
+
+    private func cancelAwayFireTask() {
+        awayFireTask?.cancel()
+        awayFireTask = nil
+        endAwayBackgroundTask()
+    }
+
+    private func endAwayBackgroundTask() {
+        #if canImport(UIKit)
+        guard awayBackgroundTask != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(awayBackgroundTask)
+        awayBackgroundTask = .invalid
+        #endif
     }
 
     private func publishWidgetSnapshot(at now: Date) {
@@ -1268,6 +1381,8 @@ final class SessionManager {
         try modelContext.save()
     }
 }
+
+extension SessionManager: SessionRidePausing {}
 
 private extension String {
     var nilIfEmpty: String? {

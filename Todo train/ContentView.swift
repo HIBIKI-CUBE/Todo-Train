@@ -8,6 +8,7 @@
 import SwiftUI
 import SwiftData
 import CoreData
+import UIKit
 
 struct ContentView: View {
     @Environment(SessionManager.self) private var sessionManager
@@ -80,7 +81,15 @@ struct ContentView: View {
                 sessionManager.endAwayWatch()
                 applyPendingFocusAction()
                 syncFocusPresentation()
-            } else {
+            } else if newPhase == .background {
+                sessionManager.beginAwayWatch()
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.protectedDataWillBecomeUnavailableNotification)) { _ in
+            sessionManager.cancelAwayWatch()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.protectedDataDidBecomeAvailableNotification)) { _ in
+            if scenePhase == .background {
                 sessionManager.beginAwayWatch()
             }
         }

@@ -9,7 +9,7 @@
 | **v1** | Settings、履歴検索・今日に追加、並べ替えビュー、dueDate、カスタム見積、LA、Widget、AI stub | **完了**（CloudKit を除く） |
 | **v2** | AlarmKit + StandBy、週次レポート、UI polish、横向き compact | **完了**（iPad 等は未着手） |
 | **定時** | 定時到着 / 定時運行の短い案内（非通貨） | **完了** |
-| **車内放送** | 乗務中チェックイン + 背面「まだ乗ってる？」+ 発券 Intent | **完了** |
+| **車内放送** | 乗務中チェックイン + 背面割り込み「まだ乗ってる？」+ 発券 Intent | **完了** |
 | **次** | Linux で同期の芯（[15](15-agent-work-plan.md) SYNC-0/1/2/5） | UI は実機待ち |
 
 ## MVP（完了チェック）
@@ -54,7 +54,7 @@
 ## 車内放送（完了）
 
 - [x] `CheckInScheduling` 純関数（10 分以下 0、11–25 分 1、30 分以上は 2。ジッター帯）
-- [x] Focus 操作盤 4 択 + 背面 away 通知
+- [x] Focus 操作盤 4 択 + 背面 away 割り込み（Session LA alert / 通知フォールバック）
 - [x] 発車時オンデバイス 1 行（失敗時 Heuristic）
 - [x] 設定トグル（既定 ON）
 

@@ -163,4 +163,35 @@ struct CheckInSchedulingTests {
         #expect(CheckInCopy.fallback(title: "資料") == "まだ『資料』？")
         #expect(CheckInCopy.fallback(title: "  ") == "まだこれ？")
     }
+
+    @Test func awayInterruptChannel_matchesSurfaces() {
+        #expect(
+            CheckInScheduling.awayInterruptChannel(
+                cabinEnabled: false,
+                alarmKitOwnsLiveActivity: false,
+                sessionLiveActivityEnabled: true
+            ) == .none
+        )
+        #expect(
+            CheckInScheduling.awayInterruptChannel(
+                cabinEnabled: true,
+                alarmKitOwnsLiveActivity: true,
+                sessionLiveActivityEnabled: true
+            ) == .none
+        )
+        #expect(
+            CheckInScheduling.awayInterruptChannel(
+                cabinEnabled: true,
+                alarmKitOwnsLiveActivity: false,
+                sessionLiveActivityEnabled: true
+            ) == .liveActivityAlert
+        )
+        #expect(
+            CheckInScheduling.awayInterruptChannel(
+                cabinEnabled: true,
+                alarmKitOwnsLiveActivity: false,
+                sessionLiveActivityEnabled: false
+            ) == .localNotification
+        )
+    }
 }

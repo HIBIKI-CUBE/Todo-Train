@@ -42,6 +42,16 @@ struct SessionResumeIntent: LiveActivityIntent {
     }
 }
 
+@MainActor
+protocol SessionRidePausing: AnyObject {
+    func pauseRide(sessionID: UUID)
+}
+
+@MainActor
+enum SessionPauseRuntime {
+    static var pauser: (any SessionRidePausing)?
+}
+
 enum FocusPendingActionStore {
     static let suiteKey = "focus.pendingAction"
 

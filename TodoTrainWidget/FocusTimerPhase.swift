@@ -168,6 +168,7 @@ struct CockpitDisplayModel: Equatable {
         isOvertime: Bool,
         isStale: Bool,
         isPaused: Bool = false,
+        checkInPrompt: String? = nil,
         now: Date = .now
     ) -> CockpitDisplayModel {
         let snapshot = CockpitInstrumentSnapshot.session(
@@ -181,6 +182,8 @@ struct CockpitDisplayModel: Equatable {
         let clock: CockpitClockStyle
         let headerState: String?
         let pausedProgress: Double?
+        let prompt = checkInPrompt?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let hasPrompt = !(prompt?.isEmpty ?? true) && !isPaused && !isOvertime
         if isPaused {
             clock = .paused(remaining: remaining)
             headerState = "停車中"
@@ -198,13 +201,15 @@ struct CockpitDisplayModel: Equatable {
             pausedProgress = nil
         } else {
             clock = .countdown(end: deadline)
-            headerState = snapshot.headerState
+            headerState = hasPrompt ? prompt : snapshot.headerState
             pausedProgress = nil
         }
         return CockpitDisplayModel(
             title: title,
             clock: clock,
-            phase: isPaused ? FocusTimerPhase(remaining: remaining, budgetSeconds: TimeInterval(budgetSeconds)) : snapshot.phase,
+            phase: isPaused
+                ? FocusTimerPhase(remaining: remaining, budgetSeconds: TimeInterval(budgetSeconds))
+                : (hasPrompt ? .approach : snapshot.phase),
             headerState: headerState,
             deadlineLabel: isPaused ? "停車中" : CockpitPresentation.deadlineLabel(from: snapshot),
             budgetSeconds: budgetSeconds,

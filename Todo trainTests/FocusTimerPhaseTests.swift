@@ -82,6 +82,19 @@ final class FocusTimerPhaseTests: XCTestCase {
         XCTAssertEqual(model.headerState, "停車中")
     }
 
+    func testDisplayModelSessionAwayPromptUsesAmberHeader() {
+        let model = CockpitDisplayModel.session(
+            title: "A",
+            deadline: Date().addingTimeInterval(120),
+            budgetSeconds: 300,
+            isOvertime: false,
+            isStale: false,
+            checkInPrompt: "まだ乗ってる？"
+        )
+        XCTAssertEqual(model.headerState, "まだ乗ってる？")
+        XCTAssertEqual(model.phase, .approach)
+    }
+
     func testDisplayModelSessionOvertime() {
         let model = CockpitDisplayModel.session(
             title: "A",

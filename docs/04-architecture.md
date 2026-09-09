@@ -52,7 +52,7 @@ UI tick（1秒）は表示専用のみ
 
 - 運行開始 / 終了
 - 発車 / 停車 / 再開 / 延長 / 到着・途中下車 / 放棄 / 割り込み発車（`switchBoard`。`phase` を `.paused` にしない）。停車は `SessionPause` 区間を残す
-- 車内放送（`answerCheckIn` / `beginAwayWatch` / `endAwayWatch`）
+- 車内放送（`answerCheckIn` / `beginAwayWatch` / `cancelAwayWatch` / `endAwayWatch`）
 - 停車上限ゲート（`PauseLimitGuard.canBoardNewRide`）— 停車は常に可。新規発車と割り込み発車だけ止める
 - 日付跨ぎ検知 → `needsServiceDayEndPrompt`
 - force-quit 後の open session 復元・複数 open の修復

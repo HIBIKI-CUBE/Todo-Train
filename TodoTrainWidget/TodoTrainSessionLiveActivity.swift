@@ -25,7 +25,8 @@ struct TodoTrainSessionLiveActivity: Widget {
                 budgetSeconds: context.state.budgetSeconds,
                 isOvertime: context.state.isOvertime,
                 isStale: context.isStale,
-                isPaused: context.state.isPaused
+                isPaused: context.state.isPaused,
+                checkInPrompt: context.state.checkInPrompt
             )
             return DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
@@ -41,18 +42,12 @@ struct TodoTrainSessionLiveActivity: Widget {
                     CockpitIslandExpandedCenter(presentation: presentation)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    if context.state.isPaused {
-                        Button(intent: SessionResumeIntent(sessionID: context.attributes.sessionID)) {
-                            Label("再乗車", systemImage: "play.fill")
-                                .font(.caption.weight(.semibold))
-                                .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.plain)
-                        .padding(.horizontal, 12)
-                        .padding(.bottom, 4)
-                    } else {
-                        EmptyView()
-                    }
+                    SessionRideChip(
+                        sessionID: context.attributes.sessionID,
+                        isPaused: context.state.isPaused
+                    )
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 4)
                 }
             } compactLeading: {
                 CockpitIslandMark(phase: presentation.phase)
@@ -66,6 +61,91 @@ struct TodoTrainSessionLiveActivity: Widget {
             .widgetURL(URL(string: "todotrain://focus"))
         }
         .supplementalActivityFamilies([.medium])
+    }
+}
+
+private struct SessionRideControl: View {
+    let sessionID: UUID
+    let isPaused: Bool
+    var standBy: Bool = false
+
+    var body: some View {
+        if isPaused {
+            Button(intent: SessionResumeIntent(sessionID: sessionID)) {
+                motionLabel(title: "再乗車", systemImage: "play.fill", tint: CockpitColors.green)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("再乗車")
+        } else {
+            Button(intent: SessionPauseIntent(sessionID: sessionID)) {
+                motionLabel(title: "停車", systemImage: "pause.fill", tint: CockpitColors.amber)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("停車")
+        }
+    }
+
+    @ViewBuilder
+    private func motionLabel(title: String, systemImage: String, tint: Color) -> some View {
+        if standBy {
+            VStack(spacing: 10) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 22, weight: .bold))
+                Text(title)
+                    .font(.system(size: 18, weight: .bold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            .foregroundStyle(tint)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(
+                CockpitColors.fillRaised,
+                in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+            )
+        } else {
+            Label(title, systemImage: systemImage)
+                .font(.subheadline.weight(.bold))
+                .foregroundStyle(tint)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(CockpitColors.fillRaised, in: Capsule())
+        }
+    }
+}
+
+private struct SessionRideChip: View {
+    let sessionID: UUID
+    let isPaused: Bool
+
+    var body: some View {
+        Group {
+            if isPaused {
+                Button(intent: SessionResumeIntent(sessionID: sessionID)) {
+                    chip(title: "再乗車", systemImage: "play.fill", tint: CockpitColors.green)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("再乗車")
+            } else {
+                Button(intent: SessionPauseIntent(sessionID: sessionID)) {
+                    chip(title: "停車", systemImage: "pause.fill", tint: CockpitColors.amber)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("停車")
+            }
+        }
+        .frame(height: CockpitSizeContract.islandExpandedControlHeight)
+    }
+
+    private func chip(title: String, systemImage: String, tint: Color) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: systemImage)
+                .font(.system(size: 12, weight: .bold))
+            Text(title)
+                .font(.caption.weight(.semibold))
+                .lineLimit(1)
+        }
+        .foregroundStyle(tint)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(CockpitColors.fillRaised, in: Capsule())
     }
 }
 
@@ -97,53 +177,13 @@ private struct SessionCockpitRoot: View {
             budgetSeconds: context.state.budgetSeconds,
             isOvertime: context.state.isOvertime,
             isStale: context.isStale,
-            isPaused: context.state.isPaused
+            isPaused: context.state.isPaused,
+            checkInPrompt: context.state.checkInPrompt
         )
 
         Group {
             if isFullscreen {
-                if context.state.isPaused {
-                    CockpitStandByInstrument(
-                        title: presentation.title,
-                        clock: presentation.clock,
-                        phase: presentation.phase,
-                        headerState: presentation.headerState,
-                        deadlineLabel: presentation.deadlineLabel,
-                        budgetSeconds: presentation.budgetSeconds,
-                        pausedProgress: presentation.pausedProgress,
-                        accessibilityTimer: presentation.accessibilityTimer
-                    ) {
-                        Button(intent: SessionResumeIntent(sessionID: context.attributes.sessionID)) {
-                            VStack(spacing: 10) {
-                                Image(systemName: "play.fill")
-                                    .font(.system(size: 22, weight: .bold))
-                                Text("再乗車")
-                                    .font(.system(size: 18, weight: .bold))
-                            }
-                            .foregroundStyle(CockpitColors.green)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .background(
-                                CockpitColors.fillRaised,
-                                in: RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            )
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("再乗車")
-                    }
-                } else {
-                    CockpitStandByInstrument(
-                        title: presentation.title,
-                        clock: presentation.clock,
-                        phase: presentation.phase,
-                        headerState: presentation.headerState,
-                        deadlineLabel: presentation.deadlineLabel,
-                        budgetSeconds: presentation.budgetSeconds,
-                        pausedProgress: presentation.pausedProgress,
-                        accessibilityTimer: presentation.accessibilityTimer
-                    )
-                }
-            } else if context.state.isPaused {
-                CockpitLockScreenInstrument(
+                CockpitStandByInstrument(
                     title: presentation.title,
                     clock: presentation.clock,
                     phase: presentation.phase,
@@ -153,14 +193,11 @@ private struct SessionCockpitRoot: View {
                     pausedProgress: presentation.pausedProgress,
                     accessibilityTimer: presentation.accessibilityTimer
                 ) {
-                    Button(intent: SessionResumeIntent(sessionID: context.attributes.sessionID)) {
-                        Label("再乗車", systemImage: "play.fill")
-                            .font(.subheadline.weight(.bold))
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .background(CockpitColors.fillRaised, in: Capsule())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("再乗車")
+                    SessionRideControl(
+                        sessionID: context.attributes.sessionID,
+                        isPaused: context.state.isPaused,
+                        standBy: true
+                    )
                 }
             } else {
                 CockpitLockScreenInstrument(
@@ -172,7 +209,12 @@ private struct SessionCockpitRoot: View {
                     budgetSeconds: presentation.budgetSeconds,
                     pausedProgress: presentation.pausedProgress,
                     accessibilityTimer: presentation.accessibilityTimer
-                )
+                ) {
+                    SessionRideControl(
+                        sessionID: context.attributes.sessionID,
+                        isPaused: context.state.isPaused
+                    )
+                }
             }
         }
         .frame(maxWidth: .infinity)
@@ -222,6 +264,16 @@ private enum SessionPreviewFixtures {
             budgetSeconds: 20 * 60
         )
     }
+
+    static var awayInterrupt: TodoTrainActivityAttributes.ContentState {
+        .init(
+            title: "仕様書を書く",
+            deadline: .now.addingTimeInterval(12 * 60),
+            isOvertime: false,
+            budgetSeconds: 20 * 60,
+            checkInPrompt: "まだ乗ってる？"
+        )
+    }
 }
 
 #Preview("Session Lock Screen", as: .content, using: SessionPreviewFixtures.attributes) {
@@ -232,6 +284,7 @@ private enum SessionPreviewFixtures {
     SessionPreviewFixtures.running(remaining: 90)
     SessionPreviewFixtures.overtime
     SessionPreviewFixtures.longTitle
+    SessionPreviewFixtures.awayInterrupt
 }
 
 #Preview("Session DI Compact", as: .dynamicIsland(.compact), using: SessionPreviewFixtures.attributes) {
@@ -258,6 +311,7 @@ private enum SessionPreviewFixtures {
     SessionPreviewFixtures.running(remaining: 90)
     SessionPreviewFixtures.overtime
     SessionPreviewFixtures.longTitle
+    SessionPreviewFixtures.awayInterrupt
 }
 #endif
 #endif

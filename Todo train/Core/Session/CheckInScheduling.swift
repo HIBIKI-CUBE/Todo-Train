@@ -37,6 +37,16 @@ enum CheckInCopy {
     static let away = "まだ乗ってる？"
 }
 
+/// How to deliver the away interrupt. Not a self-report question.
+enum AwayInterruptChannel: Equatable, Sendable {
+    /// Session LA `AlertConfiguration` (end bell OFF, Activities on).
+    case liveActivityAlert
+    /// Time Sensitive local notification — only when there is no Session LA.
+    case localNotification
+    /// Cabin off, or AlarmKit already owns the lock-screen / Island surface.
+    case none
+}
+
 enum CheckInScheduling: Sendable {
     /// 10 minutes or less: no progress broadcasts.
     static let shortTripMaxSeconds = 10 * 60
@@ -67,6 +77,17 @@ enum CheckInScheduling: Sendable {
             let fraction = band.lowerBound + (band.upperBound - band.lowerBound) * t
             return budget * fraction
         }
+    }
+
+    static func awayInterruptChannel(
+        cabinEnabled: Bool,
+        alarmKitOwnsLiveActivity: Bool,
+        sessionLiveActivityEnabled: Bool
+    ) -> AwayInterruptChannel {
+        guard cabinEnabled else { return .none }
+        if alarmKitOwnsLiveActivity { return .none }
+        if sessionLiveActivityEnabled { return .liveActivityAlert }
+        return .localNotification
     }
 
     static func awayDelay(seed: UUID, salt: UInt64 = 99) -> TimeInterval {

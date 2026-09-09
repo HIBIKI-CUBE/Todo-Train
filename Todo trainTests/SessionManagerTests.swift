@@ -18,7 +18,9 @@ struct SessionManagerTests {
         overrideCounter: (any OverrideCounting)? = nil,
         alarmScheduler: InMemoryAlarmScheduler? = nil,
         checkInNotifier: (any CheckInNotifying)? = nil,
-        deviceIdentity: (any DeviceIdentifying)? = nil
+        liveActivityManager: (any LiveActivityManaging)? = nil,
+        deviceIdentity: (any DeviceIdentifying)? = nil,
+        deviceLock: (any DeviceLockReading)? = nil
     ) throws -> (SessionManager, ModelContext, FixedSessionClock, InMemoryAlarmScheduler) {
         let container = try AppModelContainer.make(inMemory: true)
         let context = ModelContext(container)
@@ -35,8 +37,10 @@ struct SessionManagerTests {
             settings: settings,
             checkInNotifier: checkInNotifier ?? NoOpCheckInNotifier(),
             overrideCounter: overrideCounter ?? InMemoryOverrideCounter(),
+            liveActivityManager: liveActivityManager,
             alarmScheduler: scheduler,
-            deviceIdentity: deviceIdentity ?? FixedDeviceIdentity(id: "test-device")
+            deviceIdentity: deviceIdentity ?? FixedDeviceIdentity(id: "test-device"),
+            deviceLock: deviceLock ?? FixedDeviceLock(isLocked: false)
         )
         return (manager, context, clock, scheduler)
     }
@@ -276,9 +280,9 @@ struct SessionManagerTests {
         try manager.board(ticket: a)
         try manager.pause()
         try manager.board(ticket: b)
-        try manager.pause()
-        try manager.board(ticket: c)
+        try manager.switchBoard(ticket: c)
         #expect(manager.pausedTicketCount == 2)
+        #expect(manager.activeSession?.ticket?.id == c.id)
 
         #expect(throws: SessionError.pauseLimitReached) {
             try manager.switchBoard(ticket: d)
@@ -315,8 +319,7 @@ struct SessionManagerTests {
         try manager.board(ticket: a)
         try manager.pause()
         try manager.board(ticket: b)
-        try manager.pause()
-        try manager.board(ticket: c)
+        try manager.switchBoard(ticket: c)
         #expect(manager.pausedTicketCount == 2)
 
         try manager.switchBoard(ticket: a)
@@ -598,8 +601,6 @@ struct SessionManagerTests {
         #expect(manager.todayOverrideCount == 0)
         #expect(manager.phase == .paused)
         #expect(manager.pausedTicketCount == 1)
-    }
-
     }
 
     @Test func endBell_scheduledWhenEnabledOnBoard() throws {
@@ -1218,18 +1219,126 @@ struct SessionManagerTests {
         #expect(manager.pendingCheckIn == nil)
     }
 
-    @Test func beginAwayWatch_promotesOnEndAfterDue() throws {
-        let (manager, context, clock, _) = try makeHarness()
+    @Test func beginAwayWatch_unlocked_schedulesDue() throws {
+        let (manager, context, _, _) = try makeHarness()
         try manager.startService()
         let ticket = try makeTicket(context, seconds: 5 * 60)
         try manager.board(ticket: ticket)
         manager.beginAwayWatch()
         #expect(manager.activeSession?.awayDueAt != nil)
+    }
 
+    @Test func beginAwayWatch_locked_isNoOp() throws {
+        let (manager, context, _, _) = try makeHarness(deviceLock: FixedDeviceLock(isLocked: true))
+        try manager.startService()
+        let ticket = try makeTicket(context, seconds: 5 * 60)
+        try manager.board(ticket: ticket)
+        manager.beginAwayWatch()
+        #expect(manager.activeSession?.awayDueAt == nil)
+        #expect(manager.pendingCheckIn == nil)
+    }
+
+    @Test func cancelAwayWatch_clearsDue_withoutPromoting() throws {
+        let (manager, context, _, _) = try makeHarness()
+        try manager.startService()
+        let ticket = try makeTicket(context, seconds: 5 * 60)
+        try manager.board(ticket: ticket)
+        manager.beginAwayWatch()
+        manager.cancelAwayWatch()
+        #expect(manager.activeSession?.awayDueAt == nil)
+        #expect(manager.pendingCheckIn == nil)
+    }
+
+    @Test func reconcile_awayDue_setsInterrupt_notFocusQuestion() throws {
+        let live = InMemoryLiveActivityManager(areActivitiesEnabled: true)
+        let checkIns = InMemoryCheckInNotifier()
+        let (manager, context, clock, _) = try makeHarness(
+            checkInNotifier: checkIns,
+            liveActivityManager: live
+        )
+        try manager.startService()
+        let ticket = try makeTicket(context, seconds: 5 * 60)
+        try manager.board(ticket: ticket)
+        manager.beginAwayWatch()
+        #expect(checkIns.away.isEmpty)
         clock.advance(by: 90)
-        manager.endAwayWatch()
+        manager.reconcile()
         #expect(manager.pendingCheckIn == .away)
         #expect(manager.activeSession?.awayDueAt == nil)
+        #expect(live.current?.checkInPrompt == CheckInCopy.away)
+        #expect(live.alertCount == 1)
+        #expect(checkIns.away.isEmpty)
+    }
+
+    @Test func endAwayWatch_clearsAwayInterrupt() throws {
+        let (manager, context, clock, _) = try makeHarness(
+            liveActivityManager: InMemoryLiveActivityManager()
+        )
+        try manager.startService()
+        let ticket = try makeTicket(context, seconds: 5 * 60)
+        try manager.board(ticket: ticket)
+        manager.beginAwayWatch()
+        clock.advance(by: 90)
+        manager.reconcile()
+        #expect(manager.pendingCheckIn == .away)
+        manager.endAwayWatch()
+        #expect(manager.pendingCheckIn == nil)
+        #expect(manager.activeSession?.awayDueAt == nil)
+    }
+
+    @Test func endBellOn_doesNotScheduleAwayNotification() throws {
+        let checkIns = InMemoryCheckInNotifier()
+        let (manager, context, _, _) = try makeHarness(
+            endBellEnabled: true,
+            checkInNotifier: checkIns
+        )
+        try manager.startService()
+        let ticket = try makeTicket(context, seconds: 5 * 60)
+        try manager.board(ticket: ticket)
+        manager.beginAwayWatch()
+        #expect(manager.activeSession?.awayDueAt == nil)
+        #expect(checkIns.away.isEmpty)
+    }
+
+    @Test func awayNotification_stillOnIt_isIgnored() throws {
+        let checkIns = InMemoryCheckInNotifier()
+        let (manager, context, clock, _) = try makeHarness(
+            checkInNotifier: checkIns,
+            liveActivityManager: NoOpLiveActivityManager()
+        )
+        try manager.startService()
+        let ticket = try makeTicket(context, seconds: 5 * 60)
+        try manager.board(ticket: ticket)
+        manager.beginAwayWatch()
+        #expect(checkIns.away.count == 1)
+        clock.advance(by: 90)
+        let identifier = CheckInNotification.awayIdentifier(sessionID: manager.activeSession!.id)
+        manager.handleCheckInNotification(
+            identifier: identifier,
+            action: CheckInNotification.stillOnItAction
+        )
+        #expect(manager.phase == .running)
+        #expect(manager.activeSession?.isPaused == false)
+    }
+
+    @Test func awayNotification_pause_stopsTheRide() throws {
+        let checkIns = InMemoryCheckInNotifier()
+        let (manager, context, clock, _) = try makeHarness(
+            checkInNotifier: checkIns,
+            liveActivityManager: NoOpLiveActivityManager()
+        )
+        try manager.startService()
+        let ticket = try makeTicket(context, seconds: 5 * 60)
+        try manager.board(ticket: ticket)
+        manager.beginAwayWatch()
+        clock.advance(by: 90)
+        let identifier = CheckInNotification.awayIdentifier(sessionID: manager.activeSession!.id)
+        manager.handleCheckInNotification(
+            identifier: identifier,
+            action: CheckInNotification.pauseAction
+        )
+        #expect(manager.phase == .paused)
+        #expect(manager.pendingCheckIn == nil)
     }
 
     @Test func progressDue_dropsAway() throws {

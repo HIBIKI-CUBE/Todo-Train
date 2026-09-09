@@ -29,11 +29,13 @@ struct HubPreviewSeedTests {
     }
 
     @Test func inServiceWithPause_parksWeeklyReview() throws {
-        let (_, manager) = HubPreviewSeed.make(scenario: .inServiceWithPause)
+        let (container, manager) = HubPreviewSeed.make(scenario: .inServiceWithPause)
         #expect(manager.isInService)
         #expect(manager.pausedSessions.count == 1)
-        #expect(manager.pausedSessions.first?.ticket?.title == "週次レビューの下書き")
+        let pausedTitle = manager.pausedSessions.first?.ticket?.title
+        #expect(pausedTitle == "週次レビューの下書き")
         #expect(manager.phase == .paused)
+        _ = container
     }
 
     @Test func backlogIdle_keepsTicketsWithoutService() throws {
