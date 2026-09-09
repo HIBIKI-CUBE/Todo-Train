@@ -1,0 +1,80 @@
+# Linux gates for TodoTrainSync (SYNC-2) and client↔worker E2E (SYNC-5).
+#
+# Package: cd Packages/TodoTrainSync && ../../sync/linux-swift.sh test
+# E2E:     ./sync/e2e/run.sh
+#
+# swift-crypto / BoringSSL needs g++ headers on Ubuntu. Mac / Xcode は不要。
+
+name: sync-swift
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [develop, main]
+    paths:
+      - "Packages/TodoTrainSync/**"
+      - "sync/e2e/**"
+      - "sync/worker/**"
+      - "sync/contract/**"
+      - "sync/linux-swift.sh"
+      - ".github/workflows/sync-swift.yml"
+  pull_request:
+    paths:
+      - "Packages/TodoTrainSync/**"
+      - "sync/e2e/**"
+      - "sync/worker/**"
+      - "sync/contract/**"
+      - "sync/linux-swift.sh"
+      - ".github/workflows/sync-swift.yml"
+
+concurrency:
+  group: sync-swift-${{ github.event.pull_request.number && format('pr-{0}', github.event.pull_request.number) || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: swift test (TodoTrainSync)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: "6.0"
+      - name: C++ headers for swift-crypto
+        run: sudo apt-get update && sudo apt-get install -y g++ libstdc++-14-dev
+      - uses: actions/cache@v4
+        with:
+          path: Packages/TodoTrainSync/.build
+          key: ${{ runner.os }}-todotrainsync-${{ hashFiles('Packages/TodoTrainSync/Package.resolved') }}
+      - name: swift test
+        working-directory: Packages/TodoTrainSync
+        run: ../../sync/linux-swift.sh test
+
+  e2e:
+    name: Linux E2E (client ↔ worker)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: sync/worker/package-lock.json
+      - uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: "6.0"
+      - name: C++ headers for swift-crypto
+        run: sudo apt-get update && sudo apt-get install -y g++ libstdc++-14-dev
+      - uses: actions/cache@v4
+        with:
+          path: |
+            Packages/TodoTrainSync/.build
+            sync/e2e/.build
+          key: ${{ runner.os }}-sync-e2e-${{ hashFiles('Packages/TodoTrainSync/Package.resolved', 'sync/e2e/Package.resolved', 'sync/worker/package-lock.json') }}
+      - name: run.sh
+        run: ./sync/e2e/run.sh
