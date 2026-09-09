@@ -3,7 +3,7 @@
 # Package: cd Packages/TodoTrainSync && ../../sync/linux-swift.sh test
 # E2E:     ./sync/e2e/run.sh
 #
-# swift-crypto / BoringSSL needs g++ headers on Ubuntu. Mac / Xcode は不要。
+# swift-crypto 3.15 → swift-asn1 1.7.2 は tools 6.1。BoringSSL は g++ ヘッダ必須。Mac / Xcode は不要。
 
 name: sync-swift
 
@@ -43,7 +43,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: swift-actions/setup-swift@v2
         with:
-          swift-version: "6.0"
+          swift-version: "6.1"
       - name: C++ headers for swift-crypto
         run: sudo apt-get update && sudo apt-get install -y g++ libstdc++-14-dev
       - uses: actions/cache@v4
@@ -67,7 +67,7 @@ jobs:
           cache-dependency-path: sync/worker/package-lock.json
       - uses: swift-actions/setup-swift@v2
         with:
-          swift-version: "6.0"
+          swift-version: "6.1"
       - name: C++ headers for swift-crypto
         run: sudo apt-get update && sudo apt-get install -y g++ libstdc++-14-dev
       - uses: actions/cache@v4
