@@ -1,6 +1,6 @@
 # 08 — 現状ステータス
 
-最終更新: 2026-09-08（停車 LA を残す / WIP は新規発車。履歴時計・停車区間・同期作業は [15](15-agent-work-plan.md)）
+最終更新: 2026-09-10（Mac メニューバーは SYNC-4。人が見ないと閉じない確認は [16](16-wakeup-checklist.md)）
 
 ## 結論
 
@@ -68,7 +68,9 @@ Todo train/
     Reorder/               ReorderView
     Settings/              SettingsView
 TodoTrainWidget/           Home Widget + Session LA + Alarm LA
+TodoTrainCompanion/        macOS メニューバー accessory（SYNC-4。提案値）
 Todo trainTests/           Swift Testing（CheckInScheduling / TicketIssuer 含む）
+TodoTrainCompanionTests/   停車送信の純関数
 ```
 
 ## 動作するユーザーフロー
@@ -89,12 +91,12 @@ Todo trainTests/           Swift Testing（CheckInScheduling / TicketIssuer 含�
 | Session LA からの Intent | 停車中の再乗車は `SessionResumeIntent`。到着・延長は deep link |
 | iPad 最適化 | v2 以降。iPhone アプリの自由リサイズ（ミラーリング）は Hub がシーン幅に追従 |
 | 乗り継ぎキャンバスのゲージ統一 | Phase 2（Quick Add のみ線形スナップ・ゲージ） |
-| Mac Companion | 土管 [13](13-sync-mac-companion.md)。体験 [14](14-mac-companion-ux.md)。作業切り分け [15](15-agent-work-plan.md)。実装は未着手 |
+| Mac Companion | 土管 [13](13-sync-mac-companion.md)。体験 [14](14-mac-companion-ux.md)。メニューバー実装は SYNC-4。実機確認は [16](16-wakeup-checklist.md) |
 
 ## テスト
 
-- スキーム: `Todo train`
-- ユニット: `Todo trainTests`（Swift Testing）
+- スキーム: `Todo train`（iOS）/ `TodoTrainCompanion`（macOS）
+- ユニット: `Todo trainTests`、`TodoTrainCompanionTests`
 
 ```bash
 SIM=<booted-iphone-simulator-udid>

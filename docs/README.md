@@ -18,6 +18,7 @@
 | [13-sync-mac-companion.md](13-sync-mac-companion.md) | 同期構成（ペアリング + E2E + CF Workers）。**確定** |
 | [14-mac-companion-ux.md](14-mac-companion-ux.md) | Mac コンパニオン体験。**確認待ち（実装は提案値）** |
 | [15-agent-work-plan.md](15-agent-work-plan.md) | 同期実装のエージェント切り分け。Issue 本文は [issues/](issues/) |
+| [16-wakeup-checklist.md](16-wakeup-checklist.md) | 人が見ないと閉じない確認・マージ順 |
 
 ルートの [AGENTS.md](../AGENTS.md) が作業開始時の短い入口です。
 
@@ -29,11 +30,11 @@
 4. LA / Widget / AlarmKit を触るなら [11](11-v2-alarmkit-setup.md)
 5. UI を触るなら [12](12-ui-design.md)
 6. 同期の土管なら [13](13-sync-mac-companion.md)。Mac の画面なら [14](14-mac-companion-ux.md)
-7. 同期を実装するエージェントは [15](15-agent-work-plan.md) と自分の [issues/](issues/) チケットだけ
+7. 同期を実装するエージェントは [15](15-agent-work-plan.md) と自分の [issues/](issues/) チケットだけ。人が見ないと閉じない確認は [16](16-wakeup-checklist.md)
 
 ## ステータス
 
 - ターゲット: **iPhone 15 Pro Max / iOS 27**
 - スタック: **SwiftUI + SwiftData**
 - **MVP / v1 / v2: `develop` にマージ済み**
-- **次: Linux で SYNC-0/1/2/5（[15](15-agent-work-plan.md)）。Mac 起動は UI まで不要**
+- **次: SYNC-3 / 4 の実機確認。** Linux 芯（0/1/2/5）は `develop` 済み。起床後リストは [16](16-wakeup-checklist.md)

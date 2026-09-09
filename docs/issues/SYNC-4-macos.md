@@ -2,7 +2,7 @@
 
 ## 状態
 
-**今は振らない。** Linux では完了できない。メニューバーの表示ロジックは SYNC-2 済みが前提。
+**コードは PR。** 実機のカメラ / Touch ID / メニューバー見た目は [16-wakeup-checklist.md](../16-wakeup-checklist.md)。Issue: https://github.com/HIBIKI-CUBE/Todo-Train/issues/38
 
 ## 環境
 

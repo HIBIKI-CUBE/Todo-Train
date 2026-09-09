@@ -10,7 +10,7 @@
 | **v2** | AlarmKit + StandBy、週次レポート、UI polish、横向き compact | **完了**（iPad 等は未着手） |
 | **定時** | 定時到着 / 定時運行の短い案内（非通貨） | **完了** |
 | **車内放送** | 乗務中チェックイン + 背面「まだ乗ってる？」+ 発券 Intent | **完了** |
-| **次** | Linux で同期の芯（[15](15-agent-work-plan.md) SYNC-0/1/2/5） | UI は実機待ち |
+| **次** | SYNC-3 / 4 の実機確認。[16](16-wakeup-checklist.md) | コードは PR。Linux 芯は済み |
 
 ## MVP（完了チェック）
 
@@ -60,9 +60,8 @@
 
 ## 次軌道
 
-1. **SYNC-0〜2, 5** — Linux Cloud Agent。[15](15-agent-work-plan.md)。Mac 起動不要
-2. **SYNC-3 / 4** — 実機 UI。今は振らない
-3. **WP-I CloudKit** — ゲート維持
+1. **SYNC-3 / 4** — 実装 PR あり。実機確認は [16-wakeup-checklist.md](16-wakeup-checklist.md)
+2. **WP-I CloudKit** — ゲート維持
 
 ## 受入の芯（MVP・達成済みの意図）
 
