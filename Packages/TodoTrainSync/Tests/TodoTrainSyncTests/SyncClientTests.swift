@@ -91,6 +91,39 @@ struct SyncClientTests {
         #expect(requests[3].body.flatMap { String(data: $0, encoding: .utf8) }?.contains("hmac") == true)
     }
 
+    @Test func confirmRetriesUntilPeerOverlapsWithoutSecondLA() async throws {
+        let transport = ScriptedHTTPTransport([
+            .init(
+                status: 201,
+                json: #"{"offerId":"b1b2b3b4-c1c2-4d3d-8e4e-f5f6f7f8f9fb","pairingId":"a1a2a3a4-b1b2-4c3c-8d4d-e5e6e7e8e9ea","expiresAt":1768000120}"#
+            ),
+            .init(
+                status: 200,
+                json: #"{"bound":true,"pairingId":"a1a2a3a4-b1b2-4c3c-8d4d-e5e6e7e8e9ea","s":"c1c2c3c4-d1d2-4e3e-8f4f-a5a6a7a8a9aa","x":"6cUEjnLPwR0PtWYzHUVx7rfJ4kbso5tubUYqdeFHIRI","y":"UgKyT75SOaUjcnm8rdNOZvC3qC3oVkNtdt-WlgkO9rI"}"#
+            ),
+            .init(status: 200, json: #"{"confirmed":false}"#),
+            .init(status: 200, json: #"{"confirmed":true,"pairingId":"a1a2a3a4-b1b2-4c3c-8d4d-e5e6e7e8e9ea"}"#),
+            .init(status: 200, json: #"{"pairingId":"a1a2a3a4-b1b2-4c3c-8d4d-e5e6e7e8e9ea"}"#),
+        ])
+        let auth = CountingLocalAuth()
+        let store = InMemorySecretStore()
+        let flow = PairingFlow(
+            role: .iphone,
+            client: SyncHTTPClient(baseURL: base, transport: transport),
+            secrets: store,
+            localAuth: auth
+        )
+        _ = try await flow.presentQR()
+        let macURL = "todotrain://pair-mac?s=c1c2c3c4-d1d2-4e3e-8f4f-a5a6a7a8a9aa&y=UgKyT75SOaUjcnm8rdNOZvC3qC3oVkNtdt-WlgkO9rI"
+        _ = try await flow.ingestOptical(macURL)
+        try await flow.authenticateAndConfirm()
+        #expect(await flow.phase == .established)
+        #expect(await auth.count == 1)
+        #expect(try store.load() != nil)
+        let requests = await transport.requests
+        #expect(requests.filter { $0.path.contains("confirm-iphone") }.count == 2)
+    }
+
     @Test func oneSidedOpticalDoesNotAuthenticate() async throws {
         let transport = ScriptedHTTPTransport([
             .init(

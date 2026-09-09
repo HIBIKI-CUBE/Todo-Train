@@ -13,4 +13,5 @@ public enum SyncError: Error, Equatable, Sendable {
     case notPaired
     case pairingNotBound
     case pairingAborted
+    case confirmTimedOut
 }
