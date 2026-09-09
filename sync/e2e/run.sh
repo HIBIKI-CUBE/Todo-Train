@@ -5,7 +5,10 @@ set -euo pipefail
 E2E_DIR=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$E2E_DIR/../.." && pwd)
 WORKER_DIR="$ROOT/sync/worker"
-PORT="${TODOTRAIN_SYNC_E2E_PORT:-8787}"
+PORT="${TODOTRAIN_SYNC_E2E_PORT:-}"
+if [[ -z "${PORT}" ]]; then
+  PORT=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()')
+fi
 BASE_URL="http://127.0.0.1:${PORT}"
 export TODOTRAIN_SYNC_E2E_URL="$BASE_URL"
 export CI=true
@@ -16,8 +19,8 @@ PERSIST=$(mktemp -d "${TMPDIR:-/tmp}/todotrain-sync-e2e-persist.XXXXXX")
 WRANGLER_PID=""
 
 cleanup() {
-  if [[ -n "${WRANGLER_PID}" ]] && kill -0 "${WRANGLER_PID}" 2>/dev/null; then
-    kill "${WRANGLER_PID}" 2>/dev/null || true
+  if [[ -n "${WRANGLER_PID}" ]]; then
+    kill -- "-${WRANGLER_PID}" 2>/dev/null || kill "${WRANGLER_PID}" 2>/dev/null || true
     wait "${WRANGLER_PID}" 2>/dev/null || true
   fi
 }
@@ -25,6 +28,7 @@ trap cleanup EXIT
 
 echo "e2e: worker log ${LOG}"
 echo "e2e: persist ${PERSIST}"
+echo "e2e: url ${BASE_URL}"
 
 if [[ ! -d "${WORKER_DIR}/node_modules" ]]; then
   (cd "${WORKER_DIR}" && npm ci)
@@ -32,7 +36,7 @@ fi
 
 (
   cd "${WORKER_DIR}"
-  npx wrangler dev \
+  exec setsid npx wrangler dev \
     --local \
     --port "${PORT}" \
     --ip 127.0.0.1 \
@@ -44,18 +48,25 @@ WRANGLER_PID=$!
 
 ready=0
 for _ in $(seq 1 90); do
+  if grep -q 'Address already in use' "${LOG}" 2>/dev/null; then
+    echo "e2e: wrangler could not bind ${BASE_URL}" >&2
+    cat "${LOG}" >&2 || true
+    exit 1
+  fi
   if ! kill -0 "${WRANGLER_PID}" 2>/dev/null; then
     echo "e2e: wrangler exited before ready" >&2
     cat "${LOG}" >&2 || true
     exit 1
   fi
-  code=$(curl -s -o /tmp/todotrain-sync-e2e-probe.json -w '%{http_code}' \
-    -X POST "${BASE_URL}/v1/offers" \
-    -H 'content-type: application/json' \
-    -d '{"x":"nope"}' 2>/dev/null || true)
-  if [[ "${code}" == "400" ]]; then
-    ready=1
-    break
+  if grep -q "Ready on http://127.0.0.1:${PORT}" "${LOG}" 2>/dev/null; then
+    code=$(curl -s -o /tmp/todotrain-sync-e2e-probe.json -w '%{http_code}' \
+      -X POST "${BASE_URL}/v1/offers" \
+      -H 'content-type: application/json' \
+      -d '{"x":"nope"}' 2>/dev/null || true)
+    if [[ "${code}" == "400" ]]; then
+      ready=1
+      break
+    fi
   fi
   sleep 1
 done
