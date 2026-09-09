@@ -49,10 +49,10 @@ for _ in $(seq 1 90); do
     cat "${LOG}" >&2 || true
     exit 1
   fi
-  code=$(curl -sS -o /tmp/todotrain-sync-e2e-probe.json -w '%{http_code}' \
+  code=$(curl -s -o /tmp/todotrain-sync-e2e-probe.json -w '%{http_code}' \
     -X POST "${BASE_URL}/v1/offers" \
     -H 'content-type: application/json' \
-    -d '{"x":"nope"}' || true)
+    -d '{"x":"nope"}' 2>/dev/null || true)
   if [[ "${code}" == "400" ]]; then
     ready=1
     break

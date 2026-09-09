@@ -39,8 +39,11 @@ struct LinuxE2ETests {
         #expect(await iphoneFlow.phase == .awaitingLocalAuth)
         #expect(await macFlow.phase == .awaitingLocalAuth)
 
-        try await confirmUntilEstablished(iphoneFlow)
-        try await confirmUntilEstablished(macFlow)
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            group.addTask { try await confirmUntilEstablished(iphoneFlow) }
+            group.addTask { try await confirmUntilEstablished(macFlow) }
+            try await group.waitForAll()
+        }
         #expect(await iphoneFlow.phase == .established)
         #expect(await macFlow.phase == .established)
 
