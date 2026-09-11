@@ -9,6 +9,7 @@ import SwiftData
 struct SettingsView: View {
     @Environment(AppSettings.self) private var settings
     @Environment(SessionManager.self) private var sessionManager
+    @Environment(CompanionSyncRuntime.self) private var runtime
     @Environment(\.verticalSizeClass) private var verticalSizeClass
 
     var body: some View {
@@ -80,6 +81,40 @@ struct SettingsView: View {
             } header: {
                 Text("データ")
             }
+
+            Section {
+                if runtime.isPaired {
+                    LabeledContent("Mac") {
+                        Text("つながっている")
+                            .foregroundStyle(TrainTheme.muted)
+                    }
+                    Button("この Mac との連携を解除", role: .destructive) {
+                        try? runtime.unpair()
+                    }
+                } else {
+                    NavigationLink {
+                        CompanionPairingView()
+                    } label: {
+                        Label("この Mac とつなぐ", systemImage: "laptopcomputer")
+                    }
+                }
+                TextField("リレー URL", text: Binding(
+                    get: { settings.companionRelayURLString },
+                    set: { settings.companionRelayURLString = $0 }
+                ))
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .keyboardType(.URL)
+                if let status = runtime.lastStatus {
+                    Text(status)
+                        .font(.footnote)
+                        .foregroundStyle(TrainTheme.muted)
+                }
+            } header: {
+                Text("Mac")
+            } footer: {
+                Text("画面を Mac に向ける一動作でつなぎます。この Mac だけが読めます。リレーは暗号化文だけ運びます。")
+            }
         }
         .navigationTitle("設定")
         .navigationBarTitleDisplayMode(
@@ -95,6 +130,7 @@ struct SettingsView: View {
         SettingsView()
             .environment(AppSettings.shared)
             .environment(manager)
+            .environment(CompanionSyncRuntime())
             .environment(DeletionUndoCenter())
             .modelContainer(container)
     }

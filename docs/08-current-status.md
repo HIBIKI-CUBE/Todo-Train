@@ -1,11 +1,11 @@
 # 08 — 現状ステータス
 
-最終更新: 2026-09-10（車内放送 away を Session LA 割り込みへ。停車 LA / 履歴時計・同期は [15](15-agent-work-plan.md)）
+最終更新: 2026-09-11（車内放送 away を Session LA 割り込みへ。SYNC-3 / 4 は `develop`。確認は [16](16-wakeup-checklist.md)）
 
 ## 結論
 
 **MVP（Sprint 1–10）・v1・v2（AlarmKit / UI polish）・車内放送は実装済み。**  
-**CloudKit（WP-I）** はスキーマとゲート付きローカル store まで。Mac 土管には使わない。同期構成は [13-sync-mac-companion.md](13-sync-mac-companion.md)。Mac の画面は [14-mac-companion-ux.md](14-mac-companion-ux.md)（確認待ち）。実装マップと検証手順は本ファイルと [11-v2-alarmkit-setup.md](11-v2-alarmkit-setup.md) / [12-ui-design.md](12-ui-design.md) を参照。
+**CloudKit（WP-I）** はスキーマとゲート付きローカル store まで。Mac 土管には使わない。同期の Linux 芯（契約・リレー・Swift パッケージ・E2E）は完了。構成は [13-sync-mac-companion.md](13-sync-mac-companion.md)。Mac の画面は [14-mac-companion-ux.md](14-mac-companion-ux.md)（確認待ち）。実装マップと検証手順は本ファイルと [11-v2-alarmkit-setup.md](11-v2-alarmkit-setup.md) / [12-ui-design.md](12-ui-design.md) を参照。
 
 定時の喜びは **エフェメラ**。到着は完了ジェスチャ（切符の無効化）で祝う。ストリークや定時率は出さない。超過で案内は取り下げない。
 
@@ -24,6 +24,17 @@
 | WP-G Widget | ✅ | App Group スナップショット |
 | WP-H AI / PCC | 部分 | 分割・日次レビューは stub。車内放送 1 行は `OnDeviceCoachingEngine` |
 | WP-I CloudKit | ゲート維持 | unique 削除・`boardedDeviceID`・`.none` store。Mac 土管には使わない |
+
+### 同期（Linux 芯）
+
+| ID | 状態 | 備考 |
+|----|------|------|
+| SYNC-0 契約 | ✅ | `sync/contract/` |
+| SYNC-1 リレー | ✅ | `sync/worker/`。CI `sync-worker`。Cloudflare 本番は secrets 待ち |
+| SYNC-2 Swift 芯 | ✅ | `Packages/TodoTrainSync`。Mac は SYNC-4、iOS は SYNC-3 でリンク。CI `sync-swift` |
+| SYNC-5 Linux E2E | ✅ | `sync/e2e/run.sh`。CI `sync-swift` |
+| SYNC-3 iOS UI | `develop` 済み。実機待ち | Settings セルフィー + `SessionManager` 配線（#35） |
+| SYNC-4 macOS | `develop` 済み。実機待ち | メニューバー + ウェブカメラ枠（#39） |
 
 ### v2 進捗
 
@@ -50,6 +61,7 @@ Todo train/
     Notifications/         OvertimeNotifier, CheckInNotifier
     History/               HistorySearch, TicketReissue, WeeklyReport, Punctuality, SessionTimeline
     Settings/              AppSettings
+    Companion/             CompanionSyncRuntime, セルフィー配線（SYNC-3）
     Coaching/              CoachingEngine（Heuristic + OnDevice 1 行）
     Intents/               IssueTicketIntent
     Tickets/               TicketSortOrdering, TicketIssuer
@@ -68,7 +80,13 @@ Todo train/
     Reorder/               ReorderView
     Settings/              SettingsView
 TodoTrainWidget/           Home Widget + Session LA + Alarm LA
+TodoTrainCompanion/        macOS メニューバー accessory（SYNC-4。提案値）
 Todo trainTests/           Swift Testing（CheckInScheduling / TicketIssuer 含む）
+TodoTrainCompanionTests/   停車送信の純関数
+Packages/TodoTrainSync/    同期芯（暗号・ペアリング・停車判定。UI なし）
+sync/contract/             ワイヤ契約の正本
+sync/worker/               Hono + Durable Object
+sync/e2e/                  Linux 結合（client ↔ worker）
 ```
 
 ## 動作するユーザーフロー
@@ -89,12 +107,15 @@ Todo trainTests/           Swift Testing（CheckInScheduling / TicketIssuer 含�
 | Session LA からの Intent | 走行中の停車は `SessionPauseIntent`。停車中の再乗車は `SessionResumeIntent`。到着・延長は deep link |
 | iPad 最適化 | v2 以降。iPhone アプリの自由リサイズ（ミラーリング）は Hub がシーン幅に追従 |
 | 乗り継ぎキャンバスのゲージ統一 | Phase 2（Quick Add のみ線形スナップ・ゲージ） |
-| Mac Companion | 土管 [13](13-sync-mac-companion.md)。体験 [14](14-mac-companion-ux.md)。作業切り分け [15](15-agent-work-plan.md)。実装は未着手 |
+| Mac Companion | Linux 芯は完了（[13](13-sync-mac-companion.md) / [15](15-agent-work-plan.md)）。メニューバーは SYNC-4。iOS 配線（SYNC-3）は Settings セルフィー + ScenePhase。体験は [14](14-mac-companion-ux.md)。実機確認は [16](16-wakeup-checklist.md) |
 
 ## テスト
 
-- スキーム: `Todo train`
-- ユニット: `Todo trainTests`（Swift Testing）
+- スキーム: `Todo train`（iOS）/ `TodoTrainCompanion`（macOS）
+- ユニット: `Todo trainTests`、`TodoTrainCompanionTests`
+- 同期パッケージ: `cd Packages/TodoTrainSync && ../../sync/linux-swift.sh test`
+- 同期結合: `./sync/e2e/run.sh`（ローカル wrangler + Swift クライアント）
+- Worker: `cd sync/worker && npm test`
 
 ```bash
 SIM=<booted-iphone-simulator-udid>

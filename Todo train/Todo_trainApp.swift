@@ -12,6 +12,7 @@ struct Todo_trainApp: App {
     @State private var sessionManager: SessionManager
     @State private var settings = AppSettings.shared
     @State private var deletionUndo = DeletionUndoCenter()
+    @State private var companion = CompanionSyncRuntime()
 
     init() {
         do {
@@ -58,6 +59,7 @@ struct Todo_trainApp: App {
                 .environment(sessionManager)
                 .environment(settings)
                 .environment(deletionUndo)
+                .environment(companion)
                 .modelContainer(container)
         }
     }

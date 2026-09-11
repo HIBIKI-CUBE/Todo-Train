@@ -17,4 +17,4 @@
 3. 片側の光学だけ、または confirm が片側だけ、では pairing が確定しない
 4. Worker ログに平文タイトルが出ないことを確認して終わる
 
-`swift test` だけ回すときは先に Worker を立て、`TODOTRAIN_SYNC_E2E_URL`（既定 `http://127.0.0.1:8787`）を渡す。Linux では swift-crypto のコンパイルに C++ ヘッダと `libstdc++` が要る。手順の正本は `run.sh`（フラグ込み）。
+`swift test` だけ回すときは先に Worker を立て、`TODOTRAIN_SYNC_E2E_URL`（既定 `http://127.0.0.1:8787`）を渡す。Linux では `../../sync/linux-swift.sh test`（swift-crypto / BoringSSL 用の C++ フラグ）。手順の正本は `run.sh`。GitHub Actions は `sync-swift`。

@@ -13,6 +13,7 @@ import UIKit
 struct ContentView: View {
     @Environment(SessionManager.self) private var sessionManager
     @Environment(DeletionUndoCenter.self) private var undoCenter
+    @Environment(CompanionSyncRuntime.self) private var companion
     @Environment(\.scenePhase) private var scenePhase
 
     @State private var isFocusPresented = false
@@ -73,8 +74,10 @@ struct ContentView: View {
                 sessionManager.reconcile()
             }
             syncFocusPresentation()
+            companion.handleScenePhase(.active, sessionManager: sessionManager)
         }
         .onChange(of: scenePhase) { _, newPhase in
+            companion.handleScenePhase(newPhase, sessionManager: sessionManager)
             if newPhase == .active {
                 // Foreground: recompute Date-based phase only.
                 // Do not re-run recoverOnLaunch (would re-schedule cancelled end bells).
@@ -223,5 +226,6 @@ struct ContentView: View {
         .environment(manager)
         .environment(AppSettings.shared)
         .environment(DeletionUndoCenter())
+        .environment(CompanionSyncRuntime())
         .modelContainer(container)
 }

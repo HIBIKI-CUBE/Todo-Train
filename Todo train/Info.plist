@@ -4,6 +4,10 @@
 <dict>
 	<key>NSAlarmKitUsageDescription</key>
 	<string>見積もり時間の終了を知らせる終了ベルを鳴らすために使います。</string>
+	<key>NSCameraUsageDescription</key>
+	<string>画面を Mac に向けたとき、机の QR を読むために前面カメラを使います。</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>この Mac との連携を、画面を自分に戻してから確定するために使います。</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
