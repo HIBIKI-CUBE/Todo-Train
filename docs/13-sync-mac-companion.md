@@ -1,6 +1,6 @@
 # 13 — 同期構成（確定）
 
-最終更新: 2026-09-08。土管・暗号・ペアリング契約。**画面の話はしない。**  
+最終更新: 2026-09-09。土管・暗号・ペアリング契約。**画面の話はしない。**  
 Mac の体験は別紙 [14-mac-companion-ux.md](14-mac-companion-ux.md)（確認待ち）。
 
 ワイヤの正本は [`sync/contract/`](../sync/contract/README.md)。実装は [15-agent-work-plan.md](15-agent-work-plan.md) のチケットへ。経路も `op` もここから増やさない。
@@ -267,8 +267,9 @@ iOS 前面と購読者が両方 WS にいるとき、cmd は即時。iOS が背�
 
 ## 実装順（同期側）
 
-1. 契約ファイル（`sync/contract/`。SYNC-0）
-2. リレー（Hono + DO）と Swift パッケージは契約を fixture として読む（SYNC-1 / 2）
-3. iOS UI と Mac メニューバーは実機（SYNC-3 / 4）
+1. 契約ファイル（`sync/contract/`。SYNC-0）— **完了**
+2. リレー（Hono + DO）と Swift パッケージは契約を fixture として読む（SYNC-1 / 2）— **完了**
+3. Linux で client ↔ Worker の暗号化往復（SYNC-5）— **完了**
+4. iOS UI と Mac メニューバーは実機（SYNC-3 / 4）
 
 購読者 UI は [14](14-mac-companion-ux.md)。CloudKit ゲートは触らない。

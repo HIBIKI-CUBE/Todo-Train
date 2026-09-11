@@ -79,24 +79,9 @@ fi
 
 echo "e2e: worker ready on ${BASE_URL}"
 
-# Swift's bundled clang does not see g++ 13 headers / libstdc++ without extra flags.
-# Required to compile swift-crypto / BoringSSL on this Linux image.
-CXX_INC="${CXX_INC:-/usr/include/c++/13}"
-CXX_INC_ABI="${CXX_INC_ABI:-/usr/include/x86_64-linux-gnu/c++/13}"
-GCC_LIB="${GCC_LIB:-/usr/lib/gcc/x86_64-linux-gnu/13}"
-SWIFT_CXX_FLAGS=()
-if [[ -d "${CXX_INC}" ]]; then
-  SWIFT_CXX_FLAGS+=(-Xcc "-I${CXX_INC}")
-fi
-if [[ -d "${CXX_INC_ABI}" ]]; then
-  SWIFT_CXX_FLAGS+=(-Xcc "-I${CXX_INC_ABI}")
-fi
-if [[ -d "${GCC_LIB}" ]]; then
-  SWIFT_CXX_FLAGS+=(-Xlinker "-L${GCC_LIB}")
-fi
-SWIFT_CXX_FLAGS+=(-Xlinker -lstdc++)
-
-(cd "${E2E_DIR}" && swift test "${SWIFT_CXX_FLAGS[@]}")
+# Swift's bundled clang does not see g++ headers / libstdc++ without extra flags.
+# Required to compile swift-crypto / BoringSSL on Debian/Ubuntu.
+(cd "${E2E_DIR}" && "${ROOT}/sync/linux-swift.sh" test)
 
 if grep -F "${PLAINTEXT_TITLE}" "${LOG}" >/dev/null; then
   echo "e2e: plaintext title leaked into worker logs" >&2
