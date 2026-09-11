@@ -8,6 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		B6EE2E8C302B4E730022EBAD /* TodoTrainWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = B6EE2E80302B4E730022EBAD /* TodoTrainWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		C0DE2004302B4E730022EBAD /* TodoTrainSync in Frameworks */ = {isa = PBXBuildFile; productRef = C0DE2002302B4E730022EBAD /* TodoTrainSync */; };
+		C0DE2005302B4E730022EBAD /* TodoTrainSync in Frameworks */ = {isa = PBXBuildFile; productRef = C0DE2003302B4E730022EBAD /* TodoTrainSync */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -32,6 +34,13 @@
 			remoteGlobalIDString = B6EE2E82302B4E730022EBAD;
 			remoteInfo = TodoTrainWidget;
 		};
+		C0DE2140302B4E730022EBAD /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = B6EE2E4A302B4E710022EBAD /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = C0DE2130302B4E730022EBAD;
+			remoteInfo = TodoTrainCompanion;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -51,6 +60,8 @@
 		B6EE2E63302B4E730022EBAD /* Todo trainTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Todo trainTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		B6EE2E6D302B4E730022EBAD /* Todo trainUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Todo trainUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		B6EE2E80302B4E730022EBAD /* TodoTrainWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = TodoTrainWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		C0DE2101302B4E730022EBAD /* TodoTrainCompanion.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TodoTrainCompanion.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		C0DE2102302B4E730022EBAD /* TodoTrainCompanionTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TodoTrainCompanionTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -82,6 +93,14 @@
 			);
 			target = B6EE2E51302B4E710022EBAD /* Todo train */;
 		};
+		C0DE2112302B4E730022EBAD /* Exceptions for "TodoTrainCompanion" folder in "TodoTrainCompanion" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+				README.md,
+			);
+			target = C0DE2130302B4E730022EBAD /* TodoTrainCompanion */;
+		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -112,6 +131,19 @@
 			path = TodoTrainWidget;
 			sourceTree = "<group>";
 		};
+		C0DE2110302B4E730022EBAD /* TodoTrainCompanion */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				C0DE2112302B4E730022EBAD /* Exceptions for "TodoTrainCompanion" folder in "TodoTrainCompanion" target */,
+			);
+			path = TodoTrainCompanion;
+			sourceTree = "<group>";
+		};
+		C0DE2111302B4E730022EBAD /* TodoTrainCompanionTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = TodoTrainCompanionTests;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -135,6 +167,18 @@
 			files = (
 			);
 		};
+		C0DE2120302B4E730022EBAD /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+				C0DE2004302B4E730022EBAD /* TodoTrainSync in Frameworks */,
+			);
+		};
+		C0DE2123302B4E730022EBAD /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+				C0DE2005302B4E730022EBAD /* TodoTrainSync in Frameworks */,
+			);
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -143,8 +187,10 @@
 			children = (
 				B6EE2E54302B4E710022EBAD /* Todo train */,
 				B6EE2E81302B4E730022EBAD /* TodoTrainWidget */,
+				C0DE2110302B4E730022EBAD /* TodoTrainCompanion */,
 				B6EE2E66302B4E730022EBAD /* Todo trainTests */,
 				B6EE2E70302B4E730022EBAD /* Todo trainUITests */,
+				C0DE2111302B4E730022EBAD /* TodoTrainCompanionTests */,
 				B6EE2E53302B4E710022EBAD /* Products */,
 			);
 			sourceTree = "<group>";
@@ -156,6 +202,8 @@
 				B6EE2E80302B4E730022EBAD /* TodoTrainWidget.appex */,
 				B6EE2E63302B4E730022EBAD /* Todo trainTests.xctest */,
 				B6EE2E6D302B4E730022EBAD /* Todo trainUITests.xctest */,
+				C0DE2101302B4E730022EBAD /* TodoTrainCompanion.app */,
+				C0DE2102302B4E730022EBAD /* TodoTrainCompanionTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -246,6 +294,53 @@
 			productReference = B6EE2E80302B4E730022EBAD /* TodoTrainWidget.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		C0DE2130302B4E730022EBAD /* TodoTrainCompanion */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C0DE2160302B4E730022EBAD /* Build configuration list for PBXNativeTarget "TodoTrainCompanion" */;
+			buildPhases = (
+				C0DE2121302B4E730022EBAD /* Sources */,
+				C0DE2120302B4E730022EBAD /* Frameworks */,
+				C0DE2122302B4E730022EBAD /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				C0DE2110302B4E730022EBAD /* TodoTrainCompanion */,
+			);
+			name = TodoTrainCompanion;
+			packageProductDependencies = (
+				C0DE2002302B4E730022EBAD /* TodoTrainSync */,
+			);
+			productName = TodoTrainCompanion;
+			productReference = C0DE2101302B4E730022EBAD /* TodoTrainCompanion.app */;
+			productType = "com.apple.product-type.application";
+		};
+		C0DE2131302B4E730022EBAD /* TodoTrainCompanionTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C0DE2161302B4E730022EBAD /* Build configuration list for PBXNativeTarget "TodoTrainCompanionTests" */;
+			buildPhases = (
+				C0DE2124302B4E730022EBAD /* Sources */,
+				C0DE2123302B4E730022EBAD /* Frameworks */,
+				C0DE2125302B4E730022EBAD /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				C0DE2141302B4E730022EBAD /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				C0DE2111302B4E730022EBAD /* TodoTrainCompanionTests */,
+			);
+			name = TodoTrainCompanionTests;
+			packageProductDependencies = (
+				C0DE2003302B4E730022EBAD /* TodoTrainSync */,
+			);
+			productName = TodoTrainCompanionTests;
+			productReference = C0DE2102302B4E730022EBAD /* TodoTrainCompanionTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -270,6 +365,13 @@
 					B6EE2E82302B4E730022EBAD = {
 						CreatedOnToolsVersion = 27.0;
 					};
+					C0DE2130302B4E730022EBAD = {
+						CreatedOnToolsVersion = 27.0;
+					};
+					C0DE2131302B4E730022EBAD = {
+						CreatedOnToolsVersion = 27.0;
+						TestTargetID = C0DE2130302B4E730022EBAD;
+					};
 				};
 			};
 			buildConfigurationList = B6EE2E4D302B4E710022EBAD /* Build configuration list for PBXProject "Todo train" */;
@@ -281,6 +383,9 @@
 			);
 			mainGroup = B6EE2E49302B4E710022EBAD;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				C0DE2001302B4E730022EBAD /* XCLocalSwiftPackageReference "Packages/TodoTrainSync" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = B6EE2E53302B4E710022EBAD /* Products */;
 			projectDirPath = "";
@@ -290,6 +395,8 @@
 				B6EE2E82302B4E730022EBAD /* TodoTrainWidget */,
 				B6EE2E62302B4E730022EBAD /* Todo trainTests */,
 				B6EE2E6C302B4E730022EBAD /* Todo trainUITests */,
+				C0DE2130302B4E730022EBAD /* TodoTrainCompanion */,
+				C0DE2131302B4E730022EBAD /* TodoTrainCompanionTests */,
 			);
 		};
 /* End PBXProject section */
@@ -311,6 +418,16 @@
 			);
 		};
 		B6EE2E85302B4E730022EBAD /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+			);
+		};
+		C0DE2122302B4E730022EBAD /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+			);
+		};
+		C0DE2125302B4E730022EBAD /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			files = (
 			);
@@ -338,6 +455,16 @@
 			files = (
 			);
 		};
+		C0DE2121302B4E730022EBAD /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+			);
+		};
+		C0DE2124302B4E730022EBAD /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+			);
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -355,6 +482,11 @@
 			isa = PBXTargetDependency;
 			target = B6EE2E82302B4E730022EBAD /* TodoTrainWidget */;
 			targetProxy = B6EE2E8D302B4E730022EBAD /* PBXContainerItemProxy */;
+		};
+		C0DE2141302B4E730022EBAD /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = C0DE2130302B4E730022EBAD /* TodoTrainCompanion */;
+			targetProxy = C0DE2140302B4E730022EBAD /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -698,6 +830,126 @@
 			};
 			name = Release;
 		};
+		C0DE2150302B4E730022EBAD /* Debug configuration for PBXNativeTarget "TodoTrainCompanion" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = TodoTrainCompanion/TodoTrainCompanion.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = NPSM864R9U;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = TodoTrainCompanion/Info.plist;
+				INFOPLIST_KEY_LSUIElement = YES;
+				INFOPLIST_KEY_NSCameraUsageDescription = "iPhone の QR を読んで、この Mac とつなぎます。";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "dev.hibiki-cube.Todo-train.companion";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = macosx;
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		C0DE2151302B4E730022EBAD /* Release configuration for PBXNativeTarget "TodoTrainCompanion" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = TodoTrainCompanion/TodoTrainCompanion.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = NPSM864R9U;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = TodoTrainCompanion/Info.plist;
+				INFOPLIST_KEY_LSUIElement = YES;
+				INFOPLIST_KEY_NSCameraUsageDescription = "iPhone の QR を読んで、この Mac とつなぎます。";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "dev.hibiki-cube.Todo-train.companion";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = macosx;
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		C0DE2152302B4E730022EBAD /* Debug configuration for PBXNativeTarget "TodoTrainCompanionTests" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = NPSM864R9U;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "dev.hibiki-cube.Todo-train.companionTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SUPPORTED_PLATFORMS = macosx;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/TodoTrainCompanion.app/Contents/MacOS/TodoTrainCompanion";
+			};
+			name = Debug;
+		};
+		C0DE2153302B4E730022EBAD /* Release configuration for PBXNativeTarget "TodoTrainCompanionTests" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = NPSM864R9U;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "dev.hibiki-cube.Todo-train.companionTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SUPPORTED_PLATFORMS = macosx;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/TodoTrainCompanion.app/Contents/MacOS/TodoTrainCompanion";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -741,7 +993,43 @@
 			);
 			defaultConfigurationName = Release;
 		};
+		C0DE2160302B4E730022EBAD /* Build configuration list for PBXNativeTarget "TodoTrainCompanion" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C0DE2150302B4E730022EBAD /* Debug configuration for PBXNativeTarget "TodoTrainCompanion" */,
+				C0DE2151302B4E730022EBAD /* Release configuration for PBXNativeTarget "TodoTrainCompanion" */,
+			);
+			defaultConfigurationName = Release;
+		};
+		C0DE2161302B4E730022EBAD /* Build configuration list for PBXNativeTarget "TodoTrainCompanionTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C0DE2152302B4E730022EBAD /* Debug configuration for PBXNativeTarget "TodoTrainCompanionTests" */,
+				C0DE2153302B4E730022EBAD /* Release configuration for PBXNativeTarget "TodoTrainCompanionTests" */,
+			);
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		C0DE2001302B4E730022EBAD /* XCLocalSwiftPackageReference "Packages/TodoTrainSync" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/TodoTrainSync;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		C0DE2002302B4E730022EBAD /* TodoTrainSync */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C0DE2001302B4E730022EBAD /* XCLocalSwiftPackageReference "Packages/TodoTrainSync" */;
+			productName = TodoTrainSync;
+		};
+		C0DE2003302B4E730022EBAD /* TodoTrainSync */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C0DE2001302B4E730022EBAD /* XCLocalSwiftPackageReference "Packages/TodoTrainSync" */;
+			productName = TodoTrainSync;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = B6EE2E4A302B4E710022EBAD /* Project object */;
 	validationLevel = 1;

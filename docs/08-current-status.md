@@ -1,6 +1,6 @@
 # 08 — 現状ステータス
 
-最終更新: 2026-09-09（Linux 同期芯 SYNC-0/1/2/5 完了。UI は SYNC-3/4）
+最終更新: 2026-09-11（Linux 同期芯完了。Mac メニューバーは SYNC-4。確認は [16](16-wakeup-checklist.md)）
 
 ## 結論
 
@@ -31,10 +31,10 @@
 |----|------|------|
 | SYNC-0 契約 | ✅ | `sync/contract/` |
 | SYNC-1 リレー | ✅ | `sync/worker/`。CI `sync-worker`。Cloudflare 本番は secrets 待ち |
-| SYNC-2 Swift 芯 | ✅ | `Packages/TodoTrainSync`。Xcode 未接続。CI `sync-swift` |
+| SYNC-2 Swift 芯 | ✅ | `Packages/TodoTrainSync`。Mac は本 PR でリンク。iOS は SYNC-3。CI `sync-swift` |
 | SYNC-5 Linux E2E | ✅ | `sync/e2e/run.sh`。CI `sync-swift` |
-| SYNC-3 iOS UI | 実機待ち | Settings セルフィー + `SessionManager` 配線 |
-| SYNC-4 macOS | 実機待ち | メニューバー + ウェブカメラ枠 |
+| SYNC-3 iOS UI | 実機待ち | Settings セルフィー + `SessionManager` 配線（#35） |
+| SYNC-4 macOS | コード PR。実機待ち | メニューバー + ウェブカメラ枠（#39） |
 
 ### v2 進捗
 
@@ -79,7 +79,9 @@ Todo train/
     Reorder/               ReorderView
     Settings/              SettingsView
 TodoTrainWidget/           Home Widget + Session LA + Alarm LA
+TodoTrainCompanion/        macOS メニューバー accessory（SYNC-4。提案値）
 Todo trainTests/           Swift Testing（CheckInScheduling / TicketIssuer 含む）
+TodoTrainCompanionTests/   停車送信の純関数
 Packages/TodoTrainSync/    同期芯（暗号・ペアリング・停車判定。UI なし）
 sync/contract/             ワイヤ契約の正本
 sync/worker/               Hono + Durable Object
@@ -104,12 +106,12 @@ sync/e2e/                  Linux 結合（client ↔ worker）
 | Session LA からの Intent | 停車中の再乗車は `SessionResumeIntent`。到着・延長は deep link |
 | iPad 最適化 | v2 以降。iPhone アプリの自由リサイズ（ミラーリング）は Hub がシーン幅に追従 |
 | 乗り継ぎキャンバスのゲージ統一 | Phase 2（Quick Add のみ線形スナップ・ゲージ） |
-| Mac Companion | Linux 芯は完了（[13](13-sync-mac-companion.md) / [15](15-agent-work-plan.md)）。画面は [14](14-mac-companion-ux.md)。SYNC-3 / 4 が実機待ち。iOS はまだ `TodoTrainSync` をリンクしていない |
+| Mac Companion | Linux 芯は完了（[13](13-sync-mac-companion.md) / [15](15-agent-work-plan.md)）。メニューバー実装は SYNC-4。体験は [14](14-mac-companion-ux.md)。実機確認は [16](16-wakeup-checklist.md)。iOS はまだ `TodoTrainSync` をリンクしていない（SYNC-3） |
 
 ## テスト
 
-- スキーム: `Todo train`
-- ユニット: `Todo trainTests`（Swift Testing）
+- スキーム: `Todo train`（iOS）/ `TodoTrainCompanion`（macOS）
+- ユニット: `Todo trainTests`、`TodoTrainCompanionTests`
 - 同期パッケージ: `cd Packages/TodoTrainSync && ../../sync/linux-swift.sh test`
 - 同期結合: `./sync/e2e/run.sh`（ローカル wrangler + Swift クライアント）
 - Worker: `cd sync/worker && npm test`
