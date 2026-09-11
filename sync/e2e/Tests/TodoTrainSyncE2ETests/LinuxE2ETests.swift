@@ -231,7 +231,9 @@ struct LinuxE2ETests {
         try await bindUntilBound(iphone)
         try await bindUntilBound(mac)
 
-        try await iphone.authenticateAndConfirm()
+        await #expect(throws: SyncError.confirmTimedOut) {
+            try await iphone.authenticateAndConfirm()
+        }
         #expect(await iphone.phase == .confirming)
         #expect(await mac.phase == .awaitingLocalAuth)
         #expect(try iphoneStore.load() == nil)
