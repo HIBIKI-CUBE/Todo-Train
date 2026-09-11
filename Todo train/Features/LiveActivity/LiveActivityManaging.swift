@@ -5,30 +5,55 @@
 
 import Foundation
 
+struct LiveActivitySessionContent: Equatable, Sendable {
+    var sessionID: UUID
+    var title: String
+    var deadline: Date
+    var isOvertime: Bool
+    var budgetSeconds: Int
+    var isPaused: Bool = false
+    var pausedAt: Date? = nil
+    var checkInPrompt: String? = nil
+    /// When set, the next update presents an ActivityKit alert on this LA.
+    var alertTitle: String? = nil
+    var alertBody: String? = nil
+}
+
 protocol LiveActivityManaging: Sendable {
-    func startOrUpdate(
-        sessionID: UUID,
-        title: String,
-        deadline: Date,
-        isOvertime: Bool,
-        budgetSeconds: Int,
-        isPaused: Bool,
-        pausedAt: Date?
-    )
+    var areActivitiesEnabled: Bool { get }
+    func startOrUpdate(_ content: LiveActivitySessionContent)
     func end()
 }
 
 struct NoOpLiveActivityManager: LiveActivityManaging {
-    func startOrUpdate(
-        sessionID: UUID,
-        title: String,
-        deadline: Date,
-        isOvertime: Bool,
-        budgetSeconds: Int,
-        isPaused: Bool,
-        pausedAt: Date?
-    ) {}
+    var areActivitiesEnabled: Bool { false }
+
+    func startOrUpdate(_ content: LiveActivitySessionContent) {}
     func end() {}
+}
+
+@MainActor
+final class InMemoryLiveActivityManager: LiveActivityManaging {
+    var areActivitiesEnabled: Bool
+    private(set) var current: LiveActivitySessionContent?
+    private(set) var alertCount: Int = 0
+    private(set) var endCount: Int = 0
+
+    init(areActivitiesEnabled: Bool = true) {
+        self.areActivitiesEnabled = areActivitiesEnabled
+    }
+
+    func startOrUpdate(_ content: LiveActivitySessionContent) {
+        current = content
+        if content.alertTitle != nil {
+            alertCount += 1
+        }
+    }
+
+    func end() {
+        current = nil
+        endCount += 1
+    }
 }
 
 #if canImport(ActivityKit)
@@ -42,51 +67,49 @@ final class LiveActivityManager: LiveActivityManaging {
 
     private init() {}
 
-    func startOrUpdate(
-        sessionID: UUID,
-        title: String,
-        deadline: Date,
-        isOvertime: Bool,
-        budgetSeconds: Int,
-        isPaused: Bool,
-        pausedAt: Date?
-    ) {
-        guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
+    var areActivitiesEnabled: Bool {
+        ActivityAuthorizationInfo().areActivitiesEnabled
+    }
+
+    func startOrUpdate(_ content: LiveActivitySessionContent) {
+        guard areActivitiesEnabled else { return }
 
         let state = TodoTrainActivityAttributes.ContentState(
-            title: title,
-            deadline: deadline,
-            isOvertime: isOvertime,
-            budgetSeconds: max(budgetSeconds, 1),
-            isPaused: isPaused
+            title: content.title,
+            deadline: content.deadline,
+            isOvertime: content.isOvertime,
+            budgetSeconds: max(content.budgetSeconds, 1),
+            isPaused: content.isPaused,
+            checkInPrompt: content.checkInPrompt
         )
 
         // Keep the activity active while paused so StandBy / Island resume still work.
         // staleDate marks it after 2h; SessionManager.end() on the next launch actually removes it.
         let staleDate: Date?
-        if isPaused {
-            staleDate = PauseLiveActivityRetention.keepUntil(pausedAt: pausedAt ?? Date.now)
+        if content.isPaused {
+            staleDate = PauseLiveActivityRetention.keepUntil(pausedAt: content.pausedAt ?? Date.now)
         } else {
-            staleDate = isOvertime ? nil : deadline.addingTimeInterval(30)
+            staleDate = content.isOvertime ? nil : content.deadline.addingTimeInterval(30)
         }
-        let content = ActivityContent(state: state, staleDate: staleDate)
+        let activityContent = ActivityContent(state: state, staleDate: staleDate)
+        let alert = Self.alertConfiguration(title: content.alertTitle, body: content.alertBody)
 
-        if currentSessionID == sessionID,
+        if currentSessionID == content.sessionID,
            let activity = Activity<TodoTrainActivityAttributes>.activities.first {
             Task {
-                await activity.update(content)
+                await activity.update(activityContent, alertConfiguration: alert)
             }
             return
         }
 
         end()
-        currentSessionID = sessionID
+        currentSessionID = content.sessionID
 
-        let attributes = TodoTrainActivityAttributes(sessionID: sessionID)
+        let attributes = TodoTrainActivityAttributes(sessionID: content.sessionID)
         do {
             _ = try Activity.request(
                 attributes: attributes,
-                content: content,
+                content: activityContent,
                 pushType: nil
             )
         } catch {
@@ -101,6 +124,15 @@ final class LiveActivityManager: LiveActivityManaging {
                 await activity.end(nil, dismissalPolicy: .immediate)
             }
         }
+    }
+
+    private static func alertConfiguration(title: String?, body: String?) -> AlertConfiguration? {
+        guard let title, let body else { return nil }
+        return AlertConfiguration(
+            title: LocalizedStringResource(stringLiteral: title),
+            body: LocalizedStringResource(stringLiteral: body),
+            sound: .default
+        )
     }
 }
 #endif

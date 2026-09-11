@@ -9,9 +9,9 @@
 | **v1** | Settings、履歴検索・今日に追加、並べ替えビュー、dueDate、カスタム見積、LA、Widget、AI stub | **完了**（CloudKit を除く） |
 | **v2** | AlarmKit + StandBy、週次レポート、UI polish、横向き compact | **完了**（iPad 等は未着手） |
 | **定時** | 定時到着 / 定時運行の短い案内（非通貨） | **完了** |
-| **車内放送** | 乗務中チェックイン + 背面「まだ乗ってる？」+ 発券 Intent | **完了** |
+| **車内放送** | 乗務中チェックイン + 背面割り込み「まだ乗ってる？」+ 発券 Intent | **完了** |
 | **同期（Linux）** | 契約 + リレー + Swift 芯 + E2E（[15](15-agent-work-plan.md) SYNC-0/1/2/5） | **完了** |
-| **次** | iPhone / Mac の画面（SYNC-3 / 4）。確認は [16](16-wakeup-checklist.md) | コードは PR。実機待ち |
+| **次** | iPhone / Mac の画面（SYNC-3 / 4）。確認は [16](16-wakeup-checklist.md) | コードは `develop`。実機待ち |
 
 ## MVP（完了チェック）
 
@@ -55,13 +55,13 @@
 ## 車内放送（完了）
 
 - [x] `CheckInScheduling` 純関数（10 分以下 0、11–25 分 1、30 分以上は 2。ジッター帯）
-- [x] Focus 操作盤 4 択 + 背面 away 通知
+- [x] Focus 操作盤 4 択 + 背面 away 割り込み（Session LA alert / 通知フォールバック）
 - [x] 発車時オンデバイス 1 行（失敗時 Heuristic）
 - [x] 設定トグル（既定 ON）
 
 ## 次軌道
 
-1. **SYNC-3 / 4** — 実装 PR あり。実機確認は [16-wakeup-checklist.md](16-wakeup-checklist.md)。切り分けは [15](15-agent-work-plan.md)
+1. **SYNC-3 / 4** — `develop` 済み。実機確認は [16-wakeup-checklist.md](16-wakeup-checklist.md)。切り分けは [15](15-agent-work-plan.md)
 2. **WP-I CloudKit** — ゲート維持。Mac 土管には使わない
 3. Cloudflare 本番 — リポジトリに `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` が付いたら `todotrain-sync-develop`
 

@@ -1,6 +1,6 @@
 # 08 — 現状ステータス
 
-最終更新: 2026-09-11（Linux 芯完了。SYNC-3 iOS 配線 / SYNC-4 メニューバー。確認は [16](16-wakeup-checklist.md)）
+最終更新: 2026-09-11（車内放送 away を Session LA 割り込みへ。SYNC-3 / 4 は `develop`。確認は [16](16-wakeup-checklist.md)）
 
 ## 結論
 
@@ -31,9 +31,9 @@
 |----|------|------|
 | SYNC-0 契約 | ✅ | `sync/contract/` |
 | SYNC-1 リレー | ✅ | `sync/worker/`。CI `sync-worker`。Cloudflare 本番は secrets 待ち |
-| SYNC-2 Swift 芯 | ✅ | `Packages/TodoTrainSync`。Mac は SYNC-4、iOS は本 PR でリンク。CI `sync-swift` |
+| SYNC-2 Swift 芯 | ✅ | `Packages/TodoTrainSync`。Mac は SYNC-4、iOS は SYNC-3 でリンク。CI `sync-swift` |
 | SYNC-5 Linux E2E | ✅ | `sync/e2e/run.sh`。CI `sync-swift` |
-| SYNC-3 iOS UI | コード PR。実機待ち | Settings セルフィー + `SessionManager` 配線（#35） |
+| SYNC-3 iOS UI | `develop` 済み。実機待ち | Settings セルフィー + `SessionManager` 配線（#35） |
 | SYNC-4 macOS | `develop` 済み。実機待ち | メニューバー + ウェブカメラ枠（#39） |
 
 ### v2 進捗
@@ -46,7 +46,7 @@
 | UI polish | ✅ `TrainTheme` / `TrainChrome` / 横向き compact（[12](12-ui-design.md)） |
 | 切符・履歴の削除 | ✅ Hub はフルスワイプ。履歴はコンテキストメニュー + バナー Undo（[12](12-ui-design.md)） |
 | 定時到着 / 定時運行 | ✅ 到着は完了として案内。定時・早着はいい結果の見出し。超過でも取り下げない |
-| 車内放送 | ✅ `CheckInScheduling` + Focus 4 択 + 背面通知。設定トグル |
+| 車内放送 | ✅ `CheckInScheduling` + Focus 4 択 + 背面 LA alert（ロック中は沈黙） |
 | 発券 App Intent | ✅ `IssueTicketIntent`。見積は Heuristic / 直前発行 |
 
 ## ディレクトリ（実装の地図）
@@ -56,7 +56,7 @@ Todo train/
   ContentView.swift        TabView（切符 / 履歴 / 設定）+ Focus cover
   App/                     AppModelContainer, CloudKitSync（`isConfigured` 既定 false）
   Core/
-    Session/               SessionManager, TicketDeletion, DeletionUndo, CheckInScheduling
+    Session/               SessionManager, TicketDeletion, DeletionUndo, CheckInScheduling, DeviceLock
     Alarms/                AlarmScheduling, EndBellDelivery, SessionEndSchedule
     Notifications/         OvertimeNotifier, CheckInNotifier
     History/               HistorySearch, TicketReissue, WeeklyReport, Punctuality, SessionTimeline
@@ -93,7 +93,7 @@ sync/e2e/                  Linux 結合（client ↔ worker）
 
 1. 運行開始 → ツールバー `＋` で親指発券帯（Return / スナップ・ゲージで掃き出し）。Siri「切符を発行」でも可
 2. 発車 → Focus（停車 / 到着 / 延長 / 超過 / 割り込み発券 / 車内放送）。到着したら短い案内。定時なら定時到着、早着なら早着
-3. 長い乗務: 予測不能な車内放送。ホーム退避: 「まだ乗ってる？」
+3. 長い乗務: 予測不能な車内放送。他アプリへ離れたとき: LA 割り込み「まだ乗ってる？」（ロック中は出さない）
 4. 停車はいつでも。Live Activity は残り、StandBy などから再乗車できる。停車が満杯の新規発車 / 割り込みは整理シート
 5. 履歴でその日の時計を振り返る（空き時間は折り畳まない）。乗り継ぎリンク・今日に追加（定時はバッジのみ）
 6. 運行終了 → 停車中の持ち越し禁止 / 途中下車 / 放棄。遅延がなければ短い「定時運行」（早着可）
@@ -104,7 +104,7 @@ sync/e2e/                  Linux 結合（client ↔ worker）
 | 項目 | 備考 |
 |------|------|
 | CloudKit | スキーマ準備済み。store は `.none`。**iCloud entitlement なし**。Mac 土管には使わない |
-| Session LA からの Intent | 停車中の再乗車は `SessionResumeIntent`。到着・延長は deep link |
+| Session LA からの Intent | 走行中の停車は `SessionPauseIntent`。停車中の再乗車は `SessionResumeIntent`。到着・延長は deep link |
 | iPad 最適化 | v2 以降。iPhone アプリの自由リサイズ（ミラーリング）は Hub がシーン幅に追従 |
 | 乗り継ぎキャンバスのゲージ統一 | Phase 2（Quick Add のみ線形スナップ・ゲージ） |
 | Mac Companion | Linux 芯は完了（[13](13-sync-mac-companion.md) / [15](15-agent-work-plan.md)）。メニューバーは SYNC-4。iOS 配線（SYNC-3）は Settings セルフィー + ScenePhase。体験は [14](14-mac-companion-ux.md)。実機確認は [16](16-wakeup-checklist.md) |
@@ -138,7 +138,9 @@ xcodebuild test-without-building -scheme "Todo train" \
 - [ ] 30 分切符: 放送が 1–2 回、時刻が毎回ズレる、予告がない
 - [ ] 5–10 分: 進捗放送なし
 - [ ] 放送中に超過しない／超過中に放送しない
-- [ ] ホームへ退避 → 数十秒で「まだ乗ってる？」→ 停車が効く
+- [ ] 他アプリへ退避（画面オン）→ 数十秒で Session LA バナー「まだ乗ってる？」→ 停車が効く。タップで Focus
+- [ ] ロックして作業 → away 通知も LA alert も出ない
+- [ ] 終了ベル ON → 同じ退避で away バナーが重ならない
 - [ ] 放送 OFF で沈黙
 - [ ] オンデバイス文面が出る／失敗時は固定文「まだ『…』？」
 - [ ] 発行祝祭と Return 一発発券が壊れていない

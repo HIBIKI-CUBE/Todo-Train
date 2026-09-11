@@ -47,6 +47,7 @@ struct Todo_trainApp: App {
             OvertimeNotifier.shared.sessionManager = manager
             OvertimeNotifier.shared.configure()
             CheckInNotifier.shared.configure()
+            SessionPauseRuntime.pauser = manager
         } catch {
             fatalError("Could not create ModelContainer: \(error)")
         }

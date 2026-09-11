@@ -75,6 +75,7 @@ final class InMemoryCheckInNotifier: CheckInNotifying {
 
 enum CheckInNotification {
     static let categoryIdentifier = "todotrain.checkin"
+    static let awayCategoryIdentifier = "todotrain.checkin.away"
     static let pauseAction = "todotrain.checkin.pause"
     static let stillOnItAction = "todotrain.checkin.still"
 
@@ -116,13 +117,19 @@ final class CheckInNotifier: CheckInNotifying {
             title: "まだやってる",
             options: []
         )
-        let category = UNNotificationCategory(
+        let progress = UNNotificationCategory(
             identifier: CheckInNotification.categoryIdentifier,
             actions: [pause, still],
             intentIdentifiers: [],
             options: []
         )
-        center.setNotificationCategories([category])
+        let away = UNNotificationCategory(
+            identifier: CheckInNotification.awayCategoryIdentifier,
+            actions: [pause],
+            intentIdentifiers: [],
+            options: []
+        )
+        center.setNotificationCategories([progress, away])
     }
 
     func requestAuthorizationIfNeeded() {
@@ -144,7 +151,8 @@ final class CheckInNotifier: CheckInNotifying {
             identifier: identifier,
             title: "Todo train",
             body: body,
-            fireAt: fireAt
+            fireAt: fireAt,
+            categoryIdentifier: CheckInNotification.categoryIdentifier
         )
     }
 
@@ -152,9 +160,10 @@ final class CheckInNotifier: CheckInNotifying {
         let identifier = CheckInNotification.awayIdentifier(sessionID: sessionID)
         enqueue(
             identifier: identifier,
-            title: "Todo train",
-            body: body,
-            fireAt: fireAt
+            title: CheckInCopy.away,
+            body: ticketTitle,
+            fireAt: fireAt,
+            categoryIdentifier: CheckInNotification.awayCategoryIdentifier
         )
     }
 
@@ -174,7 +183,13 @@ final class CheckInNotifier: CheckInNotifying {
         }
     }
 
-    private func enqueue(identifier: String, title: String, body: String, fireAt: Date) {
+    private func enqueue(
+        identifier: String,
+        title: String,
+        body: String,
+        fireAt: Date,
+        categoryIdentifier: String
+    ) {
         center.removePendingNotificationRequests(withIdentifiers: [identifier])
 
         let content = UNMutableNotificationContent()
@@ -182,7 +197,7 @@ final class CheckInNotifier: CheckInNotifying {
         content.body = body
         content.sound = .default
         content.interruptionLevel = .timeSensitive
-        content.categoryIdentifier = CheckInNotification.categoryIdentifier
+        content.categoryIdentifier = categoryIdentifier
 
         let interval = fireAt.timeIntervalSinceNow
         guard interval > 0 else { return }

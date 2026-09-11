@@ -36,7 +36,7 @@ Widget Extension（`TodoTrainWidget`）:
 
 | 層 | 役割 |
 |----|------|
-| Session Live Activity（v1） | 発車中の残時間（終了ベル OFF 時。ON 時は出さない）。停車中は静的残り + 再乗車 |
+| Session Live Activity（v1） | 発車中の残時間（終了ベル OFF 時。ON 時は出さない）。走行中は停車 Intent。away 割り込み時は alert。停車中は静的残り + 再乗車 |
 | AlarmKit 終了ベル（v2） | 見積もり到達の強制通知（Focus/Silent 突破） |
 | Alarm Live Activity | StandBy / ロック画面のカウントダウン + **単一操作**（停車 / 再乗車 / 停止） |
 
@@ -55,6 +55,7 @@ Widget Extension（`TodoTrainWidget`）:
 | `TodoTrainActivityAttributes.swift` | App + Extension 共有（Session LA） |
 | `WidgetSnapshot.swift` | App Group スナップショット |
 | `EndBellIntents.swift` | App + Extension 共有（停車 / キャンセル / Stop / 到着・延長は deep link 用に残置） |
+| `SessionPauseIntent.swift` / `FocusPendingAction.swift` | Session LA 停車 / 再乗車 Intent |
 | `TodoTrainAlarmMetadata.swift` | App + Extension 共有（`sessionID` + `ticketTitle`） |
 | `TodoTrainWidget.swift` | ホーム画面 Widget（App Group 読取） |
 
@@ -64,7 +65,7 @@ Widget Extension（`TodoTrainWidget`）:
 
 | 状態 | LA ボタン（Intent） | セッション同期 |
 |------|---------------------|----------------|
-| Countdown | **停車** `EndBellPauseIntent` | → `pauseFromAlarmKit`。Alarm は **pause**（LA 残す） |
+| Countdown | **停車** `EndBellPauseIntent` / `SessionPauseIntent` | Alarm → `pauseFromAlarmKit`（LA 残す）。Session LA → `pauseRide` |
 | Paused | **再乗車** `EndBellResumeIntent` / `SessionResumeIntent` | → `resumeFromAlarmKit`。同じ Alarm を resume |
 | Alert | システム Stop + `EndBellStopIntent` | 到着は自動にしない。超過 3 択はアプリ内 |
 | （タップ全体） | `todotrain://focus` | アプリを開き Focus を表示。到着・延長は Focus 内 |
@@ -144,6 +145,8 @@ HIG 公称寸法で部品を直接入力する（StandBy 入力も **未スケ�
 - [ ] 停車した切符は LA が残り再乗車できる。別切符を発車したら LA は切り替わる
 - [ ] 終了ベル ON・前景期限到達: AlarmKit のみ（ローカル通知バナー・アプリ超過音が重ならない）
 - [ ] 終了ベル OFF: Session LA 同系ダーク計器、前景は Focus 超過 UI
+- [ ] 終了ベル OFF・他アプリへ退避: 数十秒後に Session LA alert。ロック中は出ない
+- [ ] 終了ベル ON・他アプリへ退避: away バナーが Alarm LA に重ならない
 - [ ] LA タップ → `todotrain://focus`
 
 ### 6.4 実機のみ（StandBy / センサー / 認証）

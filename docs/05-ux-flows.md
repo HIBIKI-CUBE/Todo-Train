@@ -143,7 +143,7 @@
 もう終わってた
 ```
 
-背面（走行中・scene 非 active）: 45–90 秒で Time Sensitive「まだ乗ってる？」＋ 停車 / まだやってる。進捗放送と同時なら away は捨てる。AlarmKit は使わない。設定「車内放送」OFF で沈黙。
+背面（走行中・**アンロック**かつ scene `.background`）: 45–90 秒で Session LA の ActivityKit alert「まだ乗ってる？」。操作は停車、タップで Focus。ロック中は沈黙（LA タイマーだけ）。終了ベル ON は Alarm LA に重ねない。Activities 無効時のみ Time Sensitive 通知（停車のみ。「まだやってる」は付けない）。進捗放送と同時なら away は捨てる。設定「車内放送」OFF で沈黙。
 
 ## 発車前の停車整理シート
 
