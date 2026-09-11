@@ -33,6 +33,16 @@ public struct ImmediateLocalAuth: LocalAuthenticating {
     public func confirmPresence() async throws {}
 }
 
+public actor CountingLocalAuth: LocalAuthenticating {
+    public private(set) var count = 0
+
+    public init() {}
+
+    public func confirmPresence() async throws {
+        count += 1
+    }
+}
+
 public actor ScriptedOptical: OpticalProviding {
     private var urls: [String]
 

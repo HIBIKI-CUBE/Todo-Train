@@ -1,6 +1,6 @@
 # 08 — 現状ステータス
 
-最終更新: 2026-09-11（Linux 同期芯完了。Mac メニューバーは SYNC-4。確認は [16](16-wakeup-checklist.md)）
+最終更新: 2026-09-11（Linux 芯完了。SYNC-3 iOS 配線 / SYNC-4 メニューバー。確認は [16](16-wakeup-checklist.md)）
 
 ## 結論
 
@@ -31,10 +31,10 @@
 |----|------|------|
 | SYNC-0 契約 | ✅ | `sync/contract/` |
 | SYNC-1 リレー | ✅ | `sync/worker/`。CI `sync-worker`。Cloudflare 本番は secrets 待ち |
-| SYNC-2 Swift 芯 | ✅ | `Packages/TodoTrainSync`。Mac は本 PR でリンク。iOS は SYNC-3。CI `sync-swift` |
+| SYNC-2 Swift 芯 | ✅ | `Packages/TodoTrainSync`。Mac は SYNC-4、iOS は本 PR でリンク。CI `sync-swift` |
 | SYNC-5 Linux E2E | ✅ | `sync/e2e/run.sh`。CI `sync-swift` |
-| SYNC-3 iOS UI | 実機待ち | Settings セルフィー + `SessionManager` 配線（#35） |
-| SYNC-4 macOS | コード PR。実機待ち | メニューバー + ウェブカメラ枠（#39） |
+| SYNC-3 iOS UI | コード PR。実機待ち | Settings セルフィー + `SessionManager` 配線（#35） |
+| SYNC-4 macOS | `develop` 済み。実機待ち | メニューバー + ウェブカメラ枠（#39） |
 
 ### v2 進捗
 
@@ -61,6 +61,7 @@ Todo train/
     Notifications/         OvertimeNotifier, CheckInNotifier
     History/               HistorySearch, TicketReissue, WeeklyReport, Punctuality, SessionTimeline
     Settings/              AppSettings
+    Companion/             CompanionSyncRuntime, セルフィー配線（SYNC-3）
     Coaching/              CoachingEngine（Heuristic + OnDevice 1 行）
     Intents/               IssueTicketIntent
     Tickets/               TicketSortOrdering, TicketIssuer
@@ -106,7 +107,7 @@ sync/e2e/                  Linux 結合（client ↔ worker）
 | Session LA からの Intent | 停車中の再乗車は `SessionResumeIntent`。到着・延長は deep link |
 | iPad 最適化 | v2 以降。iPhone アプリの自由リサイズ（ミラーリング）は Hub がシーン幅に追従 |
 | 乗り継ぎキャンバスのゲージ統一 | Phase 2（Quick Add のみ線形スナップ・ゲージ） |
-| Mac Companion | Linux 芯は完了（[13](13-sync-mac-companion.md) / [15](15-agent-work-plan.md)）。メニューバー実装は SYNC-4。体験は [14](14-mac-companion-ux.md)。実機確認は [16](16-wakeup-checklist.md)。iOS はまだ `TodoTrainSync` をリンクしていない（SYNC-3） |
+| Mac Companion | Linux 芯は完了（[13](13-sync-mac-companion.md) / [15](15-agent-work-plan.md)）。メニューバーは SYNC-4。iOS 配線（SYNC-3）は Settings セルフィー + ScenePhase。体験は [14](14-mac-companion-ux.md)。実機確認は [16](16-wakeup-checklist.md) |
 
 ## テスト
 

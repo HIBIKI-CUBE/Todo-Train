@@ -36,6 +36,7 @@ public actor PairingFlow {
     private var macSession: UUID?
     private var peerPublic: Data?
     private var masterKey: Data?
+    private var didConfirmPresence = false
 
     public init(
         role: PairingRole,
@@ -89,13 +90,22 @@ public actor PairingFlow {
         try await bind()
     }
 
-    /// Face ID / Touch ID, then confirm HMAC, then register tokenHash and store secrets.
+    /// Face ID / Touch ID once, then confirm HMAC until both sides overlap or the window lapses.
     public func authenticateAndConfirm() async throws {
         guard phase == .awaitingLocalAuth || phase == .confirming else {
             throw SyncError.pairingNotBound
         }
-        try await localAuth.confirmPresence()
-        try await confirmUntilEstablished()
+        if !didConfirmPresence {
+            try await localAuth.confirmPresence()
+            didConfirmPresence = true
+        }
+        let deadline = Date().addingTimeInterval(TimeInterval(SyncConstants.confirmOverlapWindowSeconds))
+        while Date() <= deadline {
+            try await confirmOnce()
+            if phase == .established { return }
+            try await Task.sleep(nanoseconds: 250_000_000)
+        }
+        throw SyncError.confirmTimedOut
     }
 
     public func abort() async throws {
@@ -104,6 +114,7 @@ public actor PairingFlow {
         }
         privateKey = nil
         masterKey = nil
+        didConfirmPresence = false
         phase = .aborted
     }
 
@@ -144,7 +155,7 @@ public actor PairingFlow {
         return response
     }
 
-    private func confirmUntilEstablished() async throws {
+    private func confirmOnce() async throws {
         guard let offerId, let pairingId, let masterKey else {
             throw SyncError.pairingNotBound
         }
@@ -157,11 +168,15 @@ public actor PairingFlow {
             role: role
         )
         let confirmed: ConfirmResponse
-        switch role {
-        case .iphone:
-            confirmed = try await client.confirmIphone(id: offerId, hmac: hmac)
-        case .mac:
-            confirmed = try await client.confirmMac(id: offerId, hmac: hmac)
+        do {
+            switch role {
+            case .iphone:
+                confirmed = try await client.confirmIphone(id: offerId, hmac: hmac)
+            case .mac:
+                confirmed = try await client.confirmMac(id: offerId, hmac: hmac)
+            }
+        } catch SyncError.transport(_, let code) where code == "confirmWindow" {
+            return
         }
         if !confirmed.confirmed {
             return

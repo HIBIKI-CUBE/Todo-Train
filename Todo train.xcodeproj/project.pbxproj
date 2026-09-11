@@ -8,6 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		B6EE2E8C302B4E730022EBAD /* TodoTrainWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = B6EE2E80302B4E730022EBAD /* TodoTrainWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		C0DE1004302B4E730022EBAD /* TodoTrainSync in Frameworks */ = {isa = PBXBuildFile; productRef = C0DE1002302B4E730022EBAD /* TodoTrainSync */; };
+		C0DE1005302B4E730022EBAD /* TodoTrainSync in Frameworks */ = {isa = PBXBuildFile; productRef = C0DE1003302B4E730022EBAD /* TodoTrainSync */; };
 		C0DE2004302B4E730022EBAD /* TodoTrainSync in Frameworks */ = {isa = PBXBuildFile; productRef = C0DE2002302B4E730022EBAD /* TodoTrainSync */; };
 		C0DE2005302B4E730022EBAD /* TodoTrainSync in Frameworks */ = {isa = PBXBuildFile; productRef = C0DE2003302B4E730022EBAD /* TodoTrainSync */; };
 /* End PBXBuildFile section */
@@ -150,11 +152,13 @@
 		B6EE2E4F302B4E710022EBAD /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
+				C0DE1004302B4E730022EBAD /* TodoTrainSync in Frameworks */,
 			);
 		};
 		B6EE2E60302B4E730022EBAD /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
+				C0DE1005302B4E730022EBAD /* TodoTrainSync in Frameworks */,
 			);
 		};
 		B6EE2E6A302B4E730022EBAD /* Frameworks */ = {
@@ -230,6 +234,9 @@
 				B6EE2E81302B4E730022EBAD /* TodoTrainWidget */,
 			);
 			name = "Todo train";
+			packageProductDependencies = (
+				C0DE1002302B4E730022EBAD /* TodoTrainSync */,
+			);
 			productName = "Todo train";
 			productReference = B6EE2E52302B4E710022EBAD /* Todo train.app */;
 			productType = "com.apple.product-type.application";
@@ -251,6 +258,9 @@
 				B6EE2E66302B4E730022EBAD /* Todo trainTests */,
 			);
 			name = "Todo trainTests";
+			packageProductDependencies = (
+				C0DE1003302B4E730022EBAD /* TodoTrainSync */,
+			);
 			productName = "Todo trainTests";
 			productReference = B6EE2E63302B4E730022EBAD /* Todo trainTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
@@ -504,6 +514,8 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Todo train/Info.plist";
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
+				INFOPLIST_KEY_NSCameraUsageDescription = "画面を Mac に向けたとき、机の QR を読むために前面カメラを使います。";
+				INFOPLIST_KEY_NSFaceIDUsageDescription = "この Mac との連携を、画面を自分に戻してから確定するために使います。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -540,6 +552,8 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Todo train/Info.plist";
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
+				INFOPLIST_KEY_NSCameraUsageDescription = "画面を Mac に向けたとき、机の QR を読むために前面カメラを使います。";
+				INFOPLIST_KEY_NSFaceIDUsageDescription = "この Mac との連携を、画面を自分に戻してから確定するために使います。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -1019,6 +1033,16 @@
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		C0DE1002302B4E730022EBAD /* TodoTrainSync */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C0DE2001302B4E730022EBAD /* XCLocalSwiftPackageReference "Packages/TodoTrainSync" */;
+			productName = TodoTrainSync;
+		};
+		C0DE1003302B4E730022EBAD /* TodoTrainSync */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C0DE2001302B4E730022EBAD /* XCLocalSwiftPackageReference "Packages/TodoTrainSync" */;
+			productName = TodoTrainSync;
+		};
 		C0DE2002302B4E730022EBAD /* TodoTrainSync */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = C0DE2001302B4E730022EBAD /* XCLocalSwiftPackageReference "Packages/TodoTrainSync" */;
