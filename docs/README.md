@@ -37,4 +37,4 @@
 - ターゲット: **iPhone 15 Pro Max / iOS 27**
 - スタック: **SwiftUI + SwiftData**
 - **MVP / v1 / v2: `develop` にマージ済み**
-- **次: SYNC-3 / 4 の実機確認。** Linux 芯（0/1/2/5）は `develop` 済み。起床後リストは [16](16-wakeup-checklist.md)
+- **同期の Linux 芯（SYNC-0/1/2/5）は `develop` 済み。** 次は SYNC-3 / 4 の実機確認。[15](15-agent-work-plan.md) / [16](16-wakeup-checklist.md)

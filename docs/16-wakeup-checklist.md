@@ -1,17 +1,17 @@
 # 16 — 起床後にやること（確認が要る残り）
 
-最終更新: 2026-09-10。コード側で進められる引き継ぎは PR にした。ここは **人が見ないと閉じない** ものだけ。
+最終更新: 2026-09-11。コード側で進められる引き継ぎは PR にした。ここは **人が見ないと閉じない** ものだけ。
 
 ## マージしてよい PR（Web で足りる）
 
-順序の提案。コンフリクトしやすいのは Settings / `docs/08` / `project.pbxproj`。
+#34 は `develop` 済み。残りはこの順。コンフリクトしやすいのは Settings / `docs/08` / `project.pbxproj`。
 
 | 順 | PR | 内容 | 自動テスト |
 |----|----|------|------------|
-| 1 | [#34](https://github.com/HIBIKI-CUBE/Todo-Train/pull/34) | Linux 同期の CI と現状ドキュメント | `sync-swift` green |
-| 2 | [#36](https://github.com/HIBIKI-CUBE/Todo-Train/pull/36) | 車内放送 away → Session LA alert。develop のテスト壊れも直す | `Todo trainTests` 233 Swift Testing |
-| 3 | [#35](https://github.com/HIBIKI-CUBE/Todo-Train/issues/37) / [PR](https://github.com/HIBIKI-CUBE/Todo-Train/pull/35) | SYNC-3 iOS セルフィー + ScenePhase | パッケージテスト。実機は後 |
-| 4 | [#39](https://github.com/HIBIKI-CUBE/Todo-Train/pull/39) | SYNC-4 メニューバー accessory | `TodoTrainCompanionTests`。カメラは後 |
+| 済 | [#34](https://github.com/HIBIKI-CUBE/Todo-Train/pull/34) | Linux 同期の CI と現状ドキュメント | `sync-swift` green |
+| 1 | [#36](https://github.com/HIBIKI-CUBE/Todo-Train/pull/36) | 車内放送 away → Session LA alert。develop のテスト壊れも直す | `Todo trainTests` 233 Swift Testing |
+| 2 | [#35](https://github.com/HIBIKI-CUBE/Todo-Train/issues/37) / [PR](https://github.com/HIBIKI-CUBE/Todo-Train/pull/35) | SYNC-3 iOS セルフィー + ScenePhase | パッケージテスト。実機は後 |
+| 3 | [#39](https://github.com/HIBIKI-CUBE/Todo-Train/pull/39) | SYNC-4 メニューバー accessory | `TodoTrainCompanionTests`。カメラは後 |
 
 #35 と #36 は両方 `SettingsView` と `docs/08` を触る。先にマージした方に合わせて後続を直す。
 

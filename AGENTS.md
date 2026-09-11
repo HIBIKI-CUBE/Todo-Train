@@ -41,6 +41,7 @@
 - PR 本文に Mac 検証チェックリストを載せる（[11-v2-alarmkit-setup.md](docs/11-v2-alarmkit-setup.md) §6 参照）。
 - 同期: Linux 芯（SYNC-0 / 1 / 2 / 5）は `develop` 済み。SYNC-3 / 4 は実装 PR。実機確認は [docs/16-wakeup-checklist.md](docs/16-wakeup-checklist.md)
 - `sync/worker` の品質ゲートは GitHub Actions `sync-worker`（中身は `cd sync/worker && npm test`）。Mac / Xcode は不要。
+- Swift パッケージと Linux E2E の品質ゲートは GitHub Actions `sync-swift`（`Packages/TodoTrainSync` の `swift test` と `./sync/e2e/run.sh`）。Linux では `sync/linux-swift.sh` で C++ フラグを付ける。
 - Cloudflare へのデプロイも同じ workflow。PR は Worker 名 `todotrain-sync-pr-<n>`（DO 付きなので aliased preview URL は使わない）。閉じると削除。secrets `CLOUDFLARE_API_TOKEN` と `CLOUDFLARE_ACCOUNT_ID` がリポジトリに無いときは deploy だけ skip。
 
 ## ブランチ
