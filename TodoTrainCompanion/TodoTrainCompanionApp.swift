@@ -34,4 +34,9 @@ struct TodoTrainCompanionApp: App {
 @MainActor
 final class CompanionAppDelegate: NSObject, NSApplicationDelegate {
     let runtime = CompanionMacRuntime()
+    private var overlay: CompanionRideOverlayController?
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        overlay = CompanionRideOverlayController(runtime: runtime)
+    }
 }

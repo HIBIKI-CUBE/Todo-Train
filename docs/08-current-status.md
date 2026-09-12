@@ -1,11 +1,11 @@
 # 08 — 現状ステータス
 
-最終更新: 2026-09-12（リレー `todo-train.hibiki-cube.dev` / `dev.todo-train.hibiki-cube.dev`。Mac ペアリングはメニューバー吹き出し。確認は [16](16-wakeup-checklist.md)）
+最終更新: 2026-09-12（リレー `todo-train.hibiki-cube.dev` / `dev.todo-train.hibiki-cube.dev`。Mac はメニューバー吹き出し＋乗務中 PiP。確認は [16](16-wakeup-checklist.md)）
 
 ## 結論
 
 **MVP（Sprint 1–10）・v1・v2（AlarmKit / UI polish）・車内放送は実装済み。**  
-**CloudKit（WP-I）** はスキーマとゲート付きローカル store まで。Mac 土管には使わない。同期の Linux 芯（契約・リレー・Swift パッケージ・E2E）は完了。構成は [13-sync-mac-companion.md](13-sync-mac-companion.md)。Mac の画面は [14-mac-companion-ux.md](14-mac-companion-ux.md)（確認 1 は吹き出し、2 は停車と再乗車で確定。3–6 は提案値）。実装マップと検証手順は本ファイルと [11-v2-alarmkit-setup.md](11-v2-alarmkit-setup.md) / [12-ui-design.md](12-ui-design.md) を参照。
+**CloudKit（WP-I）** はスキーマとゲート付きローカル store まで。Mac 土管には使わない。同期の Linux 芯（契約・リレー・Swift パッケージ・E2E）は完了。構成は [13-sync-mac-companion.md](13-sync-mac-companion.md)。Mac の画面は [14-mac-companion-ux.md](14-mac-companion-ux.md)（確認 1 は吹き出し＋乗務中 PiP、2 は停車と再乗車で確定。3–6 は提案値）。実装マップと検証手順は本ファイルと [11-v2-alarmkit-setup.md](11-v2-alarmkit-setup.md) / [12-ui-design.md](12-ui-design.md) を参照。
 
 定時の喜びは **エフェメラ**。到着は完了ジェスチャ（切符の無効化）で祝う。ストリークや定時率は出さない。超過で案内は取り下げない。
 
@@ -34,7 +34,7 @@
 | SYNC-2 Swift 芯 | ✅ | `Packages/TodoTrainSync`。Mac は SYNC-4、iOS は SYNC-3 でリンク。CI `sync-swift` |
 | SYNC-5 Linux E2E | ✅ | `sync/e2e/run.sh`。CI `sync-swift` |
 | SYNC-3 iOS UI | `develop` 済み。実機待ち | Settings セルフィー + 発車などで snap。Mac 名とペア識別子（#35） |
-| SYNC-4 macOS | `develop` 済み。実機待ち | メニューバー吹き出しで即ペアリング。停車と再乗車。歯車 / 右クリックで設定、そこから解除（#39） |
+| SYNC-4 macOS | `develop` 済み。実機待ち | メニューバー吹き出しで即ペアリング。乗務中 PiP（四隅・Peek・ホバーで停車/再乗車）。歯車 / 右クリックで設定、そこから解除（#39） |
 
 ### v2 進捗
 
@@ -80,10 +80,10 @@ Todo train/
     Reorder/               ReorderView
     Settings/              SettingsView
 TodoTrainWidget/           Home Widget + Session LA + Alarm LA
-TodoTrainCompanion/        macOS メニューバー accessory（SYNC-4。提案値）
+TodoTrainCompanion/        macOS メニューバー accessory + 乗務中 PiP（SYNC-4）
 Todo trainTests/           Swift Testing（CheckInScheduling / TicketIssuer 含む）
 TodoTrainCompanionTests/   停車送信の純関数
-Packages/TodoTrainSync/    同期芯（暗号・ペアリング・停車判定。UI なし）
+Packages/TodoTrainSync/    同期芯（暗号・ペアリング・停車判定・メニューバー/PiP 表示。UI なし）
 sync/contract/             ワイヤ契約の正本
 sync/worker/               Hono + Durable Object
 sync/e2e/                  Linux 結合（client ↔ worker）
@@ -107,7 +107,7 @@ sync/e2e/                  Linux 結合（client ↔ worker）
 | Session LA からの Intent | 走行中の停車は `SessionPauseIntent`。停車中の再乗車は `SessionResumeIntent`。到着・延長は deep link |
 | iPad 最適化 | v2 以降。iPhone アプリの自由リサイズ（ミラーリング）は Hub がシーン幅に追従 |
 | 乗り継ぎキャンバスのゲージ統一 | Phase 2（Quick Add のみ線形スナップ・ゲージ） |
-| Mac Companion | Linux 芯は完了（[13](13-sync-mac-companion.md) / [15](15-agent-work-plan.md)）。メニューバー吹き出しは SYNC-4。iOS は Settings セルフィー + 発車/停車/延長/到着/超過と `ScenePhase.active` で snap。Mac は停車と再乗車。設定は歯車 / 右クリックのウィンドウ。体験は [14](14-mac-companion-ux.md)。実機確認は [16](16-wakeup-checklist.md) |
+| Mac Companion | Linux 芯は完了（[13](13-sync-mac-companion.md) / [15](15-agent-work-plan.md)）。メニューバー吹き出しは SYNC-4。乗務中は四隅 PiP（ホバーで停車/再乗車、端へ隠せる）。iOS は Settings セルフィー + 発車/停車/延長/到着/超過と `ScenePhase.active` で snap。設定は歯車 / 右クリックのウィンドウ。体験は [14](14-mac-companion-ux.md)。実機確認は [16](16-wakeup-checklist.md) |
 
 ## テスト
 

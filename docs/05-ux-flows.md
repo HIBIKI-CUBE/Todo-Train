@@ -16,7 +16,7 @@
 | Reorder View | ✅ | 全表示 + フィルタ強調、手動 D&D |
 | Settings | ✅ | 同時停車 2/3、終了ベル、超過音 |
 | Weekly Report | ✅ | 週次レポート（履歴タブ内） |
-| Mac companion | 提案 | メニューバー吹き出し（未ペアは即ペアリング）。体験は [14](14-mac-companion-ux.md)。土管は [13](13-sync-mac-companion.md) |
+| Mac companion | 提案 | メニューバー吹き出し（未ペアは即ペアリング）＋乗務中 PiP。体験は [14](14-mac-companion-ux.md)。土管は [13](13-sync-mac-companion.md) |
 
 ## Hub
 

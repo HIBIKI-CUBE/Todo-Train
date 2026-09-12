@@ -71,16 +71,22 @@ final class CompanionMacRuntime {
 
     var relayURL: URL? { URL(string: relayURLString) }
 
-    var presentation: MenuBarPresentation {
-        MenuBarPresentation.make(
-            MenuBarInput(
-                pairing: isPaired ? .paired : .unpaired,
-                snap: snap,
-                now: now,
-                connection: connection,
-                outgoingPause: outgoingPause
-            )
+    var menuBarInput: MenuBarInput {
+        MenuBarInput(
+            pairing: isPaired ? .paired : .unpaired,
+            snap: snap,
+            now: now,
+            connection: connection,
+            outgoingPause: outgoingPause
         )
+    }
+
+    var presentation: MenuBarPresentation {
+        MenuBarPresentation.make(menuBarInput)
+    }
+
+    var overlayPresentation: RideOverlayPresentation {
+        RideOverlayPresentation.make(menuBarInput)
     }
 
     func refreshPaired() {

@@ -1,6 +1,6 @@
 # TodoTrainCompanion
 
-macOS メニューバー（SYNC-4）。Dock には出さない accessory。表示は `Packages/TodoTrainSync` の `MenuBarPresentation`。操作は停車と再乗車。
+macOS メニューバー（SYNC-4）＋乗務中の PiP。Dock には出さない accessory。表示は `Packages/TodoTrainSync` の `MenuBarPresentation` / `RideOverlayPresentation`。操作は停車と再乗車。
 
 ## 動かし方
 
@@ -8,7 +8,8 @@ macOS メニューバー（SYNC-4）。Dock には出さない accessory。表�
 2. Xcode スキーム `TodoTrainCompanion` を Mac で Run
 3. iPhone 側は設定 → Mac → この Mac とつなぐ
 4. Mac は未ペアならメニューバーを左クリックするだけで吹き出しがペアリングになる（別ウィンドウは出ない）
-5. 設定は吹き出し右上の歯車、またはメニューバーを右クリック。連携の解除はそこ
+5. 乗務が始まると四隅の PiP が出る。ドラッグで隅へ。端へ十分ドラッグすると Peek。ホバーで停車 / 再乗車
+6. 設定は吹き出し右上の歯車、またはメニューバーを右クリック。連携の解除はそこ
 
 設定のリレー URL 既定は Release が `https://todo-train.hibiki-cube.dev`、DEBUG が `https://dev.todo-train.hibiki-cube.dev`。以前の `http://127.0.0.1:8787` は起動時に develop へ上げる。ローカル wrangler や PR プレビュー（`https://pr-<n>.todo-train.hibiki-cube.dev`）は設定で上書きする。
 

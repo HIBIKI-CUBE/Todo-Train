@@ -16,7 +16,7 @@
 | [11-v2-alarmkit-setup.md](11-v2-alarmkit-setup.md) | Widget / Live Activity / AlarmKit セットアップ・検証 |
 | [12-ui-design.md](12-ui-design.md) | UI / ビジュアル方針（列車テーマ） |
 | [13-sync-mac-companion.md](13-sync-mac-companion.md) | 同期構成（ペアリング + E2E + CF Workers）。**確定** |
-| [14-mac-companion-ux.md](14-mac-companion-ux.md) | Mac コンパニオン体験。**確認 1 は吹き出し、2 は停車と再乗車で確定。3–6 は提案値** |
+| [14-mac-companion-ux.md](14-mac-companion-ux.md) | Mac コンパニオン体験。**確認 1 は吹き出し＋乗務中 PiP、2 は停車と再乗車で確定。3–6 は提案値** |
 | [15-agent-work-plan.md](15-agent-work-plan.md) | 同期実装のエージェント切り分け。Issue 本文は [issues/](issues/) |
 | [16-wakeup-checklist.md](16-wakeup-checklist.md) | 人が見ないと閉じない確認・マージ順 |
 
