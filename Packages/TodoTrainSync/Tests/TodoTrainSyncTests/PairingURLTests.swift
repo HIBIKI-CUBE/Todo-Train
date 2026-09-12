@@ -23,9 +23,10 @@ struct PairingURLTests {
             Issue.record("expected iphone URL")
         }
 
-        if case .mac(let session, let y) = mac {
+        if case .mac(let session, let y, let name) = mac {
             #expect(session == UUID(uuidString: "c1c2c3c4-d1d2-4e3e-8f4f-a5a6a7a8a9aa"))
             #expect(y.count == 32)
+            #expect(name == nil)
             #expect(Base64URL.encode(y) == "UgKyT75SOaUjcnm8rdNOZvC3qC3oVkNtdt-WlgkO9rI")
         } else {
             Issue.record("expected mac URL")
@@ -45,5 +46,70 @@ struct PairingURLTests {
         #expect(throws: SyncError.invalidPairingURL) {
             _ = try PairingURL.parse(extra)
         }
+    }
+
+    @Test func macNameIsOptionalDisplayOnly() throws {
+        let named = try PairingURL.parse(
+            "todotrain://pair-mac?s=c1c2c3c4-d1d2-4e3e-8f4f-a5a6a7a8a9aa&y=UgKyT75SOaUjcnm8rdNOZvC3qC3oVkNtdt-WlgkO9rI&n=Studio"
+        )
+        #expect(named.companionName == "Studio")
+        #expect(named.encoded.contains("&n=Studio"))
+        #expect(try PairingURL.parse(named.encoded) == named)
+    }
+
+    @Test func macNameRoundTripsPercentEncodedUnicode() throws {
+        let y = try Base64URL.decode("UgKyT75SOaUjcnm8rdNOZvC3qC3oVkNtdt-WlgkO9rI")
+        let url = PairingURL.mac(
+            macSession: UUID(uuidString: "c1c2c3c4-d1d2-4e3e-8f4f-a5a6a7a8a9aa")!,
+            y: y,
+            name: "スタジオ Mac"
+        )
+        #expect(url.encoded.contains("&n="))
+        #expect(!url.encoded.contains(" "))
+        #expect(try PairingURL.parse(url.encoded).companionName == "スタジオ Mac")
+    }
+
+    @Test func emptyMacNameIsOmitted() throws {
+        let parsed = try PairingURL.parse(
+            "todotrain://pair-mac?s=c1c2c3c4-d1d2-4e3e-8f4f-a5a6a7a8a9aa&y=UgKyT75SOaUjcnm8rdNOZvC3qC3oVkNtdt-WlgkO9rI&n="
+        )
+        #expect(parsed.companionName == nil)
+        #expect(!parsed.encoded.contains("&n="))
+    }
+
+    @Test func extraPairMacQueryIsRejected() {
+        let extra = "todotrain://pair-mac?s=c1c2c3c4-d1d2-4e3e-8f4f-a5a6a7a8a9aa&y=UgKyT75SOaUjcnm8rdNOZvC3qC3oVkNtdt-WlgkO9rI&n=Studio&k=1"
+        #expect(throws: SyncError.invalidPairingURL) {
+            _ = try PairingURL.parse(extra)
+        }
+    }
+
+    @Test func pairingSecretsKeepOptionalNameAndShortID() throws {
+        let pairingId = UUID(uuidString: "a1a2a3a4-b1b2-4c3c-8d4d-e5e6e7e8e9ea")!
+        let unnamed = PairingSecrets(
+            pairingId: pairingId,
+            masterKey: Data(repeating: 1, count: 32),
+            writeToken: Data(repeating: 2, count: 32)
+        )
+        #expect(unnamed.companionName == nil)
+        #expect(unnamed.shortPairingID == "a1a2a3a4")
+
+        let decoded = try JSONDecoder().decode(
+            PairingSecrets.self,
+            from: try JSONEncoder().encode(unnamed)
+        )
+        #expect(decoded.companionName == nil)
+
+        let named = PairingSecrets(
+            pairingId: pairingId,
+            masterKey: Data(repeating: 1, count: 32),
+            writeToken: Data(repeating: 2, count: 32),
+            companionName: "Studio"
+        )
+        let namedDecoded = try JSONDecoder().decode(
+            PairingSecrets.self,
+            from: try JSONEncoder().encode(named)
+        )
+        #expect(namedDecoded.companionName == "Studio")
     }
 }

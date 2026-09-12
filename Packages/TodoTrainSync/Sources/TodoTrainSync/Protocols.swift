@@ -4,11 +4,23 @@ public struct PairingSecrets: Codable, Equatable, Sendable {
     public var pairingId: UUID
     public var masterKey: Data
     public var writeToken: Data
+    /// Mac computer name captured at pairing. Missing on older Keychain blobs.
+    public var companionName: String?
 
-    public init(pairingId: UUID, masterKey: Data, writeToken: Data) {
+    public init(
+        pairingId: UUID,
+        masterKey: Data,
+        writeToken: Data,
+        companionName: String? = nil
+    ) {
         self.pairingId = pairingId
         self.masterKey = masterKey
         self.writeToken = writeToken
+        self.companionName = CompanionDisplayName.sanitize(companionName)
+    }
+
+    public var shortPairingID: String {
+        String(pairingId.uuidString.lowercased().prefix(8))
     }
 }
 

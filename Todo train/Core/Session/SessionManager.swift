@@ -14,6 +14,8 @@ import UIKit
 @MainActor
 final class SessionManager {
     private(set) var phase: SessionPhase = .idle
+    /// Bumps when the open ride changes so the Mac companion can push a snap.
+    private(set) var companionSyncTick: Int = 0
     private(set) var activeServiceDay: ServiceDay?
     private(set) var activeSession: WorkSession?
     private(set) var needsServiceDayEndPrompt = false
@@ -54,6 +56,10 @@ final class SessionManager {
     var punctualityMoment: PunctualityMoment? { punctualityQueue.first }
 
     var pauseLimit: Int { settings.pauseLimit }
+
+    private func bumpCompanionSync() {
+        companionSyncTick += 1
+    }
 
     var pendingCheckIn: CheckInKind? { activeSession?.pendingCheckIn }
 
@@ -288,6 +294,7 @@ final class SessionManager {
         applyCheckInSchedule(to: session, title: ticket.title, estimatedSeconds: estimate)
         activeSession = session
         phase = .running
+        bumpCompanionSync()
         try save()
         // One LA / Alarm at a time — drop the previous paused ride's presentation.
         alarmScheduler.cancelAllExcept(sessionID: session.id)
@@ -329,6 +336,7 @@ final class SessionManager {
         session.pendingCheckIn = nil
         session.awayDueAt = nil
         phase = .paused
+        bumpCompanionSync()
         overtimeNotifier.cancel(sessionID: session.id)
         checkInNotifier.cancel(sessionID: session.id)
         cancelAwayFireTask()
@@ -399,6 +407,7 @@ final class SessionManager {
         session.pausedAt = nil
         session.segmentStartedAt = now
         phase = .running
+        bumpCompanionSync()
         try save()
         alarmScheduler.cancelAllExcept(sessionID: session.id)
         let resumedAlarm = isAlarmKitEndBellActive && alarmScheduler.resume(sessionID: session.id)
@@ -419,6 +428,7 @@ final class SessionManager {
         session.pausedAt = nil
         session.segmentStartedAt = now
         phase = .running
+        bumpCompanionSync()
         try save()
         reconcile(now: now)
         refreshOvertimeNotification(for: session, now: now)
@@ -438,6 +448,7 @@ final class SessionManager {
 
         let added = Int(seconds.rounded())
         session.budgetSecondsAtStart += added
+        bumpCompanionSync()
         let record = SessionExtension(
             addedSeconds: added,
             reason: reason?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
@@ -743,6 +754,7 @@ final class SessionManager {
         if activeSession?.id == session.id {
             activeSession = nil
             phase = .idle
+            bumpCompanionSync()
         }
         overtimeNotifier.cancel(sessionID: session.id)
         checkInNotifier.cancel(sessionID: session.id)
@@ -795,6 +807,9 @@ final class SessionManager {
         let nextPhase: SessionPhase = session.remainingSeconds(at: now) <= 0 ? .overtime : .running
         let crossedIntoOvertime = phase != .overtime && nextPhase == .overtime
         phase = nextPhase
+        if crossedIntoOvertime {
+            bumpCompanionSync()
+        }
         if ownsDeviceSideEffects(session) {
             if crossedIntoOvertime {
                 skipPendingCheckInForOvertime(session)

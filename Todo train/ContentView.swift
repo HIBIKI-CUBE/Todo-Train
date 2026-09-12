@@ -76,6 +76,9 @@ struct ContentView: View {
             syncFocusPresentation()
             companion.handleScenePhase(.active, sessionManager: sessionManager)
         }
+        .onChange(of: sessionManager.companionSyncTick) { _, _ in
+            companion.noteSessionChanged(sessionManager: sessionManager)
+        }
         .onChange(of: scenePhase) { _, newPhase in
             companion.handleScenePhase(newPhase, sessionManager: sessionManager)
             if newPhase == .active {

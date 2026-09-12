@@ -16,9 +16,12 @@ final class CompanionSyncRuntime {
     private let localAuth: any LocalAuthenticating
     private let defaults: UserDefaults
     private var foregroundTask: Task<Void, Never>?
+    private var pushTask: Task<Void, Never>?
     private var processedCommandIDs: Set<UUID>
 
     private(set) var isPaired = false
+    private(set) var companionName: String?
+    private(set) var pairingShortID: String?
     private(set) var lastStatus: String?
 
     init(
@@ -39,7 +42,20 @@ final class CompanionSyncRuntime {
     var relayURL: URL? { settings.companionRelayURL }
 
     func refreshPaired() {
-        isPaired = (try? secrets.load()) != nil
+        let pairing = try? secrets.load()
+        isPaired = pairing != nil
+        companionName = pairing?.companionName
+        pairingShortID = pairing?.shortPairingID
+    }
+
+    func noteSessionChanged(sessionManager: SessionManager) {
+        guard isPaired else { return }
+        pushTask?.cancel()
+        pushTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 150_000_000)
+            guard !Task.isCancelled else { return }
+            await self?.syncNow(sessionManager: sessionManager)
+        }
     }
 
     func makeFlow() throws -> PairingFlow {

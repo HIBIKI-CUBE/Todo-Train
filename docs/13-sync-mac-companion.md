@@ -87,10 +87,10 @@ iPhone の画面と前面カメラは同じ向き。画面を机の Mac に向�
 
 ```
 todotrain://pair?p=<pairingId>&o=<offerId>&x=<iPhone_eph_pub_b64u>
-todotrain://pair-mac?s=<macSession>&y=<Mac_eph_pub_b64u>
+todotrain://pair-mac?s=<macSession>&y=<Mac_eph_pub_b64u>[&n=<computerName>]
 ```
 
-`x` / `y` は X25519 公開鍵 raw 32 byte の unpadded base64url。ABNF と例は `sync/contract/pairing-url.abnf`。
+`x` / `y` は X25519 公開鍵 raw 32 byte の unpadded base64url。`n` は Mac のコンピュータ名（Settings 表示用。秘密ではない。無くてもよい）。ABNF と例は `sync/contract/pairing-url.abnf`。黄金例は `n` なしのまま。
 
 リレーは、**両方の光学読取が揃うまで** 相手を固定しない。iPhone が `y` を読めただけでは足りない。Mac 側も `x` を読めたことを報告する。新経路は作らず、`POST /v1/offers/:id/bind` を双方が各 1 回（iPhone は光学の `s`+`y`、Mac は光学の `x` と自分の `s`）。
 
@@ -229,7 +229,7 @@ iOS 前面と購読者が両方 WS にいるとき、cmd は即時。iOS が背�
 
 **iPhone**
 
-- `ScenePhase.active` と発車 / 停車 / 延長 / 到着のたびに snap を置く
+- `ScenePhase.active` と発車 / 停車 / 延長 / 到着 / 超過突入のたびに snap を置く
 - active 中は WS。切れたら出し直す。定期ポーリングはしない
 - 受信 cmd を復号 → `sessionId` が今の open と一致 → `SessionManager` で実行 → snap + ack
 - 不一致・復号失敗・`SessionError` は ack `ok: false`。snap は現状のまま

@@ -25,6 +25,8 @@ final class CompanionMacRuntime {
     private var pairingEpoch = 0
 
     private(set) var isPaired = false
+    private(set) var companionName: String?
+    private(set) var pairingShortID: String?
     private(set) var snap: SnapPlaintext?
     private(set) var connection: ConnectionStatus = .disconnected
     private(set) var outgoingPause: OutgoingPauseState = .idle
@@ -82,7 +84,19 @@ final class CompanionMacRuntime {
     }
 
     func refreshPaired() {
-        isPaired = (try? secrets.load()) != nil
+        guard var pairing = try? secrets.load() else {
+            isPaired = false
+            companionName = nil
+            pairingShortID = nil
+            return
+        }
+        isPaired = true
+        if pairing.companionName == nil {
+            pairing.companionName = MacComputerName.current()
+            try? secrets.save(pairing)
+        }
+        companionName = pairing.companionName
+        pairingShortID = pairing.shortPairingID
     }
 
     func makeFlow() throws -> PairingFlow {
@@ -179,7 +193,7 @@ final class CompanionMacRuntime {
                 return
             }
             pairingFlow = pairing
-            pairingQR = try await pairing.presentQR()
+            pairingQR = try await pairing.presentQR(displayName: MacComputerName.current())
             guard pairingEpoch == epoch else {
                 try? await pairing.abort()
                 return

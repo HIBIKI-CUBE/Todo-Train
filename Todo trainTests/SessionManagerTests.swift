@@ -359,6 +359,36 @@ struct SessionManagerTests {
         #expect(ticket.sessions.first?.endedAt != nil)
     }
 
+    @Test func rideMutations_bumpCompanionSyncTick() throws {
+        let (manager, context, clock, _) = try makeHarness()
+        try manager.startService()
+        let ticket = try makeTicket(context, seconds: 60)
+        #expect(manager.companionSyncTick == 0)
+
+        try manager.board(ticket: ticket)
+        #expect(manager.companionSyncTick == 1)
+
+        try manager.pause()
+        #expect(manager.companionSyncTick == 2)
+
+        try manager.resume()
+        #expect(manager.companionSyncTick == 3)
+
+        try manager.extend(by: 60)
+        #expect(manager.companionSyncTick == 4)
+
+        clock.advance(by: 121)
+        manager.reconcile()
+        #expect(manager.phase == .overtime)
+        #expect(manager.companionSyncTick == 5)
+        manager.reconcile()
+        #expect(manager.companionSyncTick == 5)
+
+        try manager.arrive()
+        #expect(manager.companionSyncTick == 6)
+        #expect(manager.phase == .idle)
+    }
+
     @Test func overtime_whenPastBudget() throws {
         let (manager, context, clock, _) = try makeHarness()
         try manager.startService()

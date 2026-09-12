@@ -36,6 +36,7 @@ public actor PairingFlow {
     private var macSession: UUID?
     private var peerPublic: Data?
     private var masterKey: Data?
+    private var companionName: String?
     private var didConfirmPresence = false
 
     public init(
@@ -51,8 +52,9 @@ public actor PairingFlow {
     }
 
     /// Present this side's QR. iPhone creates the offer; Mac only generates keys.
+    /// `displayName` is the Mac computer name (not a secret). iPhone ignores it.
     @discardableResult
-    public func presentQR() async throws -> PairingURL {
+    public func presentQR(displayName: String? = nil) async throws -> PairingURL {
         let (privateKey, publicRaw) = SyncCrypto.generateX25519()
         self.privateKey = privateKey
         self.publicRaw = publicRaw
@@ -67,7 +69,8 @@ public actor PairingFlow {
         case .mac:
             let session = UUID()
             macSession = session
-            url = .mac(macSession: session, y: publicRaw)
+            companionName = CompanionDisplayName.sanitize(displayName)
+            url = .mac(macSession: session, y: publicRaw, name: companionName)
         }
         ownURL = url
         phase = .presentingQR(url)
@@ -121,9 +124,10 @@ public actor PairingFlow {
 
     private func applyPeer(_ url: PairingURL) throws {
         switch (role, url) {
-        case (.iphone, .mac(let session, let y)):
+        case (.iphone, .mac(let session, let y, let name)):
             macSession = session
             peerPublic = y
+            companionName = CompanionDisplayName.sanitize(name)
         case (.mac, .iphone(let pairing, let offer, let x)):
             pairingId = pairing
             offerId = offer
@@ -186,7 +190,8 @@ public actor PairingFlow {
         let stored = PairingSecrets(
             pairingId: pairingId,
             masterKey: masterKey,
-            writeToken: keys.writeToken
+            writeToken: keys.writeToken,
+            companionName: companionName
         )
         try secrets.save(stored)
         client.writeToken = keys.writeToken

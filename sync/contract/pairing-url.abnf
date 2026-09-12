@@ -1,15 +1,20 @@
-; Pairing QR URLs. Query names match docs/13. No extra parameters.
+; Pairing QR URLs. Query names match docs/13.
 ; UUIDs are lowercase canonical. Binary is unpadded base64url.
 ; Parsers accept any query order. Builders emit the order below.
+; `n` on pair-mac is an optional computer name (not a secret). Other extra parameters are invalid.
 
 pair-url        = "todotrain://pair?" pair-query
 pair-mac-url    = "todotrain://pair-mac?" pair-mac-query
 
 pair-query      = "p=" uuid "&o=" uuid "&x=" b64u-32
-pair-mac-query  = "s=" uuid "&y=" b64u-32
+pair-mac-query  = "s=" uuid "&y=" b64u-32 [ "&n=" name ]
 
 ; p = pairingId, o = offerId, x = iPhone X25519 public (raw 32 bytes)
 ; s = macSession (Mac-generated UUID), y = Mac X25519 public (raw 32 bytes)
+; n = Mac computer name for Settings (percent-encoded UTF-8, max 32)
+
+name            = 1*( b64u-char / pct-encoded )
+pct-encoded     = "%" HEXDIG HEXDIG
 
 uuid            = 8hex "-" 4hex "-" 4hex "-" 4hex "-" 12hex
 8hex            = 8HEXDIG

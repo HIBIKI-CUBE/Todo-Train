@@ -61,7 +61,7 @@ struct SyncClientTests {
         let phase1 = await flow.phase
         if case .presentingQR = phase1 {} else { Issue.record("expected presentingQR") }
 
-        let macURL = "todotrain://pair-mac?s=c1c2c3c4-d1d2-4e3e-8f4f-a5a6a7a8a9aa&y=UgKyT75SOaUjcnm8rdNOZvC3qC3oVkNtdt-WlgkO9rI"
+        let macURL = "todotrain://pair-mac?s=c1c2c3c4-d1d2-4e3e-8f4f-a5a6a7a8a9aa&y=UgKyT75SOaUjcnm8rdNOZvC3qC3oVkNtdt-WlgkO9rI&n=Studio"
         let firstBind = try await flow.ingestOptical(macURL)
         #expect(!firstBind.bound)
         let phase2 = await flow.phase
@@ -79,6 +79,8 @@ struct SyncClientTests {
         #expect(saved?.pairingId == UUID(uuidString: "a1a2a3a4-b1b2-4c3c-8d4d-e5e6e7e8e9ea"))
         #expect(saved?.masterKey.count == 32)
         #expect(saved?.writeToken.count == 32)
+        #expect(saved?.companionName == "Studio")
+        #expect(saved?.shortPairingID == "a1a2a3a4")
 
         let requests = await transport.requests
         #expect(requests.map(\.path) == [

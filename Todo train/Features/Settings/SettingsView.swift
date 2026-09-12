@@ -85,8 +85,14 @@ struct SettingsView: View {
             Section {
                 if runtime.isPaired {
                     LabeledContent("Mac") {
-                        Text("つながっている")
-                            .foregroundStyle(TrainTheme.muted)
+                        Text(runtime.companionName ?? "つながっている")
+                    }
+                    if let pairingShortID = runtime.pairingShortID {
+                        LabeledContent("ペア") {
+                            Text(pairingShortID)
+                                .font(.body.monospaced())
+                                .textSelection(.enabled)
+                        }
                     }
                     Button("この Mac との連携を解除", role: .destructive) {
                         try? runtime.unpair()
@@ -113,7 +119,7 @@ struct SettingsView: View {
             } header: {
                 Text("Mac")
             } footer: {
-                Text("画面を Mac に向ける一動作でつなぎます。この Mac だけが読めます。リレーは暗号化文だけ運びます。")
+                Text("画面を向けたその Mac だけが読めます。名前はペアしたときのコンピュータ名です。識別子が同じなら同じペアです。")
             }
         }
         .navigationTitle("設定")

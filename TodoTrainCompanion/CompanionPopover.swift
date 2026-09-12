@@ -70,9 +70,21 @@ struct RelaySettingsView: View {
 
     var body: some View {
         Form {
+            if runtime.isPaired {
+                LabeledContent("この Mac") {
+                    Text(runtime.companionName ?? MacComputerName.current())
+                }
+                if let pairingShortID = runtime.pairingShortID {
+                    LabeledContent("ペア") {
+                        Text(pairingShortID)
+                            .font(.body.monospaced())
+                            .textSelection(.enabled)
+                    }
+                }
+            }
             TextField("リレー URL", text: $runtime.relayURLString)
             Toggle("ログイン時に起動", isOn: $runtime.loginAtStartup)
-            Text("この Mac だけが読める。解除は iPhone の設定。")
+            Text("識別子が iPhone の設定と同じなら、この Mac とつながっています。解除は iPhone の設定。")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }
