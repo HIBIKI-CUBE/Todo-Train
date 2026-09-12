@@ -210,15 +210,15 @@ export class PairingDurableObject extends DurableObject<unknown> {
     return { ...jsonOk(200, { pairingId: state.pairingId }), registerTokenHash: tokenHash };
   }
 
-  async getSnap(): Promise<RpcResult> {
-    const state = await this.requirePaired();
+  async getSnap(tokenHash: string): Promise<RpcResult> {
+    const state = await this.requirePaired(tokenHash);
     if ("status" in state) return state;
     if (!state.snap) return jsonError(404, "notFound");
     return jsonOk(200, state.snap);
   }
 
-  async putSnap(body: unknown): Promise<RpcResult> {
-    const state = await this.requirePaired();
+  async putSnap(body: unknown, tokenHash: string): Promise<RpcResult> {
+    const state = await this.requirePaired(tokenHash);
     if ("status" in state) return state;
     const parsed = parseEnvelope(body, "snap");
     if (!parsed.ok) return jsonError(400, "invalid");
@@ -230,8 +230,8 @@ export class PairingDurableObject extends DurableObject<unknown> {
     return jsonOk(200, { rev: parsed.envelope.rev });
   }
 
-  async postCmd(body: unknown): Promise<RpcResult> {
-    const state = await this.requirePaired();
+  async postCmd(body: unknown, tokenHash: string): Promise<RpcResult> {
+    const state = await this.requirePaired(tokenHash);
     if ("status" in state) return state;
     const parsed = parseEnvelope(body, "cmd");
     if (!parsed.ok) return jsonError(400, "invalid");
@@ -242,14 +242,14 @@ export class PairingDurableObject extends DurableObject<unknown> {
     return jsonOk(201, { queued: true });
   }
 
-  async getCmd(): Promise<RpcResult> {
-    const state = await this.requirePaired();
+  async getCmd(tokenHash: string): Promise<RpcResult> {
+    const state = await this.requirePaired(tokenHash);
     if ("status" in state) return state;
     return jsonOk(200, { items: state.cmds });
   }
 
-  async putAck(body: unknown): Promise<RpcResult> {
-    const state = await this.requirePaired();
+  async putAck(body: unknown, tokenHash: string): Promise<RpcResult> {
+    const state = await this.requirePaired(tokenHash);
     if ("status" in state) return state;
     const parsed = parseEnvelope(body, "ack");
     if (!parsed.ok) return jsonError(400, "invalid");
@@ -260,8 +260,8 @@ export class PairingDurableObject extends DurableObject<unknown> {
     return jsonOk(200, { stored: true });
   }
 
-  async getAck(): Promise<RpcResult> {
-    const state = await this.requirePaired();
+  async getAck(tokenHash: string): Promise<RpcResult> {
+    const state = await this.requirePaired(tokenHash);
     if ("status" in state) return state;
     if (!state.ack) return jsonError(404, "notFound");
     return jsonOk(200, state.ack);
@@ -270,6 +270,11 @@ export class PairingDurableObject extends DurableObject<unknown> {
   async fetch(request: Request): Promise<Response> {
     if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket") {
       return new Response("expected websocket", { status: 426 });
+    }
+    const tokenHash = request.headers.get("X-Token-Hash");
+    const state = await this.requirePaired(tokenHash ?? "");
+    if ("status" in state) {
+      return Response.json(state.body, { status: state.status });
     }
     const pair = new WebSocketPair();
     this.ctx.acceptWebSocket(pair[1]);
@@ -288,9 +293,11 @@ export class PairingDurableObject extends DurableObject<unknown> {
     }
   }
 
-  private async requirePaired(): Promise<PairingState | RpcResult> {
+  private async requirePaired(tokenHash: string): Promise<PairingState | RpcResult> {
+    if (!isTokenHash32(tokenHash)) return jsonError(401, "unauthorized");
     const state = await this.load();
     if (!state?.confirmed || !state.tokenHash) return jsonError(401, "unauthorized");
+    if (state.tokenHash !== tokenHash) return jsonError(401, "unauthorized");
     return state;
   }
 

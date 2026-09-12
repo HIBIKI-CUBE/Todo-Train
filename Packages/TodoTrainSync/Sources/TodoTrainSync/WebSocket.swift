@@ -60,17 +60,23 @@ final class URLSessionWebSocketConnection: WebSocketConnection, @unchecked Senda
 
 public struct BearerWebSocket {
     public var writeToken: Data
+    public var pairingId: UUID?
     public var connector: any WebSocketConnecting
 
-    public init(writeToken: Data, connector: any WebSocketConnecting) {
+    public init(writeToken: Data, pairingId: UUID? = nil, connector: any WebSocketConnecting) {
         self.writeToken = writeToken
+        self.pairingId = pairingId
         self.connector = connector
     }
 
     public func connect() async throws -> any WebSocketConnection {
-        try await connector.connect(
+        var headers = ["Authorization": "Bearer \(Base64URL.encode(writeToken))"]
+        if let pairingId {
+            headers[SyncHTTPClient.pairingIdHeaderName] = pairingId.canonicalLowercase
+        }
+        return try await connector.connect(
             path: "/v1/ws",
-            headers: ["Authorization": "Bearer \(Base64URL.encode(writeToken))"]
+            headers: headers
         )
     }
 }

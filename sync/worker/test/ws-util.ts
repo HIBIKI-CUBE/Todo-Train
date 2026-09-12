@@ -7,14 +7,17 @@ export function envelope(kind: WireEnvelope["kind"], rev: number, ct = SNAP.ct, 
   return { rev, kind, n, ct };
 }
 
-export async function openWs(token: string): Promise<{ ws: WebSocket; next: () => Promise<WsFrame> }> {
-  const upgrade = await SELF.fetch("https://relay.test/v1/ws", {
-    headers: {
-      upgrade: "websocket",
-      connection: "Upgrade",
-      authorization: `Bearer ${token}`,
-    },
-  });
+export async function openWs(
+  token: string,
+  pairingId?: string,
+): Promise<{ ws: WebSocket; next: () => Promise<WsFrame> }> {
+  const headers: Record<string, string> = {
+    upgrade: "websocket",
+    connection: "Upgrade",
+    authorization: `Bearer ${token}`,
+  };
+  if (pairingId) headers["X-Pairing-Id"] = pairingId;
+  const upgrade = await SELF.fetch("https://relay.test/v1/ws", { headers });
   if (upgrade.status !== 101 || !upgrade.webSocket) {
     throw new Error(`ws upgrade ${upgrade.status}`);
   }

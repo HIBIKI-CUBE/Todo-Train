@@ -62,14 +62,18 @@ private struct ErrorBody: Codable {
 }
 
 public struct SyncHTTPClient: Sendable {
+    public static let pairingIdHeaderName = "X-Pairing-Id"
+
     public var baseURL: URL
     public var transport: any HTTPTransport
     public var writeToken: Data?
+    public var pairingId: UUID?
 
-    public init(baseURL: URL, transport: any HTTPTransport, writeToken: Data? = nil) {
+    public init(baseURL: URL, transport: any HTTPTransport, writeToken: Data? = nil, pairingId: UUID? = nil) {
         self.baseURL = baseURL
         self.transport = transport
         self.writeToken = writeToken
+        self.pairingId = pairingId
     }
 
     public func createOffer(x: Data) async throws -> OfferCreated {
@@ -175,6 +179,9 @@ public struct SyncHTTPClient: Sendable {
         if auth {
             guard let writeToken else { throw SyncError.notPaired }
             headers["Authorization"] = "Bearer \(Base64URL.encode(writeToken))"
+            if let pairingId {
+                headers[Self.pairingIdHeaderName] = pairingId.canonicalLowercase
+            }
         }
         let request = HTTPRequest(method: method, path: path, headers: headers, body: body)
         let response = try await transport.perform(request)

@@ -48,6 +48,13 @@ struct CompanionPopover: View {
                     .foregroundStyle(.secondary)
             }
 
+            if view.canReconnect {
+                Button("つなぎ直す") {
+                    runtime.reconnect()
+                }
+                .buttonStyle(.bordered)
+            }
+
             if view.canPause {
                 Button("停車") {
                     Task { await runtime.sendPause() }

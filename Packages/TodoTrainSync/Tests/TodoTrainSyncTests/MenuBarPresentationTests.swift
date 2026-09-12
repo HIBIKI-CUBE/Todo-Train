@@ -29,6 +29,7 @@ struct MenuBarPresentationTests {
         #expect(!view.isOvertime)
         #expect(view.canPause)
         #expect(!view.canResume)
+        #expect(!view.canReconnect)
         #expect(!view.isSending)
         #expect(view.popoverTitle == "週次レポート")
     }
@@ -64,6 +65,7 @@ struct MenuBarPresentationTests {
         #expect(idleView.barTitle == nil)
         #expect(!idleView.canPause)
         #expect(!idleView.canResume)
+        #expect(!idleView.canReconnect)
         #expect(idleView.popoverTitle == "乗務なし")
 
         let unpaired = MenuBarPresentation.make(
@@ -72,6 +74,7 @@ struct MenuBarPresentationTests {
         #expect(unpaired.barTitle == nil)
         #expect(!unpaired.canPause)
         #expect(!unpaired.canResume)
+        #expect(!unpaired.canReconnect)
         #expect(unpaired.popoverTitle == "iPhone で QR を出す")
         #expect(unpaired.popoverDetail == "画面を Mac に向ける")
     }
@@ -114,7 +117,22 @@ struct MenuBarPresentationTests {
         #expect(view.remainingSeconds == 1380)
         #expect(view.canPause)
         #expect(!view.canResume)
+        #expect(view.canReconnect)
         #expect(view.popoverDetail == "iPhone とつながっていない")
+    }
+
+    @Test func disconnectedIdleOffersReconnect() {
+        let view = MenuBarPresentation.make(
+            MenuBarInput(
+                pairing: .paired,
+                snap: idle,
+                now: 1_768_000_120,
+                connection: .disconnected
+            )
+        )
+        #expect(view.canReconnect)
+        #expect(view.popoverDetail == "iPhone とつながっていない")
+        #expect(!view.canPause)
     }
 
     @Test func unknownPhaseIsConservative() {

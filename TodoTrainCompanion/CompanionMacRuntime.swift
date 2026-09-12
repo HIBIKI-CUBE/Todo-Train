@@ -66,7 +66,9 @@ final class CompanionMacRuntime {
         refreshPaired()
         applyLoginItem()
         startTicking()
-        startListening()
+        if isPaired {
+            startListening()
+        }
     }
 
     var relayURL: URL? { URL(string: relayURLString) }
@@ -125,6 +127,11 @@ final class CompanionMacRuntime {
         startListening()
     }
 
+    func reconnect() {
+        guard isPaired else { return }
+        startListening()
+    }
+
     func unpair() {
         pairingBindTask?.cancel()
         pairingConfirmTask?.cancel()
@@ -142,7 +149,6 @@ final class CompanionMacRuntime {
         lastStatus = nil
         connection = .disconnected
         refreshPaired()
-        startListening()
     }
 
     var pairingCameraActive: Bool {
@@ -341,7 +347,7 @@ final class CompanionMacRuntime {
         do {
             let pairing = try requireSecrets()
             let keys = try SyncCrypto.deriveKeys(masterKey: pairing.masterKey, pairingId: pairing.pairingId)
-            let client = try authedClient(writeToken: pairing.writeToken)
+            let client = try authedClient(pairing)
             let command = CommandPlaintext(
                 id: cmdId,
                 op: op,
@@ -382,34 +388,32 @@ final class CompanionMacRuntime {
     private func startListening() {
         listenTask?.cancel()
         listenTask = Task { [weak self] in
-            await self?.runListenLoop()
+            await self?.connectOnce()
         }
     }
 
-    private func runListenLoop() async {
-        while !Task.isCancelled {
-            refreshPaired()
-            guard isPaired else {
-                connection = .disconnected
-                try? await Task.sleep(nanoseconds: 2_000_000_000)
-                continue
-            }
-            do {
-                try await pullSnapAndAck()
-                await listenWebSocket()
-            } catch {
-                if Task.isCancelled { return }
-                connection = .disconnected
-                lastStatus = userFacing(error)
-                try? await Task.sleep(nanoseconds: 2_000_000_000)
-            }
+    private func connectOnce() async {
+        refreshPaired()
+        guard isPaired, !Task.isCancelled else {
+            connection = .disconnected
+            return
+        }
+        do {
+            try await pullSnapAndAck()
+            try await listenWebSocket()
+        } catch is CancellationError {
+            return
+        } catch {
+            if Task.isCancelled { return }
+            connection = .disconnected
+            lastStatus = userFacing(error)
         }
     }
 
     private func pullSnapAndAck() async throws {
         let pairing = try requireSecrets()
         let keys = try SyncCrypto.deriveKeys(masterKey: pairing.masterKey, pairingId: pairing.pairingId)
-        let client = try authedClient(writeToken: pairing.writeToken)
+        let client = try authedClient(pairing)
         if let envelope = try? await client.getSnap() {
             try applySnap(envelope, pairingId: pairing.pairingId, encKey: keys.enc)
         }
@@ -420,36 +424,29 @@ final class CompanionMacRuntime {
         lastStatus = nil
     }
 
-    private func listenWebSocket() async {
-        guard let pairing = try? secrets.load(), let url = relayURL else { return }
+    private func listenWebSocket() async throws {
+        let pairing = try requireSecrets()
+        let url = try requireRelay()
         let connector = URLSessionWebSocketConnecting(baseURL: url)
-        let socket = BearerWebSocket(writeToken: pairing.writeToken, connector: connector)
-        let connection: any WebSocketConnection
-        do {
-            connection = try await socket.connect()
-            self.connection = .connected
-        } catch {
-            lastStatus = userFacing(error)
-            return
-        }
+        let socket = BearerWebSocket(
+            writeToken: pairing.writeToken,
+            pairingId: pairing.pairingId,
+            connector: connector
+        )
+        let connection = try await socket.connect()
+        self.connection = .connected
+        lastStatus = nil
         defer { Task { await connection.close() } }
         while !Task.isCancelled {
-            do {
-                let frame = try await connection.receive()
-                let keys = try SyncCrypto.deriveKeys(masterKey: pairing.masterKey, pairingId: pairing.pairingId)
-                switch frame.t {
-                case .snap:
-                    try applySnap(frame.envelope, pairingId: pairing.pairingId, encKey: keys.enc)
-                case .ack:
-                    try applyAck(frame.envelope, pairingId: pairing.pairingId, encKey: keys.enc)
-                case .cmd:
-                    break
-                }
-            } catch {
-                if Task.isCancelled { return }
-                self.connection = .disconnected
-                lastStatus = userFacing(error)
-                return
+            let frame = try await connection.receive()
+            let keys = try SyncCrypto.deriveKeys(masterKey: pairing.masterKey, pairingId: pairing.pairingId)
+            switch frame.t {
+            case .snap:
+                try applySnap(frame.envelope, pairingId: pairing.pairingId, encKey: keys.enc)
+            case .ack:
+                try applyAck(frame.envelope, pairingId: pairing.pairingId, encKey: keys.enc)
+            case .cmd:
+                break
             }
         }
     }
@@ -464,12 +461,13 @@ final class CompanionMacRuntime {
         outgoingPause = OutgoingPauseApplying.applyAck(ack, current: outgoingPause)
     }
 
-    private func authedClient(writeToken: Data) throws -> SyncHTTPClient {
+    private func authedClient(_ pairing: PairingSecrets) throws -> SyncHTTPClient {
         let url = try requireRelay()
         return SyncHTTPClient(
             baseURL: url,
             transport: CompanionHTTPTransport(baseURL: url),
-            writeToken: writeToken
+            writeToken: pairing.writeToken,
+            pairingId: pairing.pairingId
         )
     }
 

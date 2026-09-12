@@ -5,7 +5,7 @@
 ## 動き
 
 - ペアリング 1 つ = `PairingDurableObject` 1 つ
-- `offerId` と `tokenHash` の索引は `DirectoryDurableObject`（R2 / KV は使わない）
+- `offerId` の索引は `DirectoryDurableObject`（R2 / KV は使わない）。`tokenHash` 索引はヘッダなしクライアント用。`X-Pairing-Id` があれば Directory を飛ばし、Pairing DO がハッシュを照合する
 - サーバは `rev` / `kind` と不透明な `n` / `ct` だけ見る。`ct` を `JSON.parse` しない
 - confirm HMAC は画面に出ない不透明バイト。cfm 鍵では検証しない（サーバは鍵を持たない）
 - snap / cmd / ack の配信は `WS /v1/ws`（Hibernation）。ポーリング API は書かない

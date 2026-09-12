@@ -46,6 +46,7 @@ public struct MenuBarPresentation: Equatable, Sendable {
     public var isOvertime: Bool
     public var canPause: Bool
     public var canResume: Bool
+    public var canReconnect: Bool
     public var isSending: Bool
     public var popoverTitle: String
     public var popoverDetail: String
@@ -61,6 +62,7 @@ public struct MenuBarPresentation: Equatable, Sendable {
                 isOvertime: false,
                 canPause: false,
                 canResume: false,
+                canReconnect: false,
                 isSending: false,
                 popoverTitle: "iPhone で QR を出す",
                 popoverDetail: "画面を Mac に向ける",
@@ -109,6 +111,7 @@ public struct MenuBarPresentation: Equatable, Sendable {
                 isOvertime: (remaining ?? 1) <= 0,
                 canPause: false,
                 canResume: true,
+                canReconnect: input.connection == .disconnected,
                 isSending: sending,
                 popoverTitle: snap.title ?? "停車中",
                 popoverDetail: detail,
@@ -136,6 +139,7 @@ public struct MenuBarPresentation: Equatable, Sendable {
                 isOvertime: overtime,
                 canPause: true,
                 canResume: false,
+                canReconnect: input.connection == .disconnected,
                 isSending: sending,
                 popoverTitle: snap.title ?? "",
                 popoverDetail: detail,
@@ -179,6 +183,7 @@ public struct MenuBarPresentation: Equatable, Sendable {
             isOvertime: false,
             canPause: false,
             canResume: false,
+            canReconnect: disconnected,
             isSending: sending,
             popoverTitle: "乗務なし",
             popoverDetail: disconnected ? "iPhone とつながっていない" : "乗務なし",

@@ -114,7 +114,11 @@ final class CompanionSyncRuntime {
     private func listenWebSocket(sessionManager: SessionManager) async {
         guard let pairing = try? secrets.load(), let url = relayURL else { return }
         let connector = URLSessionWebSocketConnecting(baseURL: url)
-        let socket = BearerWebSocket(writeToken: pairing.writeToken, connector: connector)
+        let socket = BearerWebSocket(
+            writeToken: pairing.writeToken,
+            pairingId: pairing.pairingId,
+            connector: connector
+        )
         let connection: any WebSocketConnection
         do {
             connection = try await socket.connect()
@@ -141,7 +145,7 @@ final class CompanionSyncRuntime {
     private func pullCommandsAndPushSnap(sessionManager: SessionManager) async throws {
         guard let pairing = try secrets.load() else { return }
         let keys = try SyncCrypto.deriveKeys(masterKey: pairing.masterKey, pairingId: pairing.pairingId)
-        let client = try authedClient(writeToken: pairing.writeToken)
+        let client = try authedClient(pairing)
         let listed = try await client.getCmd()
         for envelope in listed.items {
             try await applyCommand(
@@ -166,7 +170,7 @@ final class CompanionSyncRuntime {
     ) async throws {
         guard let pairing = try secrets.load() else { return }
         let keys = try SyncCrypto.deriveKeys(masterKey: pairing.masterKey, pairingId: pairing.pairingId)
-        let client = try authedClient(writeToken: pairing.writeToken)
+        let client = try authedClient(pairing)
         try await applyCommand(
             envelope: envelope,
             pairingId: pairing.pairingId,
@@ -218,7 +222,7 @@ final class CompanionSyncRuntime {
     private func pushSnap(sessionManager: SessionManager) async throws {
         guard let pairing = try secrets.load() else { return }
         let keys = try SyncCrypto.deriveKeys(masterKey: pairing.masterKey, pairingId: pairing.pairingId)
-        let client = try authedClient(writeToken: pairing.writeToken)
+        let client = try authedClient(pairing)
         try await pushSnap(
             sessionManager: sessionManager,
             pairing: pairing,
@@ -250,12 +254,13 @@ final class CompanionSyncRuntime {
         _ = try await client.putSnap(envelope)
     }
 
-    private func authedClient(writeToken: Data) throws -> SyncHTTPClient {
+    private func authedClient(_ pairing: PairingSecrets) throws -> SyncHTTPClient {
         let url = try requireRelay()
         return SyncHTTPClient(
             baseURL: url,
             transport: CompanionHTTPTransport(baseURL: url),
-            writeToken: writeToken
+            writeToken: pairing.writeToken,
+            pairingId: pairing.pairingId
         )
     }
 

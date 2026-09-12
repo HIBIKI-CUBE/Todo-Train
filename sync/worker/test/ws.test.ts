@@ -48,4 +48,23 @@ describe("websocket push", () => {
     const noUpgrade = await request("/v1/ws", { headers: { authorization: "Bearer x" } });
     expect(noUpgrade.status).toBe(400);
   });
+
+  it("accepts X-Pairing-Id and rejects a foreign pairing", async () => {
+    const a = await pairedClient();
+    const b = await pairedClient();
+    const { ws, next } = await openWs(a.writeToken, a.pairingId);
+    await requestAuth("/v1/snap", "PUT", a.writeToken, SNAP, a.pairingId);
+    expect(await next()).toEqual({ t: "snap", envelope: SNAP });
+    ws.close(1000, "done");
+
+    const foreign = await request("/v1/ws", {
+      headers: {
+        upgrade: "websocket",
+        connection: "Upgrade",
+        authorization: `Bearer ${a.writeToken}`,
+        "X-Pairing-Id": b.pairingId,
+      },
+    });
+    expect(foreign.status).toBe(401);
+  });
 });

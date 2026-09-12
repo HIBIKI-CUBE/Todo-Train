@@ -59,11 +59,22 @@ struct LinuxE2ETests {
 
         let pairingId = iphoneSecrets.pairingId
         let keys = try SyncCrypto.deriveKeys(masterKey: iphoneSecrets.masterKey, pairingId: pairingId)
-        let iphone = SyncHTTPClient(baseURL: baseURL, transport: recording, writeToken: iphoneSecrets.writeToken)
-        let mac = SyncHTTPClient(baseURL: baseURL, transport: recording, writeToken: macSecrets.writeToken)
+        let iphone = SyncHTTPClient(
+            baseURL: baseURL,
+            transport: recording,
+            writeToken: iphoneSecrets.writeToken,
+            pairingId: pairingId
+        )
+        let mac = SyncHTTPClient(
+            baseURL: baseURL,
+            transport: recording,
+            writeToken: macSecrets.writeToken,
+            pairingId: pairingId
+        )
 
         let ws = BearerWebSocket(
             writeToken: macSecrets.writeToken,
+            pairingId: pairingId,
             connector: RawWebSocketConnecting(baseURL: baseURL)
         )
         let connection = try await ws.connect()

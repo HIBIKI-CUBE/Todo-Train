@@ -33,4 +33,21 @@ describe("pairing isolation", () => {
       expect(res.status, `${method} ${path}`).toBe(401);
     }
   });
+
+  it("accepts X-Pairing-Id and rejects a foreign pairing", async () => {
+    const a = await pairedClient();
+    const b = await pairedClient();
+    const put = await requestAuth("/v1/snap", "PUT", a.writeToken, SNAP, a.pairingId);
+    expect(put.status).toBe(200);
+    const got = await requestAuth("/v1/snap", "GET", a.writeToken, undefined, a.pairingId);
+    expect(got.body).toEqual(SNAP);
+
+    const foreign = await requestAuth("/v1/snap", "GET", a.writeToken, undefined, b.pairingId);
+    expect(foreign.status).toBe(401);
+    const still = await requestAuth("/v1/snap", "GET", a.writeToken);
+    expect(still.body).toEqual(SNAP);
+
+    const badId = await requestAuth("/v1/snap", "GET", a.writeToken, undefined, "not-a-uuid");
+    expect(badId.status).toBe(401);
+  });
 });

@@ -10,12 +10,12 @@ type PairingRpc = {
   confirm(input: { role: "iphone" | "mac"; body: unknown; now: number }): Promise<RpcResult>;
   deleteOffer(): Promise<RpcResult>;
   putTokenHash(tokenHash: string): Promise<RpcResult>;
-  getSnap(): Promise<RpcResult>;
-  putSnap(body: unknown): Promise<RpcResult>;
-  postCmd(body: unknown): Promise<RpcResult>;
-  getCmd(): Promise<RpcResult>;
-  putAck(body: unknown): Promise<RpcResult>;
-  getAck(): Promise<RpcResult>;
+  getSnap(tokenHash: string): Promise<RpcResult>;
+  putSnap(body: unknown, tokenHash: string): Promise<RpcResult>;
+  postCmd(body: unknown, tokenHash: string): Promise<RpcResult>;
+  getCmd(tokenHash: string): Promise<RpcResult>;
+  putAck(body: unknown, tokenHash: string): Promise<RpcResult>;
+  getAck(tokenHash: string): Promise<RpcResult>;
   fetch(request: Request): Promise<Response>;
 };
 
@@ -74,17 +74,32 @@ async function tokenHashOf(tokenB64u: string): Promise<string | null> {
   return encodeB64u(new Uint8Array(digest));
 }
 
+const PAIRING_ID_HEADER = "X-Pairing-Id";
+const TOKEN_HASH_HEADER = "X-Token-Hash";
+
 async function requirePairing(
   env: Env,
   authorization: string | undefined,
-): Promise<{ pairingId: string } | Response> {
+  pairingIdHeader: string | undefined,
+): Promise<{ pairingId: string; tokenHash: string } | Response> {
   const token = bearerToken(authorization);
   if (!token) return errorJson(401, "unauthorized");
   const hash = await tokenHashOf(token);
   if (!hash) return errorJson(401, "unauthorized");
+  if (pairingIdHeader) {
+    if (!isUuid(pairingIdHeader)) return errorJson(401, "unauthorized");
+    return { pairingId: pairingIdHeader, tokenHash: hash };
+  }
   const pairingId = await directory(env).lookupTokenHash(hash);
   if (!pairingId) return errorJson(401, "unauthorized");
-  return { pairingId };
+  return { pairingId, tokenHash: hash };
+}
+
+function pairingWebSocketRequest(raw: Request, tokenHash: string): Request {
+  const headers = new Headers(raw.headers);
+  headers.delete("Authorization");
+  headers.set(TOKEN_HASH_HEADER, tokenHash);
+  return new Request(raw, { headers });
 }
 
 async function applySideEffects(env: Env, offerId: string | undefined, pairingId: string, result: RpcResult) {
@@ -166,54 +181,54 @@ app.put("/v1/pairings/:id", async (c) => {
 });
 
 app.get("/v1/snap", async (c) => {
-  const auth = await requirePairing(c.env, c.req.header("Authorization"));
+  const auth = await requirePairing(c.env, c.req.header("Authorization"), c.req.header(PAIRING_ID_HEADER));
   if (auth instanceof Response) return auth;
-  return fromRpc(await (pairing(c.env, auth.pairingId).getSnap()));
+  return fromRpc(await pairing(c.env, auth.pairingId).getSnap(auth.tokenHash));
 });
 
 app.put("/v1/snap", async (c) => {
-  const auth = await requirePairing(c.env, c.req.header("Authorization"));
+  const auth = await requirePairing(c.env, c.req.header("Authorization"), c.req.header(PAIRING_ID_HEADER));
   if (auth instanceof Response) return auth;
   const body = await readJson(c.req.raw);
   if (body === JSON_FAIL) return errorJson(400, "invalid");
-  return fromRpc(await (pairing(c.env, auth.pairingId).putSnap(body)));
+  return fromRpc(await pairing(c.env, auth.pairingId).putSnap(body, auth.tokenHash));
 });
 
 app.post("/v1/cmd", async (c) => {
-  const auth = await requirePairing(c.env, c.req.header("Authorization"));
+  const auth = await requirePairing(c.env, c.req.header("Authorization"), c.req.header(PAIRING_ID_HEADER));
   if (auth instanceof Response) return auth;
   const body = await readJson(c.req.raw);
   if (body === JSON_FAIL) return errorJson(400, "invalid");
-  return fromRpc(await (pairing(c.env, auth.pairingId).postCmd(body)));
+  return fromRpc(await pairing(c.env, auth.pairingId).postCmd(body, auth.tokenHash));
 });
 
 app.get("/v1/cmd", async (c) => {
-  const auth = await requirePairing(c.env, c.req.header("Authorization"));
+  const auth = await requirePairing(c.env, c.req.header("Authorization"), c.req.header(PAIRING_ID_HEADER));
   if (auth instanceof Response) return auth;
-  return fromRpc(await (pairing(c.env, auth.pairingId).getCmd()));
+  return fromRpc(await pairing(c.env, auth.pairingId).getCmd(auth.tokenHash));
 });
 
 app.put("/v1/ack", async (c) => {
-  const auth = await requirePairing(c.env, c.req.header("Authorization"));
+  const auth = await requirePairing(c.env, c.req.header("Authorization"), c.req.header(PAIRING_ID_HEADER));
   if (auth instanceof Response) return auth;
   const body = await readJson(c.req.raw);
   if (body === JSON_FAIL) return errorJson(400, "invalid");
-  return fromRpc(await (pairing(c.env, auth.pairingId).putAck(body)));
+  return fromRpc(await pairing(c.env, auth.pairingId).putAck(body, auth.tokenHash));
 });
 
 app.get("/v1/ack", async (c) => {
-  const auth = await requirePairing(c.env, c.req.header("Authorization"));
+  const auth = await requirePairing(c.env, c.req.header("Authorization"), c.req.header(PAIRING_ID_HEADER));
   if (auth instanceof Response) return auth;
-  return fromRpc(await (pairing(c.env, auth.pairingId).getAck()));
+  return fromRpc(await pairing(c.env, auth.pairingId).getAck(auth.tokenHash));
 });
 
 app.get("/v1/ws", async (c) => {
   if (c.req.header("Upgrade")?.toLowerCase() !== "websocket") {
     return errorJson(400, "invalid");
   }
-  const auth = await requirePairing(c.env, c.req.header("Authorization"));
+  const auth = await requirePairing(c.env, c.req.header("Authorization"), c.req.header(PAIRING_ID_HEADER));
   if (auth instanceof Response) return auth;
-  return pairing(c.env, auth.pairingId).fetch(c.req.raw);
+  return pairing(c.env, auth.pairingId).fetch(pairingWebSocketRequest(c.req.raw, auth.tokenHash));
 });
 
 app.notFound(() => errorJson(404, "notFound"));

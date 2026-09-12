@@ -215,7 +215,7 @@ iPhone が cmd を処理したら、成否を暗号化した ack を置く。購
 | `GET /v1/ack` | 購読者が結果を取る（復帰時の保険） |
 | `WS /v1/ws` | snap / cmd / ack を接続中へ即時配信。Hibernation 可 |
 
-認証: snap / cmd / ack / WS は Bearer `writeToken`（確定後。`Authorization: Bearer <writeToken b64u>`）。オファー面は TTL だけ。QR を片側が読んだだけでは bind しない。
+認証: snap / cmd / ack / WS は Bearer `writeToken`（確定後。`Authorization: Bearer <writeToken b64u>`）。任意の `X-Pairing-Id`（canonical UUID）があれば tokenHash の Directory 索引を省略し、Pairing Durable Object が `SHA-256(writeToken)` を照合する。ヘッダなしは従来どおり Directory lookup。オファー面は TTL だけ。QR を片側が読んだだけでは bind しない。
 
 定数: offer TTL **120 秒**、confirm 重なり窓 **15 秒**、cmd FIFO **8**。機械可読な経路は `sync/contract/http.json`。
 
@@ -230,12 +230,13 @@ iOS 前面と購読者が両方 WS にいるとき、cmd は即時。iOS が背�
 **iPhone**
 
 - `ScenePhase.active` と発車 / 停車 / 延長 / 到着 / 超過突入のたびに snap を置く
-- active 中は WS。切れたら出し直す。定期ポーリングはしない
+- `ScenePhase.active` で WS を 1 本。切れたら自動では張り直さない。次の前面復帰で catch-up + WS。定期ポーリングはしない
 - 受信 cmd を復号 → `sessionId` が今の open と一致 → `SessionManager` で実行（停車 / 再乗車）→ snap + ack
 - 不一致・復号失敗・`SessionError` は ack `ok: false`。snap は現状のまま
 
 **購読者（Mac など）**
 
+- 起動時に catch-up と WS を 1 本。切れたら自動再接しない。吹き出しの「つなぎ直す」だけ（体験は [14](14-mac-companion-ux.md)）
 - WS で snap を受け、Date ベースで残りを描く
 - 操作は cmd を置くだけ。ローカル SwiftData なし
 - ack が来るまで同じ `cmdId` を再送しない。タイムアウト後は snap を正とする

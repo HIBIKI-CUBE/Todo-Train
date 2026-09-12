@@ -2,7 +2,7 @@
   "basePath": "/v1",
   "auth": {
     "none": "Offer surface. TTL only. No Bearer.",
-    "bearer": "Authorization: Bearer <writeToken unpadded base64url>. Pairing is the tokenHash lookup."
+    "bearer": "Authorization: Bearer <writeToken unpadded base64url>. Optional X-Pairing-Id (canonical UUID) skips the tokenHash directory lookup; the pairing Durable Object still checks SHA-256(writeToken) against the stored hash."
   },
   "errorBody": { "error": "invalid" },
   "errorCodes": [
@@ -160,7 +160,7 @@
         { "status": 401, "error": "unauthorized" },
         { "status": 404, "error": "notFound" }
       ],
-      "notes": "Latest snap envelope. 404 if none yet. Do not parse ct."
+      "notes": "Latest snap envelope. 404 if none yet. Do not parse ct. Optional X-Pairing-Id skips directory lookup."
     },
     {
       "id": "putSnap",
@@ -179,7 +179,7 @@
         { "status": 401, "error": "unauthorized" },
         { "status": 409, "error": "revConflict" }
       ],
-      "notes": "iPhone. kind must be snap. rev must be strictly greater than stored snap rev. Push t=snap on WS."
+      "notes": "iPhone. kind must be snap. rev must be strictly greater than stored snap rev. Push t=snap on WS. Optional X-Pairing-Id skips directory lookup."
     },
     {
       "id": "postCmd",
@@ -198,7 +198,7 @@
         { "status": 401, "error": "unauthorized" },
         { "status": 409, "error": "fifoFull" }
       ],
-      "notes": "Subscriber. kind must be cmd. FIFO max constants.cmdFifoMax. Do not parse ct. Push t=cmd on WS. No client polling loop."
+      "notes": "Subscriber. kind must be cmd. FIFO max constants.cmdFifoMax. Do not parse ct. Push t=cmd on WS. No client polling loop. Optional X-Pairing-Id skips directory lookup."
     },
     {
       "id": "getCmd",
@@ -220,7 +220,7 @@
         }
       },
       "failure": [{ "status": 401, "error": "unauthorized" }],
-      "notes": "iPhone resume insurance. Oldest-first pending envelopes. Empty list if none. Drop a cmd from the FIFO after PUT /v1/ack for that command."
+      "notes": "iPhone resume insurance. Oldest-first pending envelopes. Empty list if none. Drop a cmd from the FIFO after PUT /v1/ack for that command. Optional X-Pairing-Id skips directory lookup."
     },
     {
       "id": "putAck",
@@ -238,7 +238,7 @@
         { "status": 400, "error": "invalid" },
         { "status": 401, "error": "unauthorized" }
       ],
-      "notes": "iPhone. kind must be ack. Replaces the latest ack envelope. Push t=ack on WS. Do not parse ct."
+      "notes": "iPhone. kind must be ack. Replaces the latest ack envelope. Push t=ack on WS. Do not parse ct. Optional X-Pairing-Id skips directory lookup."
     },
     {
       "id": "getAck",
@@ -259,7 +259,7 @@
         { "status": 401, "error": "unauthorized" },
         { "status": 404, "error": "notFound" }
       ],
-      "notes": "Subscriber resume insurance. Latest ack envelope. 404 if none."
+      "notes": "Subscriber resume insurance. Latest ack envelope. 404 if none. Optional X-Pairing-Id skips directory lookup."
     },
     {
       "id": "ws",
@@ -270,7 +270,7 @@
       "request": null,
       "success": { "status": 101 },
       "failure": [{ "status": 401, "error": "unauthorized" }],
-      "notes": "See ws.json. Frames are JSON text. Hibernation allowed."
+      "notes": "See ws.json. Frames are JSON text. Hibernation allowed. Optional X-Pairing-Id skips directory lookup."
     }
   ]
 }

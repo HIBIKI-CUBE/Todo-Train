@@ -14,7 +14,12 @@ struct SyncClientTests {
             ),
             .init(status: 200, json: #"{"rev":42}"#),
         ])
-        let client = SyncHTTPClient(baseURL: base, transport: transport, writeToken: Data(repeating: 7, count: 32))
+        let client = SyncHTTPClient(
+            baseURL: base,
+            transport: transport,
+            writeToken: Data(repeating: 7, count: 32),
+            pairingId: UUID(uuidString: "a1a2a3a4-b1b2-4c3c-8d4d-e5e6e7e8e9ea")
+        )
         let offer = try await client.createOffer(x: Data(repeating: 1, count: 32))
         #expect(offer.offerId == UUID(uuidString: "b1b2b3b4-c1c2-4d3d-8e4e-f5f6f7f8f9fb"))
         #expect(offer.pairingId == UUID(uuidString: "a1a2a3a4-b1b2-4c3c-8d4d-e5e6e7e8e9ea"))
@@ -27,9 +32,11 @@ struct SyncClientTests {
         #expect(requests[0].method == "POST")
         #expect(requests[0].path == "/v1/offers")
         #expect(requests[0].headers["Authorization"] == nil)
+        #expect(requests[0].headers[SyncHTTPClient.pairingIdHeaderName] == nil)
         #expect(requests[1].method == "PUT")
         #expect(requests[1].path == "/v1/snap")
         #expect(requests[1].headers["Authorization"]?.hasPrefix("Bearer ") == true)
+        #expect(requests[1].headers[SyncHTTPClient.pairingIdHeaderName] == offer.pairingId.canonicalLowercase)
     }
 
     @Test func iphonePairingMachineBindThenLA() async throws {
@@ -152,12 +159,20 @@ struct SyncClientTests {
 
     @Test func websocketFakeYieldsContractFrame() async throws {
         let envelope = Envelope(rev: 42, kind: .snap, n: "ha_Fwfr-03T8OAOV", ct: "abc")
+        let pairingId = UUID(uuidString: "a1a2a3a4-b1b2-4c3c-8d4d-e5e6e7e8e9ea")!
         let connector = ScriptedWebSocket(frames: [WSFrame(t: .snap, envelope: envelope)])
-        let socket = BearerWebSocket(writeToken: Data(repeating: 9, count: 32), connector: connector)
+        let socket = BearerWebSocket(
+            writeToken: Data(repeating: 9, count: 32),
+            pairingId: pairingId,
+            connector: connector
+        )
         let connection = try await socket.connect()
         let frame = try await connection.receive()
         #expect(frame.t == .snap)
         #expect(frame.envelope.rev == 42)
+        let headers = await connector.lastHeaders
+        #expect(headers["Authorization"]?.hasPrefix("Bearer ") == true)
+        #expect(headers[SyncHTTPClient.pairingIdHeaderName] == pairingId.canonicalLowercase)
         await connection.close()
     }
 }

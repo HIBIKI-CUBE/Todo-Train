@@ -30,5 +30,5 @@
     "POST /v1/cmd → t=cmd to the iPhone connection",
     "PUT /v1/ack → t=ack to subscribers"
   ],
-  "notes": "Bearer on the HTTP Upgrade request identifies the pairing. Do not invent a query-token scheme. Do not ask clients to poll."
+  "notes": "Bearer on the HTTP Upgrade request identifies the pairing. Optional X-Pairing-Id (canonical UUID) skips the tokenHash directory lookup; the pairing Durable Object still checks SHA-256(writeToken). Do not invent a query-token scheme. Do not ask clients to poll. Clients do not send protocol frames."
 }

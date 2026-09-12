@@ -86,13 +86,15 @@ public actor ScriptedHTTPTransport: HTTPTransport {
 
 public actor ScriptedWebSocket: WebSocketConnecting, WebSocketConnection {
     private var frames: [WSFrame]
+    public private(set) var lastHeaders: [String: String] = [:]
 
     public init(frames: [WSFrame] = []) {
         self.frames = frames
     }
 
     public func connect(path: String, headers: [String: String]) async throws -> any WebSocketConnection {
-        self
+        lastHeaders = headers
+        return self
     }
 
     public func receive() async throws -> WSFrame {

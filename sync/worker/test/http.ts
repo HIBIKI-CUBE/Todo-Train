@@ -35,8 +35,10 @@ export async function requestAuth(
   method: string,
   token: string,
   body?: unknown,
+  pairingId?: string,
 ): Promise<{ status: number; body: unknown }> {
   const headers: Record<string, string> = { authorization: `Bearer ${token}` };
+  if (pairingId) headers["X-Pairing-Id"] = pairingId;
   if (body !== undefined) headers["content-type"] = "application/json";
   return request(path, {
     method,
