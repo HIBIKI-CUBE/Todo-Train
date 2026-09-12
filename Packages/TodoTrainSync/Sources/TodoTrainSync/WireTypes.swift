@@ -23,6 +23,7 @@ public enum WireKind: String, Codable, Sendable, Equatable {
 public enum WireOp: String, Codable, Sendable, Equatable {
     case pause
     case resume
+    case still
 }
 
 public enum WireError: String, Codable, Sendable, Equatable {

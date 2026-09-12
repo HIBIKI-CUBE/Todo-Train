@@ -10,4 +10,8 @@ enum CompanionCommandApplying {
     static func shouldCallResume(_ decision: RemotePauseDecision, op: WireOp) -> Bool {
         decision == .apply && op == .resume
     }
+
+    static func shouldCallStill(_ decision: RemotePauseDecision, op: WireOp) -> Bool {
+        decision == .apply && op == .still
+    }
 }

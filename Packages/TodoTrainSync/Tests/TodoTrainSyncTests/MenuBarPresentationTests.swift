@@ -118,7 +118,7 @@ struct MenuBarPresentationTests {
         #expect(view.canPause)
         #expect(!view.canResume)
         #expect(view.canReconnect)
-        #expect(view.popoverDetail == "iPhone とつながっていない")
+        #expect(view.popoverDetail == "リレーが切れた")
     }
 
     @Test func disconnectedIdleOffersReconnect() {
@@ -131,7 +131,7 @@ struct MenuBarPresentationTests {
             )
         )
         #expect(view.canReconnect)
-        #expect(view.popoverDetail == "iPhone とつながっていない")
+        #expect(view.popoverDetail == "リレーが切れた")
         #expect(!view.canPause)
     }
 

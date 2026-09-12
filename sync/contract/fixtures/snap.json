@@ -8,5 +8,9 @@
   "estimatedSeconds": 1500,
   "pausedAccumulated": 0,
   "pausedAt": null,
-  "boardedDeviceID": "phone-a"
+  "boardedDeviceID": "phone-a",
+  "serviceActive": true,
+  "cabinEnabled": true,
+  "checkInFiredCount": 0,
+  "pendingCabin": null
 }

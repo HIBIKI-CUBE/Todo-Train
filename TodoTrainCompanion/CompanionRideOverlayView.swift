@@ -1,4 +1,3 @@
-import AppKit
 import Observation
 import SwiftUI
 import TodoTrainSync
@@ -8,6 +7,7 @@ import TodoTrainSync
 final class CompanionRideOverlayModel {
     var presentation = RideOverlayPresentation.hidden
     var isTucked = false
+    var hovering = false
     var edge = OverlayEdge.trailing
 }
 
@@ -15,11 +15,9 @@ struct CompanionRideOverlayView: View {
     @Bindable var model: CompanionRideOverlayModel
     var onPause: () -> Void
     var onResume: () -> Void
-    var onPeekClick: () -> Void
-    var onDragChanged: (CGSize) -> Void
-    var onDragEnded: (CGSize) -> Void
+    var onStill: () -> Void
+    var onRestore: () -> Void
 
-    @State private var hovering = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var presentation: RideOverlayPresentation { model.presentation }
@@ -32,7 +30,22 @@ struct CompanionRideOverlayView: View {
                 card
             }
         }
-        .background(OverlayHoverTracking(isHovering: $hovering))
+        .frame(
+            width: CGFloat(RideOverlayGeometry.cardSize.width),
+            height: CGFloat(RideOverlayGeometry.cardSize.height)
+        )
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(presentation.title)
+        .accessibilityValue(accessibilityRemaining)
+        .accessibilityAction(named: "戻す") {
+            if model.isTucked { onRestore() }
+        }
+        .accessibilityAction(named: presentation.canResume ? "再乗車" : "停車") {
+            primaryAction()
+        }
+        .accessibilityAction(named: CabinCopy.still) {
+            if presentation.cabinPrompt != nil { onStill() }
+        }
     }
 
     private var card: some View {
@@ -46,12 +59,17 @@ struct CompanionRideOverlayView: View {
                     .minimumScaleFactor(0.45)
                     .padding(.horizontal, 12)
                     .padding(.top, 10)
-                    .gesture(dragGesture)
 
                 if let line = presentation.failureLine {
                     Text(line)
                         .font(.caption)
                         .foregroundStyle(RideOverlayPalette.overtime)
+                        .lineLimit(1)
+                        .padding(.horizontal, 12)
+                } else if let prompt = presentation.cabinPrompt {
+                    Text(prompt)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.white)
                         .lineLimit(1)
                         .padding(.horizontal, 12)
                 } else if let status = presentation.statusLine {
@@ -67,10 +85,15 @@ struct CompanionRideOverlayView: View {
             }
         }
         .background(Color.black)
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(presentation.title)
-        .accessibilityValue(accessibilityRemaining)
+        .clipShape(cardShape)
+        .overlay {
+            cardShape
+                .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
+        }
+    }
+
+    private var cardShape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: CGFloat(RideOverlayGeometry.cornerRadius), style: .continuous)
     }
 
     private var handle: some View {
@@ -80,105 +103,185 @@ struct CompanionRideOverlayView: View {
             .padding(.leading, 8)
             .padding(.trailing, 4)
             .frame(maxHeight: .infinity)
-            .contentShape(Rectangle())
-            .gesture(dragGesture)
             .accessibilityHidden(true)
     }
 
     private var bottomRow: some View {
         ZStack {
             progressRow
-                .opacity(hovering ? 0 : 1)
-                .allowsHitTesting(!hovering)
-            actionRow
-                .opacity(hovering ? 1 : 0)
-                .allowsHitTesting(hovering)
+                .opacity(showsCabinActions || showsAction ? 0 : 1)
+            if showsCabinActions {
+                cabinActionRow
+            } else {
+                actionRow
+                    .opacity(showsAction ? 1 : 0)
+            }
         }
         .frame(height: 40)
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: hovering)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.16), value: showsAction || showsCabinActions)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(bottomAccessibilityLabel)
+        .accessibilityValue(showsAction || showsCabinActions ? "" : presentation.remainingLabel)
+    }
+
+    private var showsCabinActions: Bool {
+        presentation.cabinPrompt != nil && !model.isTucked
+    }
+
+    private var showsAction: Bool {
+        model.hovering
+            && !model.isTucked
+            && presentation.cabinPrompt == nil
+            && (presentation.canPause || presentation.canResume)
     }
 
     private var progressRow: some View {
         GeometryReader { geo in
-            ZStack(alignment: .leading) {
+            let fillWidth = CGFloat(
+                RideOverlayGeometry.fillLength(
+                    progress: presentation.progress,
+                    total: geo.size.width
+                )
+            )
+            ZStack {
                 Color.black
-                RideOverlayPalette.fill(for: presentation)
-                    .frame(width: max(geo.size.width * presentation.progress, presentation.progress > 0 ? 4 : 0))
-                Text(presentation.remainingLabel)
-                    .font(.system(size: 22, weight: .medium, design: .rounded).monospacedDigit())
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
+                HStack(spacing: 0) {
+                    RideOverlayPalette.fill(for: presentation)
+                        .frame(width: fillWidth)
+                    Spacer(minLength: 0)
+                }
+                remainingDigits(RideOverlayPalette.onTrack)
+                remainingDigits(RideOverlayPalette.onFill(for: presentation))
+                    .mask {
+                        HStack(spacing: 0) {
+                            Color.white.frame(width: fillWidth)
+                            Color.clear
+                        }
+                    }
             }
+            .frame(width: geo.size.width, height: geo.size.height)
         }
         .clipped()
-        .contentShape(Rectangle())
-        .gesture(dragGesture)
-        .accessibilityLabel("残り時間")
-        .accessibilityValue(presentation.remainingLabel)
+    }
+
+    private func remainingDigits(_ color: Color) -> some View {
+        Text(presentation.remainingLabel)
+            .font(.system(size: 22, weight: .medium, design: .rounded).monospacedDigit())
+            .foregroundStyle(color)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var actionRow: some View {
-        Button(action: primaryAction) {
+        HStack(spacing: 8) {
+            Image(systemName: presentation.canResume ? "play.fill" : "pause.fill")
+                .font(.system(size: 13, weight: .semibold))
             Text(presentation.canResume ? "再乗車" : "停車")
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(
-                    presentation.canResume ? RideOverlayPalette.resume : RideOverlayPalette.progress
-                )
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .buttonStyle(.plain)
-        .disabled(presentation.isSending || !(presentation.canPause || presentation.canResume))
-        .accessibilityLabel(presentation.canResume ? "再乗車" : "停車")
+        .foregroundStyle(actionColor)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.black)
+    }
+
+    private var cabinActionRow: some View {
+        HStack(spacing: 0) {
+            Text(CabinCopy.still)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            Rectangle()
+                .fill(.white.opacity(0.18))
+                .frame(width: 1)
+                .padding(.vertical, 8)
+            HStack(spacing: 6) {
+                Image(systemName: "pause.fill")
+                    .font(.system(size: 12, weight: .semibold))
+                Text("停車")
+                    .font(.system(size: 14, weight: .semibold))
+            }
+            .foregroundStyle(presentation.isSending ? .white.opacity(0.35) : RideOverlayPalette.final)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .background(Color.black)
+    }
+
+    private var bottomAccessibilityLabel: String {
+        if showsCabinActions { return "\(CabinCopy.prompt) \(CabinCopy.still) または 停車" }
+        if showsAction { return presentation.canResume ? "再乗車" : "停車" }
+        return "残り時間"
+    }
+
+    private var actionColor: Color {
+        if presentation.isSending { return .white.opacity(0.35) }
+        return presentation.canResume ? RideOverlayPalette.resume : RideOverlayPalette.final
     }
 
     private var peek: some View {
-        VStack(spacing: 0) {
-            RideOverlayPalette.fill(for: presentation)
-                .overlay {
-                    Text(presentation.peekTitle)
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.black)
-                        .lineLimit(1)
-                        .fixedSize()
-                        .rotationEffect(.degrees(model.edge == .leading ? -90 : 90))
-                }
-                .contentShape(Rectangle())
-            Image(systemName: model.edge == .leading ? "chevron.right" : "chevron.left")
-                .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(.white)
-                .frame(height: 36)
-                .frame(maxWidth: .infinity)
-                .background(Color.black)
+        HStack(spacing: 0) {
+            if model.edge == .leading {
+                Color.clear
+            }
+            peekTab
+            if model.edge == .trailing {
+                Color.clear
+            }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .contentShape(Rectangle())
-        .gesture(dragGesture)
-        .onTapGesture(perform: onPeekClick)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(presentation.title)
-        .accessibilityValue("隠しています")
-        .accessibilityAddTraits(.isButton)
-        .accessibilityHint("タップして戻す")
-        .accessibilityAction(named: "戻す", onPeekClick)
     }
 
-    private var dragGesture: some Gesture {
-        DragGesture(minimumDistance: 2)
-            .onChanged { value in
-                onDragChanged(CGSize(width: value.translation.width, height: -value.translation.height))
+    private var peekTab: some View {
+        ZStack {
+            peekProgressBackground
+            if model.hovering {
+                Color.black
+                Image(systemName: model.edge == .leading ? "chevron.right" : "chevron.left")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(.white)
+            } else {
+                Text(presentation.peekTitle)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .shadow(color: .black.opacity(0.55), radius: 1, y: 0.5)
+                    .lineLimit(1)
+                    .fixedSize()
+                    .rotationEffect(.degrees(model.edge == .leading ? -90 : 90))
             }
-            .onEnded { value in
-                onDragEnded(CGSize(width: value.translation.width, height: -value.translation.height))
+        }
+        .frame(width: CGFloat(RideOverlayGeometry.peekReveal))
+        .frame(maxHeight: .infinity)
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.16), value: model.hovering)
+        .accessibilityHidden(true)
+    }
+
+    /// Vertical time bar: elapsed grows from the bottom, remainder stays black (sketch Hidden).
+    private var peekProgressBackground: some View {
+        GeometryReader { geo in
+            VStack(spacing: 0) {
+                Spacer(minLength: 0)
+                RideOverlayPalette.fill(for: presentation)
+                    .frame(
+                        height: CGFloat(
+                            RideOverlayGeometry.fillLength(
+                                progress: presentation.progress,
+                                total: geo.size.height
+                            )
+                        )
+                    )
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+            .background(Color.black)
+        }
     }
 
     private var accessibilityRemaining: String {
+        if model.isTucked { return "画面の外に出しています" }
         if presentation.isPaused { return "停車中 \(presentation.remainingLabel)" }
         if presentation.isOvertime { return "超過 \(presentation.remainingLabel)" }
         return "残り \(presentation.remainingLabel)"
     }
 
     private func primaryAction() {
+        if presentation.isSending { return }
         if presentation.canResume {
             onResume()
         } else if presentation.canPause {
@@ -187,65 +290,25 @@ struct CompanionRideOverlayView: View {
     }
 }
 
-private enum RideOverlayPalette {
-    static let progress = Color(red: 0.93, green: 0.76, blue: 0.12)
-    static let overtime = Color(red: 0.95, green: 0.35, blue: 0.32)
-    static let resume = Color(red: 0.35, green: 0.82, blue: 0.52)
+enum RideOverlayPalette {
+    /// Same RGB as iOS `CockpitColors` (Focus / Live Activity).
+    static let cruise = Color.white
+    static let approach = Color(red: 1.0, green: 0.82, blue: 0.42)
+    static let final = Color(red: 1.0, green: 0.72, blue: 0.28)
+    static let overtime = Color(red: 1.0, green: 0.42, blue: 0.40)
+    static let resume = Color(red: 0.35, green: 0.78, blue: 0.52)
+    static let onTrack = Color.white
 
     static func fill(for presentation: RideOverlayPresentation) -> Color {
-        if presentation.isOvertime { return overtime }
-        if presentation.isPaused { return progress.opacity(0.7) }
-        return progress
-    }
-}
-
-/// Hover must use a tracking area with `.activeAlways` so a nonactivating panel still sees the pointer.
-private struct OverlayHoverTracking: NSViewRepresentable {
-    @Binding var isHovering: Bool
-
-    func makeNSView(context: Context) -> OverlayHoverView {
-        let view = OverlayHoverView()
-        view.onHover = { hovering in
-            isHovering = hovering
-        }
-        return view
-    }
-
-    func updateNSView(_ nsView: OverlayHoverView, context: Context) {
-        nsView.onHover = { hovering in
-            isHovering = hovering
+        switch presentation.timerPhase {
+        case .cruise: cruise
+        case .approach: approach
+        case .final: final
+        case .overtime: overtime
         }
     }
-}
 
-final class OverlayHoverView: NSView {
-    var onHover: ((Bool) -> Void)?
-    private var tracking: NSTrackingArea?
-
-    override func updateTrackingAreas() {
-        super.updateTrackingAreas()
-        if let tracking {
-            removeTrackingArea(tracking)
-        }
-        let area = NSTrackingArea(
-            rect: bounds,
-            options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
-            owner: self,
-            userInfo: nil
-        )
-        addTrackingArea(area)
-        tracking = area
-    }
-
-    override func mouseEntered(with event: NSEvent) {
-        onHover?(true)
-    }
-
-    override func mouseExited(with event: NSEvent) {
-        onHover?(false)
-    }
-
-    override func hitTest(_ point: NSPoint) -> NSView? {
-        nil
+    static func onFill(for presentation: RideOverlayPresentation) -> Color {
+        presentation.timerPhase == .overtime ? .white : .black
     }
 }

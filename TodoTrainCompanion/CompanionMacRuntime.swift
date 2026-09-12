@@ -10,6 +10,9 @@ final class CompanionMacRuntime {
         static let relayURL = "companion.relayURL"
         static let cmdRev = "companion.cmdRev"
         static let loginItemOptOut = "companion.loginItemOptOut"
+        static let cabinEnabled = "companion.cabinAnnouncementsEnabled"
+        static let cabinOptimisticSession = "companion.cabinOptimisticSession"
+        static let cabinOptimisticFired = "companion.cabinOptimisticFired"
     }
 
     private let secrets: any SecretStoring
@@ -17,6 +20,7 @@ final class CompanionMacRuntime {
     private let defaults: UserDefaults
     private let registersLoginItem: Bool
     private var listenTask: Task<Void, Never>?
+    private var hintTask: Task<Void, Never>?
     private var tickTask: Task<Void, Never>?
     private var pairingFlow: PairingFlow?
     private var pairingBindTask: Task<Void, Never>?
@@ -47,6 +51,10 @@ final class CompanionMacRuntime {
         }
     }
 
+    var cabinAnnouncementsEnabled: Bool {
+        didSet { defaults.set(cabinAnnouncementsEnabled, forKey: Defaults.cabinEnabled) }
+    }
+
     init(
         secrets: any SecretStoring = KeychainSecretStore(),
         localAuth: any LocalAuthenticating = DeviceLocalAuth(),
@@ -63,6 +71,11 @@ final class CompanionMacRuntime {
             defaults.set(url, forKey: Defaults.relayURL)
         }
         self.loginAtStartup = defaults.object(forKey: Defaults.loginItemOptOut) as? Bool != true
+        if defaults.object(forKey: Defaults.cabinEnabled) == nil {
+            self.cabinAnnouncementsEnabled = true
+        } else {
+            self.cabinAnnouncementsEnabled = defaults.bool(forKey: Defaults.cabinEnabled)
+        }
         refreshPaired()
         applyLoginItem()
         startTicking()
@@ -79,7 +92,9 @@ final class CompanionMacRuntime {
             snap: snap,
             now: now,
             connection: connection,
-            outgoingPause: outgoingPause
+            outgoingPause: outgoingPause,
+            cabinEnabledLocal: cabinAnnouncementsEnabled,
+            optimisticFiredCount: optimisticFiredCount
         )
     }
 
@@ -143,11 +158,14 @@ final class CompanionMacRuntime {
         pairingCue = .scanning
         listenTask?.cancel()
         listenTask = nil
+        hintTask?.cancel()
+        hintTask = nil
         try? secrets.delete()
         snap = nil
         outgoingPause = .idle
         lastStatus = nil
         connection = .disconnected
+        clearOptimisticCabin()
         refreshPaired()
     }
 
@@ -331,14 +349,31 @@ final class CompanionMacRuntime {
         await sendRideCommand(.resume)
     }
 
+    func sendStill() async {
+        guard overlayPresentation.cabinPrompt != nil, !presentation.isSending else { return }
+        if let sessionId = snap?.sessionId {
+            markOptimisticCabin(sessionId: sessionId, firedCount: (snap?.checkInFiredCount ?? 0) + 1)
+        }
+        await sendRideCommand(.still)
+    }
+
     private func sendRideCommand(_ op: WireOp) async {
         switch op {
         case .pause:
             guard presentation.canPause, !presentation.isSending else { return }
         case .resume:
             guard presentation.canResume, !presentation.isSending else { return }
+        case .still:
+            guard !presentation.isSending else { return }
         }
-        guard let snap, let sessionId = snap.sessionId else { return }
+        let sessionId: UUID?
+        switch op {
+        case .pause, .resume:
+            guard let id = snap?.sessionId else { return }
+            sessionId = id
+        case .still:
+            sessionId = snap?.sessionId
+        }
         let cmdId = UUID()
         guard let next = OutgoingPauseApplying.beginSending(cmdId: cmdId, current: outgoingPause) else {
             return
@@ -367,6 +402,7 @@ final class CompanionMacRuntime {
         } catch {
             outgoingPause = .failed(.decryptFailed)
             lastStatus = userFacing(error)
+            if op == .still { clearOptimisticCabin() }
         }
     }
 
@@ -386,9 +422,19 @@ final class CompanionMacRuntime {
     }
 
     private func startListening() {
+        hintTask?.cancel()
+        hintTask = nil
         listenTask?.cancel()
         listenTask = Task { [weak self] in
             await self?.connectOnce()
+        }
+    }
+
+    private func startHintPolling() {
+        guard HintPolling.shouldPoll(isPaired: isPaired, connection: connection) else { return }
+        hintTask?.cancel()
+        hintTask = Task { [weak self] in
+            await self?.pollHints()
         }
     }
 
@@ -407,6 +453,7 @@ final class CompanionMacRuntime {
             if Task.isCancelled { return }
             connection = .disconnected
             lastStatus = userFacing(error)
+            startHintPolling()
         }
     }
 
@@ -424,6 +471,57 @@ final class CompanionMacRuntime {
         lastStatus = nil
     }
 
+    private func pollHints() async {
+        var previous: HintPlaintext?
+        var etag: String?
+        while !Task.isCancelled {
+            guard HintPolling.shouldPoll(isPaired: isPaired, connection: connection) else { return }
+            do {
+                let pairing = try requireSecrets()
+                let client = try authedClient(pairing)
+                let result = try await client.getHint(pairingId: pairing.pairingId, etag: etag)
+                let status = result.notModified ? 304 : 200
+                switch HintPolling.outcome(
+                    subscriber: .mac,
+                    previous: previous,
+                    status: status,
+                    hint: result.hint,
+                    responseETag: result.etag
+                ) {
+                case .ignore:
+                    break
+                case .remember(let hint, let tag):
+                    previous = hint
+                    etag = tag
+                case .catchUp(let catchUp, let hint, let tag):
+                    previous = hint
+                    etag = tag
+                    let keys = try SyncCrypto.deriveKeys(
+                        masterKey: pairing.masterKey,
+                        pairingId: pairing.pairingId
+                    )
+                    if catchUp.snap, let envelope = try? await client.getSnap() {
+                        try applySnap(envelope, pairingId: pairing.pairingId, encKey: keys.enc)
+                    }
+                    if catchUp.ack, let envelope = try? await client.getAck() {
+                        try applyAck(envelope, pairingId: pairing.pairingId, encKey: keys.enc)
+                    }
+                case .stop:
+                    return
+                }
+            } catch SyncError.transport(let status, _) where status == 429 || status == 401 {
+                lastStatus = userFacing(SyncError.transport(status: status, code: "invalid"))
+                return
+            } catch is CancellationError {
+                return
+            } catch {
+                if Task.isCancelled { return }
+                lastStatus = userFacing(error)
+            }
+            try? await Task.sleep(nanoseconds: HintPolling.intervalNanoseconds)
+        }
+    }
+
     private func listenWebSocket() async throws {
         let pairing = try requireSecrets()
         let url = try requireRelay()
@@ -438,27 +536,72 @@ final class CompanionMacRuntime {
         lastStatus = nil
         defer { Task { await connection.close() } }
         while !Task.isCancelled {
-            let frame = try await connection.receive()
+            let frame: WSFrame
+            do {
+                frame = try await connection.receive()
+            } catch SyncError.invalidJSON {
+                continue
+            }
             let keys = try SyncCrypto.deriveKeys(masterKey: pairing.masterKey, pairingId: pairing.pairingId)
-            switch frame.t {
-            case .snap:
-                try applySnap(frame.envelope, pairingId: pairing.pairingId, encKey: keys.enc)
-            case .ack:
-                try applyAck(frame.envelope, pairingId: pairing.pairingId, encKey: keys.enc)
-            case .cmd:
-                break
+            do {
+                switch frame.t {
+                case .snap:
+                    try applySnap(frame.envelope, pairingId: pairing.pairingId, encKey: keys.enc)
+                case .ack:
+                    try applyAck(frame.envelope, pairingId: pairing.pairingId, encKey: keys.enc)
+                case .cmd:
+                    break
+                }
+            } catch {
+                lastStatus = userFacing(error)
             }
         }
     }
 
     private func applySnap(_ envelope: Envelope, pairingId: UUID, encKey: Data) throws {
         snap = try CompanionEnvelope.open(SnapPlaintext.self, envelope: envelope, pairingId: pairingId, encKey: encKey)
-        connection = .connected
+        reconcileOptimisticCabin()
     }
 
     private func applyAck(_ envelope: Envelope, pairingId: UUID, encKey: Data) throws {
         let ack = try CompanionEnvelope.open(AckPlaintext.self, envelope: envelope, pairingId: pairingId, encKey: encKey)
         outgoingPause = OutgoingPauseApplying.applyAck(ack, current: outgoingPause)
+        if case .failed = outgoingPause {
+            clearOptimisticCabin()
+        }
+    }
+
+    private var optimisticFiredCount: Int {
+        guard let sessionId = snap?.sessionId,
+              defaults.string(forKey: Defaults.cabinOptimisticSession) == sessionId.uuidString.lowercased() else {
+            return 0
+        }
+        return defaults.integer(forKey: Defaults.cabinOptimisticFired)
+    }
+
+    private func markOptimisticCabin(sessionId: UUID, firedCount: Int) {
+        defaults.set(sessionId.uuidString.lowercased(), forKey: Defaults.cabinOptimisticSession)
+        defaults.set(firedCount, forKey: Defaults.cabinOptimisticFired)
+    }
+
+    private func clearOptimisticCabin() {
+        defaults.removeObject(forKey: Defaults.cabinOptimisticSession)
+        defaults.removeObject(forKey: Defaults.cabinOptimisticFired)
+    }
+
+    private func reconcileOptimisticCabin() {
+        guard let snap else {
+            clearOptimisticCabin()
+            return
+        }
+        let stored = defaults.string(forKey: Defaults.cabinOptimisticSession)
+        if stored != snap.sessionId?.uuidString.lowercased() {
+            clearOptimisticCabin()
+            return
+        }
+        if snap.checkInFiredCount >= defaults.integer(forKey: Defaults.cabinOptimisticFired) {
+            clearOptimisticCabin()
+        }
     }
 
     private func authedClient(_ pairing: PairingSecrets) throws -> SyncHTTPClient {
@@ -499,10 +642,10 @@ final class CompanionMacRuntime {
             switch sync {
             case .notPaired: "つながっていない"
             case .pairingAborted: "確定できなかった"
-            default: "iPhone とつながっていない"
+            default: "リレーが切れた"
             }
         } else {
-            "iPhone とつながっていない"
+            "リレーが切れた"
         }
     }
 }

@@ -130,6 +130,14 @@ struct RelaySettingsView: View {
                 Toggle("ログイン時に起動", isOn: $runtime.loginAtStartup)
             }
 
+            Section {
+                Toggle("車内放送", isOn: $runtime.cabinAnnouncementsEnabled)
+            } header: {
+                Text("フォーカス")
+            } footer: {
+                Text("長い乗務の途中に「まだ乗ってる？」を PiP に出します。iPhone で答えても、この Mac で答えても同じ回は終わります。")
+            }
+
             Section("リレー") {
                 TextField("リレー URL", text: $runtime.relayURLString)
                 Text("識別子が iPhone の設定と同じなら、この Mac とつながっています。")

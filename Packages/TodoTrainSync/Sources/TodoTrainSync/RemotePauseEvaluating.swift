@@ -31,14 +31,22 @@ public enum RemotePauseEvaluating {
         isPaused: Bool = false,
         command: CommandPlaintext
     ) -> RemotePauseDecision {
-        guard let openSessionId else { return .noActiveService }
-        guard command.sessionId == openSessionId else { return .sessionMismatch }
         switch command.op {
-        case .pause:
-            if pausedCount >= pauseLimit { return .pauseLimitReached }
-            return .apply
-        case .resume:
+        case .pause, .resume:
+            guard let commandSession = command.sessionId else { return .noActiveService }
+            guard let openSessionId else { return .noActiveService }
+            guard commandSession == openSessionId else { return .sessionMismatch }
+            if command.op == .pause {
+                if pausedCount >= pauseLimit { return .pauseLimitReached }
+                return .apply
+            }
             if !isPaused { return .notPaused }
+            return .apply
+        case .still:
+            if let commandSession = command.sessionId {
+                guard let openSessionId else { return .noActiveService }
+                guard commandSession == openSessionId else { return .sessionMismatch }
+            }
             return .apply
         }
     }

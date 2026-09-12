@@ -15,10 +15,12 @@ enum CompanionSnapBuilding {
         rev: Int,
         phase: SessionPhase,
         session: WorkSession?,
-        now: Date
+        now: Date,
+        serviceActive: Bool,
+        cabinEnabled: Bool
     ) -> SnapPlaintext {
         guard let session, session.isOpen, phase != .idle else {
-            return idle(rev: rev)
+            return idle(rev: rev, serviceActive: serviceActive, cabinEnabled: cabinEnabled)
         }
         let started = Int(session.startedAt.timeIntervalSince1970)
         let elapsedActive = Int(session.elapsedSeconds(at: now).rounded(.towardZero))
@@ -43,11 +45,15 @@ enum CompanionSnapBuilding {
             estimatedSeconds: session.budgetSecondsAtStart,
             pausedAccumulated: pausedAccumulated,
             pausedAt: pausedAtUnix,
-            boardedDeviceID: session.boardedDeviceID
+            boardedDeviceID: session.boardedDeviceID,
+            serviceActive: serviceActive,
+            cabinEnabled: cabinEnabled,
+            checkInFiredCount: session.checkInFiredCount,
+            pendingCabin: session.pendingCheckIn?.cabin
         )
     }
 
-    static func idle(rev: Int) -> SnapPlaintext {
+    static func idle(rev: Int, serviceActive: Bool, cabinEnabled: Bool) -> SnapPlaintext {
         SnapPlaintext(
             rev: rev,
             sessionId: nil,
@@ -58,7 +64,11 @@ enum CompanionSnapBuilding {
             estimatedSeconds: nil,
             pausedAccumulated: nil,
             pausedAt: nil,
-            boardedDeviceID: nil
+            boardedDeviceID: nil,
+            serviceActive: serviceActive,
+            cabinEnabled: cabinEnabled,
+            checkInFiredCount: 0,
+            pendingCabin: nil
         )
     }
 }

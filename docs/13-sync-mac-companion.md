@@ -3,14 +3,14 @@
 最終更新: 2026-09-12。土管・暗号・ペアリング契約。**画面の話はしない。**  
 Mac の体験は別紙 [14-mac-companion-ux.md](14-mac-companion-ux.md)（確認 1 は吹き出し、2 は停車と再乗車で確定）。
 
-ワイヤの正本は [`sync/contract/`](../sync/contract/README.md)。実装は [15-agent-work-plan.md](15-agent-work-plan.md) のチケットへ。経路と `arrive` / `extend` は増やさない。`resume` は 2026-09-12 に追加。
+ワイヤの正本は [`sync/contract/`](../sync/contract/README.md)。実装は [15-agent-work-plan.md](15-agent-work-plan.md) のチケットへ。`arrive` / `extend` は増やさない。`resume` は 2026-09-12 に追加。`GET /v1/hint/:pairingId` は公開 rev 合図の例外。
 
 ## 決めたこと
 
 | 項目 | 決定 |
 |------|------|
 | 誰が本尊か | iPhone の SwiftData + `SessionManager`。リレーは正本にしない |
-| 何を運ぶか | 暗号化スナップショット（いまの乗務）と暗号化コマンド（`pause` / `resume`） |
+| 何を運ぶか | 暗号化スナップショット（いまの乗務）と暗号化コマンド（`pause` / `resume` / `still`） |
 | 土管 | Hono on Cloudflare Workers + pairing 1 つ = Durable Object 1 つ。本番 `https://todo-train.hibiki-cube.dev`、develop `https://dev.todo-train.hibiki-cube.dev` |
 | ローカル通信 | **主経路にしない。** 社内 Wi-Fi はクライアント分離・mDNS 遮断があり得る |
 | 機密 | 正規ユーザー以外は中身を見られない。Apple / 自前サーバ / 押収を含む |
@@ -157,11 +157,15 @@ confirm HMAC は `HMAC-SHA256(cfmKey, UTF-8("{pairingId}|{offerId}|iphone"))` �
   "estimatedSeconds": 1500,
   "pausedAccumulated": 0,
   "pausedAt": null,
-  "boardedDeviceID": "…"
+  "boardedDeviceID": "…",
+  "serviceActive": true,
+  "cabinEnabled": true,
+  "checkInFiredCount": 0,
+  "pendingCabin": null
 }
 ```
 
-時刻は Unix **整数秒**。`estimatedSeconds` は当初見積ではなく **いまの予算（延長込み = `WorkSession.budgetSecondsAtStart`）**。残り秒を送ってポーリングしない。乗務なしは `sessionId: null`、他の乗務欄も `null`、`phase` は `idle`。
+時刻は Unix **整数秒**。`estimatedSeconds` は当初見積ではなく **いまの予算（延長込み = `WorkSession.budgetSecondsAtStart`）**。残り秒を送ってポーリングしない。乗務なしは `sessionId: null`、他の乗務欄も `null`、`phase` は `idle`。`serviceActive` / `cabinEnabled` / `checkInFiredCount` / `pendingCabin` は乗務なしでも載せる。欠ける旧 snap は `serviceActive=false`、`cabinEnabled=true`、`checkInFiredCount=0`、`pendingCabin=null`。`pendingCabin` は `progress` / `away` / `idle` / `null`。未知値は表示だけ無視。`idle` は次の運行中アイドル通知用（今はスケジューラを組まない）。
 
 購読者の残り（Date 計算、`SessionClock` 相当）:
 
@@ -181,7 +185,7 @@ remaining     = estimatedSeconds - elapsedActive
 { "id": "uuid", "op": "pause", "sessionId": "…", "at": 0 }
 ```
 
-v1 の `op` は `pause` と `resume`。到着・延長は同期契約に載せない。
+v1 の `op` は `pause` / `resume` / `still`。到着・延長は同期契約に載せない。`still` はいまの車内放送 pending を消費する（kind を問わない）。`sessionId` は任意（乗務なしの次の idle は `null`）。既に消費済みでも ack ok。
 
 ### コマンド結果平文（ack）
 
@@ -213,9 +217,10 @@ iPhone が cmd を処理したら、成否を暗号化した ack を置く。購
 | `GET /v1/cmd` | iPhone が未適用分を取る（復帰時の保険） |
 | `PUT /v1/ack` | iPhone が直近 cmd の結果を置く |
 | `GET /v1/ack` | 購読者が結果を取る（復帰時の保険） |
+| `GET /v1/hint/:pairingId` | 公開。`snapRev` / `ackRev` / `cmdCount` だけ。Bearer なし。暗号文は載せない |
 | `WS /v1/ws` | snap / cmd / ack を接続中へ即時配信。Hibernation 可 |
 
-認証: snap / cmd / ack / WS は Bearer `writeToken`（確定後。`Authorization: Bearer <writeToken b64u>`）。任意の `X-Pairing-Id`（canonical UUID）があれば tokenHash の Directory 索引を省略し、Pairing Durable Object が `SHA-256(writeToken)` を照合する。ヘッダなしは従来どおり Directory lookup。オファー面は TTL だけ。QR を片側が読んだだけでは bind しない。
+認証: snap / cmd / ack / WS は Bearer `writeToken`（確定後。`Authorization: Bearer <writeToken b64u>`）。任意の `X-Pairing-Id`（canonical UUID）があれば tokenHash の Directory 索引を省略し、Pairing Durable Object が `SHA-256(writeToken)` を照合する。ヘッダなしは従来どおり Directory lookup。`GET /v1/hint/:pairingId` は無認証（`pairingId` は QR に既に出ている）。オファー面は TTL だけ。QR を片側が読んだだけでは bind しない。
 
 定数: offer TTL **120 秒**、confirm 重なり窓 **15 秒**、cmd FIFO **8**。機械可読な経路は `sync/contract/http.json`。
 
@@ -230,13 +235,16 @@ iOS 前面と購読者が両方 WS にいるとき、cmd は即時。iOS が背�
 **iPhone**
 
 - `ScenePhase.active` と発車 / 停車 / 延長 / 到着 / 超過突入のたびに snap を置く
-- `ScenePhase.active` で WS を 1 本。切れたら自動では張り直さない。次の前面復帰で catch-up + WS。定期ポーリングはしない
-- 受信 cmd を復号 → `sessionId` が今の open と一致 → `SessionManager` で実行（停車 / 再乗車）→ snap + ack
+- `ScenePhase.active` で WS を 1 本。RFC 6455 ping で保つ。`.inactive` では切らない。`.background` で止める
+- 前面のまま WS が切れたら張り直さない。`GET /v1/hint/:pairingId` を 5 秒間隔で見て `cmdCount` があれば `GET /v1/cmd`。背面では hint も止める。hint の 404 では止めない
+- 受信 cmd を復号 → pause / resume は `sessionId` が今の open と一致。`still` は `sessionId` があるときだけ照合（無いときは乗務なしでも apply）→ `SessionManager` で実行（停車 / 再乗車 / 車内放送のまだやってる）→ snap + ack
 - 不一致・復号失敗・`SessionError` は ack `ok: false`。snap は現状のまま
 
 **購読者（Mac など）**
 
 - 起動時に catch-up と WS を 1 本。切れたら自動再接しない。吹き出しの「つなぎ直す」だけ（体験は [14](14-mac-companion-ux.md)）
+- WS 切断中だけ hint を見る。rev が動いたら既存の `GET /v1/snap` / `GET /v1/ack`。WS は開かない。hint の 404 では止めず、429 / 401 だけ止める
+- `URLSessionWebSocketTask` は `URLRequest` の `Authorization` を落とすことがあるので、接続ごとの session の `httpAdditionalHeaders` に Bearer と `X-Pairing-Id` を載せる。復号失敗や壊れたフレームではソケットを捨てない
 - WS で snap を受け、Date ベースで残りを描く
 - 操作は cmd を置くだけ。ローカル SwiftData なし
 - ack が来るまで同じ `cmdId` を再送しない。タイムアウト後は snap を正とする

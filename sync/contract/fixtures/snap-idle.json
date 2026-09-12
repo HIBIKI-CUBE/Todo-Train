@@ -8,5 +8,9 @@
   "estimatedSeconds": null,
   "pausedAccumulated": null,
   "pausedAt": null,
-  "boardedDeviceID": null
+  "boardedDeviceID": null,
+  "serviceActive": false,
+  "cabinEnabled": true,
+  "checkInFiredCount": 0,
+  "pendingCabin": null
 }

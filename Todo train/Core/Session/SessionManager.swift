@@ -52,6 +52,8 @@ final class SessionManager {
     private(set) var punctualityHapticTick: Int = 0
     /// Bumps when a 車内放送 panel appears.
     private(set) var checkInHapticTick: Int = 0
+    /// Paired Mac owns the desk progress interrupt; skip iPhone progress local notifications.
+    var suppressProgressLocalNotifications = false
 
     var punctualityMoment: PunctualityMoment? { punctualityQueue.first }
 
@@ -170,6 +172,7 @@ final class SessionManager {
         alarmScheduler.requestAuthorizationIfNeeded()
         refreshTodayOverrideCount(at: now)
         reconcile(now: now)
+        bumpCompanionSync()
     }
 
     func endService(now: Date? = nil) throws {
@@ -205,6 +208,7 @@ final class SessionManager {
         alarmScheduler.cancelAll()
         try save()
         reconcile(now: now)
+        bumpCompanionSync()
         if onTimeService {
             enqueuePunctualityMoment(PunctualityMoment(kind: .onTimeService))
         }
@@ -519,6 +523,7 @@ final class SessionManager {
 
         consumePendingCheckIn(session, answer: answer, now: now)
         session.awayDueAt = nil
+        bumpCompanionSync()
         try save()
 
         switch answer {
@@ -530,6 +535,44 @@ final class SessionManager {
         case .alreadyDone:
             try arrive(resolution: .alreadyDone, now: now)
         }
+    }
+
+    /// Mac `still` cmd. Consumes progress (even if iPhone has not promoted pending yet).
+    func acknowledgeCabinStill(now: Date? = nil) {
+        let now = now ?? clock.now
+        guard let session = activeSession, session.isOpen else { return }
+        switch session.pendingCheckIn {
+        case .progress:
+            try? answerCheckIn(.stillOnIt, now: now)
+            return
+        case .away:
+            cancelAwayWatch(now: now)
+            bumpCompanionSync()
+            return
+        case .idle:
+            session.pendingCheckIn = nil
+            bumpCompanionSync()
+            try? save()
+            return
+        case .none:
+            break
+        }
+
+        guard !session.isPaused, session.remainingSeconds(at: now) > CheckInScheduling.overtimeGuardSeconds else {
+            return
+        }
+        let elapsed = session.elapsedSeconds(at: now)
+        guard CheckInScheduling.dueProgressOffset(
+            offsets: session.checkInOffsets,
+            firedCount: session.checkInFiredCount,
+            elapsedSeconds: elapsed,
+            remainingSeconds: session.remainingSeconds(at: now),
+            hasPending: false
+        ) != nil else { return }
+        session.checkInFiredCount += 1
+        bumpCompanionSync()
+        try? save()
+        reconcile(now: now)
     }
 
     /// Unlocked background only. Locked / end-bell LA / cabin-off: no away watch.
@@ -638,6 +681,7 @@ final class SessionManager {
     /// Settings toggle for 車内放送 — apply immediately to the active ride.
     func syncCabinAnnouncementsWithSettings(now: Date? = nil) {
         let now = now ?? clock.now
+        bumpCompanionSync()
         guard let session = activeSession, session.isOpen else {
             checkInNotifier.cancelAll()
             return
@@ -1039,6 +1083,7 @@ final class SessionManager {
             session.awayDueAt = nil
             cancelAwayFireTask()
             checkInHapticTick += 1
+            bumpCompanionSync()
             try? save()
             return
         }
@@ -1059,6 +1104,10 @@ final class SessionManager {
         }
         guard session.isOpen, !session.isPaused else {
             checkInNotifier.cancel(sessionID: session.id)
+            return
+        }
+        if suppressProgressLocalNotifications {
+            checkInNotifier.cancelProgress(sessionID: session.id)
             return
         }
         let elapsed = session.elapsedSeconds(at: now)

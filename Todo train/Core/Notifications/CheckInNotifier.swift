@@ -21,6 +21,7 @@ protocol CheckInNotifying: AnyObject {
     )
     func scheduleAway(sessionID: UUID, ticketTitle: String, body: String, fireAt: Date)
     func cancel(sessionID: UUID)
+    func cancelProgress(sessionID: UUID)
     func cancelAll()
 }
 
@@ -36,6 +37,7 @@ final class NoOpCheckInNotifier: CheckInNotifying {
     ) {}
     func scheduleAway(sessionID: UUID, ticketTitle: String, body: String, fireAt: Date) {}
     func cancel(sessionID: UUID) {}
+    func cancelProgress(sessionID: UUID) {}
     func cancelAll() {}
 }
 
@@ -65,6 +67,10 @@ final class InMemoryCheckInNotifier: CheckInNotifying {
     func cancel(sessionID: UUID) {
         progress.removeAll { $0.sessionID == sessionID }
         away.removeAll { $0.sessionID == sessionID }
+    }
+
+    func cancelProgress(sessionID: UUID) {
+        progress.removeAll { $0.sessionID == sessionID }
     }
 
     func cancelAll() {
@@ -169,6 +175,15 @@ final class CheckInNotifier: CheckInNotifying {
 
     func cancel(sessionID: UUID) {
         var identifiers = [CheckInNotification.awayIdentifier(sessionID: sessionID)]
+        for index in 0..<4 {
+            identifiers.append(CheckInNotification.progressIdentifier(sessionID: sessionID, index: index))
+        }
+        center.removePendingNotificationRequests(withIdentifiers: identifiers)
+        center.removeDeliveredNotifications(withIdentifiers: identifiers)
+    }
+
+    func cancelProgress(sessionID: UUID) {
+        var identifiers: [String] = []
         for index in 0..<4 {
             identifiers.append(CheckInNotification.progressIdentifier(sessionID: sessionID, index: index))
         }

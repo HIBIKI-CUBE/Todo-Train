@@ -75,9 +75,14 @@ struct ContentView: View {
             }
             syncFocusPresentation()
             companion.handleScenePhase(.active, sessionManager: sessionManager)
+            sessionManager.suppressProgressLocalNotifications = companion.isPaired
         }
         .onChange(of: sessionManager.companionSyncTick) { _, _ in
             companion.noteSessionChanged(sessionManager: sessionManager)
+        }
+        .onChange(of: companion.isPaired) { _, paired in
+            sessionManager.suppressProgressLocalNotifications = paired
+            sessionManager.syncCabinAnnouncementsWithSettings()
         }
         .onChange(of: scenePhase) { _, newPhase in
             companion.handleScenePhase(newPhase, sessionManager: sessionManager)

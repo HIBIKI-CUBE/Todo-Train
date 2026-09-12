@@ -11,6 +11,10 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
     public var pausedAccumulated: Int?
     public var pausedAt: Int?
     public var boardedDeviceID: String?
+    public var serviceActive: Bool
+    public var cabinEnabled: Bool
+    public var checkInFiredCount: Int
+    public var pendingCabin: CabinKind?
 
     public init(
         rev: Int,
@@ -22,7 +26,11 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
         estimatedSeconds: Int?,
         pausedAccumulated: Int?,
         pausedAt: Int?,
-        boardedDeviceID: String?
+        boardedDeviceID: String?,
+        serviceActive: Bool = false,
+        cabinEnabled: Bool = true,
+        checkInFiredCount: Int = 0,
+        pendingCabin: CabinKind? = nil
     ) {
         self.rev = rev
         self.sessionId = sessionId
@@ -34,11 +42,16 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
         self.pausedAccumulated = pausedAccumulated
         self.pausedAt = pausedAt
         self.boardedDeviceID = boardedDeviceID
+        self.serviceActive = serviceActive
+        self.cabinEnabled = cabinEnabled
+        self.checkInFiredCount = checkInFiredCount
+        self.pendingCabin = pendingCabin
     }
 
     enum CodingKeys: String, CodingKey {
         case rev, sessionId, ticketId, title, phase
         case startedAt, estimatedSeconds, pausedAccumulated, pausedAt, boardedDeviceID
+        case serviceActive, cabinEnabled, checkInFiredCount, pendingCabin
     }
 
     public init(from decoder: Decoder) throws {
@@ -53,6 +66,18 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
         pausedAccumulated = try container.decodeIfPresent(Int.self, forKey: .pausedAccumulated)
         pausedAt = try container.decodeIfPresent(Int.self, forKey: .pausedAt)
         boardedDeviceID = try container.decodeIfPresent(String.self, forKey: .boardedDeviceID)
+        serviceActive = try container.decodeIfPresent(Bool.self, forKey: .serviceActive) ?? false
+        cabinEnabled = try container.decodeIfPresent(Bool.self, forKey: .cabinEnabled) ?? true
+        checkInFiredCount = try container.decodeIfPresent(Int.self, forKey: .checkInFiredCount) ?? 0
+        if container.contains(.pendingCabin) {
+            if try container.decodeNil(forKey: .pendingCabin) {
+                pendingCabin = nil
+            } else {
+                pendingCabin = try container.decode(CabinKind.self, forKey: .pendingCabin)
+            }
+        } else {
+            pendingCabin = nil
+        }
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -67,6 +92,10 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
         try container.encode(pausedAccumulated, forKey: .pausedAccumulated)
         try container.encode(pausedAt, forKey: .pausedAt)
         try container.encode(boardedDeviceID, forKey: .boardedDeviceID)
+        try container.encode(serviceActive, forKey: .serviceActive)
+        try container.encode(cabinEnabled, forKey: .cabinEnabled)
+        try container.encode(checkInFiredCount, forKey: .checkInFiredCount)
+        try container.encode(pendingCabin, forKey: .pendingCabin)
     }
 
     /// Remaining seconds using the contract formula. Idle / missing fields → nil.
@@ -77,6 +106,14 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
             + (pausedAt.map { now - $0 } ?? 0)
         let elapsedActive = now - startedAt - pausedTotal
         return estimatedSeconds - elapsedActive
+    }
+
+    /// Active elapsed seconds. Idle / missing fields → nil.
+    public func elapsedActiveSeconds(at now: Int) -> Int? {
+        guard let estimated = estimatedSeconds, let remaining = remainingSeconds(at: now) else {
+            return nil
+        }
+        return estimated - remaining
     }
 }
 

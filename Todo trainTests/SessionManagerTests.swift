@@ -363,29 +363,29 @@ struct SessionManagerTests {
         let (manager, context, clock, _) = try makeHarness()
         try manager.startService()
         let ticket = try makeTicket(context, seconds: 60)
-        #expect(manager.companionSyncTick == 0)
-
-        try manager.board(ticket: ticket)
         #expect(manager.companionSyncTick == 1)
 
-        try manager.pause()
+        try manager.board(ticket: ticket)
         #expect(manager.companionSyncTick == 2)
 
-        try manager.resume()
+        try manager.pause()
         #expect(manager.companionSyncTick == 3)
 
-        try manager.extend(by: 60)
+        try manager.resume()
         #expect(manager.companionSyncTick == 4)
+
+        try manager.extend(by: 60)
+        #expect(manager.companionSyncTick == 5)
 
         clock.advance(by: 121)
         manager.reconcile()
         #expect(manager.phase == .overtime)
-        #expect(manager.companionSyncTick == 5)
+        #expect(manager.companionSyncTick == 6)
         manager.reconcile()
-        #expect(manager.companionSyncTick == 5)
+        #expect(manager.companionSyncTick == 6)
 
         try manager.arrive()
-        #expect(manager.companionSyncTick == 6)
+        #expect(manager.companionSyncTick == 7)
         #expect(manager.phase == .idle)
     }
 
@@ -1236,6 +1236,46 @@ struct SessionManagerTests {
         #expect(manager.activeSession?.checkInFiredCount == 1)
         #expect(manager.activeSession?.checkInAnswers.count == 1)
         #expect(manager.phase == .running)
+    }
+
+    @Test func acknowledgeCabinStill_consumesPendingProgress() throws {
+        let (manager, context, clock, _) = try makeHarness()
+        try manager.startService()
+        let ticket = try makeTicket(context, seconds: 30 * 60)
+        try manager.board(ticket: ticket)
+        let offset = try #require(manager.activeSession?.checkInOffsets.first)
+        clock.advance(by: offset + 1)
+        manager.reconcile()
+        #expect(manager.pendingCheckIn == .progress)
+        manager.acknowledgeCabinStill()
+        #expect(manager.pendingCheckIn == nil)
+        #expect(manager.activeSession?.checkInFiredCount == 1)
+    }
+
+    @Test func acknowledgeCabinStill_consumesDueWithoutPending() throws {
+        let (manager, context, clock, _) = try makeHarness()
+        try manager.startService()
+        let ticket = try makeTicket(context, seconds: 30 * 60)
+        try manager.board(ticket: ticket)
+        let offset = try #require(manager.activeSession?.checkInOffsets.first)
+        clock.advance(by: offset + 1)
+        #expect(manager.pendingCheckIn == nil)
+        manager.acknowledgeCabinStill()
+        #expect(manager.activeSession?.checkInFiredCount == 1)
+        manager.reconcile()
+        #expect(manager.pendingCheckIn == nil)
+    }
+
+    @Test func pairedCompanion_doesNotScheduleProgressNotifications() throws {
+        let checkIns = InMemoryCheckInNotifier()
+        let (manager, context, _, _) = try makeHarness(checkInNotifier: checkIns)
+        manager.suppressProgressLocalNotifications = true
+        try manager.startService()
+        let ticket = try makeTicket(context, seconds: 30 * 60)
+        try manager.board(ticket: ticket)
+        #expect(checkIns.progress.isEmpty)
+        manager.beginAwayWatch()
+        #expect(!checkIns.away.isEmpty)
     }
 
     @Test func cabinAnnouncementsOff_doesNotFire() throws {

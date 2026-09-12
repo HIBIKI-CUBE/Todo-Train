@@ -68,7 +68,7 @@ HMAC-SHA256(cfmKey, UTF-8("{pairingId}|{offerId}|mac"))
 
 ## Snap 平文
 
-フィールドは [fixtures/snap.json](fixtures/snap.json)。乗務なしは [fixtures/snap-idle.json](fixtures/snap-idle.json)（`sessionId` と他の乗務欄は `null`、`phase` は `idle`）。
+フィールドは [fixtures/snap.json](fixtures/snap.json)。乗務なしは [fixtures/snap-idle.json](fixtures/snap-idle.json)（`sessionId` と他の乗務欄は `null`、`phase` は `idle`）。`serviceActive` / `cabinEnabled` / `checkInFiredCount` / `pendingCabin` は乗務なしでも載せる。欠ける旧 snap は `serviceActive=false`、`cabinEnabled=true`、`checkInFiredCount=0`、`pendingCabin=null`。`pendingCabin` は `progress` / `away` / `idle` / `null`。未知値は表示だけ無視。`idle` は次の運行中アイドル通知用（今はスケジューラを組まない）。
 
 `estimatedSeconds` は当初見積ではなく **いまの予算（延長込み）**。iOS の `WorkSession.budgetSecondsAtStart` に対応する。
 
@@ -86,6 +86,6 @@ remaining      = estimatedSeconds - elapsedActive
 
 ## Cmd / ack 平文
 
-- cmd: [fixtures/cmd-pause.json](fixtures/cmd-pause.json) / [fixtures/cmd-resume.json](fixtures/cmd-resume.json)。`op` は `pause` と `resume`。
+- cmd: [fixtures/cmd-pause.json](fixtures/cmd-pause.json) / [fixtures/cmd-resume.json](fixtures/cmd-resume.json) / [fixtures/cmd-still.json](fixtures/cmd-still.json)。`op` は `pause` / `resume` / `still`。`still` はいまの車内放送 pending を消費する。`sessionId` は任意（乗務なし idle は `null`。例: [fixtures/cmd-still-nosession.json](fixtures/cmd-still-nosession.json)）。
 - ack 成功: [fixtures/ack-ok.json](fixtures/ack-ok.json)。`ok: true` のとき `error` キーは置かない。
 - ack 失敗: [fixtures/ack-pauseLimitReached.json](fixtures/ack-pauseLimitReached.json)。`error` は [enums.json](enums.json) のみ。タイトルは載せない。

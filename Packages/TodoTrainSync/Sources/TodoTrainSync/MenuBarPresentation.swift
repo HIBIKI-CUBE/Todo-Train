@@ -22,19 +22,25 @@ public struct MenuBarInput: Equatable, Sendable {
     public var now: Int
     public var connection: ConnectionStatus
     public var outgoingPause: OutgoingPauseState
+    public var cabinEnabledLocal: Bool
+    public var optimisticFiredCount: Int
 
     public init(
         pairing: PairingStatus,
         snap: SnapPlaintext?,
         now: Int,
         connection: ConnectionStatus = .connected,
-        outgoingPause: OutgoingPauseState = .idle
+        outgoingPause: OutgoingPauseState = .idle,
+        cabinEnabledLocal: Bool = true,
+        optimisticFiredCount: Int = 0
     ) {
         self.pairing = pairing
         self.snap = snap
         self.now = now
         self.connection = connection
         self.outgoingPause = outgoingPause
+        self.cabinEnabledLocal = cabinEnabledLocal
+        self.optimisticFiredCount = optimisticFiredCount
     }
 }
 
@@ -99,7 +105,7 @@ public struct MenuBarPresentation: Equatable, Sendable {
             let remaining = snap.remainingSeconds(at: input.now)
             let detail: String
             if input.connection == .disconnected {
-                detail = "iPhone とつながっていない"
+                detail = "リレーが切れた"
             } else if sending {
                 detail = "iPhone に送った"
             } else {
@@ -125,7 +131,7 @@ public struct MenuBarPresentation: Equatable, Sendable {
             let bar = [truncated, remainingLabel].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " ")
             let detail: String
             if input.connection == .disconnected {
-                detail = "iPhone とつながっていない"
+                detail = "リレーが切れた"
             } else if sending {
                 detail = "iPhone に送った"
             } else if overtime {
@@ -186,7 +192,7 @@ public struct MenuBarPresentation: Equatable, Sendable {
             canReconnect: disconnected,
             isSending: sending,
             popoverTitle: "乗務なし",
-            popoverDetail: disconnected ? "iPhone とつながっていない" : "乗務なし",
+            popoverDetail: disconnected ? "リレーが切れた" : "乗務なし",
             failureLine: failureLine
         )
     }

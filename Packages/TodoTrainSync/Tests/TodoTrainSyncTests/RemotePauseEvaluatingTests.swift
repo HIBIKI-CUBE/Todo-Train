@@ -95,4 +95,53 @@ struct RemotePauseEvaluatingTests {
         #expect(decision == .notPaused)
         #expect(RemotePauseEvaluating.ack(decision: decision, commandId: resume.id).error == .notPaused)
     }
+
+    @Test func stillAppliesWhenSessionMatches() {
+        let still = CommandPlaintext(
+            id: UUID(uuidString: "55555555-5555-4555-8555-555555555555")!,
+            op: .still,
+            sessionId: session,
+            at: 1_768_000_120
+        )
+        let decision = RemotePauseEvaluating.evaluate(
+            openSessionId: session,
+            pausedCount: 0,
+            pauseLimit: 2,
+            command: still
+        )
+        #expect(decision == .apply)
+        #expect(RemotePauseEvaluating.ack(decision: decision, commandId: still.id).ok)
+    }
+
+    @Test func stillWithoutSessionApplies() {
+        let still = CommandPlaintext(
+            id: UUID(uuidString: "66666666-6666-4666-8666-666666666666")!,
+            op: .still,
+            sessionId: nil,
+            at: 1_768_000_120
+        )
+        let decision = RemotePauseEvaluating.evaluate(
+            openSessionId: nil,
+            pausedCount: 0,
+            pauseLimit: 2,
+            command: still
+        )
+        #expect(decision == .apply)
+    }
+
+    @Test func stillMismatchesOpenSession() {
+        let still = CommandPlaintext(
+            id: UUID(),
+            op: .still,
+            sessionId: other,
+            at: 1_768_000_120
+        )
+        let decision = RemotePauseEvaluating.evaluate(
+            openSessionId: session,
+            pausedCount: 0,
+            pauseLimit: 2,
+            command: still
+        )
+        #expect(decision == .sessionMismatch)
+    }
 }

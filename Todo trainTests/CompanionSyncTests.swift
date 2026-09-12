@@ -7,11 +7,20 @@ import TodoTrainSync
 @MainActor
 struct CompanionSnapBuildingTests {
     @Test func idleWhenNoSession() {
-        let snap = CompanionSnapBuilding.snap(rev: 1, phase: .idle, session: nil, now: Date())
+        let snap = CompanionSnapBuilding.snap(
+            rev: 1,
+            phase: .idle,
+            session: nil,
+            now: Date(),
+            serviceActive: false,
+            cabinEnabled: true
+        )
         #expect(snap.phase == .idle)
         #expect(snap.sessionId == nil)
         #expect(snap.title == nil)
         #expect(snap.rev == 1)
+        #expect(snap.serviceActive == false)
+        #expect(snap.cabinEnabled == true)
     }
 
     @Test func runningExportsTitleAndDateBasedRemaining() throws {
@@ -28,7 +37,14 @@ struct CompanionSnapBuildingTests {
         )
         container.mainContext.insert(session)
         let now = Date(timeIntervalSince1970: 1_768_000_060)
-        let snap = CompanionSnapBuilding.snap(rev: 7, phase: .running, session: session, now: now)
+        let snap = CompanionSnapBuilding.snap(
+            rev: 7,
+            phase: .running,
+            session: session,
+            now: now,
+            serviceActive: true,
+            cabinEnabled: true
+        )
         #expect(snap.phase == .running)
         #expect(snap.title == "週次レポート")
         #expect(snap.startedAt == 1_768_000_000)
@@ -36,6 +52,9 @@ struct CompanionSnapBuildingTests {
         #expect(snap.pausedAt == nil)
         #expect(snap.remainingSeconds(at: 1_768_000_060) == 1440)
         #expect(snap.boardedDeviceID == "phone-a")
+        #expect(snap.serviceActive == true)
+        #expect(snap.checkInFiredCount == 0)
+        #expect(snap.pendingCabin == nil)
     }
 
     @Test func pausedExportsPausedAt() throws {
@@ -52,7 +71,9 @@ struct CompanionSnapBuildingTests {
             rev: 2,
             phase: .paused,
             session: session,
-            now: Date(timeIntervalSince1970: 180)
+            now: Date(timeIntervalSince1970: 180),
+            serviceActive: true,
+            cabinEnabled: true
         )
         #expect(snap.phase == .paused)
         #expect(snap.pausedAt == 160)
@@ -70,6 +91,9 @@ struct CompanionCommandApplyingTests {
         #expect(CompanionCommandApplying.shouldCallResume(.apply, op: .resume))
         #expect(!CompanionCommandApplying.shouldCallResume(.notPaused, op: .resume))
         #expect(!CompanionCommandApplying.shouldCallResume(.apply, op: .pause))
+        #expect(CompanionCommandApplying.shouldCallStill(.apply, op: .still))
+        #expect(!CompanionCommandApplying.shouldCallStill(.apply, op: .pause))
+        #expect(!CompanionCommandApplying.shouldCallStill(.sessionMismatch, op: .still))
     }
 }
 

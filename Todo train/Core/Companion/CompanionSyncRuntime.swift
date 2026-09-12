@@ -84,10 +84,14 @@ final class CompanionSyncRuntime {
     func handleScenePhase(_ phase: ScenePhase, sessionManager: SessionManager) {
         switch phase {
         case .active:
-            foregroundTask?.cancel()
+            guard foregroundTask == nil else { return }
             foregroundTask = Task { [weak self] in
                 await self?.runForeground(sessionManager: sessionManager)
             }
+        case .inactive:
+            break
+        case .background:
+            fallthrough
         default:
             foregroundTask?.cancel()
             foregroundTask = nil
@@ -109,6 +113,8 @@ final class CompanionSyncRuntime {
         await syncNow(sessionManager: sessionManager)
         guard !Task.isCancelled else { return }
         await listenWebSocket(sessionManager: sessionManager)
+        guard !Task.isCancelled else { return }
+        await pollHints(sessionManager: sessionManager)
     }
 
     private func listenWebSocket(sessionManager: SessionManager) async {
@@ -128,17 +134,69 @@ final class CompanionSyncRuntime {
         }
         defer { Task { await connection.close() } }
         while !Task.isCancelled {
+            let frame: WSFrame
             do {
-                let frame = try await connection.receive()
-                if frame.t == .cmd {
-                    try await handleCommandEnvelope(frame.envelope, sessionManager: sessionManager)
-                    try await pushSnap(sessionManager: sessionManager)
-                }
+                frame = try await connection.receive()
+            } catch is CancellationError {
+                return
+            } catch SyncError.invalidJSON {
+                continue
             } catch {
                 if Task.isCancelled { return }
                 lastStatus = userFacing(error)
                 return
             }
+            do {
+                if frame.t == .cmd {
+                    try await handleCommandEnvelope(frame.envelope, sessionManager: sessionManager)
+                    try await pushSnap(sessionManager: sessionManager)
+                }
+            } catch {
+                lastStatus = userFacing(error)
+            }
+        }
+    }
+
+    private func pollHints(sessionManager: SessionManager) async {
+        var previous: HintPlaintext?
+        var etag: String?
+        while !Task.isCancelled {
+            do {
+                guard let pairing = try secrets.load() else { return }
+                let client = try authedClient(pairing)
+                let result = try await client.getHint(pairingId: pairing.pairingId, etag: etag)
+                let status = result.notModified ? 304 : 200
+                switch HintPolling.outcome(
+                    subscriber: .iphone,
+                    previous: previous,
+                    status: status,
+                    hint: result.hint,
+                    responseETag: result.etag
+                ) {
+                case .ignore:
+                    break
+                case .remember(let hint, let tag):
+                    previous = hint
+                    etag = tag
+                case .catchUp(let catchUp, let hint, let tag):
+                    previous = hint
+                    etag = tag
+                    if catchUp.cmd {
+                        try await pullCommandsAndPushSnap(sessionManager: sessionManager)
+                    }
+                case .stop:
+                    return
+                }
+            } catch SyncError.transport(let status, _) where status == 429 || status == 401 {
+                lastStatus = userFacing(SyncError.transport(status: status, code: "invalid"))
+                return
+            } catch is CancellationError {
+                return
+            } catch {
+                if Task.isCancelled { return }
+                lastStatus = userFacing(error)
+            }
+            try? await Task.sleep(nanoseconds: HintPolling.intervalNanoseconds)
         }
     }
 
@@ -205,6 +263,8 @@ final class CompanionSyncRuntime {
             try sessionManager.pause()
         } else if CompanionCommandApplying.shouldCallResume(decision, op: command.op) {
             try sessionManager.resume()
+        } else if CompanionCommandApplying.shouldCallStill(decision, op: command.op) {
+            sessionManager.acknowledgeCabinStill()
         }
         let ack = RemotePauseEvaluating.ack(decision: decision, commandId: command.id)
         let ackEnvelope = try CompanionEnvelope.seal(
@@ -242,7 +302,9 @@ final class CompanionSyncRuntime {
             rev: snapRev,
             phase: sessionManager.phase,
             session: sessionManager.activeSession,
-            now: Date()
+            now: Date(),
+            serviceActive: sessionManager.activeServiceDay?.isOpen == true,
+            cabinEnabled: settings.cabinAnnouncementsEnabled
         )
         let envelope = try CompanionEnvelope.seal(
             plaintext,
@@ -293,9 +355,9 @@ final class CompanionSyncRuntime {
             case .transport(_, let code) where code == "notPaused":
                 return "停車中ではない"
             default:
-                return "iPhone とつながっていない"
+                return "リレーが切れた"
             }
         }
-        return "iPhone とつながっていない"
+        return "リレーが切れた"
     }
 }

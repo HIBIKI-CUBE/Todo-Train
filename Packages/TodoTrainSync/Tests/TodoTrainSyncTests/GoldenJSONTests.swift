@@ -17,6 +17,10 @@ struct GoldenJSONTests {
         #expect(decoded.pausedAccumulated == 0)
         #expect(decoded.pausedAt == nil)
         #expect(decoded.boardedDeviceID == "phone-a")
+        #expect(decoded.serviceActive == true)
+        #expect(decoded.cabinEnabled == true)
+        #expect(decoded.checkInFiredCount == 0)
+        #expect(decoded.pendingCabin == nil)
 
         let encoded = try WireJSON.encoder().encode(decoded)
         let again = try WireJSON.decoder().decode(SnapPlaintext.self, from: encoded)
@@ -39,11 +43,14 @@ struct GoldenJSONTests {
 
         let encoded = try WireJSON.encoder().encode(decoded)
         let object = try JSONSerialization.jsonObject(with: encoded) as! [String: Any]
-        for key in ["sessionId", "ticketId", "title", "startedAt", "estimatedSeconds", "pausedAccumulated", "pausedAt", "boardedDeviceID"] {
+        for key in ["sessionId", "ticketId", "title", "startedAt", "estimatedSeconds", "pausedAccumulated", "pausedAt", "boardedDeviceID", "pendingCabin"] {
             #expect(object[key] is NSNull, "idle snap must emit null for \(key)")
         }
         #expect(object["phase"] as? String == "idle")
         #expect(object["rev"] as? Int == 43)
+        #expect(object["serviceActive"] as? Bool == false)
+        #expect(object["cabinEnabled"] as? Bool == true)
+        #expect(object["checkInFiredCount"] as? Int == 0)
     }
 
     @Test func cmdPauseRoundTrip() throws {
@@ -60,6 +67,44 @@ struct GoldenJSONTests {
         let object = try JSONSerialization.jsonObject(with: encoded) as! [String: Any]
         #expect(object["op"] as? String == "pause")
         #expect((object["id"] as? String)?.contains("A") == false)
+    }
+
+    @Test func cmdStillRoundTrip() throws {
+        let data = try ContractFixtures.data("fixtures/cmd-still.json")
+        let decoded = try WireJSON.decoder().decode(CommandPlaintext.self, from: data)
+        #expect(decoded.op == .still)
+        #expect(decoded.id == UUID(uuidString: "55555555-5555-4555-8555-555555555555"))
+        #expect(decoded.sessionId == UUID(uuidString: "11111111-1111-4111-8111-111111111111"))
+
+        let encoded = try WireJSON.encoder().encode(decoded)
+        let object = try JSONSerialization.jsonObject(with: encoded) as! [String: Any]
+        #expect(object["op"] as? String == "still")
+    }
+
+    @Test func cmdStillNullSessionDecodes() throws {
+        let data = try ContractFixtures.data("fixtures/cmd-still-nosession.json")
+        let decoded = try WireJSON.decoder().decode(CommandPlaintext.self, from: data)
+        #expect(decoded.op == .still)
+        #expect(decoded.sessionId == nil)
+        let encoded = try WireJSON.encoder().encode(decoded)
+        let object = try JSONSerialization.jsonObject(with: encoded) as! [String: Any]
+        #expect(object["sessionId"] is NSNull)
+    }
+
+    @Test func oldSnapMissingCabinKeysDefaults() throws {
+        let json = Data(#"{"rev":1,"sessionId":null,"ticketId":null,"title":null,"phase":"idle","startedAt":null,"estimatedSeconds":null,"pausedAccumulated":null,"pausedAt":null,"boardedDeviceID":null}"#.utf8)
+        let decoded = try WireJSON.decoder().decode(SnapPlaintext.self, from: json)
+        #expect(decoded.serviceActive == false)
+        #expect(decoded.cabinEnabled == true)
+        #expect(decoded.checkInFiredCount == 0)
+        #expect(decoded.pendingCabin == nil)
+    }
+
+    @Test func pendingCabinIdleIsNotUnknown() throws {
+        let json = Data(#"{"rev":1,"sessionId":null,"ticketId":null,"title":null,"phase":"idle","startedAt":null,"estimatedSeconds":null,"pausedAccumulated":null,"pausedAt":null,"boardedDeviceID":null,"serviceActive":true,"cabinEnabled":true,"checkInFiredCount":0,"pendingCabin":"idle"}"#.utf8)
+        let decoded = try WireJSON.decoder().decode(SnapPlaintext.self, from: json)
+        #expect(decoded.pendingCabin == .idle)
+        #expect(decoded.serviceActive == true)
     }
 
     @Test func cmdResumeRoundTrip() throws {
@@ -121,7 +166,8 @@ struct GoldenJSONTests {
         let json = try JSONSerialization.jsonObject(with: data) as! [String: Any]
         #expect(json["phase"] as? [String] == ["idle", "running", "paused", "overtime"])
         #expect(json["kind"] as? [String] == ["snap", "cmd", "ack"])
-        #expect(json["op"] as? [String] == ["pause", "resume"])
+        #expect(json["op"] as? [String] == ["pause", "resume", "still"])
+        #expect(json["pendingCabin"] as? [String] == ["progress", "away", "idle"])
         #expect(json["error"] as? [String] == [
             "pauseLimitReached", "noActiveService", "sessionMismatch", "decryptFailed", "notPaused",
         ])

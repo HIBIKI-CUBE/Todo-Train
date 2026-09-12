@@ -6,14 +6,19 @@ import TodoTrainSync
 
 @MainActor
 final class CompanionRideOverlayController: NSObject {
+    static let actionStripHeight: CGFloat = 44
+    static let handleWidth: CGFloat = 22
+
     private let runtime: CompanionMacRuntime
     private let defaults: UserDefaults
     private let panel = CompanionRideOverlayPanel()
     private let model = CompanionRideOverlayModel()
+    private let rootView = OverlayRootView()
     private var layout: OverlayLayoutState
     private var screenID: UInt32
     private var dragStart: NSRect?
     private var lastVisible = false
+    private var lastCabinPrompt: String?
 
     init(runtime: CompanionMacRuntime, defaults: UserDefaults = .standard) {
         self.runtime = runtime
@@ -21,23 +26,44 @@ final class CompanionRideOverlayController: NSObject {
         self.layout = OverlayLayoutPersisting.load(defaults)
         self.screenID = OverlayLayoutPersisting.screenID(defaults)
         super.init()
-        let root = CompanionRideOverlayView(
-            model: model,
-            onPause: { [weak self] in
-                guard let self else { return }
-                Task { await self.runtime.sendPause() }
-            },
-            onResume: { [weak self] in
-                guard let self else { return }
-                Task { await self.runtime.sendResume() }
-            },
-            onPeekClick: { [weak self] in self?.restoreFromPeek() },
-            onDragChanged: { [weak self] translation in self?.dragChanged(translation) },
-            onDragEnded: { [weak self] translation in self?.dragEnded(translation) }
+        let hosting = PassThroughHostingView(
+            rootView:             CompanionRideOverlayView(
+                model: model,
+                onPause: { [weak self] in
+                    guard let self else { return }
+                    Task { await self.runtime.sendPause() }
+                },
+                onResume: { [weak self] in
+                    guard let self else { return }
+                    Task { await self.runtime.sendResume() }
+                },
+                onStill: { [weak self] in
+                    guard let self else { return }
+                    Task { await self.runtime.sendStill() }
+                },
+                onRestore: { [weak self] in self?.restoreFromPeek() }
+            )
         )
-        let hosting = NSHostingView(rootView: root)
         hosting.safeAreaRegions = []
-        panel.contentView = hosting
+        hosting.sizingOptions = []
+        hosting.wantsLayer = true
+        hosting.layer?.backgroundColor = NSColor.clear.cgColor
+        hosting.frame = rootView.bounds
+        hosting.autoresizingMask = [.width, .height]
+        rootView.addSubview(hosting)
+        rootView.onHover = { [weak self] hovering in
+            self?.model.hovering = hovering
+        }
+        rootView.onDragChanged = { [weak self] mouse, startFrame, startMouse in
+            self?.dragChanged(mouse: mouse, startFrame: startFrame, startMouse: startMouse)
+        }
+        rootView.onDragEnded = { [weak self] _ in
+            self?.dragEnded()
+        }
+        rootView.onClick = { [weak self] point in
+            self?.handleClick(at: point)
+        }
+        panel.contentView = rootView
         panel.orderOut(nil)
         NotificationCenter.default.addObserver(
             self,
@@ -64,56 +90,99 @@ final class CompanionRideOverlayController: NSObject {
         }
     }
 
-    private func applyPresentation(_ presentation: RideOverlayPresentation) {
-        model.presentation = presentation
+    private func applyLayoutToChrome() {
         model.isTucked = layout.isTucked
         model.edge = layout.edge
+        rootView.isTucked = layout.isTucked
+        rootView.edge = layout.edge
+        rootView.updateTrackingAreas()
+    }
+
+    private func applyPresentation(_ presentation: RideOverlayPresentation) {
+        let cabinAppeared = presentation.cabinPrompt != nil && lastCabinPrompt == nil
+        model.presentation = presentation
+        applyLayoutToChrome()
         let visible = presentation.isVisible
         if visible {
             if !lastVisible {
                 applyFrame(animated: false)
                 panel.orderFrontRegardless()
             }
+            if cabinAppeared {
+                model.hovering = false
+                if layout.isTucked {
+                    restoreFromPeek()
+                }
+                if !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+                    NSSound(named: "Tink")?.play()
+                }
+            }
         } else {
             panel.orderOut(nil)
         }
         lastVisible = visible
+        lastCabinPrompt = presentation.cabinPrompt
     }
 
-    private func dragChanged(_ translation: CGSize) {
-        if dragStart == nil {
-            dragStart = panel.frame
-        }
-        guard var frame = dragStart else { return }
-        frame.origin.x += translation.width
-        frame.origin.y += translation.height
+    private func dragChanged(mouse: NSPoint, startFrame: NSRect, startMouse: NSPoint) {
+        dragStart = startFrame
+        var frame = startFrame
+        frame.origin.x += mouse.x - startMouse.x
+        frame.origin.y += mouse.y - startMouse.y
+        frame.size = RideOverlayGeometry.cardSize.nsSize
         panel.setFrame(frame, display: true)
     }
 
-    private func dragEnded(_ translation: CGSize) {
-        let distance = hypot(translation.width, translation.height)
+    private func dragEnded() {
         dragStart = nil
-        if layout.isTucked, distance < 6 {
+        let screens = NSScreen.screens
+        guard !screens.isEmpty else { return }
+        let overlayScreens = screens.map(OverlayScreen.init)
+        let placement = RideOverlayGeometry.layout(
+            afterDrag: OverlayRect(panel.frame),
+            screens: overlayScreens
+        )
+        let index = min(max(placement.screenIndex, 0), screens.count - 1)
+        screenID = screens[index].overlayDisplayID
+        layout = placement.state
+        persist()
+        applyLayoutToChrome()
+        model.hovering = false
+        applyFrame(animated: true)
+    }
+
+    private func handleClick(at point: NSPoint) {
+        if layout.isTucked {
             restoreFromPeek()
             return
         }
-        guard let screen = screenContaining(panel.frame) ?? targetScreen() else { return }
-        screenID = screen.overlayDisplayID
-        layout = RideOverlayGeometry.layout(
-            afterDrag: OverlayRect(panel.frame),
-            screen: OverlayRect(screen.visibleFrame)
-        )
-        persist()
-        model.isTucked = layout.isTucked
-        model.edge = layout.edge
-        applyFrame(animated: true)
+        guard point.y <= Self.actionStripHeight,
+              point.x >= Self.handleWidth else { return }
+        let presentation = model.presentation
+        if presentation.isSending { return }
+        if presentation.cabinPrompt != nil {
+            let contentWidth = panel.frame.width - Self.handleWidth
+            let x = point.x - Self.handleWidth
+            if x < contentWidth / 2 {
+                Task { await runtime.sendStill() }
+            } else if presentation.canPause {
+                Task { await runtime.sendPause() }
+            }
+            return
+        }
+        guard model.hovering else { return }
+        if presentation.canResume {
+            Task { await runtime.sendResume() }
+        } else if presentation.canPause {
+            Task { await runtime.sendPause() }
+        }
     }
 
     private func restoreFromPeek() {
         guard layout.isTucked else { return }
         layout.isTucked = false
         persist()
-        model.isTucked = false
+        applyLayoutToChrome()
         applyFrame(animated: true)
     }
 
@@ -121,11 +190,13 @@ final class CompanionRideOverlayController: NSObject {
         guard let screen = targetScreen() else { return }
         let rect = RideOverlayGeometry.frame(
             for: layout,
-            screen: OverlayRect(screen.visibleFrame)
+            screen: OverlayScreen(screen)
         ).nsRect
-        if animated {
+        let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        panel.hasShadow = !layout.isTucked
+        if animated, !reduceMotion {
             NSAnimationContext.runAnimationGroup { context in
-                context.duration = 0.2
+                context.duration = 0.22
                 context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
                 panel.animator().setFrame(rect, display: true)
             }
@@ -144,12 +215,6 @@ final class CompanionRideOverlayController: NSObject {
             return match
         }
         return NSScreen.main ?? NSScreen.screens.first
-    }
-
-    private func screenContaining(_ frame: NSRect) -> NSScreen? {
-        let center = NSPoint(x: frame.midX, y: frame.midY)
-        return NSScreen.screens.first { NSMouseInRect(center, $0.frame, false) }
-            ?? NSScreen.screens.first { $0.frame.intersects(frame) }
     }
 
     @objc private func screensChanged() {

@@ -6,7 +6,7 @@
 
 Worker は `ct` を JSON.parse しない。平文フィクスチャと AES-GCM ベクトルはクライアント側の round-trip 用。復号鍵を Worker テストに持たない。
 
-新しい HTTP 経路も `arrive` / `extend` の `op` も、ここから足さない。`resume` は 2026-09-12 に追加。
+新しい HTTP 経路も `arrive` / `extend` の `op` も、ここから足さない。`resume` は 2026-09-12、`still`（車内放送の消費）は 2026-09-12 に追加。`GET /v1/hint/:pairingId` だけ例外（平文 rev。暗号文は載せない）。
 
 ## ファイル一覧
 
@@ -17,14 +17,16 @@ Worker は `ct` を JSON.parse しない。平文フィクスチャと AES-GCM �
 | [http.json](http.json) | HTTP 経路（メソッド、認証、成功/失敗、JSON 形） |
 | [ws.json](ws.json) | `WS /v1/ws` テキストフレーム |
 | [envelope.md](envelope.md) | encoding、AAD、HKDF、エンベロープ、残り計算 |
-| [enums.json](enums.json) | `phase` / `kind` / `op` / `error` |
+| [enums.json](enums.json) | `phase` / `kind` / `op` / `error` / `pendingCabin` |
 | [constants.json](constants.json) | offer TTL、confirm 窓、cmd FIFO |
 | [fixtures/snap.json](fixtures/snap.json) | 走行中 snap 平文 |
 | [fixtures/snap-idle.json](fixtures/snap-idle.json) | 乗務なし snap 平文 |
 | [fixtures/cmd-pause.json](fixtures/cmd-pause.json) | `op: pause` 平文 |
 | [fixtures/cmd-resume.json](fixtures/cmd-resume.json) | `op: resume` 平文 |
+| [fixtures/cmd-still.json](fixtures/cmd-still.json) | `op: still` 平文 |
+| [fixtures/cmd-still-nosession.json](fixtures/cmd-still-nosession.json) | `op: still`、乗務なし（`sessionId` null） |
 | [fixtures/ack-ok.json](fixtures/ack-ok.json) | 成功 ack 平文 |
-| [fixtures/ack-pauseLimitReached.json](fixtures/ack-pauseLimitReached.json) | 停車上限 ack 平文 |
+| [fixtures/hint.json](fixtures/hint.json) | 公開 hint（rev だけ） |
 | [vectors/aes-gcm-snap.json](vectors/aes-gcm-snap.json) | 既知鍵の AES-GCM と confirm HMAC。Worker は使わない |
 
 固定 UUID / Unix / 鍵はフィクスチャ間で共有する（`pairingId` `a1a2a3a4-b1b2-4c3c-8d4d-e5e6e7e8e9ea` など）。

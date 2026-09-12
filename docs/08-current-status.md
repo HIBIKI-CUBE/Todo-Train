@@ -1,6 +1,6 @@
 # 08 — 現状ステータス
 
-最終更新: 2026-09-12（リレー `todo-train.hibiki-cube.dev` / `dev.todo-train.hibiki-cube.dev`。Mac はメニューバー吹き出し＋乗務中 PiP。確認は [16](16-wakeup-checklist.md)）
+最終更新: 2026-09-12（リレー `todo-train.hibiki-cube.dev` / `dev.todo-train.hibiki-cube.dev`。Mac はメニューバー吹き出し＋乗務中 PiP。進捗車内放送は PiP。確認は [16](16-wakeup-checklist.md)）
 
 ## 結論
 
@@ -34,7 +34,7 @@
 | SYNC-2 Swift 芯 | ✅ | `Packages/TodoTrainSync`。Mac は SYNC-4、iOS は SYNC-3 でリンク。CI `sync-swift` |
 | SYNC-5 Linux E2E | ✅ | `sync/e2e/run.sh`。CI `sync-swift` |
 | SYNC-3 iOS UI | `develop` 済み。実機待ち | Settings セルフィー + 発車などで snap。Mac 名とペア識別子（#35） |
-| SYNC-4 macOS | `develop` 済み。実機待ち | メニューバー吹き出しで即ペアリング。乗務中 PiP（四隅・Peek・ホバーで停車/再乗車）。歯車 / 右クリックで設定、そこから解除（#39） |
+| SYNC-4 macOS | `develop` 済み。実機待ち | メニューバー吹き出しで即ペアリング。乗務中 PiP（四隅スナップ。端へは同じカードのまま追い出す。ホバーで停車/再乗車。進捗車内放送は PiP）。歯車 / 右クリックで設定、そこから解除（#39） |
 
 ### v2 進捗
 
@@ -107,7 +107,7 @@ sync/e2e/                  Linux 結合（client ↔ worker）
 | Session LA からの Intent | 走行中の停車は `SessionPauseIntent`。停車中の再乗車は `SessionResumeIntent`。到着・延長は deep link |
 | iPad 最適化 | v2 以降。iPhone アプリの自由リサイズ（ミラーリング）は Hub がシーン幅に追従 |
 | 乗り継ぎキャンバスのゲージ統一 | Phase 2（Quick Add のみ線形スナップ・ゲージ） |
-| Mac Companion | Linux 芯は完了（[13](13-sync-mac-companion.md) / [15](15-agent-work-plan.md)）。メニューバー吹き出しは SYNC-4。乗務中は四隅 PiP（ホバーで停車/再乗車、端へ隠せる）。iOS は Settings セルフィー + 発車/停車/延長/到着/超過と `ScenePhase.active` で snap。設定は歯車 / 右クリックのウィンドウ。体験は [14](14-mac-companion-ux.md)。実機確認は [16](16-wakeup-checklist.md) |
+| Mac Companion | Linux 芯は完了（[13](13-sync-mac-companion.md) / [15](15-agent-work-plan.md)）。メニューバー吹き出しは SYNC-4。乗務中は四隅 PiP（ホバーで停車/再乗車。端へは同じカードのまま追い出す）。進捗車内放送は PiP に「まだ乗ってる？」（停車 / まだやってる）。答えは snap の `checkInFiredCount` と cmd `still` で共有。ペア済みなら iPhone の進捗ローカル通知は出さない。次の運行中アイドル通知は同じチャネルに載せる。iOS は Settings セルフィー + 発車/停車/延長/到着/超過と `ScenePhase.active` で snap。WS は ping で保ち、切れたら自動再接せず公開 hint で追いつく。WS の Bearer は接続ごとの session に載せる。hint の 404 では止めない。設定は歯車 / 右クリックのウィンドウ。体験は [14](14-mac-companion-ux.md)。実機確認は [16](16-wakeup-checklist.md) |
 
 ## テスト
 
@@ -145,6 +145,8 @@ xcodebuild test-without-building -scheme "Todo train" \
 - [ ] オンデバイス文面が出る／失敗時は固定文「まだ『…』？」
 - [ ] 発行祝祭と Return 一発発券が壊れていない
 - [ ] Siri / ショートカット「切符を発行」
+- [ ] ペア済み Mac: 同じ放送が PiP に出る。片方でまだやってるともう片方は出ない。端出し中なら戻って出る
+- [ ] 次の運行中アイドル通知はまだ出ない（チャネルだけ予約）
 
 ## Personal Team でできるデバッグ
 

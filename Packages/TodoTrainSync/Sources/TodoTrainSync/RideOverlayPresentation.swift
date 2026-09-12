@@ -1,11 +1,20 @@
 import Foundation
 
+/// Budget-ratio urgency. Same thresholds as `FocusTimerPhase` on iOS (not a fixed 1-minute rule).
+public enum RideOverlayTimerPhase: String, Equatable, Sendable {
+    case cruise
+    case approach
+    case final
+    case overtime
+}
+
 /// Mac ride PiP from the same snap input as the menu bar. Hidden when unpaired or idle.
 public struct RideOverlayPresentation: Equatable, Sendable {
     public var isVisible: Bool
     public var title: String
     public var remainingLabel: String
     public var progress: Double
+    public var timerPhase: RideOverlayTimerPhase
     public var isOvertime: Bool
     public var isPaused: Bool
     public var canPause: Bool
@@ -14,6 +23,8 @@ public struct RideOverlayPresentation: Equatable, Sendable {
     public var failureLine: String?
     public var statusLine: String?
     public var peekTitle: String
+    /// Progress 車内放送 on the PiP. Nil when idle.
+    public var cabinPrompt: String?
 
     public static let peekTitleLimit = 6
 
@@ -22,6 +33,7 @@ public struct RideOverlayPresentation: Equatable, Sendable {
         title: "",
         remainingLabel: "",
         progress: 0,
+        timerPhase: .cruise,
         isOvertime: false,
         isPaused: false,
         canPause: false,
@@ -29,7 +41,8 @@ public struct RideOverlayPresentation: Equatable, Sendable {
         isSending: false,
         failureLine: nil,
         statusLine: nil,
-        peekTitle: ""
+        peekTitle: "",
+        cabinPrompt: nil
     )
 
     public static func make(_ input: MenuBarInput) -> RideOverlayPresentation {
@@ -61,18 +74,31 @@ public struct RideOverlayPresentation: Equatable, Sendable {
         let remainingLabel = remaining.map(MenuBarPresentation.formatRemaining) ?? ""
         let statusLine: String?
         if input.connection == .disconnected {
-            statusLine = "iPhone とつながっていない"
+            statusLine = "リレーが切れた"
         } else if bar.isSending {
             statusLine = "iPhone に送った"
         } else {
             statusLine = nil
         }
 
+        let cabin = CabinInterruptWatch.evaluate(
+            snap: input.snap,
+            now: input.now,
+            localEnabled: input.cabinEnabledLocal,
+            optimisticFiredCount: input.optimisticFiredCount
+        )
+        let cabinPrompt = (cabin.showsPip && !bar.isSending) ? cabin.prompt : nil
+
         return RideOverlayPresentation(
             isVisible: true,
             title: title,
             remainingLabel: remainingLabel,
             progress: progress,
+            timerPhase: timerPhase(
+                remaining: remaining,
+                estimated: snap.estimatedSeconds,
+                overtime: bar.isOvertime
+            ),
             isOvertime: bar.isOvertime,
             isPaused: snap.phase == .paused,
             canPause: bar.canPause,
@@ -80,7 +106,8 @@ public struct RideOverlayPresentation: Equatable, Sendable {
             isSending: bar.isSending,
             failureLine: bar.failureLine,
             statusLine: statusLine,
-            peekTitle: truncatedPeekTitle(title)
+            peekTitle: truncatedPeekTitle(title),
+            cabinPrompt: cabinPrompt
         )
     }
 
@@ -93,6 +120,24 @@ public struct RideOverlayPresentation: Equatable, Sendable {
         guard let remaining, let estimated, estimated > 0 else { return 0 }
         let elapsed = Double(estimated - remaining)
         return min(1, max(0, elapsed / Double(estimated)))
+    }
+
+    /// Same cutoffs as iOS `FocusTimerPhase.phase(remaining:budgetSeconds:)`.
+    public static func timerPhase(
+        remaining: Int?,
+        estimated: Int?,
+        overtime: Bool
+    ) -> RideOverlayTimerPhase {
+        if overtime { return .overtime }
+        guard let remaining else { return .cruise }
+        let remainingTime = TimeInterval(remaining)
+        if remainingTime < 0 { return .overtime }
+        let budget = TimeInterval(max(estimated ?? 1, 1))
+        let finalThreshold = max(budget * 0.10, 30)
+        let approachThreshold = max(budget * 0.25, 90)
+        if remainingTime <= finalThreshold { return .final }
+        if remainingTime <= approachThreshold { return .approach }
+        return .cruise
     }
 
     public static func truncatedPeekTitle(_ title: String) -> String {
