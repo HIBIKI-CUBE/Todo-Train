@@ -12,6 +12,7 @@ import UIKit
 
 struct DeckHorizontalPanGesture: UIGestureRecognizerRepresentable {
     var isEnabled: Bool = true
+    var cancelsTouchesInView: Bool = false
     var onChanged: (CGFloat) -> Void
     var onEnded: (_ translationX: CGFloat, _ predictedX: CGFloat) -> Void
 
@@ -23,13 +24,15 @@ struct DeckHorizontalPanGesture: UIGestureRecognizerRepresentable {
         let pan = UIPanGestureRecognizer()
         pan.delegate = context.coordinator
         pan.maximumNumberOfTouches = 1
-        pan.cancelsTouchesInView = false
+        pan.cancelsTouchesInView = cancelsTouchesInView
+        pan.delaysTouchesBegan = false
         pan.isEnabled = isEnabled
         return pan
     }
 
     func updateUIGestureRecognizer(_ recognizer: UIPanGestureRecognizer, context: Context) {
         recognizer.isEnabled = isEnabled
+        recognizer.cancelsTouchesInView = cancelsTouchesInView
     }
 
     func handleUIGestureRecognizerAction(

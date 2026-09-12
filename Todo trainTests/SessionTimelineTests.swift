@@ -288,4 +288,67 @@ struct SessionTimelineTests {
         let gap = layout.y(for: sorted[1].startedAt) - layout.y(for: sorted[0].endedAt)
         #expect(gap == 90 * SessionTimeline.pointsPerMinute)
     }
+
+    @Test func clip_keepsOnlyTheRequestedCalendarDay() {
+        let overnight = ride(
+            start: date(hour: 23, minute: 0),
+            end: utcCalendar.date(from: DateComponents(year: 2026, month: 9, day: 9, hour: 1, minute: 0))!,
+            estimate: 120 * 60
+        )
+        let tuesday = utcCalendar.startOfDay(for: date(hour: 9, minute: 0))
+        let wednesday = utcCalendar.date(byAdding: .day, value: 1, to: tuesday)!
+        let onTuesday = SessionTimeline.clip(overnight, toDay: tuesday, calendar: utcCalendar)
+        let onWednesday = SessionTimeline.clip(overnight, toDay: wednesday, calendar: utcCalendar)
+        #expect(onTuesday?.endedAt == utcCalendar.date(byAdding: .day, value: 1, to: tuesday))
+        #expect(onTuesday?.startedAt == date(hour: 23, minute: 0))
+        #expect(onWednesday?.startedAt == wednesday)
+        #expect(onWednesday?.endedAt == utcCalendar.date(from: DateComponents(year: 2026, month: 9, day: 9, hour: 1, minute: 0)))
+    }
+
+    @Test func project_mapsSameClockTimeOntoReferenceDay() {
+        let wednesday = utcCalendar.date(from: DateComponents(year: 2026, month: 9, day: 9, hour: 10, minute: 0))!
+        let sample = ride(
+            start: wednesday,
+            end: wednesday.addingTimeInterval(30 * 60),
+            estimate: 30 * 60
+        )
+        let projected = SessionTimeline.project(
+            sample,
+            onto: utcCalendar.startOfDay(for: date(hour: 0, minute: 0)),
+            calendar: utcCalendar
+        )
+        #expect(projected.startedAt == date(hour: 10, minute: 0))
+        #expect(projected.endedAt == date(hour: 10, minute: 30))
+    }
+
+    @Test func sharedLayout_alignsTheSameHourAcrossDays() throws {
+        let monday = ride(
+            start: date(hour: 9, minute: 0),
+            end: date(hour: 10, minute: 0),
+            estimate: 60 * 60
+        )
+        let wednesdayStart = utcCalendar.date(from: DateComponents(year: 2026, month: 9, day: 9, hour: 9, minute: 0))!
+        let wednesday = ride(
+            start: wednesdayStart,
+            end: wednesdayStart.addingTimeInterval(60 * 60),
+            estimate: 60 * 60
+        )
+        let layout = SessionTimeline.sharedLayout(
+            rides: [monday, wednesday],
+            referenceDay: utcCalendar.startOfDay(for: date(hour: 0, minute: 0)),
+            calendar: utcCalendar
+        )
+        let projectedMonday = SessionTimeline.project(
+            monday,
+            onto: utcCalendar.startOfDay(for: layout.start),
+            calendar: utcCalendar
+        )
+        let projectedWednesday = SessionTimeline.project(
+            wednesday,
+            onto: utcCalendar.startOfDay(for: layout.start),
+            calendar: utcCalendar
+        )
+        #expect(layout.y(for: projectedMonday.startedAt) == layout.y(for: projectedWednesday.startedAt))
+        #expect(layout.pointsPerMinute == SessionTimeline.pointsPerMinute)
+    }
 }

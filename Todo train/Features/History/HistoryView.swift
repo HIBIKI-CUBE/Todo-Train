@@ -23,6 +23,7 @@ struct HistoryView: View {
     @State private var selectedRideID: UUID?
     @State private var didFocusInitialDay = false
     @State private var isSearchPresented = false
+    @State private var daysVisible: CGFloat = 1
     @FocusState private var searchFieldFocused: Bool
 
     init(focusDay: Date? = nil) {
@@ -57,6 +58,43 @@ struct HistoryView: View {
 
     private var daysWithRides: Set<String> {
         Set(HistoryStats.groupByDay(sessions: endedSessions, calendar: calendar).map(\.dayKey))
+    }
+
+    private var sessionsByDay: [String: [WorkSession]] {
+        Dictionary(uniqueKeysWithValues: groups.map { ($0.dayKey, $0.sessions) })
+    }
+
+    private var canvasDayRange: (start: Date, end: Date) {
+        let today = calendar.startOfDay(for: Date())
+        var start = min(today, calendar.startOfDay(for: selectedDay))
+        var end = max(today, calendar.startOfDay(for: selectedDay))
+        for key in daysWithRides {
+            guard let date = HistoryStats.date(from: key, calendar: calendar) else { continue }
+            start = min(start, date)
+            end = max(end, date)
+        }
+        return (
+            calendar.date(byAdding: .day, value: -14, to: start) ?? start,
+            calendar.date(byAdding: .day, value: 14, to: end) ?? end
+        )
+    }
+
+    private var dayStrip: [Date] {
+        HistoryStats.days(from: canvasDayRange.start, through: canvasDayRange.end, calendar: calendar)
+    }
+
+    private var rideDensity: HistoryRideDensity {
+        HistoryRideDensity(daysVisible: daysVisible)
+    }
+
+    private var visibleDayKeys: Set<String> {
+        Set(
+            HistoryCanvasZoom.visibleDays(
+                selected: selectedDay,
+                daysVisible: HistoryCanvasZoom.snappedDays(daysVisible),
+                calendar: calendar
+            ).map { HistoryStats.dayKey(for: $0, calendar: calendar) }
+        )
     }
 
     var body: some View {
@@ -135,6 +173,7 @@ struct HistoryView: View {
         }
         .errorAlert(isPresented: $showError, message: errorMessage)
         .onAppear(perform: focusInitialDayIfNeeded)
+        .sensoryFeedback(.selection, trigger: selectedDayKey)
     }
 
     private var searchFieldRow: some View {
@@ -168,6 +207,9 @@ struct HistoryView: View {
             HistoryCalendarStrip(
                 selectedDay: selectedDay,
                 daysWithRides: daysWithRides,
+                visibleDayKeys: visibleDayKeys,
+                rangeStart: canvasDayRange.start,
+                rangeEnd: canvasDayRange.end,
                 onSelect: { day in
                     selectedDay = calendar.startOfDay(for: day)
                 },
@@ -177,46 +219,33 @@ struct HistoryView: View {
             .padding(.top, TrainTheme.Space.xs)
             .padding(.bottom, TrainTheme.Space.sm)
 
-            Group {
-                if selectedDaySessions.isEmpty {
-                    ContentUnavailableView {
-                        Label("この日の乗車はありません", systemImage: "tram")
-                    } description: {
-                        Text("印のある日を選ぶか、月から日付を指定できます。")
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    VStack(spacing: 0) {
-                        DailyStatsHeader(
-                            dayKey: selectedDayKey,
-                            aggregate: HistoryStats.aggregate(sessions: selectedDaySessions),
-                            showsDay: false
-                        )
-                        .padding(.horizontal, TrainTheme.Space.md)
-                        .padding(.bottom, TrainTheme.Space.sm)
-
-                        GeometryReader { geo in
-                            ScrollView {
-                                HistoryDayClockView(
-                                    sessions: selectedDaySessions,
-                                    minHeight: geo.size.height,
-                                    onSelect: { session in
-                                        selectedRideID = session.id
-                                    },
-                                    onReissue: reissue,
-                                    onDelete: deleteSession
-                                )
-                                .frame(maxWidth: .infinity, minHeight: geo.size.height, alignment: .top)
-                                .padding(.horizontal, TrainTheme.Space.md)
-                            }
-                            .scrollBounceBehavior(.basedOnSize)
-                        }
-                        .safeAreaPadding(.bottom)
-                    }
-                }
+            if rideDensity.showsStatsHeader, !selectedDaySessions.isEmpty {
+                DailyStatsHeader(
+                    dayKey: selectedDayKey,
+                    aggregate: HistoryStats.aggregate(sessions: selectedDaySessions),
+                    showsDay: false
+                )
+                .padding(.horizontal, TrainTheme.Space.md)
+                .padding(.bottom, TrainTheme.Space.sm)
             }
-            .id(selectedDayKey)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+
+            GeometryReader { geo in
+                HistoryDayPager(
+                    sessionsByDay: sessionsByDay,
+                    dayStrip: dayStrip,
+                    selectedDay: $selectedDay,
+                    daysVisible: $daysVisible,
+                    minHeight: geo.size.height,
+                    viewportWidth: geo.size.width,
+                    onSelect: { session in
+                        selectedRideID = session.id
+                    },
+                    onReissue: reissue,
+                    onDelete: deleteSession
+                )
+                .safeAreaPadding(.bottom)
+            }
+            .padding(.horizontal, rideDensity == .day ? TrainTheme.Space.md : TrainTheme.Space.xs)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(TrainTheme.platform)

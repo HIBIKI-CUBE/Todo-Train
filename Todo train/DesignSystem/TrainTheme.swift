@@ -82,6 +82,8 @@ enum TrainTheme {
 
     enum Motion {
         static let spring = Animation.spring(response: 0.38, dampingFraction: 0.82)
+        /// Day / week canvas paging — follows the finger, then settles.
+        static let pageSnap = Animation.spring(response: 0.22, dampingFraction: 0.88)
         static let soft = Animation.easeInOut(duration: 0.28)
         static let pulse = Animation.easeInOut(duration: 0.55).repeatCount(2, autoreverses: true)
         /// Issued ticket eject uses fixed easeOut ms in MarsTicketSpec.IssueMotion (not this spring).

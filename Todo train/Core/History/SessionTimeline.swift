@@ -219,6 +219,143 @@ enum SessionTimeline {
         }
     }
 
+    static func timeOfDay(_ date: Date, calendar: Calendar) -> TimeInterval {
+        date.timeIntervalSince(calendar.startOfDay(for: date))
+    }
+
+    static func clockDate(_ date: Date, on referenceDay: Date, calendar: Calendar) -> Date {
+        calendar.startOfDay(for: referenceDay).addingTimeInterval(timeOfDay(date, calendar: calendar))
+    }
+
+    /// Keep the portion of a ride that falls on `day` so multi-day columns share a time-of-day axis.
+    static func clip(_ ride: TimelineRide, toDay day: Date, calendar: Calendar) -> TimelineRide? {
+        let dayStart = calendar.startOfDay(for: day)
+        guard let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart) else { return nil }
+        let start = max(ride.startedAt, dayStart)
+        let end = min(ride.endedAt, dayEnd)
+        guard end > start else { return nil }
+
+        var clipped = ride
+        clipped.startedAt = start
+        clipped.endedAt = end
+        clipped.pauses = ride.pauses.compactMap { pause in
+            let pauseStart = max(pause.startedAt, dayStart)
+            let pauseEnd = min(pause.endedAt, dayEnd)
+            guard pauseEnd > pauseStart else { return nil }
+            return TimelinePause(id: pause.id, startedAt: pauseStart, endedAt: pauseEnd)
+        }
+        clipped.extensions = ride.extensions.filter { item in
+            item.createdAt >= dayStart && item.createdAt < dayEnd
+        }
+        return clipped
+    }
+
+    static func project(_ ride: TimelineRide, onto referenceDay: Date, calendar: Calendar) -> TimelineRide {
+        func map(_ date: Date) -> Date {
+            clockDate(date, on: referenceDay, calendar: calendar)
+        }
+        var projected = ride
+        projected.startedAt = map(ride.startedAt)
+        projected.endedAt = map(ride.endedAt)
+        if projected.endedAt <= projected.startedAt {
+            projected.endedAt = projected.startedAt.addingTimeInterval(
+                max(60, ride.endedAt.timeIntervalSince(ride.startedAt))
+            )
+        }
+        projected.pauses = ride.pauses.map { pause in
+            var ended = map(pause.endedAt)
+            let started = map(pause.startedAt)
+            if ended <= started {
+                ended = started.addingTimeInterval(max(60, pause.duration))
+            }
+            return TimelinePause(id: pause.id, startedAt: started, endedAt: ended)
+        }
+        projected.extensions = ride.extensions.map { item in
+            TimelineExtension(
+                id: item.id,
+                addedSeconds: item.addedSeconds,
+                reason: item.reason,
+                createdAt: map(item.createdAt)
+            )
+        }
+        return projected
+    }
+
+    static func fallbackLayout(
+        on day: Date,
+        calendar: Calendar = .current,
+        pointsPerMinute: Double = pointsPerMinute,
+        minHeight: Double = 0
+    ) -> DayClockLayout {
+        let start = calendar.startOfDay(for: day).addingTimeInterval(8 * 3600)
+        let aligned = hourAlignedRange(
+            start: start,
+            end: start.addingTimeInterval(3600),
+            calendar: calendar
+        )
+        let end = stretchedEnd(
+            start: aligned.start,
+            end: aligned.end,
+            minHeight: minHeight,
+            pointsPerMinute: pointsPerMinute
+        )
+        return DayClockLayout(
+            start: aligned.start,
+            end: end,
+            pointsPerMinute: pointsPerMinute,
+            laneByRideID: [:],
+            laneCount: 1,
+            hourTicks: hourTicks(from: aligned.start, to: end, calendar: calendar)
+        )
+    }
+
+    /// Shared hour axis for several calendar days. Lanes are packed per column, not here.
+    static func sharedLayout(
+        rides: [TimelineRide],
+        referenceDay: Date,
+        calendar: Calendar = .current,
+        pointsPerMinute: Double = pointsPerMinute,
+        minHeight: Double = 0
+    ) -> DayClockLayout {
+        let projected = rides.map { project($0, onto: referenceDay, calendar: calendar) }
+        if let layout = layout(
+            rides: projected,
+            calendar: calendar,
+            pointsPerMinute: pointsPerMinute,
+            minHeight: minHeight
+        ) {
+            return DayClockLayout(
+                start: layout.start,
+                end: layout.end,
+                pointsPerMinute: layout.pointsPerMinute,
+                laneByRideID: [:],
+                laneCount: 1,
+                hourTicks: layout.hourTicks
+            )
+        }
+        return fallbackLayout(
+            on: referenceDay,
+            calendar: calendar,
+            pointsPerMinute: pointsPerMinute,
+            minHeight: minHeight
+        )
+    }
+
+    static func layoutForDay(
+        rides: [TimelineRide],
+        shared: DayClockLayout
+    ) -> DayClockLayout {
+        let lanes = packLanes(rides)
+        return DayClockLayout(
+            start: shared.start,
+            end: shared.end,
+            pointsPerMinute: shared.pointsPerMinute,
+            laneByRideID: lanes,
+            laneCount: max(1, Set(lanes.values).count),
+            hourTicks: shared.hourTicks
+        )
+    }
+
     static func layout(
         rides: [TimelineRide],
         calendar: Calendar = .current,

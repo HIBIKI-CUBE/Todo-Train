@@ -75,7 +75,7 @@ Todo train/
                            HubStationChevronSign（提示レイヤ LED。Hiragino 量子化ドット）
     Focus/                 FocusView, FocusControlsView（車内放送 4 択含む）, OvertimeSheet
     Arrival/               PauseLimitSheet, TransferCanvasPresenter
-    History/               HistoryView, HistoryCalendarStrip, HistoryDayClockView, HistoryRideDetailView, WeeklyReportView
+    History/               HistoryView, HistoryCalendarStrip, HistoryDayPager, HistoryDayClockView, HistoryRideDetailView, WeeklyReportView
     LiveActivity/          LiveActivityManaging
     Reorder/               ReorderView
     Settings/              SettingsView
@@ -95,7 +95,7 @@ sync/e2e/                  Linux 結合（client ↔ worker）
 2. 発車 → Focus（停車 / 到着 / 延長 / 超過 / 割り込み発券 / 車内放送）。到着したら短い案内。定時なら定時到着、早着なら早着
 3. 長い乗務: 予測不能な車内放送。他アプリへ離れたとき: LA 割り込み「まだ乗ってる？」（ロック中は出さない）
 4. 停車はいつでも。Live Activity は残り、StandBy などから再乗車できる。停車が満杯の新規発車 / 割り込みは整理シート
-5. 履歴は週ストリップでその日の時計を振り返る（空き時間は折り畳まない）。ブロックを開いて乗り継ぎ・今日に追加（定時はバッジのみ）
+5. 履歴は週ストリップと時計キャンバスで振り返る（左右スワイプで日付、ピンチで 1/3/7 日。空き時間は折り畳まない）。ブロックを開いて乗り継ぎ・今日に追加（定時はバッジのみ）
 6. 運行終了 → 停車中の持ち越し禁止 / 途中下車 / 放棄。遅延がなければ短い「定時運行」（早着可）
 7. 終了ベル ON → AlarmKit LA（StandBy）/ OFF → Session LA。停車中も同じ経路の LA が残る
 

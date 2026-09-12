@@ -106,4 +106,27 @@ struct HistoryStatsTests {
         #expect(calendar.component(.day, from: days[6]) == 12)
         #expect(calendar.isDate(days[2], inSameDayAs: tuesday))
     }
+
+    @Test func days_includesInclusiveRange() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let start = calendar.date(from: DateComponents(year: 2026, month: 9, day: 8))!
+        let end = calendar.date(from: DateComponents(year: 2026, month: 9, day: 10))!
+        let days = HistoryStats.days(from: start, through: end, calendar: calendar)
+        #expect(days.count == 3)
+        #expect(calendar.component(.day, from: days[0]) == 8)
+        #expect(calendar.component(.day, from: days[2]) == 10)
+    }
+
+    @Test func weekStarts_dedupesDaysInSameWeek() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        calendar.firstWeekday = 1
+        let start = calendar.date(from: DateComponents(year: 2026, month: 9, day: 8))!
+        let end = calendar.date(from: DateComponents(year: 2026, month: 9, day: 16))!
+        let weeks = HistoryStats.weekStarts(from: start, through: end, calendar: calendar)
+        #expect(weeks.count == 2)
+        #expect(calendar.component(.day, from: weeks[0]) == 6)
+        #expect(calendar.component(.day, from: weeks[1]) == 13)
+    }
 }

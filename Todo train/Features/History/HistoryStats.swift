@@ -34,6 +34,34 @@ enum HistoryStats {
         }
     }
 
+    static func days(from start: Date, through end: Date, calendar: Calendar = .current) -> [Date] {
+        let startDay = calendar.startOfDay(for: start)
+        let endDay = calendar.startOfDay(for: end)
+        guard endDay >= startDay else { return [startDay] }
+        var days: [Date] = []
+        var cursor = startDay
+        while cursor <= endDay {
+            days.append(cursor)
+            guard let next = calendar.date(byAdding: .day, value: 1, to: cursor) else { break }
+            cursor = next
+            if days.count > 800 { break }
+        }
+        return days
+    }
+
+    static func weekStarts(from start: Date, through end: Date, calendar: Calendar = .current) -> [Date] {
+        var seen: Set<String> = []
+        var starts: [Date] = []
+        for day in days(from: start, through: end, calendar: calendar) {
+            guard let weekStart = weekDays(containing: day, calendar: calendar).first else { continue }
+            let key = dayKey(for: weekStart, calendar: calendar)
+            if seen.insert(key).inserted {
+                starts.append(weekStart)
+            }
+        }
+        return starts
+    }
+
     static func aggregate(sessions: [WorkSession]) -> DayAggregate {
         var focus: TimeInterval = 0
         var arrived = 0
