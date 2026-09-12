@@ -25,8 +25,10 @@ struct CompanionHTTPTransport: HTTPTransport, @unchecked Sendable {
             urlRequest.setValue(value, forHTTPHeaderField: key)
         }
         let (data, response) = try await session.data(for: urlRequest)
-        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-        return HTTPResponse(status: status, body: data)
+        if let http = response as? HTTPURLResponse {
+            return HTTPResponse(http: http, body: data)
+        }
+        return HTTPResponse(status: 0, body: data)
     }
 }
 

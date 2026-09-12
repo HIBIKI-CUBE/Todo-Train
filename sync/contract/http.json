@@ -270,7 +270,29 @@
       "request": null,
       "success": { "status": 101 },
       "failure": [{ "status": 401, "error": "unauthorized" }],
-      "notes": "See ws.json. Frames are JSON text. Hibernation allowed. Optional X-Pairing-Id skips directory lookup."
+      "notes": "See ws.json. Frames are JSON text. Hibernation allowed. Optional X-Pairing-Id skips directory lookup. RFC 6455 ping is allowed keepalive; clients do not send JSON WSFrame."
+    },
+    {
+      "id": "getHint",
+      "method": "GET",
+      "path": "/v1/hint/:pairingId",
+      "auth": "none",
+      "request": null,
+      "success": {
+        "status": 200,
+        "body": {
+          "snapRev": 42,
+          "ackRev": 7,
+          "cmdCount": 1
+        },
+        "headers": {
+          "ETag": "\"42-7-1\"",
+          "Cache-Control": "public, max-age=5"
+        }
+      },
+      "notModified": { "status": 304 },
+      "failure": [{ "status": 404, "error": "notFound" }],
+      "notes": "Public revs only. pairingId is already on the QR. No Bearer, no ct. Unconfirmed pairings are 404. Clients watch this only while the WebSocket is down, then catch up with GET /v1/snap /ack /cmd. Not a connected-path polling loop."
     }
   ]
 }

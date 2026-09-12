@@ -154,6 +154,35 @@ public struct SyncHTTPClient: Sendable {
         try await send(method: "GET", path: "/v1/ack", auth: true, body: nil as Data?, expected: [200])
     }
 
+    public func getHint(pairingId: UUID, etag: String? = nil) async throws -> HintGetResult {
+        var headers: [String: String] = [:]
+        if let etag {
+            headers["If-None-Match"] = etag
+        }
+        let request = HTTPRequest(
+            method: "GET",
+            path: "/v1/hint/\(pairingId.canonicalLowercase)",
+            headers: headers
+        )
+        let response = try await transport.perform(request)
+        if response.status == 304 {
+            return HintGetResult(notModified: true, hint: nil, etag: etag)
+        }
+        if response.status == 429 {
+            throw SyncError.transport(status: 429, code: "invalid")
+        }
+        if response.status != 200 {
+            let code = (try? WireJSON.decoder().decode(ErrorBody.self, from: response.body).error) ?? "invalid"
+            throw SyncError.transport(status: response.status, code: code)
+        }
+        let hint = try WireJSON.decoder().decode(HintPlaintext.self, from: response.body)
+        return HintGetResult(
+            notModified: false,
+            hint: hint,
+            etag: response.header("ETag") ?? HintPolling.etag(for: hint)
+        )
+    }
+
     private func send<Body: Encodable, Response: Decodable>(
         method: String,
         path: String,
@@ -211,7 +240,9 @@ public final class URLSessionHTTPTransport: HTTPTransport, @unchecked Sendable {
             urlRequest.setValue(value, forHTTPHeaderField: key)
         }
         let (data, response) = try await session.data(for: urlRequest)
-        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-        return HTTPResponse(status: status, body: data)
+        guard let http = response as? HTTPURLResponse else {
+            return HTTPResponse(status: 0, body: data)
+        }
+        return HTTPResponse(http: http, body: data)
     }
 }

@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 public struct PairingSecrets: Codable, Equatable, Sendable {
     public var pairingId: UUID
@@ -56,10 +59,29 @@ public struct HTTPRequest: Equatable, Sendable {
 public struct HTTPResponse: Equatable, Sendable {
     public var status: Int
     public var body: Data
+    public var headers: [String: String]
 
-    public init(status: Int, body: Data = Data()) {
+    public init(status: Int, body: Data = Data(), headers: [String: String] = [:]) {
         self.status = status
         self.body = body
+        self.headers = headers
+    }
+
+    public init(http: HTTPURLResponse, body: Data) {
+        self.status = http.statusCode
+        self.body = body
+        var headers: [String: String] = [:]
+        for (key, value) in http.allHeaderFields {
+            guard let key = key as? String else { continue }
+            headers[key] = String(describing: value)
+        }
+        self.headers = headers
+    }
+
+    public func header(_ name: String) -> String? {
+        if let value = headers[name] { return value }
+        let lower = name.lowercased()
+        return headers.first { $0.key.lowercased() == lower }?.value
     }
 }
 

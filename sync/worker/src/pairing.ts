@@ -4,7 +4,7 @@ import { CMD_FIFO_MAX } from "./constants.ts";
 import type { WireEnvelope } from "./envelope.ts";
 import { parseEnvelope } from "./envelope.ts";
 import { isPub32, isTokenHash32, isUuid } from "./ids.ts";
-import { jsonError, jsonOk, type RpcResult } from "./result.ts";
+import { jsonError, jsonOk, type HintBody, type RpcResult } from "./result.ts";
 import { confirmOverlapOk, isOfferExpired, offerExpiresAt } from "./time.ts";
 import { encodeWsFrame } from "./ws-frame.ts";
 
@@ -60,6 +60,14 @@ function boundBody(pairingId: string, offer: OfferState) {
     s: offer.iphone!.s,
     x: offer.x,
     y: offer.iphone!.y,
+  };
+}
+
+function hintFrom(state: PairingState): HintBody {
+  return {
+    snapRev: state.snap?.rev ?? 0,
+    ackRev: state.ack?.rev ?? 0,
+    cmdCount: state.cmds.length,
   };
 }
 
@@ -227,7 +235,7 @@ export class PairingDurableObject extends DurableObject<unknown> {
     state.snap = parsed.envelope;
     await this.save(state);
     this.broadcast("snap", parsed.envelope);
-    return jsonOk(200, { rev: parsed.envelope.rev });
+    return { ...jsonOk(200, { rev: parsed.envelope.rev }), hint: hintFrom(state) };
   }
 
   async postCmd(body: unknown, tokenHash: string): Promise<RpcResult> {
@@ -239,7 +247,7 @@ export class PairingDurableObject extends DurableObject<unknown> {
     state.cmds.push(parsed.envelope);
     await this.save(state);
     this.broadcast("cmd", parsed.envelope);
-    return jsonOk(201, { queued: true });
+    return { ...jsonOk(201, { queued: true }), hint: hintFrom(state) };
   }
 
   async getCmd(tokenHash: string): Promise<RpcResult> {
@@ -257,7 +265,7 @@ export class PairingDurableObject extends DurableObject<unknown> {
     state.cmds = state.cmds.filter((item) => item.rev !== parsed.envelope.rev);
     await this.save(state);
     this.broadcast("ack", parsed.envelope);
-    return jsonOk(200, { stored: true });
+    return { ...jsonOk(200, { stored: true }), hint: hintFrom(state) };
   }
 
   async getAck(tokenHash: string): Promise<RpcResult> {
@@ -265,6 +273,12 @@ export class PairingDurableObject extends DurableObject<unknown> {
     if ("status" in state) return state;
     if (!state.ack) return jsonError(404, "notFound");
     return jsonOk(200, state.ack);
+  }
+
+  async getHint(): Promise<RpcResult> {
+    const state = await this.load();
+    if (!state?.confirmed || !state.tokenHash) return jsonError(404, "notFound");
+    return { ...jsonOk(200, hintFrom(state)), hint: hintFrom(state) };
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -282,7 +296,7 @@ export class PairingDurableObject extends DurableObject<unknown> {
   }
 
   async webSocketMessage(_ws: WebSocket, _message: string | ArrayBuffer): Promise<void> {
-    // Clients do not send protocol frames. Ignore.
+    // Clients do not send JSON WSFrame. RFC 6455 ping is handled by the runtime.
   }
 
   async webSocketClose(ws: WebSocket, code: number, reason: string, _wasClean: boolean): Promise<void> {

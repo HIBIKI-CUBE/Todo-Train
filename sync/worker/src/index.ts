@@ -3,6 +3,7 @@ import { decodeB64u, encodeB64u } from "./b64.ts";
 import { isPub32, isTokenHash32, isUuid } from "./ids.ts";
 import type { RpcResult } from "./result.ts";
 import { unixSeconds } from "./time.ts";
+import { hintHTTPResponse, readHintCache, storeHintCache } from "./hint.ts";
 
 type PairingRpc = {
   createOffer(input: { pairingId: string; offerId: string; x: string; now: number }): Promise<RpcResult>;
@@ -16,6 +17,7 @@ type PairingRpc = {
   getCmd(tokenHash: string): Promise<RpcResult>;
   putAck(body: unknown, tokenHash: string): Promise<RpcResult>;
   getAck(tokenHash: string): Promise<RpcResult>;
+  getHint(): Promise<RpcResult>;
   fetch(request: Request): Promise<Response>;
 };
 
@@ -100,6 +102,10 @@ function pairingWebSocketRequest(raw: Request, tokenHash: string): Request {
   headers.delete("Authorization");
   headers.set(TOKEN_HASH_HEADER, tokenHash);
   return new Request(raw, { headers });
+}
+
+async function applyHintCache(requestUrl: string, pairingId: string, result: RpcResult) {
+  if (result.hint) await storeHintCache(requestUrl, pairingId, result.hint);
 }
 
 async function applySideEffects(env: Env, offerId: string | undefined, pairingId: string, result: RpcResult) {
@@ -191,7 +197,9 @@ app.put("/v1/snap", async (c) => {
   if (auth instanceof Response) return auth;
   const body = await readJson(c.req.raw);
   if (body === JSON_FAIL) return errorJson(400, "invalid");
-  return fromRpc(await pairing(c.env, auth.pairingId).putSnap(body, auth.tokenHash));
+  const result = await pairing(c.env, auth.pairingId).putSnap(body, auth.tokenHash);
+  await applyHintCache(c.req.url, auth.pairingId, result);
+  return fromRpc(result);
 });
 
 app.post("/v1/cmd", async (c) => {
@@ -199,7 +207,9 @@ app.post("/v1/cmd", async (c) => {
   if (auth instanceof Response) return auth;
   const body = await readJson(c.req.raw);
   if (body === JSON_FAIL) return errorJson(400, "invalid");
-  return fromRpc(await pairing(c.env, auth.pairingId).postCmd(body, auth.tokenHash));
+  const result = await pairing(c.env, auth.pairingId).postCmd(body, auth.tokenHash);
+  await applyHintCache(c.req.url, auth.pairingId, result);
+  return fromRpc(result);
 });
 
 app.get("/v1/cmd", async (c) => {
@@ -213,13 +223,39 @@ app.put("/v1/ack", async (c) => {
   if (auth instanceof Response) return auth;
   const body = await readJson(c.req.raw);
   if (body === JSON_FAIL) return errorJson(400, "invalid");
-  return fromRpc(await pairing(c.env, auth.pairingId).putAck(body, auth.tokenHash));
+  const result = await pairing(c.env, auth.pairingId).putAck(body, auth.tokenHash);
+  await applyHintCache(c.req.url, auth.pairingId, result);
+  return fromRpc(result);
 });
 
 app.get("/v1/ack", async (c) => {
   const auth = await requirePairing(c.env, c.req.header("Authorization"), c.req.header(PAIRING_ID_HEADER));
   if (auth instanceof Response) return auth;
   return fromRpc(await pairing(c.env, auth.pairingId).getAck(auth.tokenHash));
+});
+
+app.get("/v1/hint/:pairingId", async (c) => {
+  const pairingId = c.req.param("pairingId");
+  if (!isUuid(pairingId)) return errorJson(404, "notFound");
+  const ifNoneMatch = c.req.header("If-None-Match") ?? undefined;
+  const cached = await readHintCache(c.req.url, pairingId);
+  if (cached) {
+    const etag = cached.headers.get("ETag");
+    if (etag && ifNoneMatch === etag) {
+      return new Response(null, {
+        status: 304,
+        headers: {
+          ETag: etag,
+          "Cache-Control": cached.headers.get("Cache-Control") ?? "public, max-age=5",
+        },
+      });
+    }
+    return cached;
+  }
+  const result = await pairing(c.env, pairingId).getHint();
+  if (result.status !== 200 || !result.hint) return fromRpc(result);
+  await applyHintCache(c.req.url, pairingId, result);
+  return hintHTTPResponse(result.hint, ifNoneMatch);
 });
 
 app.get("/v1/ws", async (c) => {

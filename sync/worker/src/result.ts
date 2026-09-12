@@ -18,11 +18,18 @@ export type JsonValue =
   | JsonValue[]
   | { [key: string]: JsonValue };
 
+export type HintBody = {
+  snapRev: number;
+  ackRev: number;
+  cmdCount: number;
+};
+
 export type RpcResult = {
   status: number;
   body: JsonValue;
   dropOffer?: boolean;
   registerTokenHash?: string;
+  hint?: HintBody;
 };
 
 export function jsonError(status: number, error: ErrorCode): RpcResult {

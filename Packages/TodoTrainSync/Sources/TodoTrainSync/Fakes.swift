@@ -60,10 +60,12 @@ public actor ScriptedHTTPTransport: HTTPTransport {
     public struct Step: Sendable {
         public var status: Int
         public var json: String?
+        public var headers: [String: String]
 
-        public init(status: Int, json: String? = nil) {
+        public init(status: Int, json: String? = nil, headers: [String: String] = [:]) {
             self.status = status
             self.json = json
+            self.headers = headers
         }
     }
 
@@ -80,7 +82,7 @@ public actor ScriptedHTTPTransport: HTTPTransport {
             throw SyncError.transport(status: 500, code: "invalid")
         }
         let step = steps.removeFirst()
-        return HTTPResponse(status: step.status, body: Data((step.json ?? "").utf8))
+        return HTTPResponse(status: step.status, body: Data((step.json ?? "").utf8), headers: step.headers)
     }
 }
 

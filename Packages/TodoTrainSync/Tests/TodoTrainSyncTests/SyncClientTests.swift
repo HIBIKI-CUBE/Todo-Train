@@ -175,4 +175,54 @@ struct SyncClientTests {
         #expect(headers[SyncHTTPClient.pairingIdHeaderName] == pairingId.canonicalLowercase)
         await connection.close()
     }
+
+    @Test func websocketURLUsesWssAndKeepsV1Path() throws {
+        let production = try URLSessionWebSocketConnecting.webSocketURL(
+            baseURL: URL(string: "https://todo-train.hibiki-cube.dev")!,
+            path: "/v1/ws"
+        )
+        #expect(production.absoluteString == "wss://todo-train.hibiki-cube.dev/v1/ws")
+
+        let trailing = try URLSessionWebSocketConnecting.webSocketURL(
+            baseURL: URL(string: "https://dev.todo-train.hibiki-cube.dev/")!,
+            path: "/v1/ws"
+        )
+        #expect(trailing.absoluteString == "wss://dev.todo-train.hibiki-cube.dev/v1/ws")
+
+        let local = try URLSessionWebSocketConnecting.webSocketURL(
+            baseURL: URL(string: "http://127.0.0.1:8787")!,
+            path: "/v1/ws"
+        )
+        #expect(local.absoluteString == "ws://127.0.0.1:8787/v1/ws")
+    }
+
+    @Test func getHintOmitsBearerAndSendsIfNoneMatch() async throws {
+        let pairingId = UUID(uuidString: "a1a2a3a4-b1b2-4c3c-8d4d-e5e6e7e8e9ea")!
+        let transport = ScriptedHTTPTransport([
+            .init(
+                status: 200,
+                json: #"{"snapRev":42,"ackRev":7,"cmdCount":1}"#,
+                headers: ["ETag": "\"42-7-1\""]
+            ),
+            .init(status: 304),
+        ])
+        let client = SyncHTTPClient(
+            baseURL: base,
+            transport: transport,
+            writeToken: Data(repeating: 7, count: 32),
+            pairingId: pairingId
+        )
+        let first = try await client.getHint(pairingId: pairingId)
+        #expect(first.hint == HintPlaintext(snapRev: 42, ackRev: 7, cmdCount: 1))
+        #expect(first.etag == "\"42-7-1\"")
+        #expect(!first.notModified)
+
+        let second = try await client.getHint(pairingId: pairingId, etag: first.etag)
+        #expect(second.notModified)
+
+        let requests = await transport.requests
+        #expect(requests[0].path == "/v1/hint/a1a2a3a4-b1b2-4c3c-8d4d-e5e6e7e8e9ea")
+        #expect(requests[0].headers["Authorization"] == nil)
+        #expect(requests[1].headers["If-None-Match"] == "\"42-7-1\"")
+    }
 }
