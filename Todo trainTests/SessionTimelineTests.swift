@@ -63,8 +63,35 @@ struct SessionTimelineTests {
 
         let gap = layout.y(for: second.startedAt) - layout.y(for: first.endedAt)
         #expect(gap == 90 * SessionTimeline.pointsPerMinute)
-        #expect(layout.height == 135 * SessionTimeline.pointsPerMinute)
+        #expect(layout.height == 180 * SessionTimeline.pointsPerMinute)
         #expect(layout.laneCount == 1)
+        #expect(layout.start == date(hour: 9, minute: 0))
+        #expect(layout.end == date(hour: 12, minute: 0))
+    }
+
+    @Test func stretchedEnd_fillsViewportWithoutChangingEventScale() throws {
+        let sample = ride(
+            start: date(hour: 9, minute: 0),
+            end: date(hour: 10, minute: 0),
+            estimate: 60 * 60
+        )
+        let layout = try #require(
+            SessionTimeline.layout(
+                rides: [sample],
+                calendar: utcCalendar,
+                minHeight: 300
+            )
+        )
+        #expect(layout.height == 300)
+        #expect(layout.y(for: sample.endedAt) == 60 * SessionTimeline.pointsPerMinute)
+        #expect(
+            SessionTimeline.stretchedEnd(
+                start: date(hour: 9, minute: 0),
+                end: date(hour: 10, minute: 0),
+                minHeight: 0,
+                pointsPerMinute: SessionTimeline.pointsPerMinute
+            ) == date(hour: 10, minute: 0)
+        )
     }
 
     @Test func overlappingRides_takeParallelLanes() throws {
@@ -102,6 +129,38 @@ struct SessionTimelineTests {
         #expect(layout.laneCount == 1)
         #expect(layout.laneIndex(for: a.id) == 0)
         #expect(layout.laneIndex(for: b.id) == 0)
+    }
+
+    @Test func isolatedRide_doesNotOverlapNeighbors() {
+        let a = ride(
+            start: date(hour: 9, minute: 0),
+            end: date(hour: 9, minute: 30),
+            estimate: 30 * 60
+        )
+        let b = ride(
+            start: date(hour: 10, minute: 0),
+            end: date(hour: 10, minute: 20),
+            estimate: 20 * 60
+        )
+        #expect(SessionTimeline.rideIsIsolated(a, among: [a, b]))
+        #expect(SessionTimeline.rideIsIsolated(b, among: [a, b]))
+        #expect(!SessionTimeline.ridesOverlap(a, b))
+    }
+
+    @Test func overlappingRides_areNotIsolated() {
+        let a = ride(
+            start: date(hour: 9, minute: 0),
+            end: date(hour: 10, minute: 30),
+            estimate: 45 * 60
+        )
+        let b = ride(
+            start: date(hour: 9, minute: 35),
+            end: date(hour: 10, minute: 0),
+            estimate: 20 * 60
+        )
+        #expect(!SessionTimeline.rideIsIsolated(a, among: [a, b]))
+        #expect(!SessionTimeline.rideIsIsolated(b, among: [a, b]))
+        #expect(SessionTimeline.ridesOverlap(a, b))
     }
 
     @Test func range_includesOriginalScheduleAfterEarlyArrival() throws {
@@ -157,7 +216,7 @@ struct SessionTimelineTests {
         #expect(SessionTimeline.markerLabel(markers[4]) == "延長2 +5分")
     }
 
-    @Test func hourTicks_skipHoursBeforeFirstEvent() throws {
+    @Test func layout_snapsCanvasToHourMarks() throws {
         let sample = ride(
             start: date(hour: 9, minute: 20),
             end: date(hour: 11, minute: 10),
@@ -166,8 +225,20 @@ struct SessionTimelineTests {
         let layout = try #require(
             SessionTimeline.layout(rides: [sample], calendar: utcCalendar)
         )
+        #expect(layout.start == date(hour: 9, minute: 0))
+        #expect(layout.end == date(hour: 12, minute: 0))
         let hours = layout.hourTicks.map { utcCalendar.component(.hour, from: $0) }
-        #expect(hours == [10, 11])
+        #expect(hours == [9, 10, 11, 12])
+    }
+
+    @Test func hourAlignedRange_keepsExactHourEnd() {
+        let range = SessionTimeline.hourAlignedRange(
+            start: date(hour: 9, minute: 0),
+            end: date(hour: 11, minute: 0),
+            calendar: utcCalendar
+        )
+        #expect(range.start == date(hour: 9, minute: 0))
+        #expect(range.end == date(hour: 11, minute: 0))
     }
 
     @Test func ridesFromSessions_mapsPauseAndExtension() throws {

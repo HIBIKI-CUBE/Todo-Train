@@ -92,8 +92,9 @@ struct DayClockLayout: Equatable, Sendable {
 }
 
 enum SessionTimeline {
-    /// One wall-clock minute is one point. 空き時間も同じ縮尺。
-    static let pointsPerMinute: Double = 1.0
+    /// Wall-clock minutes share one scale — idle is never folded.
+    /// 2pt/min (120pt/hour) is a slightly zoomed Calendar day, so 15–30分の切符が読める。
+    static let pointsPerMinute: Double = 2.0
 
     static func rides(from sessions: [WorkSession]) -> [TimelineRide] {
         sessions.compactMap { session -> TimelineRide? in
@@ -221,19 +222,67 @@ enum SessionTimeline {
     static func layout(
         rides: [TimelineRide],
         calendar: Calendar = .current,
-        pointsPerMinute: Double = pointsPerMinute
+        pointsPerMinute: Double = pointsPerMinute,
+        minHeight: Double = 0
     ) -> DayClockLayout? {
         guard let range = timeRange(rides: rides) else { return nil }
+        let aligned = hourAlignedRange(start: range.start, end: range.end, calendar: calendar)
+        let end = stretchedEnd(
+            start: aligned.start,
+            end: aligned.end,
+            minHeight: minHeight,
+            pointsPerMinute: pointsPerMinute
+        )
         let lanes = packLanes(rides)
         let laneCount = max(1, Set(lanes.values).count)
         return DayClockLayout(
-            start: range.start,
-            end: range.end,
+            start: aligned.start,
+            end: end,
             pointsPerMinute: pointsPerMinute,
             laneByRideID: lanes,
             laneCount: laneCount,
-            hourTicks: hourTicks(from: range.start, to: range.end, calendar: calendar)
+            hourTicks: hourTicks(from: aligned.start, to: end, calendar: calendar)
         )
+    }
+
+    /// Fill leftover viewport with empty hour rows so a short day is a page, not a stub.
+    static func stretchedEnd(
+        start: Date,
+        end: Date,
+        minHeight: Double,
+        pointsPerMinute: Double
+    ) -> Date {
+        guard minHeight > 0, pointsPerMinute > 0 else { return end }
+        let current = max(0, end.timeIntervalSince(start) / 60.0 * pointsPerMinute)
+        guard current < minHeight else { return end }
+        let extraMinutes = (minHeight - current) / pointsPerMinute
+        return end.addingTimeInterval(extraMinutes * 60)
+    }
+
+    /// Snap the canvas to hour marks so the gutter reads like a calendar.
+    static func hourAlignedRange(
+        start: Date,
+        end: Date,
+        calendar: Calendar
+    ) -> (start: Date, end: Date) {
+        let alignedStart = calendar.dateInterval(of: .hour, for: start)?.start ?? start
+        guard let endHour = calendar.dateInterval(of: .hour, for: end)?.start else {
+            return (alignedStart, end)
+        }
+        let alignedEnd: Date
+        if end <= endHour {
+            alignedEnd = endHour
+        } else if let next = calendar.date(byAdding: .hour, value: 1, to: endHour) {
+            alignedEnd = next
+        } else {
+            alignedEnd = end
+        }
+        if alignedEnd <= alignedStart {
+            let fallback = calendar.date(byAdding: .hour, value: 1, to: alignedStart)
+                ?? alignedStart.addingTimeInterval(3600)
+            return (alignedStart, fallback)
+        }
+        return (alignedStart, alignedEnd)
     }
 
     static func timeRange(rides: [TimelineRide]) -> (start: Date, end: Date)? {
@@ -255,6 +304,16 @@ enum SessionTimeline {
         }
         if end < start { return nil }
         return (start, end)
+    }
+
+    static func ridesOverlap(_ a: TimelineRide, _ b: TimelineRide) -> Bool {
+        a.startedAt < b.endedAt && b.startedAt < a.endedAt
+    }
+
+    static func rideIsIsolated(_ ride: TimelineRide, among rides: [TimelineRide]) -> Bool {
+        !rides.contains { other in
+            other.id != ride.id && ridesOverlap(ride, other)
+        }
     }
 
     static func packLanes(_ rides: [TimelineRide]) -> [UUID: Int] {

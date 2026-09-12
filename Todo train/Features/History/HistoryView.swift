@@ -10,7 +10,7 @@ struct HistoryView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(SessionManager.self) private var sessionManager
     @Environment(DeletionUndoCenter.self) private var undoCenter
-    @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @Environment(\.calendar) private var calendar
 
     @Query(sort: \WorkSession.endedAt, order: .reverse)
     private var sessions: [WorkSession]
@@ -18,6 +18,18 @@ struct HistoryView: View {
     @State private var searchText = ""
     @State private var errorMessage = ""
     @State private var showError = false
+    @State private var selectedDay = Calendar.current.startOfDay(for: Date())
+    @State private var showDatePicker = false
+    @State private var selectedRideID: UUID?
+    @State private var didFocusInitialDay = false
+    @State private var isSearchPresented = false
+    @FocusState private var searchFieldFocused: Bool
+
+    init(focusDay: Date? = nil) {
+        let calendar = Calendar.current
+        _selectedDay = State(initialValue: focusDay ?? calendar.startOfDay(for: Date()))
+        _didFocusInitialDay = State(initialValue: focusDay != nil)
+    }
 
     private var endedSessions: [WorkSession] {
         sessions.filter { $0.endedAt != nil }
@@ -28,64 +40,66 @@ struct HistoryView: View {
     }
 
     private var groups: [(dayKey: String, sessions: [WorkSession])] {
-        HistoryStats.groupByDay(sessions: filteredSessions)
+        HistoryStats.groupByDay(sessions: filteredSessions, calendar: calendar)
     }
 
     private var isSearching: Bool {
         !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    private var selectedDayKey: String {
+        HistoryStats.dayKey(for: selectedDay, calendar: calendar)
+    }
+
+    private var selectedDaySessions: [WorkSession] {
+        groups.first(where: { $0.dayKey == selectedDayKey })?.sessions ?? []
+    }
+
+    private var daysWithRides: Set<String> {
+        Set(HistoryStats.groupByDay(sessions: endedSessions, calendar: calendar).map(\.dayKey))
+    }
+
     var body: some View {
-        Group {
-            if filteredSessions.isEmpty {
-                ContentUnavailableView {
-                    Label(
-                        isSearching ? "一致する履歴がありません" : "まだ履歴がありません",
-                        systemImage: isSearching ? "magnifyingglass" : "clock"
-                    )
-                } description: {
-                    Text(
-                        isSearching
-                            ? "別の切符名で検索してみてください。"
-                            : "発車して到着・途中下車するとここに残ります。"
-                    )
-                }
-            } else {
-                ScrollView {
-                    LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
-                        ForEach(groups, id: \.dayKey) { group in
-                            Section {
-                                HistoryDayClockView(
-                                    sessions: group.sessions,
-                                    onReissue: reissue,
-                                    onDelete: deleteSession
-                                )
-                                .frame(maxWidth: .infinity, alignment: .top)
-                                .padding(.horizontal, TrainTheme.Space.md)
-                                .padding(.bottom, TrainTheme.Space.xl)
-                            } header: {
-                                DailyStatsHeader(
-                                    dayKey: group.dayKey,
-                                    aggregate: HistoryStats.aggregate(sessions: group.sessions)
-                                )
-                                .textCase(nil)
-                                .padding(.horizontal, TrainTheme.Space.md)
-                                .padding(.vertical, TrainTheme.Space.sm)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(TrainTheme.platform)
-                            }
-                        }
+        VStack(spacing: 0) {
+            if isSearchPresented {
+                searchFieldRow
+            }
+
+            if isSearching {
+                if filteredSessions.isEmpty {
+                    ContentUnavailableView {
+                        Label("一致する履歴がありません", systemImage: "magnifyingglass")
+                    } description: {
+                        Text("別の切符名で検索してみてください。")
                     }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    searchResults
                 }
-                .background(TrainTheme.platform)
+            } else if endedSessions.isEmpty {
+                ContentUnavailableView {
+                    Label("まだ履歴がありません", systemImage: "clock")
+                } description: {
+                    Text("発車して到着・途中下車するとここに残ります。")
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                calendarDay
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(TrainTheme.platform)
         .navigationTitle("履歴")
-        .navigationBarTitleDisplayMode(
-            TrainLayout.navigationBarTitleDisplayMode(verticalSizeClass: verticalSizeClass)
-        )
-        .searchable(text: $searchText, prompt: "切符名で検索")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(TrainTheme.platform, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
         .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("今日") {
+                    selectedDay = calendar.startOfDay(for: Date())
+                }
+                .disabled(calendar.isDateInToday(selectedDay) || isSearchPresented)
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 NavigationLink {
                     WeeklyReportView()
@@ -93,8 +107,220 @@ struct HistoryView: View {
                     Text("週次")
                 }
             }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    toggleSearch()
+                } label: {
+                    Image(systemName: isSearchPresented ? "xmark" : "magnifyingglass")
+                }
+                .accessibilityLabel(isSearchPresented ? "検索を閉じる" : "検索")
+            }
+        }
+        .sheet(isPresented: $showDatePicker) {
+            datePickerSheet
+        }
+        .sheet(item: selectedRideBinding) { item in
+            if let session = endedSessions.first(where: { $0.id == item.id }) {
+                NavigationStack {
+                    HistoryRideDetailView(
+                        session: session,
+                        onReissue: reissue,
+                        onDelete: deleteSession
+                    )
+                }
+                .presentationDetents([.medium, .large])
+                .presentationContentInteraction(.scrolls)
+                .presentationDragIndicator(.visible)
+            }
         }
         .errorAlert(isPresented: $showError, message: errorMessage)
+        .onAppear(perform: focusInitialDayIfNeeded)
+    }
+
+    private var searchFieldRow: some View {
+        HStack(spacing: TrainTheme.Space.sm) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+            TextField("切符名で検索", text: $searchText)
+                .textFieldStyle(.plain)
+                .focused($searchFieldFocused)
+                .submitLabel(.search)
+            if !searchText.isEmpty {
+                Button {
+                    searchText = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                }
+                .accessibilityLabel("入力を消す")
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .padding(.horizontal, TrainTheme.Space.md)
+        .padding(.vertical, TrainTheme.Space.sm)
+        .background(TrainTheme.platform)
+    }
+
+    private var calendarDay: some View {
+        VStack(spacing: 0) {
+            HistoryCalendarStrip(
+                selectedDay: selectedDay,
+                daysWithRides: daysWithRides,
+                onSelect: { day in
+                    selectedDay = calendar.startOfDay(for: day)
+                },
+                onShowDatePicker: { showDatePicker = true }
+            )
+            .padding(.horizontal, TrainTheme.Space.md)
+            .padding(.top, TrainTheme.Space.xs)
+            .padding(.bottom, TrainTheme.Space.sm)
+
+            Group {
+                if selectedDaySessions.isEmpty {
+                    ContentUnavailableView {
+                        Label("この日の乗車はありません", systemImage: "tram")
+                    } description: {
+                        Text("印のある日を選ぶか、月から日付を指定できます。")
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    VStack(spacing: 0) {
+                        DailyStatsHeader(
+                            dayKey: selectedDayKey,
+                            aggregate: HistoryStats.aggregate(sessions: selectedDaySessions),
+                            showsDay: false
+                        )
+                        .padding(.horizontal, TrainTheme.Space.md)
+                        .padding(.bottom, TrainTheme.Space.sm)
+
+                        GeometryReader { geo in
+                            ScrollView {
+                                HistoryDayClockView(
+                                    sessions: selectedDaySessions,
+                                    minHeight: geo.size.height,
+                                    onSelect: { session in
+                                        selectedRideID = session.id
+                                    },
+                                    onReissue: reissue,
+                                    onDelete: deleteSession
+                                )
+                                .frame(maxWidth: .infinity, minHeight: geo.size.height, alignment: .top)
+                                .padding(.horizontal, TrainTheme.Space.md)
+                            }
+                            .scrollBounceBehavior(.basedOnSize)
+                        }
+                        .safeAreaPadding(.bottom)
+                    }
+                }
+            }
+            .id(selectedDayKey)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(TrainTheme.platform)
+    }
+
+    private func toggleSearch() {
+        if isSearchPresented {
+            isSearchPresented = false
+            searchText = ""
+            searchFieldFocused = false
+        } else {
+            isSearchPresented = true
+            searchFieldFocused = true
+        }
+    }
+
+    private var searchResults: some View {
+        List {
+            ForEach(groups, id: \.dayKey) { group in
+                Section {
+                    ForEach(group.sessions, id: \.id) { session in
+                        Button {
+                            if let endedAt = session.endedAt {
+                                selectedDay = calendar.startOfDay(for: endedAt)
+                            }
+                            selectedRideID = session.id
+                            searchText = ""
+                            isSearchPresented = false
+                            searchFieldFocused = false
+                        } label: {
+                            searchRow(session)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                } header: {
+                    Text(DayKeyFormatting.displayDay(from: group.dayKey))
+                }
+            }
+        }
+        .listStyle(.insetGrouped)
+    }
+
+    private func searchRow(_ session: WorkSession) -> some View {
+        let ride = SessionTimeline.rides(from: [session]).first
+        return HStack(alignment: .firstTextBaseline, spacing: TrainTheme.Space.sm) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(ride?.title ?? session.ticket?.title ?? "不明な切符")
+                    .font(TrainTheme.TypeScale.ticketTitle())
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                if let ride {
+                    Text(
+                        "\(Self.timeFormatter.string(from: ride.startedAt))–\(Self.timeFormatter.string(from: ride.endedAt))"
+                    )
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                }
+            }
+            Spacer(minLength: 8)
+            HistoryOutcomeBadge(session: session)
+        }
+    }
+
+    private var datePickerSheet: some View {
+        NavigationStack {
+            DatePicker(
+                "日付",
+                selection: $selectedDay,
+                displayedComponents: .date
+            )
+            .datePickerStyle(.graphical)
+            .labelsHidden()
+            .environment(\.locale, Locale(identifier: "ja_JP"))
+            .padding(.horizontal, TrainTheme.Space.md)
+            .navigationTitle("日付を選ぶ")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("完了") {
+                        selectedDay = calendar.startOfDay(for: selectedDay)
+                        showDatePicker = false
+                    }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+    }
+
+    private var selectedRideBinding: Binding<RideSheetItem?> {
+        Binding(
+            get: { selectedRideID.map(RideSheetItem.init(id:)) },
+            set: { selectedRideID = $0?.id }
+        )
+    }
+
+    private func focusInitialDayIfNeeded() {
+        guard !didFocusInitialDay else { return }
+        didFocusInitialDay = true
+        let todayKey = HistoryStats.dayKey(for: Date(), calendar: calendar)
+        if daysWithRides.contains(todayKey) { return }
+        guard let latest = HistoryStats.groupByDay(sessions: endedSessions, calendar: calendar).first,
+              let date = HistoryStats.date(from: latest.dayKey, calendar: calendar)
+        else { return }
+        selectedDay = date
     }
 
     private func deleteSession(_ session: WorkSession) {
@@ -153,16 +379,43 @@ struct HistoryView: View {
         let maxOrder = (try? modelContext.fetch(descriptor).first?.sortOrder) ?? -1
         return maxOrder + 1
     }
+
+    private static let timeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm"
+        return formatter
+    }()
 }
 
-#Preview {
+private struct RideSheetItem: Identifiable {
+    var id: UUID
+}
+
+#Preview("直近日") {
     let container = try! AppModelContainer.make(inMemory: true)
-    HistoryPreviewSeed.insertSampleDay(into: container.mainContext)
+    HistoryPreviewSeed.insertSampleWeek(into: container.mainContext)
     let manager = SessionManager(modelContext: container.mainContext)
     return NavigationStack {
         HistoryView()
             .environment(manager)
             .environment(DeletionUndoCenter())
+            .environment(TicketMotionBridge())
+            .modelContainer(container)
+    }
+}
+
+#Preview("重なりのある火曜") {
+    let container = try! AppModelContainer.make(inMemory: true)
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = .current
+    HistoryPreviewSeed.insertSampleWeek(into: container.mainContext, calendar: calendar)
+    let tuesday = calendar.date(from: DateComponents(year: 2026, month: 9, day: 8))!
+    let manager = SessionManager(modelContext: container.mainContext)
+    return NavigationStack {
+        HistoryView(focusDay: tuesday)
+            .environment(manager)
+            .environment(DeletionUndoCenter())
+            .environment(TicketMotionBridge())
             .modelContainer(container)
     }
 }

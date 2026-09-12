@@ -83,4 +83,27 @@ struct HistoryStatsTests {
         #expect(groups[0].sessions.first?.id == newer.id)
         #expect(groups[1].sessions.first?.id == older.id)
     }
+
+    @Test func dateFromDayKey_roundTrips() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let date = calendar.date(from: DateComponents(year: 2026, month: 9, day: 8))!
+        let key = HistoryStats.dayKey(for: date, calendar: calendar)
+        #expect(key == "2026-09-08")
+        let parsed = HistoryStats.date(from: key, calendar: calendar)
+        #expect(parsed == date)
+        #expect(HistoryStats.date(from: "nope") == nil)
+    }
+
+    @Test func weekDays_coverSevenDaysFromCalendarWeek() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        calendar.firstWeekday = 1
+        let tuesday = calendar.date(from: DateComponents(year: 2026, month: 9, day: 8))!
+        let days = HistoryStats.weekDays(containing: tuesday, calendar: calendar)
+        #expect(days.count == 7)
+        #expect(calendar.component(.day, from: days[0]) == 6)
+        #expect(calendar.component(.day, from: days[6]) == 12)
+        #expect(calendar.isDate(days[2], inSameDayAs: tuesday))
+    }
 }

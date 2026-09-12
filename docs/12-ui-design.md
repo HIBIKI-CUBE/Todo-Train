@@ -10,7 +10,7 @@
 | 面 | 方針 |
 |----|------|
 | Hub | システム背景のうえ、未乗車は **マルス券 Wallet peek**（タップ → 提示レイヤ → 右投げで発車 → 運転台）。運行・停車は標準ブロック |
-| 履歴 | その日の時計キャンバス（システム背景・セマンティック色。空き時間は乗車と同じ 1pt/分）。設定は標準 `Form` |
+| 履歴 | カレンダーの週ストリップ＋その日の時計キャンバス（システム背景・セマンティック色。空き時間は乗車と同じ 2pt/分）。設定は標準 `Form` |
 | Quick Add | システム sheet + **親指発券帯**（タイトル・常時タグ・KB 直上ゲージ）。Form / Disclosure ではない |
 | Focus | 真っ黒ダッシュボード。超大タイマーが主役。hairline パネル格子＋ gapless 操作盤 |
 | 超過 | 信号色は意味を持たせる（緑・琥珀・赤） |
@@ -151,7 +151,7 @@ Focus / 設定は HIG 骨格のまま。Hub の未乗車リストはマルス券
 | `Features/Hub/QuickAddBar.swift` | `QuickAddSheet`（親指発券帯） |
 | `Features/Hub/TicketStackView.swift` / `HubMarsTicketCard.swift` | Hub マルス peek。選択は Hub 提示レイヤ。未選択は leading 発車 / trailing 削除のフルスワイプ。出入りは手前券の下。提示中は右投げ発車 |
 | `Features/Hub/HubStationChevronSign.swift` | 提示中だけ中央固定の LED「>>> 発車 >>>」（16×16、字形パスの中心サンプリング。ヒット透過） |
-| 履歴 / 設定 | 履歴は日時計キャンバス。設定は標準 Form |
+| 履歴 / 設定 | 履歴は週ストリップ＋日時計キャンバス。設定は標準 Form |
 
 ## シーンサイズ適応（WWDC26 resizable iPhone）
 

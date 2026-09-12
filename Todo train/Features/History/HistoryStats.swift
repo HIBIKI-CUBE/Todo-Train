@@ -21,6 +21,19 @@ enum HistoryStats {
         ServiceDay.dayKey(for: date, calendar: calendar)
     }
 
+    static func date(from dayKey: String, calendar: Calendar = .current) -> Date? {
+        let parts = dayKey.split(separator: "-").compactMap { Int($0) }
+        guard parts.count == 3 else { return nil }
+        return calendar.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2]))
+    }
+
+    static func weekDays(containing date: Date, calendar: Calendar = .current) -> [Date] {
+        guard let interval = calendar.dateInterval(of: .weekOfYear, for: date) else { return [] }
+        return (0..<7).compactMap { offset in
+            calendar.date(byAdding: .day, value: offset, to: interval.start)
+        }
+    }
+
     static func aggregate(sessions: [WorkSession]) -> DayAggregate {
         var focus: TimeInterval = 0
         var arrived = 0

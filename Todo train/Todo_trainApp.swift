@@ -48,6 +48,14 @@ struct Todo_trainApp: App {
             OvertimeNotifier.shared.configure()
             CheckInNotifier.shared.configure()
             SessionPauseRuntime.pauser = manager
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("-SeedHistoryTimeline") {
+                let existing = (try? context.fetch(FetchDescriptor<WorkSession>())) ?? []
+                if !existing.contains(where: { $0.endedAt != nil }) {
+                    HistoryPreviewSeed.insertSampleWeek(into: context)
+                }
+            }
+            #endif
         } catch {
             fatalError("Could not create ModelContainer: \(error)")
         }

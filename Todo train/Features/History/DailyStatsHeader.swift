@@ -10,6 +10,7 @@ struct DailyStatsHeader: View {
 
     let dayKey: String
     let aggregate: DayAggregate
+    var showsDay: Bool = true
 
     var body: some View {
         Group {
@@ -25,8 +26,10 @@ struct DailyStatsHeader: View {
 
     private var portraitHeader: some View {
         VStack(alignment: .leading, spacing: TrainTheme.Space.xs) {
-            Text(displayDay)
-                .font(.headline.weight(.semibold))
+            if showsDay {
+                Text(displayDay)
+                    .font(.headline.weight(.semibold))
+            }
 
             HStack(spacing: TrainTheme.Space.md) {
                 meta("集中", "\(aggregate.focusMinutes)分")
@@ -41,11 +44,13 @@ struct DailyStatsHeader: View {
 
     private var compactHeader: some View {
         HStack(spacing: TrainTheme.Space.sm) {
-            Text(displayDay)
-                .font(.subheadline.weight(.semibold))
-                .lineLimit(1)
+            if showsDay {
+                Text(displayDay)
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
 
-            Spacer(minLength: 8)
+                Spacer(minLength: 8)
+            }
 
             inlineMeta("集中 \(aggregate.focusMinutes)分")
             inlineMeta("到着 \(aggregate.arrived)")
