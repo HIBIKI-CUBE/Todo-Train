@@ -89,6 +89,12 @@ struct SyncClientTests {
             "/v1/pairings/a1a2a3a4-b1b2-4c3c-8d4d-e5e6e7e8e9ea",
         ])
         #expect(requests[3].body.flatMap { String(data: $0, encoding: .utf8) }?.contains("hmac") == true)
+
+        try await flow.abort()
+        #expect(await flow.phase == .established)
+        let afterAbort = await transport.requests
+        #expect(afterAbort.count == requests.count)
+        #expect(!afterAbort.map(\.method).contains("DELETE"))
     }
 
     @Test func confirmRetriesUntilPeerOverlapsWithoutSecondLA() async throws {

@@ -14,12 +14,6 @@ struct TodoTrainCompanionApp: App {
         }
         .menuBarExtraStyle(.window)
 
-        Window("ペアリング", id: "pairing") {
-            PairingWindow()
-                .environment(runtime)
-        }
-        .windowResizability(.contentMinSize)
-
         Settings {
             RelaySettingsView(runtime: runtime)
         }

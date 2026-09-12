@@ -61,7 +61,7 @@ public struct MenuBarPresentation: Equatable, Sendable {
                 canPause: false,
                 isSending: false,
                 popoverTitle: "iPhone で QR を出す",
-                popoverDetail: "カメラ / 貼り付け",
+                popoverDetail: "画面を Mac に向ける",
                 failureLine: nil
             )
         }

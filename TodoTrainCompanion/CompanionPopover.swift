@@ -3,11 +3,21 @@ import TodoTrainSync
 
 struct CompanionPopover: View {
     @Environment(CompanionMacRuntime.self) private var runtime
-    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
+        Group {
+            if !runtime.isPaired {
+                CompanionPairingPane()
+            } else {
+                pairedBody
+            }
+        }
+        .padding(16)
+    }
+
+    private var pairedBody: some View {
         let view = runtime.presentation
-        VStack(alignment: .leading, spacing: 12) {
+        return VStack(alignment: .leading, spacing: 12) {
             Text(view.popoverTitle)
                 .font(.headline)
                 .textSelection(.enabled)
@@ -25,11 +35,7 @@ struct CompanionPopover: View {
                     .foregroundStyle(.secondary)
             }
 
-            if !runtime.isPaired {
-                Button("iPhone の画面を向ける") {
-                    openWindow(id: "pairing")
-                }
-            } else if view.canPause {
+            if view.canPause {
                 Button("停車") {
                     Task { await runtime.sendPause() }
                 }
@@ -40,7 +46,6 @@ struct CompanionPopover: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .padding(16)
         .frame(minWidth: 280)
     }
 }

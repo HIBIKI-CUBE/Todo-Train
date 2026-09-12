@@ -1,11 +1,11 @@
 # 08 — 現状ステータス
 
-最終更新: 2026-09-12（リレー `todo-train.hibiki-cube.dev` / `dev.todo-train.hibiki-cube.dev`。車内放送 away を Session LA 割り込みへ。SYNC-3 / 4 は `develop`。確認は [16](16-wakeup-checklist.md)）
+最終更新: 2026-09-12（リレー `todo-train.hibiki-cube.dev` / `dev.todo-train.hibiki-cube.dev`。Mac ペアリングはメニューバー吹き出し。確認は [16](16-wakeup-checklist.md)）
 
 ## 結論
 
 **MVP（Sprint 1–10）・v1・v2（AlarmKit / UI polish）・車内放送は実装済み。**  
-**CloudKit（WP-I）** はスキーマとゲート付きローカル store まで。Mac 土管には使わない。同期の Linux 芯（契約・リレー・Swift パッケージ・E2E）は完了。構成は [13-sync-mac-companion.md](13-sync-mac-companion.md)。Mac の画面は [14-mac-companion-ux.md](14-mac-companion-ux.md)（確認待ち）。実装マップと検証手順は本ファイルと [11-v2-alarmkit-setup.md](11-v2-alarmkit-setup.md) / [12-ui-design.md](12-ui-design.md) を参照。
+**CloudKit（WP-I）** はスキーマとゲート付きローカル store まで。Mac 土管には使わない。同期の Linux 芯（契約・リレー・Swift パッケージ・E2E）は完了。構成は [13-sync-mac-companion.md](13-sync-mac-companion.md)。Mac の画面は [14-mac-companion-ux.md](14-mac-companion-ux.md)（確認 1 は吹き出しで確定。2–6 は提案値）。実装マップと検証手順は本ファイルと [11-v2-alarmkit-setup.md](11-v2-alarmkit-setup.md) / [12-ui-design.md](12-ui-design.md) を参照。
 
 定時の喜びは **エフェメラ**。到着は完了ジェスチャ（切符の無効化）で祝う。ストリークや定時率は出さない。超過で案内は取り下げない。
 
@@ -34,7 +34,7 @@
 | SYNC-2 Swift 芯 | ✅ | `Packages/TodoTrainSync`。Mac は SYNC-4、iOS は SYNC-3 でリンク。CI `sync-swift` |
 | SYNC-5 Linux E2E | ✅ | `sync/e2e/run.sh`。CI `sync-swift` |
 | SYNC-3 iOS UI | `develop` 済み。実機待ち | Settings セルフィー + `SessionManager` 配線（#35） |
-| SYNC-4 macOS | `develop` 済み。実機待ち | メニューバー + ウェブカメラ枠（#39） |
+| SYNC-4 macOS | `develop` 済み。実機待ち | メニューバー吹き出しで即ペアリング。正方カメラ枠（#39） |
 
 ### v2 進捗
 
@@ -107,7 +107,7 @@ sync/e2e/                  Linux 結合（client ↔ worker）
 | Session LA からの Intent | 走行中の停車は `SessionPauseIntent`。停車中の再乗車は `SessionResumeIntent`。到着・延長は deep link |
 | iPad 最適化 | v2 以降。iPhone アプリの自由リサイズ（ミラーリング）は Hub がシーン幅に追従 |
 | 乗り継ぎキャンバスのゲージ統一 | Phase 2（Quick Add のみ線形スナップ・ゲージ） |
-| Mac Companion | Linux 芯は完了（[13](13-sync-mac-companion.md) / [15](15-agent-work-plan.md)）。メニューバーは SYNC-4。iOS 配線（SYNC-3）は Settings セルフィー + ScenePhase。体験は [14](14-mac-companion-ux.md)。実機確認は [16](16-wakeup-checklist.md) |
+| Mac Companion | Linux 芯は完了（[13](13-sync-mac-companion.md) / [15](15-agent-work-plan.md)）。メニューバー吹き出しは SYNC-4。iOS 配線（SYNC-3）は Settings セルフィー + ScenePhase。体験は [14](14-mac-companion-ux.md)。実機確認は [16](16-wakeup-checklist.md) |
 
 ## テスト
 

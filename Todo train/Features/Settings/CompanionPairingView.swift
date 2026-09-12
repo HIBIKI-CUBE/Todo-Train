@@ -14,62 +14,65 @@ struct CompanionPairingView: View {
     @State private var bindTask: Task<Void, Never>?
 
     var body: some View {
-        VStack(spacing: TrainTheme.Space.lg) {
-            Text(instruction)
-                .font(.headline)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, TrainTheme.Space.lg)
+        ScrollView {
+            VStack(spacing: TrainTheme.Space.lg) {
+                Text(instruction)
+                    .font(.headline)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, TrainTheme.Space.lg)
 
-            if let encoded = qr?.encoded {
-                CompanionQRCodeView(encoded: encoded)
-            }
+                if let encoded = qr?.encoded {
+                    CompanionQRCodeView(encoded: encoded, dimension: 220)
+                }
 
-            if showsCamera {
-                ZStack {
-                    if CompanionScannerSupport.isCameraUsable {
-                        CompanionQRScanner { handleOptical($0) }
-                    } else {
-                        Color.black.opacity(0.08)
+                if showsCamera {
+                    ZStack {
+                        if CompanionScannerSupport.isCameraUsable {
+                            CompanionQRScanner { handleOptical($0) }
+                        } else {
+                            Color.black.opacity(0.12)
+                        }
+                        QRViewfinderFrame(color: TrainTheme.rail)
+                            .padding(12)
                     }
-                    RoundedRectangle(cornerRadius: 12)
-                        .strokeBorder(TrainTheme.rail, lineWidth: 3)
-                        .padding(28)
-                }
-                .frame(height: 220)
-                .clipShape(RoundedRectangle(cornerRadius: TrainTheme.Radius.control))
-                .padding(.horizontal, TrainTheme.Space.lg)
-            }
-
-            if phase == .awaitingLocalAuth || phase == .confirming {
-                Button("自分に戻して Face ID") {
-                    Task { await confirm() }
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(TrainTheme.rail)
-            }
-
-            if CompanionScannerSupport.isCameraUsable == false || showsPaste {
-                TextField("Mac の QR（todotrain://pair-mac…）", text: $paste)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .textFieldStyle(.roundedBorder)
+                    .aspectRatio(1, contentMode: .fit)
+                    .frame(maxWidth: 280, maxHeight: 280)
+                    .clipShape(RoundedRectangle(cornerRadius: TrainTheme.Radius.control))
                     .padding(.horizontal, TrainTheme.Space.lg)
-                Button("貼った URL を使う") {
-                    handleOptical(paste)
                 }
-                .disabled(paste.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            }
 
-            if let errorText {
-                Text(errorText)
-                    .font(.footnote)
-                    .foregroundStyle(TrainTheme.signalRed)
-                    .padding(.horizontal, TrainTheme.Space.lg)
-            }
+                if phase == .awaitingLocalAuth || phase == .confirming {
+                    Button("自分に戻して Face ID") {
+                        Task { await confirm() }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(TrainTheme.rail)
+                }
 
-            Spacer()
+                if showsPaste {
+                    TextField("Mac の QR（todotrain://pair-mac…）", text: $paste)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .textFieldStyle(.roundedBorder)
+                        .padding(.horizontal, TrainTheme.Space.lg)
+                    Button("貼った URL を使う") {
+                        handleOptical(paste)
+                    }
+                    .disabled(paste.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+
+                if let errorText {
+                    Text(errorText)
+                        .font(.footnote)
+                        .foregroundStyle(TrainTheme.signalRed)
+                        .padding(.horizontal, TrainTheme.Space.lg)
+                }
+            }
+            .padding(.top, TrainTheme.Space.lg)
+            .padding(.bottom, TrainTheme.Space.xl)
+            .frame(maxWidth: .infinity)
         }
-        .padding(.top, TrainTheme.Space.lg)
+        .scrollBounceBehavior(.basedOnSize)
         .background(TrainTheme.platform)
         .navigationTitle("この Mac とつなぐ")
         .navigationBarTitleDisplayMode(
@@ -78,7 +81,10 @@ struct CompanionPairingView: View {
         .task { await start() }
         .onDisappear {
             bindTask?.cancel()
-            Task { try? await flow?.abort() }
+            guard phase != .established else { return }
+            let current = flow
+            flow = nil
+            Task { try? await current?.abort() }
         }
     }
 
@@ -92,7 +98,7 @@ struct CompanionPairingView: View {
     }
 
     private var showsPaste: Bool {
-        showsCamera
+        showsCamera && CompanionScannerSupport.isCameraUsable == false
     }
 
     private var instruction: String {
@@ -140,7 +146,8 @@ struct CompanionPairingView: View {
 
     private func pollBind() async {
         guard let flow else { return }
-        for _ in 0..<40 {
+        let deadline = Date().addingTimeInterval(TimeInterval(SyncConstants.offerTtlSeconds))
+        while Date() < deadline {
             if Task.isCancelled { return }
             do {
                 let response = try await flow.refreshBind()
@@ -155,6 +162,7 @@ struct CompanionPairingView: View {
             }
             try? await Task.sleep(nanoseconds: 250_000_000)
         }
+        errorText = "つなぎ直しが必要"
     }
 
     private func confirm() async {

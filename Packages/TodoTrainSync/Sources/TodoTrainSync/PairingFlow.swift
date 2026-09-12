@@ -109,6 +109,7 @@ public actor PairingFlow {
     }
 
     public func abort() async throws {
+        guard phase != .established else { return }
         if let offerId {
             try? await client.deleteOffer(id: offerId)
         }

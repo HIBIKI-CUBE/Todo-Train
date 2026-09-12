@@ -1,7 +1,7 @@
 # 13 — 同期構成（確定）
 
 最終更新: 2026-09-12。土管・暗号・ペアリング契約。**画面の話はしない。**  
-Mac の体験は別紙 [14-mac-companion-ux.md](14-mac-companion-ux.md)（確認待ち）。
+Mac の体験は別紙 [14-mac-companion-ux.md](14-mac-companion-ux.md)（確認 1 は吹き出しで確定）。
 
 ワイヤの正本は [`sync/contract/`](../sync/contract/README.md)。実装は [15-agent-work-plan.md](15-agent-work-plan.md) のチケットへ。経路も `op` もここから増やさない。
 

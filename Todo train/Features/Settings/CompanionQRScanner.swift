@@ -51,9 +51,10 @@ struct CompanionQRScanner: UIViewControllerRepresentable {
         ) {
             guard !didEmit else { return }
             for item in addedItems {
-                if case .barcode(let barcode) = item, let payload = barcode.payloadStringValue {
+                if case .barcode(let barcode) = item,
+                   let payload = barcode.payloadStringValue,
+                   payload.hasPrefix("todotrain://") {
                     didEmit = true
-                    dataScanner.stopScanning()
                     onCode(payload)
                     return
                 }

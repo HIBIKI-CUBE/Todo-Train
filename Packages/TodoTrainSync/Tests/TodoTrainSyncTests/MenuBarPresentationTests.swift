@@ -69,6 +69,7 @@ struct MenuBarPresentationTests {
         #expect(unpaired.barTitle == nil)
         #expect(!unpaired.canPause)
         #expect(unpaired.popoverTitle == "iPhone で QR を出す")
+        #expect(unpaired.popoverDetail == "画面を Mac に向ける")
     }
 
     @Test func sendingBlocksResendUntilAck() {

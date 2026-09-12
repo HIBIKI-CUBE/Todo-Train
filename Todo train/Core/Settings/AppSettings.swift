@@ -71,7 +71,7 @@ final class AppSettings {
         }
     }
 
-    /// Relay for Mac companion. Release 既定は本番カスタムドメイン。DEBUG はローカル wrangler。
+    /// Relay for Mac companion. DEBUG 既定は develop ホスト。Release は本番。ローカル wrangler は設定で上書き。
     var companionRelayURLString: String {
         didSet {
             UserDefaults.standard.set(companionRelayURLString, forKey: Keys.companionRelayURL)
@@ -144,11 +144,10 @@ final class AppSettings {
             )
         }
 
-        if let storedRelay = UserDefaults.standard.string(forKey: Keys.companionRelayURL) {
-            companionRelayURLString = storedRelay
-        } else {
-            companionRelayURLString = RelayEndpoint.defaultURLString
-        }
+        companionRelayURLString = RelayEndpoint.coalesceStored(
+            UserDefaults.standard.string(forKey: Keys.companionRelayURL)
+        )
+        UserDefaults.standard.set(companionRelayURLString, forKey: Keys.companionRelayURL)
     }
 
     nonisolated static func clampPauseLimit(_ value: Int) -> Int {

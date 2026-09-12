@@ -46,6 +46,7 @@ struct OutgoingPauseApplyingTests {
         )
         #expect(view.barTitle == nil)
         #expect(view.popoverTitle == "iPhone で QR を出す")
+        #expect(view.popoverDetail == "画面を Mac に向ける")
         #expect(!view.canPause)
     }
 }

@@ -10,9 +10,19 @@ public enum RelayEndpoint: Sendable {
 
     public static var defaultURLString: String {
         #if DEBUG
-        localDevURLString
+        developURLString
         #else
         productionURLString
         #endif
+    }
+
+    /// Stored `127.0.0.1` was the old DEBUG default. Treat it as unset.
+    public static func coalesceStored(_ stored: String?) -> String {
+        guard let stored else { return defaultURLString }
+        let trimmed = stored.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty || trimmed == localDevURLString {
+            return defaultURLString
+        }
+        return trimmed
     }
 }
