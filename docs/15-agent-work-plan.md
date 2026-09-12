@@ -1,6 +1,6 @@
 # 15 — 同期実装の作業切り分け（エージェント振り分け）
 
-最終更新: 2026-09-09。契約は [13](13-sync-mac-companion.md)。Mac 画面は [14](14-mac-companion-ux.md)。  
+最終更新: 2026-09-12。契約は [13](13-sync-mac-companion.md)。Mac 画面は [14](14-mac-companion-ux.md)。  
 チケット本文は [issues/](issues/)。
 
 **Linux 隊列（SYNC-0 → 1∥2 → 5）は `develop` 済み。** 残る画面（カメラ / Face ID / メニューバー）だけが実機待ち。
@@ -51,7 +51,7 @@ flowchart TD
 - パッケージ: `cd Packages/TodoTrainSync && ../../sync/linux-swift.sh test`
 - 結合: `./sync/e2e/run.sh`
 
-Cloudflare 本番デプロイは secrets（`CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID`）待ち。無いときは workflow が skip する。
+Cloudflare ホストは本番 `https://todo-train.hibiki-cube.dev`、develop `https://dev.todo-train.hibiki-cube.dev`。secrets（`CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID`）が無いときは workflow が deploy を skip する。ゾーン `hibiki-cube.dev` は同じ Cloudflare アカウントに置く。
 
 ## 実機が空いてから
 
@@ -72,5 +72,5 @@ Linux Cloud Agent には投げない。蓋を開けた Mac で `cursor worker st
 ## 人間がやること
 
 1. SYNC-3 / 4 は Mac が空いたときに振る（Issue は作らなくてもよい）
-2. Cloudflare を載せるならリポジトリ secrets を足す
+2. Cloudflare を載せるならリポジトリ secrets を足す。ゾーン `hibiki-cube.dev` も同じアカウントへ。手順は `sync/worker/README.md`
 3. セルフィーとメニューバーは、手が空いたときの実機確認

@@ -5,6 +5,7 @@
 
 import Foundation
 import Observation
+import TodoTrainSync
 
 @Observable
 @MainActor
@@ -70,7 +71,7 @@ final class AppSettings {
         }
     }
 
-    /// Relay for Mac companion. Empty until the user pastes a Worker URL.
+    /// Relay for Mac companion. Release 既定は本番カスタムドメイン。DEBUG はローカル wrangler。
     var companionRelayURLString: String {
         didSet {
             UserDefaults.standard.set(companionRelayURLString, forKey: Keys.companionRelayURL)
@@ -146,11 +147,7 @@ final class AppSettings {
         if let storedRelay = UserDefaults.standard.string(forKey: Keys.companionRelayURL) {
             companionRelayURLString = storedRelay
         } else {
-            #if DEBUG
-            companionRelayURLString = "http://127.0.0.1:8787"
-            #else
-            companionRelayURLString = ""
-            #endif
+            companionRelayURLString = RelayEndpoint.defaultURLString
         }
     }
 

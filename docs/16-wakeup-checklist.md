@@ -1,6 +1,6 @@
 # 16 — 起床後にやること（確認が要る残り）
 
-最終更新: 2026-09-11。コード側で進められる引き継ぎは PR にした。ここは **人が見ないと閉じない** ものだけ。
+最終更新: 2026-09-12。コード側で進められる引き継ぎは PR にした。ここは **人が見ないと閉じない** ものだけ。
 
 ## マージしてよい PR（Web で足りる）
 
@@ -44,12 +44,15 @@
 - [ ] ウェブカメラ枠に iPhone を入れて haptic。Touch ID は自分に戻してから
 - [ ] ログイン時起動が既定 ON
 
-## リポジトリ secrets（任意・本番リレー）
+## リポジトリ secrets（本番リレー）
 
-無いと GitHub Actions の Cloudflare deploy は skip のまま。
+無いと GitHub Actions の Cloudflare deploy は skip のまま。ゾーン `hibiki-cube.dev` はデプロイ先アカウントに置く。詳細は `sync/worker/README.md`。
 
-- [ ] `CLOUDFLARE_API_TOKEN`
+- [ ] ゾーン `hibiki-cube.dev` が同じ Cloudflare アカウントにある
+- [ ] `CLOUDFLARE_API_TOKEN`（Edit Cloudflare Workers + ゾーンの DNS Edit）
 - [ ] `CLOUDFLARE_ACCOUNT_ID`
+- [ ] `develop` へ載せて `https://dev.todo-train.hibiki-cube.dev` が出る
+- [ ] `main` へ載せて `https://todo-train.hibiki-cube.dev` が出る
 
 ## 体験の覆し（SYNC-4 を本採用する前でも可）
 

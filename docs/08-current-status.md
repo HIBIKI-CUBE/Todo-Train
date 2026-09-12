@@ -1,6 +1,6 @@
 # 08 — 現状ステータス
 
-最終更新: 2026-09-11（車内放送 away を Session LA 割り込みへ。SYNC-3 / 4 は `develop`。確認は [16](16-wakeup-checklist.md)）
+最終更新: 2026-09-12（リレー `todo-train.hibiki-cube.dev` / `dev.todo-train.hibiki-cube.dev`。車内放送 away を Session LA 割り込みへ。SYNC-3 / 4 は `develop`。確認は [16](16-wakeup-checklist.md)）
 
 ## 結論
 
@@ -30,7 +30,7 @@
 | ID | 状態 | 備考 |
 |----|------|------|
 | SYNC-0 契約 | ✅ | `sync/contract/` |
-| SYNC-1 リレー | ✅ | `sync/worker/`。CI `sync-worker`。Cloudflare 本番は secrets 待ち |
+| SYNC-1 リレー | ✅ | `sync/worker/`。CI `sync-worker`。本番 `https://todo-train.hibiki-cube.dev`、develop `https://dev.todo-train.hibiki-cube.dev`。secrets が無いと deploy は skip |
 | SYNC-2 Swift 芯 | ✅ | `Packages/TodoTrainSync`。Mac は SYNC-4、iOS は SYNC-3 でリンク。CI `sync-swift` |
 | SYNC-5 Linux E2E | ✅ | `sync/e2e/run.sh`。CI `sync-swift` |
 | SYNC-3 iOS UI | `develop` 済み。実機待ち | Settings セルフィー + `SessionManager` 配線（#35） |

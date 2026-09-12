@@ -4,9 +4,9 @@
 # Deploy uses a *separate Worker name* per target. Aliased preview URLs
 # (wrangler versions upload --preview-alias) do not support Durable Objects.
 #
-#   pull_request → todotrain-sync-pr-<n>
-#   push develop → todotrain-sync-develop
-#   push main    → todotrain-sync
+#   pull_request              → todotrain-sync-pr-<n>     (https://pr-<n>.todo-train.hibiki-cube.dev)
+#   push develop              → todotrain-sync-develop    (https://dev.todo-train.hibiki-cube.dev)
+#   push main / dispatch prod → todotrain-sync            (https://todo-train.hibiki-cube.dev)
 #
 # Job-level `if` cannot read `secrets`. A small gate job maps repo/org
 # secrets to an output. Environment-only secrets are invisible here.
@@ -16,6 +16,15 @@ name: sync-worker
 
 on:
   workflow_dispatch:
+    inputs:
+      deploy:
+        description: "test のあとデプロイする先。none ならテストだけ。"
+        type: choice
+        options:
+          - none
+          - develop
+          - production
+        default: none
   push:
     branches: [develop, main]
     paths:
@@ -99,6 +108,8 @@ jobs:
         uses: ./.github/actions/deploy-sync-worker
         with:
           worker-name: todotrain-sync-pr-${{ github.event.pull_request.number }}
+          custom-domain: pr-${{ github.event.pull_request.number }}.todo-train.hibiki-cube.dev
+          public-url: https://pr-${{ github.event.pull_request.number }}.todo-train.hibiki-cube.dev
           api-token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -108,9 +119,11 @@ jobs:
     name: deploy develop
     needs: [test, cloudflare-creds]
     if: >-
-      github.event_name == 'push'
-      && github.ref == 'refs/heads/develop'
-      && needs.cloudflare-creds.outputs.present == 'true'
+      needs.cloudflare-creds.outputs.present == 'true'
+      && (
+        (github.event_name == 'push' && github.ref == 'refs/heads/develop')
+        || (github.event_name == 'workflow_dispatch' && inputs.deploy == 'develop')
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -126,6 +139,8 @@ jobs:
         uses: ./.github/actions/deploy-sync-worker
         with:
           worker-name: todotrain-sync-develop
+          deploy-command: deploy --env develop
+          public-url: https://dev.todo-train.hibiki-cube.dev
           api-token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -134,9 +149,11 @@ jobs:
     name: deploy production
     needs: [test, cloudflare-creds]
     if: >-
-      github.event_name == 'push'
-      && github.ref == 'refs/heads/main'
-      && needs.cloudflare-creds.outputs.present == 'true'
+      needs.cloudflare-creds.outputs.present == 'true'
+      && (
+        (github.event_name == 'push' && github.ref == 'refs/heads/main')
+        || (github.event_name == 'workflow_dispatch' && inputs.deploy == 'production')
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -152,6 +169,8 @@ jobs:
         uses: ./.github/actions/deploy-sync-worker
         with:
           worker-name: todotrain-sync
+          deploy-command: deploy --env production
+          public-url: https://todo-train.hibiki-cube.dev
           api-token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           github-token: ${{ secrets.GITHUB_TOKEN }}

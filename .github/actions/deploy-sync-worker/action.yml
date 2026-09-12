@@ -18,10 +18,22 @@ inputs:
     description: Post or update a sticky comment on the current PR
     required: false
     default: "false"
+  deploy-command:
+    description: Full wrangler command. Empty uses `deploy --name <worker-name>`.
+    required: false
+    default: ""
+  public-url:
+    description: Canonical HTTPS URL to report (custom domain). Empty uses workers.dev from the deploy log.
+    required: false
+    default: ""
+  custom-domain:
+    description: Hostname to attach as a Workers custom domain (no scheme). Empty skips. Used for per-PR hosts.
+    required: false
+    default: ""
 
 outputs:
   deployment-url:
-    description: workers.dev URL for this Worker
+    description: Public URL for this Worker
     value: ${{ steps.url.outputs.url }}
 
 runs:
@@ -32,6 +44,23 @@ runs:
         node-version: "22"
         cache: npm
         cache-dependency-path: sync/worker/package-lock.json
+
+    - name: Attach custom domain
+      if: ${{ inputs.custom-domain != '' }}
+      shell: bash
+      env:
+        CUSTOM_DOMAIN: ${{ inputs.custom-domain }}
+      run: |
+        set -euo pipefail
+        case "$CUSTOM_DOMAIN" in
+          *[!A-Za-z0-9.-]*|"") echo "invalid custom domain: ${CUSTOM_DOMAIN}"; exit 1 ;;
+        esac
+        cat >> "${GITHUB_WORKSPACE}/sync/worker/wrangler.toml" <<EOF
+
+[[routes]]
+pattern = "${CUSTOM_DOMAIN}"
+custom_domain = true
+EOF
 
     - name: Deploy
       id: deploy
@@ -45,20 +74,24 @@ runs:
         packageManager: npm
         wranglerVersion: "4.129.1"
         gitHubToken: ${{ inputs.github-token }}
-        command: deploy --name ${{ inputs.worker-name }}
+        command: ${{ inputs.deploy-command || format('deploy --name {0}', inputs.worker-name) }}
 
-    - name: Resolve workers.dev URL
+    - name: Resolve public URL
       id: url
       shell: bash
       env:
+        PUBLIC_URL: ${{ inputs.public-url }}
         DEPLOY_URL: ${{ steps.deploy.outputs.deployment-url }}
         CMD_OUTPUT: ${{ steps.deploy.outputs.command-output }}
         WORKER_NAME: ${{ inputs.worker-name }}
       run: |
         set -euo pipefail
-        url="${DEPLOY_URL:-}"
-        if [ -z "$url" ] || ! grep -q 'workers.dev' <<<"$url"; then
-          extracted="$(printf '%s\n' "$CMD_OUTPUT" | grep -Eo 'https://[A-Za-z0-9.-]+\.workers\.dev' | head -n1 || true)"
+        url="${PUBLIC_URL:-}"
+        if [ -z "$url" ]; then
+          url="${DEPLOY_URL:-}"
+        fi
+        if [ -z "$url" ] || ! grep -Eq '^https://' <<<"$url"; then
+          extracted="$(printf '%s\n' "$CMD_OUTPUT" | grep -Eo 'https://[A-Za-z0-9.-]+\.(workers\.dev|hibiki-cube\.dev)' | head -n1 || true)"
           if [ -n "$extracted" ]; then
             url="$extracted"
           fi
@@ -78,9 +111,12 @@ runs:
           const marker = '<!-- todotrain-sync-preview -->';
           const url = process.env.DEPLOY_URL || '';
           const worker = process.env.WORKER_NAME;
+          const fallback = worker.startsWith('todotrain-sync-pr-')
+            ? `https://${worker.replace('todotrain-sync-pr-', 'pr-')}.todo-train.hibiki-cube.dev`
+            : `https://${worker}.<account-subdomain>.workers.dev`;
           const urlLine = url
             ? `- URL: ${url}`
-            : `- URL: \`https://${worker}.<account-subdomain>.workers.dev\`（ログから URL を取れなかった）`;
+            : `- URL: \`${fallback}\`（ログから URL を取れなかった）`;
           const body = [
             marker,
             '### Sync worker preview',

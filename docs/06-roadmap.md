@@ -63,7 +63,7 @@
 
 1. **SYNC-3 / 4** — `develop` 済み。実機確認は [16-wakeup-checklist.md](16-wakeup-checklist.md)。切り分けは [15](15-agent-work-plan.md)
 2. **WP-I CloudKit** — ゲート維持。Mac 土管には使わない
-3. Cloudflare 本番 — リポジトリに `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` が付いたら `todotrain-sync-develop`
+3. Cloudflare — 本番 `https://todo-train.hibiki-cube.dev`、develop `https://dev.todo-train.hibiki-cube.dev`。リポジトリに `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` が付いたら `develop` / `main` へ載せる
 
 ## 受入の芯（MVP・達成済みの意図）
 

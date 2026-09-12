@@ -46,7 +46,7 @@ final class CompanionMacRuntime {
         self.localAuth = localAuth
         self.defaults = defaults
         self.registersLoginItem = registersLoginItem
-        self.relayURLString = defaults.string(forKey: Defaults.relayURL) ?? "http://127.0.0.1:8787"
+        self.relayURLString = defaults.string(forKey: Defaults.relayURL) ?? RelayEndpoint.defaultURLString
         self.loginAtStartup = defaults.object(forKey: Defaults.loginItemOptOut) as? Bool != true
         refreshPaired()
         applyLoginItem()

@@ -1,6 +1,8 @@
-# Production script name. CI overrides with `wrangler deploy --name` for
-# develop (`todotrain-sync-develop`) and PRs (`todotrain-sync-pr-<n>`).
-# Do not put account_id here; Actions passes CLOUDFLARE_ACCOUNT_ID.
+# Worker names: production `todotrain-sync`, develop `todotrain-sync-develop`,
+# PRs `todotrain-sync-pr-<n>` (CI uses `--name` plus a per-PR custom domain).
+# Hostnames live under `todo-train.hibiki-cube.dev` so preview / develop do
+# not steal production. Do not put account_id here; Actions passes
+# CLOUDFLARE_ACCOUNT_ID.
 name = "todotrain-sync"
 main = "src/index.ts"
 compatibility_date = "2026-08-22"
@@ -17,3 +19,43 @@ class_name = "DirectoryDurableObject"
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["PairingDurableObject", "DirectoryDurableObject"]
+
+# Zone `hibiki-cube.dev` must live on the same Cloudflare account as
+# CLOUDFLARE_ACCOUNT_ID. Bindings are not inheritable; keep in sync with
+# the top-level list.
+#
+#   production → todo-train.hibiki-cube.dev
+#   develop    → dev.todo-train.hibiki-cube.dev
+#   PR         → pr-<n>.todo-train.hibiki-cube.dev (attached by CI)
+
+[env.develop]
+name = "todotrain-sync-develop"
+workers_dev = true
+
+[[env.develop.routes]]
+pattern = "dev.todo-train.hibiki-cube.dev"
+custom_domain = true
+
+[[env.develop.durable_objects.bindings]]
+name = "PAIRING"
+class_name = "PairingDurableObject"
+
+[[env.develop.durable_objects.bindings]]
+name = "DIRECTORY"
+class_name = "DirectoryDurableObject"
+
+[env.production]
+name = "todotrain-sync"
+workers_dev = true
+
+[[env.production.routes]]
+pattern = "todo-train.hibiki-cube.dev"
+custom_domain = true
+
+[[env.production.durable_objects.bindings]]
+name = "PAIRING"
+class_name = "PairingDurableObject"
+
+[[env.production.durable_objects.bindings]]
+name = "DIRECTORY"
+class_name = "DirectoryDurableObject"

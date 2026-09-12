@@ -34,4 +34,12 @@ struct AppSettingsTests {
         #expect(AppSettings.clampEstimateMinutes(30) == 30)
         #expect(AppSettings.clampEstimateMinutes(90) == 60)
     }
+
+    @Test func companionRelayURL_acceptsProductionHTTPS() {
+        let settings = AppSettings.makeForTesting(
+            companionRelayURLString: "https://todo-train.hibiki-cube.dev"
+        )
+        #expect(settings.companionRelayURL?.scheme == "https")
+        #expect(settings.companionRelayURL?.host == "todo-train.hibiki-cube.dev")
+    }
 }

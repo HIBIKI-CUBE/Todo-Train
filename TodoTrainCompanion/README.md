@@ -8,7 +8,7 @@ macOS メニューバー（SYNC-4）。Dock には出さない accessory。表�
 2. Xcode スキーム `TodoTrainCompanion` を Mac で Run
 3. iPhone 側は SYNC-3（#35）の設定 → Mac → 画面をこの Mac に向ける
 
-設定のリレー URL 既定は `http://127.0.0.1:8787`。本番 Cloudflare は secrets 待ち。
+設定のリレー URL 既定は Release が `https://todo-train.hibiki-cube.dev`、DEBUG が `http://127.0.0.1:8787`。develop リレーは `https://dev.todo-train.hibiki-cube.dev`。PR プレビューは `https://pr-<n>.todo-train.hibiki-cube.dev` を設定で上書きする。
 
 ## テスト
 

@@ -1,6 +1,6 @@
 # 13 — 同期構成（確定）
 
-最終更新: 2026-09-09。土管・暗号・ペアリング契約。**画面の話はしない。**  
+最終更新: 2026-09-12。土管・暗号・ペアリング契約。**画面の話はしない。**  
 Mac の体験は別紙 [14-mac-companion-ux.md](14-mac-companion-ux.md)（確認待ち）。
 
 ワイヤの正本は [`sync/contract/`](../sync/contract/README.md)。実装は [15-agent-work-plan.md](15-agent-work-plan.md) のチケットへ。経路も `op` もここから増やさない。
@@ -11,7 +11,7 @@ Mac の体験は別紙 [14-mac-companion-ux.md](14-mac-companion-ux.md)（確認
 |------|------|
 | 誰が本尊か | iPhone の SwiftData + `SessionManager`。リレーは正本にしない |
 | 何を運ぶか | 暗号化スナップショット（いまの乗務）と暗号化コマンド（いまは `pause`） |
-| 土管 | Hono on Cloudflare Workers + pairing 1 つ = Durable Object 1 つ |
+| 土管 | Hono on Cloudflare Workers + pairing 1 つ = Durable Object 1 つ。本番 `https://todo-train.hibiki-cube.dev`、develop `https://dev.todo-train.hibiki-cube.dev` |
 | ローカル通信 | **主経路にしない。** 社内 Wi-Fi はクライアント分離・mDNS 遮断があり得る |
 | 機密 | 正規ユーザー以外は中身を見られない。Apple / 自前サーバ / 押収を含む |
 | 起こし | **求めない。** iOS は前面、または `ScenePhase.active` 復帰で送受信 |
