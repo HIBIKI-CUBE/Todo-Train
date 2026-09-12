@@ -1,16 +1,16 @@
 # 13 — 同期構成（確定）
 
 最終更新: 2026-09-12。土管・暗号・ペアリング契約。**画面の話はしない。**  
-Mac の体験は別紙 [14-mac-companion-ux.md](14-mac-companion-ux.md)（確認 1 は吹き出しで確定）。
+Mac の体験は別紙 [14-mac-companion-ux.md](14-mac-companion-ux.md)（確認 1 は吹き出し、2 は停車と再乗車で確定）。
 
-ワイヤの正本は [`sync/contract/`](../sync/contract/README.md)。実装は [15-agent-work-plan.md](15-agent-work-plan.md) のチケットへ。経路も `op` もここから増やさない。
+ワイヤの正本は [`sync/contract/`](../sync/contract/README.md)。実装は [15-agent-work-plan.md](15-agent-work-plan.md) のチケットへ。経路と `arrive` / `extend` は増やさない。`resume` は 2026-09-12 に追加。
 
 ## 決めたこと
 
 | 項目 | 決定 |
 |------|------|
 | 誰が本尊か | iPhone の SwiftData + `SessionManager`。リレーは正本にしない |
-| 何を運ぶか | 暗号化スナップショット（いまの乗務）と暗号化コマンド（いまは `pause`） |
+| 何を運ぶか | 暗号化スナップショット（いまの乗務）と暗号化コマンド（`pause` / `resume`） |
 | 土管 | Hono on Cloudflare Workers + pairing 1 つ = Durable Object 1 つ。本番 `https://todo-train.hibiki-cube.dev`、develop `https://dev.todo-train.hibiki-cube.dev` |
 | ローカル通信 | **主経路にしない。** 社内 Wi-Fi はクライアント分離・mDNS 遮断があり得る |
 | 機密 | 正規ユーザー以外は中身を見られない。Apple / 自前サーバ / 押収を含む |
@@ -181,7 +181,7 @@ remaining     = estimatedSeconds - elapsedActive
 { "id": "uuid", "op": "pause", "sessionId": "…", "at": 0 }
 ```
 
-v1 の `op` は `pause` だけ。再開・到着・延長は同期契約に載せない。
+v1 の `op` は `pause` と `resume`。到着・延長は同期契約に載せない。
 
 ### コマンド結果平文（ack）
 
@@ -191,7 +191,7 @@ iPhone が cmd を処理したら、成否を暗号化した ack を置く。購
 { "cmdId": "uuid", "ok": false, "error": "pauseLimitReached" }
 ```
 
-ワイヤの `error` は `pauseLimitReached` / `noActiveService` / `sessionMismatch` / `decryptFailed` だけ。`sessionMismatch` と `decryptFailed` はワイヤ専用（iOS の `SessionError` には無い）。`noActiveSession` は `noActiveService` に落とす。`SessionError` の残りは載せない。平文のタイトルは載せない。`ok: true` のとき `error` キーは置かない。
+ワイヤの `error` は `pauseLimitReached` / `noActiveService` / `sessionMismatch` / `decryptFailed` / `notPaused` だけ。`sessionMismatch` と `decryptFailed` はワイヤ専用（iOS の `SessionError` には無い）。`noActiveSession` は `noActiveService` に落とす。`SessionError.notPaused` は `notPaused` に落とす。`SessionError` の残りは載せない。平文のタイトルは載せない。`ok: true` のとき `error` キーは置かない。
 
 ---
 
@@ -231,7 +231,7 @@ iOS 前面と購読者が両方 WS にいるとき、cmd は即時。iOS が背�
 
 - `ScenePhase.active` と発車 / 停車 / 延長 / 到着 / 超過突入のたびに snap を置く
 - active 中は WS。切れたら出し直す。定期ポーリングはしない
-- 受信 cmd を復号 → `sessionId` が今の open と一致 → `SessionManager` で実行 → snap + ack
+- 受信 cmd を復号 → `sessionId` が今の open と一致 → `SessionManager` で実行（停車 / 再乗車）→ snap + ack
 - 不一致・復号失敗・`SessionError` は ack `ok: false`。snap は現状のまま
 
 **購読者（Mac など）**

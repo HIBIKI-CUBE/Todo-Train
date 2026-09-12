@@ -119,6 +119,26 @@ final class CompanionMacRuntime {
         startListening()
     }
 
+    func unpair() {
+        pairingBindTask?.cancel()
+        pairingConfirmTask?.cancel()
+        pairingBindTask = nil
+        pairingConfirmTask = nil
+        pairingFlow = nil
+        pairingPhase = .idle
+        pairingQR = nil
+        pairingCue = .scanning
+        listenTask?.cancel()
+        listenTask = nil
+        try? secrets.delete()
+        snap = nil
+        outgoingPause = .idle
+        lastStatus = nil
+        connection = .disconnected
+        refreshPaired()
+        startListening()
+    }
+
     var pairingCameraActive: Bool {
         guard pairingUIVisible, !isPaired else { return false }
         switch pairingPhase {
@@ -292,7 +312,20 @@ final class CompanionMacRuntime {
     }
 
     func sendPause() async {
-        guard presentation.canPause else { return }
+        await sendRideCommand(.pause)
+    }
+
+    func sendResume() async {
+        await sendRideCommand(.resume)
+    }
+
+    private func sendRideCommand(_ op: WireOp) async {
+        switch op {
+        case .pause:
+            guard presentation.canPause, !presentation.isSending else { return }
+        case .resume:
+            guard presentation.canResume, !presentation.isSending else { return }
+        }
         guard let snap, let sessionId = snap.sessionId else { return }
         let cmdId = UUID()
         guard let next = OutgoingPauseApplying.beginSending(cmdId: cmdId, current: outgoingPause) else {
@@ -305,6 +338,7 @@ final class CompanionMacRuntime {
             let client = try authedClient(writeToken: pairing.writeToken)
             let command = CommandPlaintext(
                 id: cmdId,
+                op: op,
                 sessionId: sessionId,
                 at: now
             )

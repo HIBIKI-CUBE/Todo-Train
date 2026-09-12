@@ -45,6 +45,7 @@ public struct MenuBarPresentation: Equatable, Sendable {
     public var remainingSeconds: Int?
     public var isOvertime: Bool
     public var canPause: Bool
+    public var canResume: Bool
     public var isSending: Bool
     public var popoverTitle: String
     public var popoverDetail: String
@@ -59,6 +60,7 @@ public struct MenuBarPresentation: Equatable, Sendable {
                 remainingSeconds: nil,
                 isOvertime: false,
                 canPause: false,
+                canResume: false,
                 isSending: false,
                 popoverTitle: "iPhone で QR を出す",
                 popoverDetail: "画面を Mac に向ける",
@@ -93,16 +95,23 @@ public struct MenuBarPresentation: Equatable, Sendable {
             )
         case .paused:
             let remaining = snap.remainingSeconds(at: input.now)
+            let detail: String
+            if input.connection == .disconnected {
+                detail = "iPhone とつながっていない"
+            } else if sending {
+                detail = "iPhone に送った"
+            } else {
+                detail = "停車中"
+            }
             return MenuBarPresentation(
                 barTitle: "停車中",
                 remainingSeconds: remaining,
                 isOvertime: (remaining ?? 1) <= 0,
                 canPause: false,
-                isSending: false,
+                canResume: true,
+                isSending: sending,
                 popoverTitle: snap.title ?? "停車中",
-                popoverDetail: input.connection == .disconnected
-                    ? "iPhone とつながっていない"
-                    : "停車中",
+                popoverDetail: detail,
                 failureLine: failureLine
             )
         case .running, .overtime:
@@ -111,14 +120,6 @@ public struct MenuBarPresentation: Equatable, Sendable {
             let truncated = truncatedTitle(snap.title)
             let remainingLabel = remaining.map(formatRemaining) ?? ""
             let bar = [truncated, remainingLabel].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " ")
-            let canPause: Bool
-            if sending {
-                canPause = false
-            } else if case .failed = input.outgoingPause {
-                canPause = true
-            } else {
-                canPause = true
-            }
             let detail: String
             if input.connection == .disconnected {
                 detail = "iPhone とつながっていない"
@@ -133,7 +134,8 @@ public struct MenuBarPresentation: Equatable, Sendable {
                 barTitle: bar.isEmpty ? truncated : bar,
                 remainingSeconds: remaining,
                 isOvertime: overtime,
-                canPause: canPause,
+                canPause: true,
+                canResume: false,
                 isSending: sending,
                 popoverTitle: snap.title ?? "",
                 popoverDetail: detail,
@@ -162,6 +164,7 @@ public struct MenuBarPresentation: Equatable, Sendable {
         case .noActiveService: "乗務なし"
         case .sessionMismatch: "乗務が変わった"
         case .decryptFailed: "送れなかった"
+        case .notPaused: "停車中ではない"
         }
     }
 
@@ -175,6 +178,7 @@ public struct MenuBarPresentation: Equatable, Sendable {
             remainingSeconds: nil,
             isOvertime: false,
             canPause: false,
+            canResume: false,
             isSending: sending,
             popoverTitle: "乗務なし",
             popoverDetail: disconnected ? "iPhone とつながっていない" : "乗務なし",

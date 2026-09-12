@@ -66,7 +66,7 @@ Linux Cloud Agent には投げない。蓋を開けた Mac で `cursor worker st
 
 - 自分のチケットのパス以外を書き換えない
 - 13 と矛盾するプロトコルを発明しない
-- アカウント、CloudKit on、APNs、ポーリング、LAN 主経路、CRDT、`pause` 以外の cmd を足さない
+- アカウント、CloudKit on、APNs、ポーリング、LAN 主経路、CRDT、`arrive` / `extend` の cmd を足さない
 - 1 PR = 1 チケット
 
 ## 人間がやること

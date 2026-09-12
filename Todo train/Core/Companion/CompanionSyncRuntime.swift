@@ -194,10 +194,13 @@ final class CompanionSyncRuntime {
             openSessionId: sessionManager.activeSession?.id,
             pausedCount: sessionManager.pausedTicketCount,
             pauseLimit: sessionManager.pauseLimit,
+            isPaused: sessionManager.activeSession?.isPaused == true,
             command: command
         )
-        if CompanionCommandApplying.shouldCallPause(decision) {
+        if CompanionCommandApplying.shouldCallPause(decision, op: command.op) {
             try sessionManager.pause()
+        } else if CompanionCommandApplying.shouldCallResume(decision, op: command.op) {
+            try sessionManager.resume()
         }
         let ack = RemotePauseEvaluating.ack(decision: decision, commandId: command.id)
         let ackEnvelope = try CompanionEnvelope.seal(
@@ -282,6 +285,8 @@ final class CompanionSyncRuntime {
                 return "確定の時間切れ。もう一度画面を向けてください"
             case .transport(_, let code) where code == "pauseLimitReached":
                 return "停車できません（停車上限）"
+            case .transport(_, let code) where code == "notPaused":
+                return "停車中ではない"
             default:
                 return "iPhone とつながっていない"
             }

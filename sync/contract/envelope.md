@@ -86,6 +86,6 @@ remaining      = estimatedSeconds - elapsedActive
 
 ## Cmd / ack 平文
 
-- cmd: [fixtures/cmd-pause.json](fixtures/cmd-pause.json)。`op` は `pause` だけ。
+- cmd: [fixtures/cmd-pause.json](fixtures/cmd-pause.json) / [fixtures/cmd-resume.json](fixtures/cmd-resume.json)。`op` は `pause` と `resume`。
 - ack 成功: [fixtures/ack-ok.json](fixtures/ack-ok.json)。`ok: true` のとき `error` キーは置かない。
 - ack 失敗: [fixtures/ack-pauseLimitReached.json](fixtures/ack-pauseLimitReached.json)。`error` は [enums.json](enums.json) のみ。タイトルは載せない。

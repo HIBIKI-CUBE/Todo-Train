@@ -1,16 +1,17 @@
 {
   "phase": ["idle", "running", "paused", "overtime"],
   "kind": ["snap", "cmd", "ack"],
-  "op": ["pause"],
+  "op": ["pause", "resume"],
   "error": [
     "pauseLimitReached",
     "noActiveService",
     "sessionMismatch",
-    "decryptFailed"
+    "decryptFailed",
+    "notPaused"
   ],
   "notes": {
     "phase": "SessionPhase raw values. Unknown values: display conservatively, do not crash.",
-    "op": "v1 allows pause only. Do not add resume/arrive/extend on the wire.",
-    "error": "Ack wire errors only. sessionMismatch and decryptFailed are wire-only (not SessionError cases). Map noActiveSession to noActiveService. Do not put the rest of SessionError on the wire."
+    "op": "v1 allows pause and resume. Do not add arrive/extend on the wire.",
+    "error": "Ack wire errors only. sessionMismatch and decryptFailed are wire-only (not SessionError cases). Map noActiveSession to noActiveService. Map SessionError.notPaused to notPaused. Do not put the rest of SessionError on the wire."
   }
 }

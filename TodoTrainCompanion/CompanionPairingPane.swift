@@ -7,12 +7,14 @@ struct CompanionPairingPane: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
+            HStack(alignment: .top, spacing: 8) {
                 cueIcon
                 Text(runtime.pairingCue.message)
                     .font(.headline)
                     .foregroundStyle(cueForeground)
                     .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 8)
+                CompanionSettingsGear()
             }
 
             ZStack {

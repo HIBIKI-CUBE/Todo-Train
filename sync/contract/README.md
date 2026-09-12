@@ -1,12 +1,12 @@
 # sync/contract — ワイヤ契約の正本
 
-最終更新: 2026-09-08。散文の背景は [docs/13-sync-mac-companion.md](../../docs/13-sync-mac-companion.md)。
+最終更新: 2026-09-12。散文の背景は [docs/13-sync-mac-companion.md](../../docs/13-sync-mac-companion.md)。
 
 **Swift（SYNC-2）も Worker（SYNC-1）も、ワイヤ形式の正はここだけ。** 実装ディレクトリに別のスキーマや「本当の」エンベロープを書かない。テストはこのディレクトリの JSON / 例を fixture として読む。
 
 Worker は `ct` を JSON.parse しない。平文フィクスチャと AES-GCM ベクトルはクライアント側の round-trip 用。復号鍵を Worker テストに持たない。
 
-新しい HTTP 経路も `pause` 以外の `op` も、ここから足さない。
+新しい HTTP 経路も `arrive` / `extend` の `op` も、ここから足さない。`resume` は 2026-09-12 に追加。
 
 ## ファイル一覧
 
@@ -22,6 +22,7 @@ Worker は `ct` を JSON.parse しない。平文フィクスチャと AES-GCM �
 | [fixtures/snap.json](fixtures/snap.json) | 走行中 snap 平文 |
 | [fixtures/snap-idle.json](fixtures/snap-idle.json) | 乗務なし snap 平文 |
 | [fixtures/cmd-pause.json](fixtures/cmd-pause.json) | `op: pause` 平文 |
+| [fixtures/cmd-resume.json](fixtures/cmd-resume.json) | `op: resume` 平文 |
 | [fixtures/ack-ok.json](fixtures/ack-ok.json) | 成功 ack 平文 |
 | [fixtures/ack-pauseLimitReached.json](fixtures/ack-pauseLimitReached.json) | 停車上限 ack 平文 |
 | [vectors/aes-gcm-snap.json](vectors/aes-gcm-snap.json) | 既知鍵の AES-GCM と confirm HMAC。Worker は使わない |

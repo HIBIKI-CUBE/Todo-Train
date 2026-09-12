@@ -62,6 +62,19 @@ struct GoldenJSONTests {
         #expect((object["id"] as? String)?.contains("A") == false)
     }
 
+    @Test func cmdResumeRoundTrip() throws {
+        let data = try ContractFixtures.data("fixtures/cmd-resume.json")
+        let decoded = try WireJSON.decoder().decode(CommandPlaintext.self, from: data)
+        #expect(decoded.op == .resume)
+        #expect(decoded.id == UUID(uuidString: "44444444-4444-4444-8444-444444444444"))
+        #expect(decoded.sessionId == UUID(uuidString: "11111111-1111-4111-8111-111111111111"))
+
+        let encoded = try WireJSON.encoder().encode(decoded)
+        let again = try JSONSerialization.jsonObject(with: encoded) as! [String: Any]
+        #expect(again["op"] as? String == "resume")
+        #expect((again["id"] as? String)?.contains("A") == false)
+    }
+
     @Test func ackOkOmitsErrorKey() throws {
         let data = try ContractFixtures.data("fixtures/ack-ok.json")
         let decoded = try WireJSON.decoder().decode(AckPlaintext.self, from: data)
@@ -108,9 +121,9 @@ struct GoldenJSONTests {
         let json = try JSONSerialization.jsonObject(with: data) as! [String: Any]
         #expect(json["phase"] as? [String] == ["idle", "running", "paused", "overtime"])
         #expect(json["kind"] as? [String] == ["snap", "cmd", "ack"])
-        #expect(json["op"] as? [String] == ["pause"])
+        #expect(json["op"] as? [String] == ["pause", "resume"])
         #expect(json["error"] as? [String] == [
-            "pauseLimitReached", "noActiveService", "sessionMismatch", "decryptFailed",
+            "pauseLimitReached", "noActiveService", "sessionMismatch", "decryptFailed", "notPaused",
         ])
     }
 }

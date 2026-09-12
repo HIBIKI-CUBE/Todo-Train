@@ -22,6 +22,7 @@ public enum WireKind: String, Codable, Sendable, Equatable {
 
 public enum WireOp: String, Codable, Sendable, Equatable {
     case pause
+    case resume
 }
 
 public enum WireError: String, Codable, Sendable, Equatable {
@@ -29,6 +30,7 @@ public enum WireError: String, Codable, Sendable, Equatable {
     case noActiveService
     case sessionMismatch
     case decryptFailed
+    case notPaused
 }
 
 /// `phase` on the wire. Unknown values must not crash; display conservatively.

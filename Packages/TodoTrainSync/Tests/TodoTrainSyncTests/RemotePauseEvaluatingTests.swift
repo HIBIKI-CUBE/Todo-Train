@@ -59,4 +59,40 @@ struct RemotePauseEvaluatingTests {
         #expect(decision == .noActiveService)
         #expect(RemotePauseEvaluating.ack(decision: decision, commandId: command.id).error == .noActiveService)
     }
+
+    @Test func resumeAppliesWhenPaused() {
+        let resume = CommandPlaintext(
+            id: UUID(uuidString: "44444444-4444-4444-8444-444444444444")!,
+            op: .resume,
+            sessionId: session,
+            at: 1_768_000_120
+        )
+        let decision = RemotePauseEvaluating.evaluate(
+            openSessionId: session,
+            pausedCount: 2,
+            pauseLimit: 2,
+            isPaused: true,
+            command: resume
+        )
+        #expect(decision == .apply)
+        #expect(RemotePauseEvaluating.ack(decision: decision, commandId: resume.id).ok)
+    }
+
+    @Test func resumeRejectedWhenNotPaused() {
+        let resume = CommandPlaintext(
+            id: UUID(uuidString: "44444444-4444-4444-8444-444444444444")!,
+            op: .resume,
+            sessionId: session,
+            at: 1_768_000_120
+        )
+        let decision = RemotePauseEvaluating.evaluate(
+            openSessionId: session,
+            pausedCount: 0,
+            pauseLimit: 2,
+            isPaused: false,
+            command: resume
+        )
+        #expect(decision == .notPaused)
+        #expect(RemotePauseEvaluating.ack(decision: decision, commandId: resume.id).error == .notPaused)
+    }
 }

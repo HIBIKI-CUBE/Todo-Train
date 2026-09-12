@@ -19,7 +19,7 @@
 10. [docs/11-v2-alarmkit-setup.md](docs/11-v2-alarmkit-setup.md) — Widget / LA / AlarmKit 配線・検証
 11. [docs/12-ui-design.md](docs/12-ui-design.md) — UI 方針
 12. [docs/13-sync-mac-companion.md](docs/13-sync-mac-companion.md) — 同期構成（土管。確定）
-13. [docs/14-mac-companion-ux.md](docs/14-mac-companion-ux.md) — Mac コンパニオン体験（確認 1 は吹き出しで確定。2–6 は提案値）
+13. [docs/14-mac-companion-ux.md](docs/14-mac-companion-ux.md) — Mac コンパニオン体験（確認 1 は吹き出し、2 は停車と再乗車で確定。3–6 は提案値）
 14. [docs/15-agent-work-plan.md](docs/15-agent-work-plan.md) — 同期の切り分け。自分のチケットの「触ってよいパス」だけを触る
 15. [docs/16-wakeup-checklist.md](docs/16-wakeup-checklist.md) — 人が見ないと閉じない確認・マージ順
 

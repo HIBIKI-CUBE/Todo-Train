@@ -62,10 +62,14 @@ struct CompanionSnapBuildingTests {
 
 struct CompanionCommandApplyingTests {
     @Test func onlyApplyCallsPause() {
-        #expect(CompanionCommandApplying.shouldCallPause(.apply))
-        #expect(!CompanionCommandApplying.shouldCallPause(.pauseLimitReached))
-        #expect(!CompanionCommandApplying.shouldCallPause(.sessionMismatch))
-        #expect(!CompanionCommandApplying.shouldCallPause(.noActiveService))
+        #expect(CompanionCommandApplying.shouldCallPause(.apply, op: .pause))
+        #expect(!CompanionCommandApplying.shouldCallPause(.pauseLimitReached, op: .pause))
+        #expect(!CompanionCommandApplying.shouldCallPause(.sessionMismatch, op: .pause))
+        #expect(!CompanionCommandApplying.shouldCallPause(.noActiveService, op: .pause))
+        #expect(!CompanionCommandApplying.shouldCallPause(.apply, op: .resume))
+        #expect(CompanionCommandApplying.shouldCallResume(.apply, op: .resume))
+        #expect(!CompanionCommandApplying.shouldCallResume(.notPaused, op: .resume))
+        #expect(!CompanionCommandApplying.shouldCallResume(.apply, op: .pause))
     }
 }
 

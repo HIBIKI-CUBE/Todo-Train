@@ -28,6 +28,7 @@ struct MenuBarPresentationTests {
         #expect(view.remainingSeconds == 1380)
         #expect(!view.isOvertime)
         #expect(view.canPause)
+        #expect(!view.canResume)
         #expect(!view.isSending)
         #expect(view.popoverTitle == "週次レポート")
     }
@@ -51,6 +52,7 @@ struct MenuBarPresentationTests {
         )
         #expect(view.barTitle == "停車中")
         #expect(!view.canPause)
+        #expect(view.canResume)
         #expect(view.popoverDetail == "停車中")
         #expect(view.remainingSeconds == running.remainingSeconds(at: 1_768_000_100))
     }
@@ -61,6 +63,7 @@ struct MenuBarPresentationTests {
         )
         #expect(idleView.barTitle == nil)
         #expect(!idleView.canPause)
+        #expect(!idleView.canResume)
         #expect(idleView.popoverTitle == "乗務なし")
 
         let unpaired = MenuBarPresentation.make(
@@ -68,6 +71,7 @@ struct MenuBarPresentationTests {
         )
         #expect(unpaired.barTitle == nil)
         #expect(!unpaired.canPause)
+        #expect(!unpaired.canResume)
         #expect(unpaired.popoverTitle == "iPhone で QR を出す")
         #expect(unpaired.popoverDetail == "画面を Mac に向ける")
     }
@@ -82,7 +86,8 @@ struct MenuBarPresentationTests {
             )
         )
         #expect(sending.isSending)
-        #expect(!sending.canPause)
+        #expect(sending.canPause)
+        #expect(!sending.canResume)
         #expect(sending.popoverDetail == "iPhone に送った")
 
         let failed = MenuBarPresentation.make(
@@ -108,6 +113,7 @@ struct MenuBarPresentationTests {
         )
         #expect(view.remainingSeconds == 1380)
         #expect(view.canPause)
+        #expect(!view.canResume)
         #expect(view.popoverDetail == "iPhone とつながっていない")
     }
 
@@ -119,11 +125,40 @@ struct MenuBarPresentationTests {
         )
         #expect(view.barTitle == nil)
         #expect(!view.canPause)
+        #expect(!view.canResume)
     }
 
     @Test func truncatesLongTitle() {
         let long = String(repeating: "あ", count: 12)
         #expect(MenuBarPresentation.truncatedTitle(long)?.hasSuffix("…") == true)
         #expect(MenuBarPresentation.truncatedTitle(long)?.count == 11)
+    }
+
+    @Test func pausedShowsResumeAndSending() {
+        var snap = running
+        snap.phase = .paused
+        snap.pausedAt = 1_768_000_100
+        let sending = MenuBarPresentation.make(
+            MenuBarInput(
+                pairing: .paired,
+                snap: snap,
+                now: 1_768_000_200,
+                outgoingPause: .sending(cmdId: UUID())
+            )
+        )
+        #expect(sending.isSending)
+        #expect(sending.canResume)
+        #expect(sending.popoverDetail == "iPhone に送った")
+
+        let failed = MenuBarPresentation.make(
+            MenuBarInput(
+                pairing: .paired,
+                snap: snap,
+                now: 1_768_000_200,
+                outgoingPause: .failed(.notPaused)
+            )
+        )
+        #expect(failed.canResume)
+        #expect(failed.failureLine == "停車中ではない")
     }
 }
