@@ -55,12 +55,7 @@ runs:
         case "$CUSTOM_DOMAIN" in
           *[!A-Za-z0-9.-]*|"") echo "invalid custom domain: ${CUSTOM_DOMAIN}"; exit 1 ;;
         esac
-        cat >> "${GITHUB_WORKSPACE}/sync/worker/wrangler.toml" <<EOF
-
-[[routes]]
-pattern = "${CUSTOM_DOMAIN}"
-custom_domain = true
-EOF
+        printf '\n[[routes]]\npattern = "%s"\ncustom_domain = true\n' "$CUSTOM_DOMAIN" >> "${GITHUB_WORKSPACE}/sync/worker/wrangler.toml"
 
     - name: Deploy
       id: deploy
