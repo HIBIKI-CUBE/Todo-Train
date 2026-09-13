@@ -31,10 +31,15 @@ Durable Objects 付き Worker は Cloudflare の aliased preview URL（`wrangler
 | きっかけ | Worker 名 | 公開 URL | GitHub Environment |
 |---|---|---|---|
 | PR（open / sync） | `todotrain-sync-pr-<n>` | `https://pr-<n>.todo-train.hibiki-cube.dev` | `sync-preview-pr-<n>` |
-| `develop` へ push / `workflow_dispatch` → develop | `todotrain-sync-develop` | `https://dev.todo-train.hibiki-cube.dev` | `sync-develop` |
-| `main` へ push / `workflow_dispatch` → production | `todotrain-sync` | `https://todo-train.hibiki-cube.dev` | `sync-production` |
+| `develop` へ push / 手動 → develop | `todotrain-sync-develop` | `https://dev.todo-train.hibiki-cube.dev` | `sync-develop` |
+| `main` へ push / 手動 → production | `todotrain-sync` | `https://todo-train.hibiki-cube.dev` | `sync-production` |
+| 手動 → preview | `todotrain-sync-b-<branch>` | `https://b-<branch>.todo-train.hibiki-cube.dev` | `sync-preview` |
 
-PR を閉じると `sync-worker-preview-teardown` が `todotrain-sync-pr-<n>` を削除する。preview の DO は本番と共有しない。
+push / PR は `sync/worker` か `sync/contract` が変わったときだけ。関係ない変更では出さない。
+
+手動は Actions の **sync-worker → Run workflow**。使うブランチと出し先（develop / production / preview）を選ぶ。既定は develop。実行するブランチのコードが出る。worker を触っていなくても出せる。
+
+PR を閉じると `sync-worker-preview-teardown` が `todotrain-sync-pr-<n>` を削除する。手動 preview は残る（ダッシュボードか `wrangler delete --name todotrain-sync-b-<branch> --force`）。preview の DO は本番と共有しない。
 
 手元:
 
