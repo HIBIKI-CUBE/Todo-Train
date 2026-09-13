@@ -1,0 +1,44 @@
+{
+  "comment": "Known-answer vector for SYNC-2 / SYNC-5. Worker tests must not decrypt or JSON.parse ct.",
+  "pairingId": "a1a2a3a4-b1b2-4c3c-8d4d-e5e6e7e8e9ea",
+  "offerId": "b1b2b3b4-c1c2-4d3d-8e4e-f5f6f7f8f9fb",
+  "masterKey": "I4wcSSYMfnTPbdcb76PNcm-I3VaFPQcsjoKCt7fGarE",
+  "masterKeySha256Utf8Seed": "todotrain/v1/vector-master",
+  "hkdf": {
+    "hash": "SHA-256",
+    "salt": "pairingId RFC4122 16 bytes",
+    "saltHex": "a1a2a3a4b1b24c3c8d4de5e6e7e8e9ea",
+    "length": 32,
+    "infoEnc": "todotrain/v1/enc",
+    "infoTok": "todotrain/v1/tok",
+    "infoCfm": "todotrain/v1/cfm",
+    "enc": "26u4oJtkVm0furN_WMNolTJt6iBEB53N0TIUU8JNp0g",
+    "tok": "uX9Z1ICNNwBUofOy2JSYlhK3cByZGWmi9Lx9xqd24nw",
+    "cfm": "aQM0Cx1QlCyzejviWmlA6nqgKWgEq-CaeoIfL25IX7Q"
+  },
+  "tokenHash": "VHE2sFq9H-skouexC1QZ9rvD4PRr8shboGTF7qG9NPg",
+  "aadUtf8": "a1a2a3a4-b1b2-4c3c-8d4d-e5e6e7e8e9ea|snap|42",
+  "kind": "snap",
+  "rev": 42,
+  "n": "ha_Fwfr-03T8OAOV",
+  "plaintext": {
+    "rev": 42,
+    "sessionId": "11111111-1111-4111-8111-111111111111",
+    "ticketId": "22222222-2222-4222-8222-222222222222",
+    "title": "週次レポート",
+    "phase": "running",
+    "startedAt": 1768000000,
+    "estimatedSeconds": 1500,
+    "pausedAccumulated": 0,
+    "pausedAt": null,
+    "boardedDeviceID": "phone-a"
+  },
+  "plaintextUtf8": "{\"rev\":42,\"sessionId\":\"11111111-1111-4111-8111-111111111111\",\"ticketId\":\"22222222-2222-4222-8222-222222222222\",\"title\":\"週次レポート\",\"phase\":\"running\",\"startedAt\":1768000000,\"estimatedSeconds\":1500,\"pausedAccumulated\":0,\"pausedAt\":null,\"boardedDeviceID\":\"phone-a\"}",
+  "ct": "NpGl3kGFaMKJ-e-egG5-rYgNQEuiFUUDlicTmvJesSCySoUrb7meW57CzPWi-VDlYHdHReDwgf6Jm2mtxd1pmuqfpHk6HIqZafcL1P-enL1O9TpXMg2QB8WUX2o7aUOmp7H5tIMmi5zkwjOciBiS3QTPh467dP5gyX37yzkSLzlprR7219gwAvaNmL86z_85I5icgOzxM5vXyXY2ipxy8qAexTI8AmwnA-CefeY4yt_oR5TWH9QproGJEo-DME-6Fxh5B_AaNLibKwc1TBBfI_qg1YfGHutw1lj_J6Q8In648czl9lFXNibIp3mpczr2lU5R45AmtyMmglOQjXvmz7FhsuD_iADIy4bNAOj-Qq6uKPbDI6xSY2mwB4C_tz0",
+  "confirm": {
+    "messageIphoneUtf8": "a1a2a3a4-b1b2-4c3c-8d4d-e5e6e7e8e9ea|b1b2b3b4-c1c2-4d3d-8e4e-f5f6f7f8f9fb|iphone",
+    "messageMacUtf8": "a1a2a3a4-b1b2-4c3c-8d4d-e5e6e7e8e9ea|b1b2b3b4-c1c2-4d3d-8e4e-f5f6f7f8f9fb|mac",
+    "hmacIphone": "i4YEw3MQx6r36PyeMuX65fXGBexumZ_n0qqUZtYgQNg",
+    "hmacMac": "_Zwat9LFmivpBGJ2xzUc2J5kYqspRQSWqp856P5kl-8"
+  }
+}

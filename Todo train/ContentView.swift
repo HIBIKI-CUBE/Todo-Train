@@ -2,60 +2,238 @@
 //  ContentView.swift
 //  Todo train
 //
-//  Created by HIBIKI CUBE on 2026/08/11.
+//  Tab host + Focus fullScreenCover.
 //
 
 import SwiftUI
 import SwiftData
+import CoreData
+import UIKit
 
 struct ContentView: View {
-    @Environment(\.modelContext) private var modelContext
-    @Query private var items: [Item]
+    @Environment(SessionManager.self) private var sessionManager
+    @Environment(DeletionUndoCenter.self) private var undoCenter
+    @Environment(CompanionSyncRuntime.self) private var companion
+    @Environment(\.scenePhase) private var scenePhase
+
+    @State private var isFocusPresented = false
+    @State private var didRecoverOnLaunch = false
+    @State private var transferCanvas = TransferCanvasPresenter()
+    @State private var ticketMotion = TicketMotionBridge()
+    @Namespace private var focusZoom
 
     var body: some View {
-        NavigationSplitView {
-            List {
-                ForEach(items) { item in
-                    NavigationLink {
-                        Text("Item at \(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))")
-                    } label: {
-                        Text(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))
-                    }
-                }
-                .onDelete(perform: deleteItems)
-            }
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    EditButton()
-                }
-                ToolbarItem {
-                    Button(action: addItem) {
-                        Label("Add Item", systemImage: "plus")
-                    }
+        @Bindable var transferCanvas = transferCanvas
+        @Bindable var ticketMotion = ticketMotion
+        TabView {
+            Tab("切符", systemImage: "tram.fill") {
+                NavigationStack {
+                    HubView()
                 }
             }
-        } detail: {
-            Text("Select an item")
+
+            Tab("履歴", systemImage: "clock") {
+                NavigationStack {
+                    HistoryView()
+                }
+            }
+
+            Tab("設定", systemImage: "gearshape") {
+                NavigationStack {
+                    SettingsView()
+                }
+            }
+        }
+        .tint(TrainTheme.rail)
+        .environment(transferCanvas)
+        .environment(ticketMotion)
+        .environment(\.focusZoomNamespace, focusZoom)
+        .environment(\.isFocusCoverPresented, isFocusPresented)
+        .overlay {
+            if let event = ticketMotion.interruptEject {
+                TicketIssueEjectOverlay(event: event, finish: .zoomIntoFocus) {
+                    ticketMotion.commitInterruptZoom()
+                }
+            }
+        }
+        .safeAreaInset(edge: .bottom, spacing: 8) {
+            if let message = undoCenter.bannerMessage {
+                DeletionUndoBanner(message: message) {
+                    undoCenter.undo()
+                }
+                .padding(.horizontal, TrainTheme.Space.lg)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.easeInOut(duration: 0.25), value: undoCenter.bannerMessage)
+        .onAppear {
+            if !didRecoverOnLaunch {
+                recoverOnLaunch()
+                didRecoverOnLaunch = true
+            } else {
+                sessionManager.reconcile()
+            }
+            syncFocusPresentation()
+            companion.handleScenePhase(.active, sessionManager: sessionManager)
+            sessionManager.suppressProgressLocalNotifications = companion.isPaired
+        }
+        .onChange(of: sessionManager.companionSyncTick) { _, _ in
+            companion.noteSessionChanged(sessionManager: sessionManager)
+        }
+        .onChange(of: companion.isPaired) { _, paired in
+            sessionManager.suppressProgressLocalNotifications = paired
+            sessionManager.syncCabinAnnouncementsWithSettings()
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            companion.handleScenePhase(newPhase, sessionManager: sessionManager)
+            if newPhase == .active {
+                // Foreground: recompute Date-based phase only.
+                // Do not re-run recoverOnLaunch (would re-schedule cancelled end bells).
+                sessionManager.endAwayWatch()
+                applyPendingFocusAction()
+                syncFocusPresentation()
+            } else if newPhase == .background {
+                sessionManager.beginAwayWatch()
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.protectedDataWillBecomeUnavailableNotification)) { _ in
+            sessionManager.cancelAwayWatch()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.protectedDataDidBecomeAvailableNotification)) { _ in
+            if scenePhase == .background {
+                sessionManager.beginAwayWatch()
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .NSPersistentStoreRemoteChange)) { _ in
+            sessionManager.handleRemoteStoreChange()
+        }
+        .onChange(of: sessionManager.phase) { _, _ in
+            syncFocusPresentation()
+        }
+        .onChange(of: ticketMotion.suppressFocusCover) { _, suppress in
+            var transaction = Transaction()
+            if suppress {
+                transaction.disablesAnimations = true
+            }
+            withTransaction(transaction) {
+                syncFocusPresentation()
+            }
+        }
+        .onOpenURL { url in
+            guard url.scheme == "todotrain" else { return }
+            sessionManager.reconcile()
+            syncFocusPresentation()
+        }
+        .fullScreenCover(isPresented: $isFocusPresented, onDismiss: {
+            // Focus teardown races sheet presentation if launched from FocusView.
+            // Promote after the cover is gone so 乗り継ぎ canvas actually appears.
+            promoteTransferCanvasAfterFocusDismiss()
+        }) {
+            FocusView()
+                .environment(sessionManager)
+                .environment(transferCanvas)
+                .environment(ticketMotion)
+                .interactiveDismissDisabled()
+                .navigationTransition(
+                    .zoom(
+                        sourceID: ticketMotion.zoomSourceID
+                            ?? sessionManager.activeSession?.ticket?.id
+                            ?? TicketMotionBridge.missingSource,
+                        in: focusZoom
+                    )
+                )
+        }
+        .onChange(of: isFocusPresented) { wasPresented, presented in
+            // Safety net if onDismiss and enqueue ordering ever races.
+            if wasPresented && !presented {
+                promoteTransferCanvasAfterFocusDismiss()
+            }
+            if presented {
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(500))
+                    if !ticketMotion.suppressFocusCover {
+                        ticketMotion.interruptEject = nil
+                    }
+                }
+            }
+        }
+        .sheet(item: $transferCanvas.active) { launch in
+            RemainingTicketsCanvas(parent: launch.parent, fromSessionID: launch.sessionID)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+        }
+        .overlay {
+            if let moment = sessionManager.punctualityMoment {
+                switch moment.kind {
+                case .arrival:
+                    ArrivalInvalidateOverlay(moment: moment, skipEnter: true) {
+                        sessionManager.consumePunctualityMoment()
+                    }
+                    .id(moment.id)
+                case .onTimeService:
+                    if !isFocusPresented {
+                        PunctualityMomentOverlay(moment: moment) {
+                            sessionManager.consumePunctualityMoment()
+                        }
+                        .id(moment.id)
+                    }
+                }
+            }
+        }
+        // Arrival haptic is driven by the invalidate gesture; service moment keeps a light success.
+        .sensoryFeedback(.success, trigger: sessionManager.punctualityHapticTick)
+    }
+
+    private func promoteTransferCanvasAfterFocusDismiss() {
+        guard transferCanvas.pending != nil else { return }
+        Task { @MainActor in
+            await Task.yield()
+            transferCanvas.presentPendingIfNeeded()
         }
     }
 
-    private func addItem() {
-        withAnimation {
-            let newItem = Item(timestamp: Date())
-            modelContext.insert(newItem)
+    private func syncFocusPresentation() {
+        let shouldShow = sessionManager.shouldPresentFocusCover
+            && !ticketMotion.suppressFocusCover
+        if isFocusPresented != shouldShow {
+            isFocusPresented = shouldShow
         }
     }
 
-    private func deleteItems(offsets: IndexSet) {
-        withAnimation {
-            for index in offsets {
-                modelContext.delete(items[index])
-            }
+    /// Handle LA deep-link actions that must run even when Focus is not yet presented (e.g. paused → 到着).
+    private func applyPendingFocusAction() {
+        guard let pending = FocusPendingActionStore.peek() else { return }
+        // Extend always needs Focus; leave the queue for FocusView.
+        if pending.kind == .extend { return }
+        if pending.kind == .pause || pending.kind == .resume {
+            _ = sessionManager.applyPendingLiveActivityAction()
+            return
         }
+        guard let consumed = FocusPendingActionStore.consume() else { return }
+        guard consumed.sessionID == sessionManager.activeSession?.id else { return }
+        if consumed.kind == .arrive, sessionManager.phase != .overtime {
+            try? sessionManager.arrive()
+        }
+    }
+
+    private func recoverOnLaunch() {
+        do {
+            try sessionManager.recoverOnLaunch()
+        } catch {
+            sessionManager.reconcile()
+        }
+        applyPendingFocusAction()
+        syncFocusPresentation()
     }
 }
 
 #Preview {
-    ContentView()
-        .modelContainer(for: Item.self, inMemory: true)
+    let container = try! AppModelContainer.make(inMemory: true)
+    let manager = SessionManager(modelContext: container.mainContext)
+    return ContentView()
+        .environment(manager)
+        .environment(AppSettings.shared)
+        .environment(DeletionUndoCenter())
+        .environment(CompanionSyncRuntime())
+        .modelContainer(container)
 }
