@@ -17,22 +17,70 @@ extension CompanionMacRuntime {
         hintTask?.cancel()
         hintTask = nil
         listenTask?.cancel()
+        listenTask = nil
+        guard HintPolling.shouldListen(isPaired: isPaired, isIdle: presence.isIdle) else { return }
         listenTask = Task { [weak self] in
             await self?.connectOnce()
         }
     }
 
     func startHintPolling() {
-        guard HintPolling.shouldPoll(isPaired: isPaired, connection: connection) else { return }
+        guard HintPolling.shouldPoll(
+            isPaired: isPaired,
+            connection: connection,
+            isIdle: presence.isIdle
+        ) else { return }
         hintTask?.cancel()
         hintTask = Task { [weak self] in
             await self?.pollHints()
         }
     }
 
+    func noteSystemSleep() {
+        applyPresence { $0.systemAsleep = true }
+    }
+
+    func noteSystemWake() {
+        applyPresence { $0.systemAsleep = false }
+    }
+
+    func noteScreensSleep() {
+        applyPresence { $0.screensAsleep = true }
+    }
+
+    func noteScreensWake() {
+        applyPresence { $0.screensAsleep = false }
+    }
+
+    func noteScreensaverDidStart() {
+        applyPresence { $0.screensaver = true }
+    }
+
+    func noteScreensaverDidStop() {
+        applyPresence { $0.screensaver = false }
+    }
+
+    func applyPresence(_ mutate: (inout RelayPresence) -> Void) {
+        let wasIdle = presence.isIdle
+        mutate(&presence)
+        if RelayPresence.shouldSuppress(wasIdle: wasIdle, isIdle: presence.isIdle) {
+            suppressRelay()
+        } else if RelayPresence.shouldResume(wasIdle: wasIdle, isIdle: presence.isIdle) {
+            startListening()
+        }
+    }
+
+    func suppressRelay() {
+        hintTask?.cancel()
+        hintTask = nil
+        listenTask?.cancel()
+        listenTask = nil
+        connection = .disconnected
+    }
+
     func connectOnce() async {
         refreshPaired()
-        guard isPaired, !Task.isCancelled else {
+        guard HintPolling.shouldListen(isPaired: isPaired, isIdle: presence.isIdle), !Task.isCancelled else {
             connection = .disconnected
             return
         }
@@ -59,6 +107,7 @@ extension CompanionMacRuntime {
         if let envelope = try? await client.getAck() {
             try applyAck(envelope, pairingId: pairing.pairingId, encKey: keys.enc)
         }
+        guard !Task.isCancelled, !presence.isIdle else { throw CancellationError() }
         connection = .connected
         lastStatus = nil
     }
@@ -67,7 +116,11 @@ extension CompanionMacRuntime {
         var previous: HintPlaintext?
         var etag: String?
         while !Task.isCancelled {
-            guard HintPolling.shouldPoll(isPaired: isPaired, connection: connection) else { return }
+            guard HintPolling.shouldPoll(
+                isPaired: isPaired,
+                connection: connection,
+                isIdle: presence.isIdle
+            ) else { return }
             do {
                 let pairing = try requireSecrets()
                 let client = try authedClient(pairing)

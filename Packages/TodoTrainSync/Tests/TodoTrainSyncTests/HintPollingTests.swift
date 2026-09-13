@@ -19,10 +19,18 @@ struct HintPollingTests {
         #expect(object["ct"] == nil)
     }
 
-    @Test func pollsOnlyWhileDisconnectedAndPaired() {
+    @Test func pollsOnlyWhileDisconnectedAndPairedAndAwake() {
         #expect(HintPolling.shouldPoll(isPaired: true, connection: .disconnected))
         #expect(!HintPolling.shouldPoll(isPaired: true, connection: .connected))
         #expect(!HintPolling.shouldPoll(isPaired: false, connection: .disconnected))
+        #expect(!HintPolling.shouldPoll(isPaired: true, connection: .disconnected, isIdle: true))
+    }
+
+    @Test func listensOnlyWhilePairedAndAwake() {
+        #expect(HintPolling.shouldListen(isPaired: true))
+        #expect(!HintPolling.shouldListen(isPaired: false))
+        #expect(!HintPolling.shouldListen(isPaired: true, isIdle: true))
+        #expect(!HintPolling.shouldListen(isPaired: false, isIdle: true))
     }
 
     @Test func etagMatchesContractShape() {

@@ -55,8 +55,16 @@ public enum HintPollOutcome: Equatable, Sendable {
 public enum HintPolling: Sendable {
     public static let intervalNanoseconds: UInt64 = 5_000_000_000
 
-    public static func shouldPoll(isPaired: Bool, connection: ConnectionStatus) -> Bool {
-        isPaired && connection == .disconnected
+    public static func shouldPoll(
+        isPaired: Bool,
+        connection: ConnectionStatus,
+        isIdle: Bool = false
+    ) -> Bool {
+        isPaired && connection == .disconnected && !isIdle
+    }
+
+    public static func shouldListen(isPaired: Bool, isIdle: Bool = false) -> Bool {
+        isPaired && !isIdle
     }
 
     public static func etag(for hint: HintPlaintext) -> String {

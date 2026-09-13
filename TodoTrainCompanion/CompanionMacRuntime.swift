@@ -22,6 +22,7 @@ final class CompanionMacRuntime {
     var listenTask: Task<Void, Never>?
     var hintTask: Task<Void, Never>?
     var tickTask: Task<Void, Never>?
+    var presence = RelayPresence()
     let cabinNotifier = CompanionCabinNotifier()
     var optimisticIdleConsumed = false
     var pairingFlow: PairingFlow?
