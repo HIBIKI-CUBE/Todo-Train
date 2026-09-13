@@ -5,14 +5,37 @@ struct CompanionPopover: View {
     @Environment(CompanionMacRuntime.self) private var runtime
 
     var body: some View {
-        Group {
-            if !runtime.isPaired {
-                CompanionPairingPane()
-            } else {
-                pairedBody
+        VStack(alignment: .leading, spacing: 0) {
+            Group {
+                if !runtime.isPaired {
+                    CompanionPairingPane()
+                } else {
+                    pairedBody
+                }
             }
+            .padding(16)
+
+            Divider()
+
+            Button {
+                NSApp.terminate(nil)
+            } label: {
+                HStack {
+                    Text("Todo train を終了")
+                    Spacer(minLength: 24)
+                    Text("⌘Q")
+                        .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .keyboardShortcut("q")
+            .frame(maxWidth: .infinity)
         }
-        .padding(16)
     }
 
     private var pairedBody: some View {

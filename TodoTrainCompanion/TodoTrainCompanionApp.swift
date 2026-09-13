@@ -28,6 +28,14 @@ struct TodoTrainCompanionApp: App {
                     CompanionSettingsOpener.restoreAccessoryPolicyIfNeeded()
                 }
         }
+        .commands {
+            CommandGroup(replacing: .appTermination) {
+                Button("Todo train を終了") {
+                    NSApp.terminate(nil)
+                }
+                .keyboardShortcut("q")
+            }
+        }
     }
 }
 
@@ -37,6 +45,7 @@ final class CompanionAppDelegate: NSObject, NSApplicationDelegate {
     private var overlay: CompanionRideOverlayController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        CompanionStatusItemRightClick.install()
         overlay = CompanionRideOverlayController(runtime: runtime)
         let workspace = NSWorkspace.shared.notificationCenter
         workspace.addObserver(
