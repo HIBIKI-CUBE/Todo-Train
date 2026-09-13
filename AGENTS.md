@@ -1,49 +1,37 @@
 # Todo train — Agent Guide
 
-このリポジトリで作業する AI / 人間向けの入口です。プロダクト決定・用語・技術方針はすべて `docs/` に集約しています。
+プロダクトの判断は `docs/` にだけある。**コードから読めること（画面の作り、ファイル配置、ワイヤのバイト）は docs に書かない。** 迷ったらコードと `sync/contract/` を見る。
 
-## 必読（着手前）
+## 必読
 
-1. [docs/README.md](docs/README.md) — ドキュメント索引
-2. [docs/01-vision.md](docs/01-vision.md) — 哲学・誰のためか
-3. [docs/02-requirements.md](docs/02-requirements.md) — 確定要件・却下事項
-4. [docs/03-terminology.md](docs/03-terminology.md) — UI / ドメイン用語（勝手に言い換えない）
-5. [docs/08-current-status.md](docs/08-current-status.md) — **現状の実装マップ**
+1. [docs/01-vision.md](docs/01-vision.md) — 誰のためか・哲学
+2. [docs/03-terminology.md](docs/03-terminology.md) — 用語を言い換えない
+3. [docs/02-requirements.md](docs/02-requirements.md) — 守ること・やらないこと・未決
 
-実装・設計変更時は追加で:
+触る面に応じて:
 
-6. [docs/04-architecture.md](docs/04-architecture.md) — SessionManager / SwiftData / 運行
-7. [docs/05-ux-flows.md](docs/05-ux-flows.md) — 画面とフロー
-8. [docs/06-roadmap.md](docs/06-roadmap.md) — MVP / v1 / v2 スコープ
-9. [docs/07-research.md](docs/07-research.md) — 根拠・Live Activity 制限
-10. [docs/11-v2-alarmkit-setup.md](docs/11-v2-alarmkit-setup.md) — Widget / LA / AlarmKit 配線・検証
-11. [docs/12-ui-design.md](docs/12-ui-design.md) — UI 方針
-12. [docs/13-sync-mac-companion.md](docs/13-sync-mac-companion.md) — 同期構成（土管。確定）
-13. [docs/14-mac-companion-ux.md](docs/14-mac-companion-ux.md) — Mac コンパニオン体験（確認 1 は吹き出し＋乗務中 PiP、2 は停車と再乗車で確定。3–6 は提案値）
-14. [docs/15-agent-work-plan.md](docs/15-agent-work-plan.md) — 同期の切り分け。自分のチケットの「触ってよいパス」だけを触る
-15. [docs/16-wakeup-checklist.md](docs/16-wakeup-checklist.md) — 人が見ないと閉じない確認・マージ順
+- 根拠・OS 制限 → [docs/07-research.md](docs/07-research.md)
+- 真実源・CloudKit を足さない理由 → [docs/04-architecture.md](docs/04-architecture.md)
+- 見た目の骨格 → [docs/12-ui-design.md](docs/12-ui-design.md)
+- 同期のなぜ → [docs/13-sync-mac-companion.md](docs/13-sync-mac-companion.md)
+- Mac の役割 → [docs/14-mac-companion-ux.md](docs/14-mac-companion-ux.md)
+- 実機でしか閉じない確認 → [docs/16-wakeup-checklist.md](docs/16-wakeup-checklist.md)
 
 ## 作業時の原則
 
-- **コーチではなく道具**。質問ウィザードや説教 UI を増やさない。
-- **掃き出し摩擦を最小化**（FAB → 即キーボード）。
-- **定時の喜びは瞬間だけ**。まず到着を祝う。早着はいい結果。ストリーク・点数・定時率を足さない。超過で案内を取り下げない。
-- モデル名は **`Ticket`**（Swift の `Task` と衝突するため）。
-- 走行中セッションの真実源は **`WorkSession`（`endedAt == nil`）+ `SessionManager.reconcile()`**。タイマーは Date ベース。
-- 同一切符の大幅書き換えはしない。残りは **途中下車 → 乗り継ぎ（新切符）**。
-- Live Activity は **発車中 + 停車中（最大 2 時間）**。全日運行 LA は不可。詳細は `07-research.md`。
+- **コーチではなく道具。** 質問ウィザードや説教 UI を増やさない。
+- **掃き出し摩擦を最小化。**
+- **定時の喜びは瞬間だけ。** ストリーク・点数・定時率を足さない。超過で案内を取り下げない。
+- 型名は **`Ticket`**（Swift の `Task` と衝突する）。
+- 走行の真実は **`WorkSession`（`endedAt == nil`）+ `SessionManager.reconcile()`**。タイマーに置かない。
+- 同一切符の大幅書き換えはしない。残りは **途中下車 → 乗り継ぎ**。
+- Live Activity で全日運行を張らない（8 時間上限。[07](docs/07-research.md)）。
 
-## Cloud Agent / Linux 向け注意
+## Cloud Agent / Linux
 
-- **iOS Simulator / 本格的な `xcodebuild test` は期待しない。**
-- 純関数化 + `Todo trainTests` へのテスト追加を優先。
-- Live Activity / Widget / 通知 / PCC の実行確認は PR の **Needs Mac verification** に委ねる。
-- PR 本文に Mac 検証チェックリストを載せる（[11-v2-alarmkit-setup.md](docs/11-v2-alarmkit-setup.md) §6 参照）。
-- 同期: Linux 芯（SYNC-0 / 1 / 2 / 5）は `develop` 済み。SYNC-3 / 4 は実装 PR。実機確認は [docs/16-wakeup-checklist.md](docs/16-wakeup-checklist.md)
-- `sync/worker` の品質ゲートは GitHub Actions `sync-worker`（中身は `cd sync/worker && npm test`）。Mac / Xcode は不要。
-- Swift パッケージと Linux E2E の品質ゲートは GitHub Actions `sync-swift`（`Packages/TodoTrainSync` の `swift test` と `./sync/e2e/run.sh`）。Linux では `sync/linux-swift.sh` で C++ フラグを付ける。
-- Cloudflare へのデプロイも同じ workflow。本番 `https://todo-train.hibiki-cube.dev`、develop `https://dev.todo-train.hibiki-cube.dev`、PR は `https://pr-<n>.todo-train.hibiki-cube.dev`（DO 付きなので aliased preview URL は使わない）。閉じると削除。secrets `CLOUDFLARE_API_TOKEN` と `CLOUDFLARE_ACCOUNT_ID` がリポジトリに無いときは deploy だけ skip。
+- iOS Simulator / 本格的な `xcodebuild test` は期待しない。純関数と `Todo trainTests` を優先する。
+- Live Activity / Widget / 通知 / カメラは PR の Mac 検証に委ねる。
+- Worker は `cd sync/worker && npm test`（CI `sync-worker`）。パッケージと E2E は `sync/linux-swift.sh test` と `./sync/e2e/run.sh`（CI `sync-swift`）。
+- リレーのホストと preview の出し方は `sync/worker/README.md`。
 
-## ブランチ
-
-現在の開発ブランチは `develop` を想定。
+開発ブランチは `develop`。
