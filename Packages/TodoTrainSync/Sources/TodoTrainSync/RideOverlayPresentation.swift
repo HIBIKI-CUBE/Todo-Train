@@ -1,12 +1,6 @@
 import Foundation
 
-/// Budget-ratio urgency. Same thresholds as `FocusTimerPhase` on iOS (not a fixed 1-minute rule).
-public enum RideOverlayTimerPhase: String, Equatable, Sendable {
-    case cruise
-    case approach
-    case final
-    case overtime
-}
+public typealias RideOverlayTimerPhase = TimerUrgency
 
 /// Mac ride PiP from the same snap input as the menu bar. Hidden when unpaired or idle.
 public struct RideOverlayPresentation: Equatable, Sendable {
@@ -74,9 +68,9 @@ public struct RideOverlayPresentation: Equatable, Sendable {
         let remainingLabel = remaining.map(MenuBarPresentation.formatRemaining) ?? ""
         let statusLine: String?
         if input.connection == .disconnected {
-            statusLine = "リレーが切れた"
+            statusLine = SyncCopy.relayDisconnected
         } else if bar.isSending {
-            statusLine = "iPhone に送った"
+            statusLine = SyncCopy.sentToIPhone
         } else {
             statusLine = nil
         }
@@ -85,7 +79,8 @@ public struct RideOverlayPresentation: Equatable, Sendable {
             snap: input.snap,
             now: input.now,
             localEnabled: input.cabinEnabledLocal,
-            optimisticFiredCount: input.optimisticFiredCount
+            optimisticFiredCount: input.optimisticFiredCount,
+            optimisticIdleConsumed: input.optimisticIdleConsumed
         )
         let cabinPrompt = (cabin.showsPip && !bar.isSending) ? cabin.prompt : nil
 
@@ -130,14 +125,10 @@ public struct RideOverlayPresentation: Equatable, Sendable {
     ) -> RideOverlayTimerPhase {
         if overtime { return .overtime }
         guard let remaining else { return .cruise }
-        let remainingTime = TimeInterval(remaining)
-        if remainingTime < 0 { return .overtime }
-        let budget = TimeInterval(max(estimated ?? 1, 1))
-        let finalThreshold = max(budget * 0.10, 30)
-        let approachThreshold = max(budget * 0.25, 90)
-        if remainingTime <= finalThreshold { return .final }
-        if remainingTime <= approachThreshold { return .approach }
-        return .cruise
+        return TimerUrgency.phase(
+            remaining: TimeInterval(remaining),
+            budgetSeconds: TimeInterval(estimated ?? 1)
+        )
     }
 
     public static func truncatedPeekTitle(_ title: String) -> String {

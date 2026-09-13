@@ -15,6 +15,14 @@ struct WeekAggregate: Equatable, Sendable {
     var focusMinutes: Int {
         Int((focusSeconds / 60).rounded())
     }
+
+    init(weekStart: Date, day: DayAggregate) {
+        self.weekStart = weekStart
+        self.focusSeconds = day.focusSeconds
+        self.arrived = day.arrived
+        self.partialDisembark = day.partialDisembark
+        self.abandoned = day.abandoned
+    }
 }
 
 enum WeeklyReport {
@@ -38,13 +46,7 @@ enum WeeklyReport {
             return interval.contains(endedAt)
         }
         let dayAggregate = HistoryStats.aggregate(sessions: inWeek)
-        return WeekAggregate(
-            weekStart: interval.start,
-            focusSeconds: dayAggregate.focusSeconds,
-            arrived: dayAggregate.arrived,
-            partialDisembark: dayAggregate.partialDisembark,
-            abandoned: dayAggregate.abandoned
-        )
+        return WeekAggregate(weekStart: interval.start, day: dayAggregate)
     }
 
     static func groupByWeek(

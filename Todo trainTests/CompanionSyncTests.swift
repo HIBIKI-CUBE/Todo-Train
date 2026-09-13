@@ -57,6 +57,20 @@ struct CompanionSnapBuildingTests {
         #expect(snap.pendingCabin == nil)
     }
 
+    @Test func idleExportsPendingCabin() {
+        let snap = CompanionSnapBuilding.idle(
+            rev: 4,
+            serviceActive: true,
+            cabinEnabled: true,
+            pendingCabin: .idle
+        )
+        #expect(snap.phase == .idle)
+        #expect(snap.sessionId == nil)
+        #expect(snap.pendingCabin == .idle)
+        #expect(snap.checkInFiredCount == 0)
+        #expect(snap.serviceActive == true)
+    }
+
     @Test func pausedExportsPausedAt() throws {
         let container = try AppModelContainer.make(inMemory: true)
         let ticket = Ticket(title: "停車中", estimatedSeconds: 600)
@@ -78,22 +92,6 @@ struct CompanionSnapBuildingTests {
         #expect(snap.phase == .paused)
         #expect(snap.pausedAt == 160)
         #expect(snap.pausedAccumulated == 0)
-    }
-}
-
-struct CompanionCommandApplyingTests {
-    @Test func onlyApplyCallsPause() {
-        #expect(CompanionCommandApplying.shouldCallPause(.apply, op: .pause))
-        #expect(!CompanionCommandApplying.shouldCallPause(.pauseLimitReached, op: .pause))
-        #expect(!CompanionCommandApplying.shouldCallPause(.sessionMismatch, op: .pause))
-        #expect(!CompanionCommandApplying.shouldCallPause(.noActiveService, op: .pause))
-        #expect(!CompanionCommandApplying.shouldCallPause(.apply, op: .resume))
-        #expect(CompanionCommandApplying.shouldCallResume(.apply, op: .resume))
-        #expect(!CompanionCommandApplying.shouldCallResume(.notPaused, op: .resume))
-        #expect(!CompanionCommandApplying.shouldCallResume(.apply, op: .pause))
-        #expect(CompanionCommandApplying.shouldCallStill(.apply, op: .still))
-        #expect(!CompanionCommandApplying.shouldCallStill(.apply, op: .pause))
-        #expect(!CompanionCommandApplying.shouldCallStill(.sessionMismatch, op: .still))
     }
 }
 

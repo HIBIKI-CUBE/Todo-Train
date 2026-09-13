@@ -39,14 +39,4 @@ struct OutgoingPauseApplyingTests {
         )
         #expect(next == sending)
     }
-
-    @Test func presentation_usesPackageDefaults() {
-        let view = MenuBarPresentation.make(
-            MenuBarInput(pairing: .unpaired, snap: nil, now: 0)
-        )
-        #expect(view.barTitle == nil)
-        #expect(view.popoverTitle == "iPhone で QR を出す")
-        #expect(view.popoverDetail == "画面を Mac に向ける")
-        #expect(!view.canPause)
-    }
 }

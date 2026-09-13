@@ -8,6 +8,7 @@ import SwiftData
 import Testing
 @testable import Todo_train
 
+@MainActor
 struct CoachingEngineTests {
     @Test func heuristic_split_forLongEstimates() async {
         let engine = HeuristicCoachingEngine()

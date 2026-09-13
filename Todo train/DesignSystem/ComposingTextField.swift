@@ -57,7 +57,7 @@ struct ComposingTextField: UIViewRepresentable {
 
         guard context.coordinator.lastFocusNonce != focusNonce else { return }
         if uiView.window == nil {
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 guard uiView.window != nil else { return }
                 context.coordinator.lastFocusNonce = focusNonce
                 if !uiView.isFirstResponder {

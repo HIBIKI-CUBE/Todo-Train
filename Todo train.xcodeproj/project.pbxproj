@@ -10,6 +10,7 @@
 		B6EE2E8C302B4E730022EBAD /* TodoTrainWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = B6EE2E80302B4E730022EBAD /* TodoTrainWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		C0DE1004302B4E730022EBAD /* TodoTrainSync in Frameworks */ = {isa = PBXBuildFile; productRef = C0DE1002302B4E730022EBAD /* TodoTrainSync */; };
 		C0DE1005302B4E730022EBAD /* TodoTrainSync in Frameworks */ = {isa = PBXBuildFile; productRef = C0DE1003302B4E730022EBAD /* TodoTrainSync */; };
+		C0DE1006302B4E730022EBAD /* TodoTrainSync in Frameworks */ = {isa = PBXBuildFile; productRef = C0DE1007302B4E730022EBAD /* TodoTrainSync */; };
 		C0DE2004302B4E730022EBAD /* TodoTrainSync in Frameworks */ = {isa = PBXBuildFile; productRef = C0DE2002302B4E730022EBAD /* TodoTrainSync */; };
 		C0DE2005302B4E730022EBAD /* TodoTrainSync in Frameworks */ = {isa = PBXBuildFile; productRef = C0DE2003302B4E730022EBAD /* TodoTrainSync */; };
 /* End PBXBuildFile section */
@@ -169,6 +170,7 @@
 		B6EE2E84302B4E730022EBAD /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
+				C0DE1006302B4E730022EBAD /* TodoTrainSync in Frameworks */,
 			);
 		};
 		C0DE2120302B4E730022EBAD /* Frameworks */ = {
@@ -300,6 +302,9 @@
 				B6EE2E81302B4E730022EBAD /* TodoTrainWidget */,
 			);
 			name = TodoTrainWidget;
+			packageProductDependencies = (
+				C0DE1007302B4E730022EBAD /* TodoTrainSync */,
+			);
 			productName = TodoTrainWidget;
 			productReference = B6EE2E80302B4E730022EBAD /* TodoTrainWidget.appex */;
 			productType = "com.apple.product-type.app-extension";
@@ -866,6 +871,11 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-framework",
+					AppIntents,
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = "dev.hibiki-cube.Todo-train.companion";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
@@ -903,6 +913,11 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-framework",
+					AppIntents,
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = "dev.hibiki-cube.Todo-train.companion";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
@@ -1037,6 +1052,11 @@
 			productName = TodoTrainSync;
 		};
 		C0DE1003302B4E730022EBAD /* TodoTrainSync */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C0DE2001302B4E730022EBAD /* XCLocalSwiftPackageReference "Packages/TodoTrainSync" */;
+			productName = TodoTrainSync;
+		};
+		C0DE1007302B4E730022EBAD /* TodoTrainSync */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = C0DE2001302B4E730022EBAD /* XCLocalSwiftPackageReference "Packages/TodoTrainSync" */;
 			productName = TodoTrainSync;

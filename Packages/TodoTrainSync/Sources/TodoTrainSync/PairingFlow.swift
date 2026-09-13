@@ -106,9 +106,21 @@ public actor PairingFlow {
         while Date() <= deadline {
             try await confirmOnce()
             if phase == .established { return }
-            try await Task.sleep(nanoseconds: 250_000_000)
+            try await Task.sleep(nanoseconds: SyncTiming.bindPollNanoseconds)
         }
         throw SyncError.confirmTimedOut
+    }
+
+    /// Re-POST bind until the peer is bound or the offer TTL lapses.
+    public func waitUntilBound() async throws {
+        let deadline = Date().addingTimeInterval(TimeInterval(SyncConstants.offerTtlSeconds))
+        while Date() < deadline {
+            try Task.checkCancellation()
+            let response = try await refreshBind()
+            if response.bound { return }
+            try await Task.sleep(nanoseconds: SyncTiming.bindPollNanoseconds)
+        }
+        throw SyncError.pairingNotBound
     }
 
     public func abort() async throws {

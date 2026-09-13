@@ -3,64 +3,6 @@ import Foundation
 import FoundationNetworking
 #endif
 
-public struct OfferCreated: Codable, Equatable, Sendable {
-    public var offerId: UUID
-    public var pairingId: UUID
-    public var expiresAt: Int
-}
-
-public struct BindRequest: Codable, Equatable, Sendable {
-    public var role: String
-    public var s: String
-    public var x: String?
-    public var y: String?
-
-    public static func iphone(s: UUID, y: Data) -> BindRequest {
-        BindRequest(role: "iphone", s: s.canonicalLowercase, x: nil, y: Base64URL.encode(y))
-    }
-
-    public static func mac(s: UUID, x: Data) -> BindRequest {
-        BindRequest(role: "mac", s: s.canonicalLowercase, x: Base64URL.encode(x), y: nil)
-    }
-}
-
-public struct BindResponse: Codable, Equatable, Sendable {
-    public var bound: Bool
-    public var pairingId: UUID?
-    public var s: UUID?
-    public var x: String?
-    public var y: String?
-}
-
-public struct ConfirmResponse: Codable, Equatable, Sendable {
-    public var confirmed: Bool
-    public var pairingId: UUID?
-}
-
-public struct PairingRegistered: Codable, Equatable, Sendable {
-    public var pairingId: UUID
-}
-
-public struct SnapPutResponse: Codable, Equatable, Sendable {
-    public var rev: Int
-}
-
-public struct CmdQueued: Codable, Equatable, Sendable {
-    public var queued: Bool
-}
-
-public struct CmdList: Codable, Equatable, Sendable {
-    public var items: [Envelope]
-}
-
-public struct AckStored: Codable, Equatable, Sendable {
-    public var stored: Bool
-}
-
-private struct ErrorBody: Codable {
-    var error: String
-}
-
 public struct SyncHTTPClient: Sendable {
     public static let pairingIdHeaderName = "X-Pairing-Id"
 
@@ -219,30 +161,5 @@ public struct SyncHTTPClient: Sendable {
             throw SyncError.transport(status: response.status, code: code)
         }
         return response
-    }
-}
-
-public final class URLSessionHTTPTransport: HTTPTransport, @unchecked Sendable {
-    public let baseURL: URL
-    private let session: URLSession
-
-    public init(baseURL: URL, session: URLSession = .shared) {
-        self.baseURL = baseURL
-        self.session = session
-    }
-
-    public func perform(_ request: HTTPRequest) async throws -> HTTPResponse {
-        let url = baseURL.appendingPathComponent(String(request.path.drop(while: { $0 == "/" })))
-        var urlRequest = URLRequest(url: url)
-        urlRequest.httpMethod = request.method
-        urlRequest.httpBody = request.body
-        for (key, value) in request.headers {
-            urlRequest.setValue(value, forHTTPHeaderField: key)
-        }
-        let (data, response) = try await session.data(for: urlRequest)
-        guard let http = response as? HTTPURLResponse else {
-            return HTTPResponse(status: 0, body: data)
-        }
-        return HTTPResponse(http: http, body: data)
     }
 }

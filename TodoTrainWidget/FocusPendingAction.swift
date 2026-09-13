@@ -6,14 +6,14 @@
 import AppIntents
 import Foundation
 
-enum FocusPendingActionKind: String, Codable, Sendable {
+nonisolated enum FocusPendingActionKind: String, Codable, Sendable {
     case arrive
     case extend
     case pause
     case resume
 }
 
-struct FocusPendingAction: Codable, Equatable, Sendable {
+nonisolated struct FocusPendingAction: Codable, Equatable, Sendable {
     var kind: FocusPendingActionKind
     var sessionID: UUID
     var createdAt: Date
@@ -52,7 +52,7 @@ enum SessionPauseRuntime {
     static var pauser: (any SessionRidePausing)?
 }
 
-enum FocusPendingActionStore {
+nonisolated enum FocusPendingActionStore {
     static let suiteKey = "focus.pendingAction"
 
     static var defaults: UserDefaults? {

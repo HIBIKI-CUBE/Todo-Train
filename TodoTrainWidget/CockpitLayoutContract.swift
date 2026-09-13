@@ -15,14 +15,14 @@ import CoreGraphics
 import Foundation
 
 /// Where a cockpit instrument is rendered.
-enum CockpitSurface: Equatable, Sendable {
+nonisolated enum CockpitSurface: Equatable, Sendable {
     case lockScreen
     case standBy
     case islandExpanded
 }
 
 /// Density tier chosen from the proposed height.
-enum CockpitDensity: Equatable, Sendable {
+nonisolated enum CockpitDensity: Equatable, Sendable {
     /// 120pt+ — full instrument chrome.
     case regular
     /// Below 120pt — drop title / deadline / secondary chrome.
@@ -30,7 +30,7 @@ enum CockpitDensity: Equatable, Sendable {
 }
 
 /// Explicit size contract for Live Activity content.
-struct CockpitSizeContract: Equatable, Sendable {
+nonisolated struct CockpitSizeContract: Equatable, Sendable {
     var width: CGFloat
     var height: CGFloat
     var surface: CockpitSurface
@@ -94,7 +94,7 @@ struct CockpitSizeContract: Equatable, Sendable {
 }
 
 /// Fixed chrome for StandBy remaining-height fill (no ratio magic).
-struct CockpitStandByChrome: Equatable, Sendable {
+nonisolated struct CockpitStandByChrome: Equatable, Sendable {
     static let margin: CGFloat = 8
     static let progressHeight: CGFloat = 6
     static let titleRowHeight: CGFloat = 20
@@ -108,7 +108,7 @@ struct CockpitStandByChrome: Equatable, Sendable {
 }
 
 /// StandBy layout context passed through the environment.
-struct CockpitStandByMetrics: Equatable, Sendable {
+nonisolated struct CockpitStandByMetrics: Equatable, Sendable {
     var width: CGFloat
     var height: CGFloat
 
@@ -132,7 +132,7 @@ struct CockpitStandByMetrics: Equatable, Sendable {
     var timerSize: CGFloat { max(CockpitStandByChrome.minTimerHeight, height * 0.9) }
 }
 
-enum CockpitLayoutPolicy {
+nonisolated enum CockpitLayoutPolicy {
     static func density(forHeight height: CGFloat) -> CockpitDensity {
         height >= 120 ? .regular : .compact
     }

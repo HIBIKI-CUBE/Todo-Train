@@ -10,7 +10,8 @@ struct SplitSuggestion: Equatable, Sendable {
     var note: String?
 }
 
-protocol CoachingEngine: Sendable {
+@MainActor
+protocol CoachingEngine {
     func suggestSplit(for title: String, estimatedMinutes: Int) async -> SplitSuggestion?
     func dailyReview(sessions: [WorkSession]) async -> String?
     /// One or two short questions for 車内放送. Advice-free. Empty → caller uses fallback.

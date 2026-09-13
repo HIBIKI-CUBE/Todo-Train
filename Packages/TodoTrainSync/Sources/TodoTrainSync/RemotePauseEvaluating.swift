@@ -7,6 +7,8 @@ public enum RemotePauseDecision: Equatable, Sendable {
     case noActiveService
     case notPaused
 
+    public var shouldApply: Bool { self == .apply }
+
     public var wireError: WireError? {
         switch self {
         case .apply: nil

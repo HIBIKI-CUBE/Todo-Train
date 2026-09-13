@@ -94,7 +94,7 @@ enum DeletionUndo {
             closedAt: ticket.closedAt,
             closureKindRaw: ticket.closureKindRaw,
             tagIDs: ticket.tags.map(\.id),
-            sessions: ticket.sessions.map(captureSession),
+            sessions: ticket.sessions.map { captureSession($0) },
             lineages: lineages
         )
     }

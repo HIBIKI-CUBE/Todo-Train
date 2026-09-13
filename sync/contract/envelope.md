@@ -68,7 +68,7 @@ HMAC-SHA256(cfmKey, UTF-8("{pairingId}|{offerId}|mac"))
 
 ## Snap 平文
 
-フィールドは [fixtures/snap.json](fixtures/snap.json)。乗務なしは [fixtures/snap-idle.json](fixtures/snap-idle.json)（`sessionId` と他の乗務欄は `null`、`phase` は `idle`）。`serviceActive` / `cabinEnabled` / `checkInFiredCount` / `pendingCabin` は乗務なしでも載せる。欠ける旧 snap は `serviceActive=false`、`cabinEnabled=true`、`checkInFiredCount=0`、`pendingCabin=null`。`pendingCabin` は `progress` / `away` / `idle` / `null`。未知値は表示だけ無視。`idle` は次の運行中アイドル通知用（今はスケジューラを組まない）。
+フィールドは [fixtures/snap.json](fixtures/snap.json)。乗務なしは [fixtures/snap-idle.json](fixtures/snap-idle.json)（`sessionId` と他の乗務欄は `null`、`phase` は `idle`）。`serviceActive` / `cabinEnabled` / `checkInFiredCount` / `pendingCabin` は乗務なしでも載せる。欠ける旧 snap は `serviceActive=false`、`cabinEnabled=true`、`checkInFiredCount=0`、`pendingCabin=null`。`pendingCabin` は `progress` / `away` / `idle` / `null`。未知値は表示だけ無視。`idle` は運行中で乗務が無いとき。iPhone が立て、Mac は通知するだけ。`lastActivityAt` は載せない。
 
 `estimatedSeconds` は当初見積ではなく **いまの予算（延長込み）**。iOS の `WorkSession.budgetSecondsAtStart` に対応する。
 

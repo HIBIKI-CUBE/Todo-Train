@@ -4,9 +4,10 @@
 //
 
 import SwiftUI
+import TodoTrainSync
 
 /// Countdown urgency relative to the session budget (not a fixed 1-minute rule).
-enum FocusTimerPhase: Equatable {
+nonisolated enum FocusTimerPhase: Equatable {
     case cruise
     case approach
     case final
@@ -17,13 +18,12 @@ enum FocusTimerPhase: Equatable {
     }
 
     static func phase(remaining: TimeInterval, budgetSeconds: TimeInterval) -> FocusTimerPhase {
-        if remaining < 0 { return .overtime }
-        let budget = max(budgetSeconds, 1)
-        let finalThreshold = max(budget * 0.10, 30)
-        let approachThreshold = max(budget * 0.25, 90)
-        if remaining <= finalThreshold { return .final }
-        if remaining <= approachThreshold { return .approach }
-        return .cruise
+        switch TimerUrgency.phase(remaining: remaining, budgetSeconds: budgetSeconds) {
+        case .cruise: .cruise
+        case .approach: .approach
+        case .final: .final
+        case .overtime: .overtime
+        }
     }
 
     var accentColor: Color {
@@ -60,7 +60,7 @@ enum FocusTimerPhase: Equatable {
 }
 
 /// Focus dashboard palette — usable in Widget extension without TrainTheme.
-enum CockpitColors {
+nonisolated enum CockpitColors {
     static let ink = Color.white
     static let muted = Color.white.opacity(0.55)
     static let hairline = Color.white.opacity(0.14)
@@ -74,7 +74,7 @@ enum CockpitColors {
 }
 
 /// How the primary clock should render (system-driven when counting down).
-enum CockpitClockStyle: Equatable {
+nonisolated enum CockpitClockStyle: Equatable {
     case countdown(end: Date)
     case paused(remaining: TimeInterval)
     case alert
@@ -82,7 +82,7 @@ enum CockpitClockStyle: Equatable {
     case stale
 }
 
-enum CockpitPresentation {
+nonisolated enum CockpitPresentation {
     static func deadlineLabel(from snapshot: CockpitInstrumentSnapshot) -> String {
         if snapshot.headerState == "更新待ち" {
             return "予定の確認中"
@@ -91,7 +91,7 @@ enum CockpitPresentation {
     }
 }
 
-enum CockpitTimerInterval {
+nonisolated enum CockpitTimerInterval {
     /// `Text(timerInterval:)` / `ProgressView(timerInterval:)` crash if lowerBound > upperBound.
     static func countdown(to end: Date, from start: Date = .now) -> ClosedRange<Date> {
         if end >= start { return start...end }
@@ -106,14 +106,9 @@ enum CockpitTimerInterval {
     }
 }
 
-enum CockpitFormat {
+nonisolated enum CockpitFormat {
     static func timerLabel(remaining: TimeInterval) -> String {
-        let total = Int(remaining.rounded())
-        if total < 0 {
-            let absTotal = abs(total)
-            return String(format: "%d:%02d", absTotal / 60, absTotal % 60)
-        }
-        return String(format: "%d:%02d", total / 60, total % 60)
+        ClockTime.mmss(Int(remaining.rounded()))
     }
 
     /// Compact / width-limited Dynamic Island — drop seconds below 10 minutes when needed.
@@ -150,7 +145,7 @@ enum CockpitFormat {
 }
 
 /// Shared glanceable model for Session LA and Alarm LA.
-struct CockpitDisplayModel: Equatable {
+nonisolated struct CockpitDisplayModel: Equatable {
     var title: String
     var clock: CockpitClockStyle
     var phase: FocusTimerPhase
@@ -230,7 +225,7 @@ struct CockpitDisplayModel: Equatable {
     }
 }
 
-struct CockpitInstrumentSnapshot: Equatable {
+nonisolated struct CockpitInstrumentSnapshot: Equatable {
     let remaining: TimeInterval
     let progress: Double
     let phase: FocusTimerPhase

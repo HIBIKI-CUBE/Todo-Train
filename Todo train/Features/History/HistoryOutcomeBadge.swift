@@ -31,7 +31,7 @@ struct HistoryOutcomeBadge: View {
                 SignalBadge(kind: .arrived)
             }
         case .partialDisembark:
-            SignalBadge(kind: .paused, customLabel: "途中下車")
+            SignalBadge(kind: .paused, customLabel: ClosureKind.partialDisembark.displayLabel)
         case .abandoned:
             SignalBadge(kind: .abandoned)
         default:

@@ -135,7 +135,7 @@ struct RelaySettingsView: View {
             } header: {
                 Text("フォーカス")
             } footer: {
-                Text("長い乗務の途中に「まだ乗ってる？」を PiP に出します。iPhone で答えても、この Mac で答えても同じ回は終わります。")
+                Text("乗務中の「まだ乗ってる？」と、運行中で乗っていないときの「運行は続いてる」を出します。iPhone で答えても、この Mac で答えても同じ回は終わります。")
             }
 
             Section("リレー") {

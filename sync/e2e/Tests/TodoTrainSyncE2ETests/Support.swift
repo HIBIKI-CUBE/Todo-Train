@@ -65,50 +65,14 @@ enum E2EConfig {
     }
 }
 
-final class AbsoluteURLHTTPTransport: HTTPTransport, @unchecked Sendable {
-    let baseURL: URL
-    private let session: URLSession
-
-    init(baseURL: URL, session: URLSession? = nil) {
-        self.baseURL = baseURL
-        if let session {
-            self.session = session
-        } else {
-            let config = URLSessionConfiguration.ephemeral
-            config.timeoutIntervalForRequest = 15
-            config.timeoutIntervalForResource = 30
-            config.httpCookieAcceptPolicy = .never
-            config.httpShouldSetCookies = false
-            self.session = URLSession(configuration: config)
-        }
-    }
-
-    func perform(_ request: HTTPRequest) async throws -> HTTPResponse {
-        let url = try Self.url(baseURL: baseURL, path: request.path)
-        var urlRequest = URLRequest(url: url)
-        urlRequest.httpMethod = request.method
-        urlRequest.httpBody = request.body
-        for (key, value) in request.headers {
-            urlRequest.setValue(value, forHTTPHeaderField: key)
-        }
-        let (data, response) = try await session.data(for: urlRequest)
-        if let http = response as? HTTPURLResponse {
-            return HTTPResponse(http: http, body: data)
-        }
-        return HTTPResponse(status: 0, body: data)
-    }
-
-    static func url(baseURL: URL, path: String) throws -> URL {
-        guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
-            throw E2EError.workerUnreachable(baseURL.absoluteString)
-        }
-        components.path = path.hasPrefix("/") ? path : "/" + path
-        components.query = nil
-        components.fragment = nil
-        guard let url = components.url else {
-            throw E2EError.workerUnreachable("\(baseURL.absoluteString) + \(path)")
-        }
-        return url
+enum E2EHTTP {
+    static func transport(baseURL: URL) -> URLSessionHTTPTransport {
+        let config = URLSessionConfiguration.ephemeral
+        config.timeoutIntervalForRequest = 15
+        config.timeoutIntervalForResource = 30
+        config.httpCookieAcceptPolicy = .never
+        config.httpShouldSetCookies = false
+        return URLSessionHTTPTransport(baseURL: baseURL, session: URLSession(configuration: config))
     }
 }
 
@@ -394,7 +358,7 @@ private func readSome(fd: Int32, max: Int) throws -> Data {
 }
 
 func waitForWorker(url: URL, attempts: Int = 5) async throws {
-    let transport = AbsoluteURLHTTPTransport(baseURL: url)
+    let transport = E2EHTTP.transport(baseURL: url)
     var last = "no attempt"
     for _ in 0..<attempts {
         do {

@@ -8,6 +8,7 @@
 
 import Foundation
 import UserNotifications
+import TodoTrainSync
 
 @MainActor
 protocol CheckInNotifying: AnyObject {
@@ -20,8 +21,10 @@ protocol CheckInNotifying: AnyObject {
         fireAt: Date
     )
     func scheduleAway(sessionID: UUID, ticketTitle: String, body: String, fireAt: Date)
+    func scheduleIdle(serviceDayID: UUID, body: String, fireAt: Date)
     func cancel(sessionID: UUID)
     func cancelProgress(sessionID: UUID)
+    func cancelIdle(serviceDayID: UUID)
     func cancelAll()
 }
 
@@ -36,8 +39,10 @@ final class NoOpCheckInNotifier: CheckInNotifying {
         fireAt: Date
     ) {}
     func scheduleAway(sessionID: UUID, ticketTitle: String, body: String, fireAt: Date) {}
+    func scheduleIdle(serviceDayID: UUID, body: String, fireAt: Date) {}
     func cancel(sessionID: UUID) {}
     func cancelProgress(sessionID: UUID) {}
+    func cancelIdle(serviceDayID: UUID) {}
     func cancelAll() {}
 }
 
@@ -45,6 +50,7 @@ final class NoOpCheckInNotifier: CheckInNotifying {
 final class InMemoryCheckInNotifier: CheckInNotifying {
     private(set) var progress: [(sessionID: UUID, index: Int, fireAt: Date, body: String)] = []
     private(set) var away: [(sessionID: UUID, fireAt: Date, body: String)] = []
+    private(set) var idle: [(serviceDayID: UUID, fireAt: Date, body: String)] = []
 
     func requestAuthorizationIfNeeded() {}
 
@@ -64,6 +70,11 @@ final class InMemoryCheckInNotifier: CheckInNotifying {
         away.append((sessionID, fireAt, body))
     }
 
+    func scheduleIdle(serviceDayID: UUID, body: String, fireAt: Date) {
+        idle.removeAll { $0.serviceDayID == serviceDayID }
+        idle.append((serviceDayID, fireAt, body))
+    }
+
     func cancel(sessionID: UUID) {
         progress.removeAll { $0.sessionID == sessionID }
         away.removeAll { $0.sessionID == sessionID }
@@ -73,15 +84,21 @@ final class InMemoryCheckInNotifier: CheckInNotifying {
         progress.removeAll { $0.sessionID == sessionID }
     }
 
+    func cancelIdle(serviceDayID: UUID) {
+        idle.removeAll { $0.serviceDayID == serviceDayID }
+    }
+
     func cancelAll() {
         progress.removeAll()
         away.removeAll()
+        idle.removeAll()
     }
 }
 
-enum CheckInNotification {
+nonisolated enum CheckInNotification {
     static let categoryIdentifier = "todotrain.checkin"
     static let awayCategoryIdentifier = "todotrain.checkin.away"
+    static let idleCategoryIdentifier = "todotrain.checkin.idle"
     static let pauseAction = "todotrain.checkin.pause"
     static let stillOnItAction = "todotrain.checkin.still"
 
@@ -93,12 +110,20 @@ enum CheckInNotification {
         "checkin.away.\(sessionID.uuidString)"
     }
 
+    static func idleIdentifier(serviceDayID: UUID) -> String {
+        "checkin.idle.\(serviceDayID.uuidString)"
+    }
+
     static func isCheckIn(_ identifier: String) -> Bool {
         identifier.hasPrefix("checkin.")
     }
 
     static func isAway(_ identifier: String) -> Bool {
         identifier.hasPrefix("checkin.away.")
+    }
+
+    static func isIdle(_ identifier: String) -> Bool {
+        identifier.hasPrefix("checkin.idle.")
     }
 }
 
@@ -135,13 +160,20 @@ final class CheckInNotifier: CheckInNotifying {
             intentIdentifiers: [],
             options: []
         )
-        center.setNotificationCategories([progress, away])
+        let idle = UNNotificationCategory(
+            identifier: CheckInNotification.idleCategoryIdentifier,
+            actions: [still],
+            intentIdentifiers: [],
+            options: []
+        )
+        center.setNotificationCategories([progress, away, idle])
     }
 
     func requestAuthorizationIfNeeded() {
-        center.getNotificationSettings { settings in
+        Task {
+            let settings = await center.notificationSettings()
             guard settings.authorizationStatus == .notDetermined else { return }
-            self.center.requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
+            _ = try? await center.requestAuthorization(options: [.alert, .sound, .badge])
         }
     }
 
@@ -173,6 +205,17 @@ final class CheckInNotifier: CheckInNotifying {
         )
     }
 
+    func scheduleIdle(serviceDayID: UUID, body: String, fireAt: Date) {
+        let identifier = CheckInNotification.idleIdentifier(serviceDayID: serviceDayID)
+        enqueue(
+            identifier: identifier,
+            title: CabinCopy.idle,
+            body: CabinCopy.still,
+            fireAt: fireAt,
+            categoryIdentifier: CheckInNotification.idleCategoryIdentifier
+        )
+    }
+
     func cancel(sessionID: UUID) {
         var identifiers = [CheckInNotification.awayIdentifier(sessionID: sessionID)]
         for index in 0..<4 {
@@ -191,10 +234,18 @@ final class CheckInNotifier: CheckInNotifying {
         center.removeDeliveredNotifications(withIdentifiers: identifiers)
     }
 
+    func cancelIdle(serviceDayID: UUID) {
+        let identifier = CheckInNotification.idleIdentifier(serviceDayID: serviceDayID)
+        center.removePendingNotificationRequests(withIdentifiers: [identifier])
+        center.removeDeliveredNotifications(withIdentifiers: [identifier])
+    }
+
     func cancelAll() {
-        center.getPendingNotificationRequests { requests in
-            let ids = requests.map(\.identifier).filter(CheckInNotification.isCheckIn)
-            self.center.removePendingNotificationRequests(withIdentifiers: ids)
+        Task {
+            let ids = await center.pendingNotificationRequests()
+                .map(\.identifier)
+                .filter(CheckInNotification.isCheckIn)
+            center.removePendingNotificationRequests(withIdentifiers: ids)
         }
     }
 
@@ -214,11 +265,9 @@ final class CheckInNotifier: CheckInNotifying {
         content.interruptionLevel = .timeSensitive
         content.categoryIdentifier = categoryIdentifier
 
-        let interval = fireAt.timeIntervalSinceNow
-        guard interval > 0 else { return }
-
+        let interval = max(fireAt.timeIntervalSinceNow, 1)
         let trigger = UNTimeIntervalNotificationTrigger(
-            timeInterval: max(interval, 1),
+            timeInterval: interval,
             repeats: false
         )
         let request = UNNotificationRequest(

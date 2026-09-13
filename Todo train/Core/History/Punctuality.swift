@@ -8,7 +8,7 @@
 import Foundation
 
 /// How an arrived session sits against its published timetable (original estimate).
-enum ArrivalPunctuality: Equatable, Sendable {
+nonisolated enum ArrivalPunctuality: Equatable, Sendable {
     /// Within the on-time band of the original estimate.
     case onTime
     /// Finished ahead of the original estimate — a good result, not a miss.

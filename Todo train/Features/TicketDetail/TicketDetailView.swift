@@ -337,11 +337,7 @@ struct TicketDetailView: View {
     }
 
     private func closureLabel(_ kind: ClosureKind) -> String {
-        switch kind {
-        case .arrived: "到着"
-        case .partialDisembark: "途中下車"
-        case .abandoned: "放棄"
-        }
+        kind.displayLabel
     }
 
     private func closureColor(_ kind: ClosureKind) -> Color {

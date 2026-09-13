@@ -67,9 +67,10 @@ final class OvertimeNotifier: NSObject, OvertimeNotifying, UNUserNotificationCen
 
     func requestAuthorizationIfNeeded() {
         configure()
-        center.getNotificationSettings { settings in
+        Task {
+            let settings = await center.notificationSettings()
             guard settings.authorizationStatus == .notDetermined else { return }
-            self.center.requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
+            _ = try? await center.requestAuthorization(options: [.alert, .sound, .badge])
         }
     }
 
@@ -114,7 +115,11 @@ final class OvertimeNotifier: NSObject, OvertimeNotifying, UNUserNotificationCen
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification
     ) async -> UNNotificationPresentationOptions {
-        []
+        let identifier = notification.request.identifier
+        if CheckInNotification.isIdle(identifier) {
+            return [.banner, .sound, .list]
+        }
+        return []
     }
 
     nonisolated func userNotificationCenter(

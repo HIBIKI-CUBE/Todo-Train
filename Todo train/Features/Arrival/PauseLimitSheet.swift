@@ -16,15 +16,9 @@ struct PauseLimitSheet: View {
     var pendingTicket: Ticket?
     var onSlotFreedTryBoard: () -> Void
 
-    @State private var canvasLaunch: CanvasLaunch?
+    @State private var canvasLaunch: TransferCanvasLaunch?
     @State private var errorMessage = ""
     @State private var showError = false
-
-    private struct CanvasLaunch: Identifiable {
-        let id = UUID()
-        let parent: Ticket
-        let sessionID: UUID?
-    }
 
     var body: some View {
         NavigationStack {
@@ -113,7 +107,7 @@ struct PauseLimitSheet: View {
         let sessionID = session.id
         do {
             try sessionManager.partialDisembark(session: session)
-            canvasLaunch = CanvasLaunch(parent: ticket, sessionID: sessionID)
+            canvasLaunch = TransferCanvasLaunch(parent: ticket, sessionID: sessionID)
         } catch {
             present(error)
         }

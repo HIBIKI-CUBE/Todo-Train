@@ -43,19 +43,6 @@ public actor CountingLocalAuth: LocalAuthenticating {
     }
 }
 
-public actor ScriptedOptical: OpticalProviding {
-    private var urls: [String]
-
-    public init(_ urls: [String]) {
-        self.urls = urls
-    }
-
-    public func waitForURL() async throws -> String {
-        guard !urls.isEmpty else { throw SyncError.invalidPairingURL }
-        return urls.removeFirst()
-    }
-}
-
 public actor ScriptedHTTPTransport: HTTPTransport {
     public struct Step: Sendable {
         public var status: Int

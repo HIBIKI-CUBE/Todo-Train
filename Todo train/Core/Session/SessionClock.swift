@@ -9,7 +9,7 @@ protocol SessionClock: Sendable {
     var now: Date { get }
 }
 
-struct SystemSessionClock: SessionClock {
+nonisolated struct SystemSessionClock: SessionClock {
     var now: Date { .now }
 }
 

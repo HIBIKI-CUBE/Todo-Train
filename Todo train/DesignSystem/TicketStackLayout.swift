@@ -158,14 +158,14 @@ enum TicketStackLayout {
         )
     }
 
-    enum HoldRelease: Equatable {
+    nonisolated enum HoldRelease: Equatable {
         case board
         case putBack
         case snap
     }
 
     /// Resting-deck swipe: leading full-swipe boards, trailing deletes (HIG list edges).
-    enum DeckSwipeRelease: Equatable {
+    nonisolated enum DeckSwipeRelease: Equatable {
         case board
         case delete
         case snap

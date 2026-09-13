@@ -129,6 +129,22 @@ struct RemotePauseEvaluatingTests {
         #expect(decision == .apply)
     }
 
+    @Test func stillNullSessionIdAppliesEvenWithOpenRide() {
+        let still = CommandPlaintext(
+            id: UUID(),
+            op: .still,
+            sessionId: nil,
+            at: 1_768_000_120
+        )
+        let decision = RemotePauseEvaluating.evaluate(
+            openSessionId: session,
+            pausedCount: 0,
+            pauseLimit: 2,
+            command: still
+        )
+        #expect(decision == .apply)
+    }
+
     @Test func stillMismatchesOpenSession() {
         let still = CommandPlaintext(
             id: UUID(),

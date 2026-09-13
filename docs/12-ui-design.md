@@ -145,12 +145,13 @@ Focus / 設定は HIG 骨格のまま。Hub の未乗車リストはマルス券
 | `DesignSystem/TicketStackLayout.swift` | Hub 読める peek デッキの純関数レイアウト |
 | `Core/History/Punctuality.swift` | 帯域判定（当初見積もり）。スコアを持たない |
 | `Core/History/SessionTimeline.swift` | 履歴の日時計レイアウト（純関数。空きは折り畳まない。複数日は時刻を投影して共有軸） |
+| `Core/History/TimelineModels.swift` | 日時計の ride / marker / layout モデル |
 | `Core/History/HistoryCanvasZoom.swift` | 横ピンチ→1画面の日数（1/3/7）と情報密度 |
 | `TodoTrainWidget/FocusTimerPhase.swift` | App + Widget 共有の段階色ロジック |
 | `TodoTrainWidget/CockpitLayoutContract.swift` | Live Activity 公称サイズ契約・密度選択 |
 | `TodoTrainWidget/CockpitInstrumentViews.swift` | StandBy 2ペイン / LS ViewThatFits ダーク計器 |
 | `ContentView.swift` | TabView + Focus cover |
-| `Features/Hub/QuickAddBar.swift` | `QuickAddSheet`（親指発券帯） |
+| `Features/Hub/QuickAddSheet.swift` | `QuickAddSheet`（親指発券帯） |
 | `Features/Hub/TicketStackView.swift` / `HubMarsTicketCard.swift` | Hub マルス peek。選択は Hub 提示レイヤ。未選択は leading 発車 / trailing 削除のフルスワイプ。出入りは手前券の下。提示中は右投げ発車 |
 | `Features/Hub/HubStationChevronSign.swift` | 提示中だけ中央固定の LED「>>> 発車 >>>」（16×16、字形パスの中心サンプリング。ヒット透過） |
 | 履歴 / 設定 | 履歴は週ストリップ＋日時計キャンバス（ピンチで 1/3/7 日）。設定は標準 Form |

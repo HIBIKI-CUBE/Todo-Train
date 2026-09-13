@@ -123,9 +123,9 @@ struct HistoryRideDetailView: View {
 
     private func terminalLabel(_ ride: TimelineRide) -> String {
         switch ride.outcome {
-        case .partialDisembark: "途中下車"
-        case .abandoned: "放棄"
-        default: "到着"
+        case .partialDisembark: SessionOutcome.partialDisembark.displayLabel
+        case .abandoned: SessionOutcome.abandoned.displayLabel
+        default: SessionOutcome.arrived.displayLabel
         }
     }
 

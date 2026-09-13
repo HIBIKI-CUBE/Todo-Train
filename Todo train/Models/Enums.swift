@@ -16,6 +16,14 @@ enum ClosureKind: String, Codable, Sendable {
     case arrived
     case partialDisembark
     case abandoned
+
+    var displayLabel: String {
+        switch self {
+        case .arrived: "到着"
+        case .partialDisembark: "途中下車"
+        case .abandoned: "放棄"
+        }
+    }
 }
 
 enum SessionOutcome: String, Codable, Sendable {
@@ -23,6 +31,15 @@ enum SessionOutcome: String, Codable, Sendable {
     case partialDisembark
     case abandoned
     case recoveryConflict
+
+    var displayLabel: String {
+        switch self {
+        case .arrived: "到着"
+        case .partialDisembark: "途中下車"
+        case .abandoned: "放棄"
+        case .recoveryConflict: "復旧"
+        }
+    }
 }
 
 /// How the user answered the overtime prompt when arriving.

@@ -1,6 +1,6 @@
 # 13 — 同期構成（確定）
 
-最終更新: 2026-09-12。土管・暗号・ペアリング契約。**画面の話はしない。**  
+最終更新: 2026-09-13。土管・暗号・ペアリング契約。**画面の話はしない。**  
 Mac の体験は別紙 [14-mac-companion-ux.md](14-mac-companion-ux.md)（確認 1 は吹き出し、2 は停車と再乗車で確定）。
 
 ワイヤの正本は [`sync/contract/`](../sync/contract/README.md)。実装は [15-agent-work-plan.md](15-agent-work-plan.md) のチケットへ。`arrive` / `extend` は増やさない。`resume` は 2026-09-12 に追加。`GET /v1/hint/:pairingId` は公開 rev 合図の例外。
@@ -165,7 +165,7 @@ confirm HMAC は `HMAC-SHA256(cfmKey, UTF-8("{pairingId}|{offerId}|iphone"))` �
 }
 ```
 
-時刻は Unix **整数秒**。`estimatedSeconds` は当初見積ではなく **いまの予算（延長込み = `WorkSession.budgetSecondsAtStart`）**。残り秒を送ってポーリングしない。乗務なしは `sessionId: null`、他の乗務欄も `null`、`phase` は `idle`。`serviceActive` / `cabinEnabled` / `checkInFiredCount` / `pendingCabin` は乗務なしでも載せる。欠ける旧 snap は `serviceActive=false`、`cabinEnabled=true`、`checkInFiredCount=0`、`pendingCabin=null`。`pendingCabin` は `progress` / `away` / `idle` / `null`。未知値は表示だけ無視。`idle` は次の運行中アイドル通知用（今はスケジューラを組まない）。
+時刻は Unix **整数秒**。`estimatedSeconds` は当初見積ではなく **いまの予算（延長込み = `WorkSession.budgetSecondsAtStart`）**。残り秒を送ってポーリングしない。乗務なしは `sessionId: null`、他の乗務欄も `null`、`phase` は `idle`。`serviceActive` / `cabinEnabled` / `checkInFiredCount` / `pendingCabin` は乗務なしでも載せる。欠ける旧 snap は `serviceActive=false`、`cabinEnabled=true`、`checkInFiredCount=0`、`pendingCabin=null`。`pendingCabin` は `progress` / `away` / `idle` / `null`。未知値は表示だけ無視。`lastActivityAt` は載せない。運行中アイドルは **iPhone が** `pendingCabin=idle` を立てる。Mac はそれを見て通知するだけで、自分では発火しない。
 
 購読者の残り（Date 計算、`SessionClock` 相当）:
 
@@ -185,7 +185,7 @@ remaining     = estimatedSeconds - elapsedActive
 { "id": "uuid", "op": "pause", "sessionId": "…", "at": 0 }
 ```
 
-v1 の `op` は `pause` / `resume` / `still`。到着・延長は同期契約に載せない。`still` はいまの車内放送 pending を消費する（kind を問わない）。`sessionId` は任意（乗務なしの次の idle は `null`）。既に消費済みでも ack ok。
+v1 の `op` は `pause` / `resume` / `still`。到着・延長は同期契約に載せない。`still` はいまの車内放送 pending を消費する（kind を問わない）。`sessionId` は任意（乗務なし idle は `null`）。既に消費済みでも ack ok。`sessionMismatch` は `sessionId` があるときだけ。
 
 ### コマンド結果平文（ack）
 
@@ -237,7 +237,7 @@ iOS 前面と購読者が両方 WS にいるとき、cmd は即時。iOS が背�
 - `ScenePhase.active` と発車 / 停車 / 延長 / 到着 / 超過突入のたびに snap を置く
 - `ScenePhase.active` で WS を 1 本。RFC 6455 ping で保つ。`.inactive` では切らない。`.background` で止める
 - 前面のまま WS が切れたら張り直さない。`GET /v1/hint/:pairingId` を 5 秒間隔で見て `cmdCount` があれば `GET /v1/cmd`。背面では hint も止める。hint の 404 では止めない
-- 受信 cmd を復号 → pause / resume は `sessionId` が今の open と一致。`still` は `sessionId` があるときだけ照合（無いときは乗務なしでも apply）→ `SessionManager` で実行（停車 / 再乗車 / 車内放送のまだやってる）→ snap + ack
+- 受信 cmd を復号 → pause / resume は `sessionId` が今の open と一致。`still` は `sessionId` があるときだけ照合（無いときは乗務なしでも apply。運行中アイドルの `pendingCabin=idle` を消費する）→ `SessionManager` で実行（停車 / 再乗車 / 車内放送のまだやってる）→ snap + ack
 - 不一致・復号失敗・`SessionError` は ack `ok: false`。snap は現状のまま
 
 **購読者（Mac など）**

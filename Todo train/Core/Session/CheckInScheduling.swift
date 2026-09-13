@@ -48,7 +48,7 @@ enum CheckInCopy {
 }
 
 /// How to deliver the away interrupt. Not a self-report question.
-enum AwayInterruptChannel: Equatable, Sendable {
+nonisolated enum AwayInterruptChannel: Equatable, Sendable {
     /// Session LA `AlertConfiguration` (end bell OFF, Activities on).
     case liveActivityAlert
     /// Time Sensitive local notification — only when there is no Session LA.

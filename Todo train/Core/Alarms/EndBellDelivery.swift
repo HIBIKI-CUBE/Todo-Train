@@ -7,14 +7,14 @@
 
 import Foundation
 
-enum EndBellDeliveryChannel: Equatable, Sendable {
+nonisolated enum EndBellDeliveryChannel: Equatable, Sendable {
     /// AlarmKit owns countdown LA + end alert. No local overtime notification / app overtime sound.
     case alarmKit
     /// UserNotifications Time Sensitive (and in-app overtime UI/sound when foreground).
     case localNotification
 }
 
-enum EndBellDelivery {
+nonisolated enum EndBellDelivery {
     /// - Parameters:
     ///   - endBellEnabled: Settings toggle.
     ///   - alarmKitAuthorized: AlarmKit authorization is `.authorized`.

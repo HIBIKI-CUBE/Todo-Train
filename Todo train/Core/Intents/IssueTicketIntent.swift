@@ -38,6 +38,7 @@ struct IssueTicketIntent: AppIntent {
         )
         let ticket = try TicketIssuer.issue(title: trimmed, minutes: resolved, into: context)
         AppSettings.shared.lastIssuedEstimateMinutes = resolved
+        AppRuntime.sessionManager?.noteCabinActivity()
         return .result(dialog: "「\(ticket.title)」を \(resolved) 分で発行しました")
     }
 

@@ -7,7 +7,7 @@ import Foundation
 import WidgetKit
 
 enum WidgetSnapshotStore {
-    static let appGroupID = "group.dev.hibiki-cube.Todo-train"
+    nonisolated static let appGroupID = "group.dev.hibiki-cube.Todo-train"
     static let suiteKey = "widget.snapshot"
     static let homeWidgetKind = "TodoTrainWidget"
 

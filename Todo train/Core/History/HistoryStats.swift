@@ -5,7 +5,7 @@
 
 import Foundation
 
-struct DayAggregate: Equatable, Sendable {
+nonisolated struct DayAggregate: Equatable, Sendable {
     var focusSeconds: TimeInterval
     var arrived: Int
     var partialDisembark: Int
@@ -27,7 +27,7 @@ enum HistoryStats {
         return calendar.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2]))
     }
 
-    static func weekDays(containing date: Date, calendar: Calendar = .current) -> [Date] {
+    nonisolated static func weekDays(containing date: Date, calendar: Calendar = .current) -> [Date] {
         guard let interval = calendar.dateInterval(of: .weekOfYear, for: date) else { return [] }
         return (0..<7).compactMap { offset in
             calendar.date(byAdding: .day, value: offset, to: interval.start)
@@ -118,12 +118,6 @@ enum HistoryStats {
     }
 
     static func outcomeLabel(_ outcome: SessionOutcome?) -> String {
-        switch outcome {
-        case .arrived: "到着"
-        case .partialDisembark: "途中下車"
-        case .abandoned: "放棄"
-        case .recoveryConflict: "復旧"
-        case .none: "—"
-        }
+        outcome?.displayLabel ?? "—"
     }
 }

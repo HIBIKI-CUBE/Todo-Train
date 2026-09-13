@@ -181,7 +181,7 @@ struct FocusView: View {
 
             GeometryReader { geo in
                 let fontSize = timerFontSize(in: geo.size)
-                Text(timerLabel(remaining))
+                Text(CockpitFormat.timerLabel(remaining: remaining))
                     .font(.system(size: fontSize, weight: .semibold, design: .default))
                     .monospacedDigit()
                     .foregroundStyle(phase.accentColor)
@@ -191,7 +191,7 @@ struct FocusView: View {
                     .animation(reduceMotion ? nil : TrainTheme.Motion.pulse, value: overtimePulse)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .accessibilityLabel("残り時間")
-                    .accessibilityValue(timerLabel(remaining))
+                    .accessibilityValue(CockpitFormat.timerLabel(remaining: remaining))
             }
             .onChange(of: context.date) { _, _ in
                 sessionManager.reconcile()
@@ -349,15 +349,6 @@ struct FocusView: View {
         let byHeight = size.height * 0.72
         let capped: CGFloat = verticalSizeClass == .compact ? 140 : 220
         return min(byWidth, byHeight, capped)
-    }
-
-    private func timerLabel(_ remaining: TimeInterval) -> String {
-        let total = Int(remaining.rounded())
-        if total < 0 {
-            let absTotal = abs(total)
-            return String(format: "%d:%02d", absTotal / 60, absTotal % 60)
-        }
-        return String(format: "%d:%02d", total / 60, total % 60)
     }
 
     private func progressValue(at now: Date) -> Double {

@@ -13,7 +13,7 @@
   "notes": {
     "phase": "SessionPhase raw values. Unknown values: display conservatively, do not crash.",
     "op": "v1 allows pause, resume, and still (consume the current cabin prompt). Do not add arrive/extend on the wire.",
-    "pendingCabin": "Current 車内放送 kind on snap. null when none. Unknown values: ignore for display. idle is reserved for a later 運行-idle notification.",
+    "pendingCabin": "Current 車内放送 kind on snap. null when none. Unknown values: ignore for display. idle means service is open with no ride; iPhone sets it, Mac notifies only.",
     "error": "Ack wire errors only. sessionMismatch and decryptFailed are wire-only (not SessionError cases). Map noActiveSession to noActiveService. Map SessionError.notPaused to notPaused. Do not put the rest of SessionError on the wire."
   }
 }

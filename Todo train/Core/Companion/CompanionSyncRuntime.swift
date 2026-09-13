@@ -26,12 +26,12 @@ final class CompanionSyncRuntime {
 
     init(
         secrets: any SecretStoring = KeychainSecretStore(),
-        settings: AppSettings = .shared,
-        localAuth: any LocalAuthenticating = DeviceLocalAuth(),
+        settings: AppSettings? = nil,
+        localAuth: any LocalAuthenticating = DeviceLocalAuth(reason: SyncCopy.iphoneConfirmReason),
         defaults: UserDefaults = .standard
     ) {
         self.secrets = secrets
-        self.settings = settings
+        self.settings = settings ?? .shared
         self.localAuth = localAuth
         self.defaults = defaults
         let stored = defaults.stringArray(forKey: Defaults.processedCmdIDs) ?? []
@@ -52,7 +52,7 @@ final class CompanionSyncRuntime {
         guard isPaired else { return }
         pushTask?.cancel()
         pushTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 150_000_000)
+            try? await Task.sleep(nanoseconds: SyncTiming.snapDebounceNanoseconds)
             guard !Task.isCancelled else { return }
             await self?.syncNow(sessionManager: sessionManager)
         }
@@ -62,7 +62,7 @@ final class CompanionSyncRuntime {
         let url = try requireRelay()
         let client = SyncHTTPClient(
             baseURL: url,
-            transport: CompanionHTTPTransport(baseURL: url)
+            transport: URLSessionHTTPTransport(baseURL: url)
         )
         return PairingFlow(
             role: .iphone,
@@ -165,13 +165,10 @@ final class CompanionSyncRuntime {
                 guard let pairing = try secrets.load() else { return }
                 let client = try authedClient(pairing)
                 let result = try await client.getHint(pairingId: pairing.pairingId, etag: etag)
-                let status = result.notModified ? 304 : 200
                 switch HintPolling.outcome(
                     subscriber: .iphone,
                     previous: previous,
-                    status: status,
-                    hint: result.hint,
-                    responseETag: result.etag
+                    result: result
                 ) {
                 case .ignore:
                     break
@@ -245,7 +242,7 @@ final class CompanionSyncRuntime {
         client: SyncHTTPClient,
         sessionManager: SessionManager
     ) async throws {
-        let command = try CompanionEnvelope.open(
+        let command = try SyncCrypto.openJSON(
             CommandPlaintext.self,
             envelope: envelope,
             pairingId: pairingId,
@@ -259,15 +256,18 @@ final class CompanionSyncRuntime {
             isPaused: sessionManager.activeSession?.isPaused == true,
             command: command
         )
-        if CompanionCommandApplying.shouldCallPause(decision, op: command.op) {
-            try sessionManager.pause()
-        } else if CompanionCommandApplying.shouldCallResume(decision, op: command.op) {
-            try sessionManager.resume()
-        } else if CompanionCommandApplying.shouldCallStill(decision, op: command.op) {
-            sessionManager.acknowledgeCabinStill()
+        if decision.shouldApply {
+            switch command.op {
+            case .pause:
+                try sessionManager.pause()
+            case .resume:
+                try sessionManager.resume()
+            case .still:
+                sessionManager.acknowledgeCabinStill()
+            }
         }
         let ack = RemotePauseEvaluating.ack(decision: decision, commandId: command.id)
-        let ackEnvelope = try CompanionEnvelope.seal(
+        let ackEnvelope = try SyncCrypto.sealJSON(
             ack,
             pairingId: pairingId,
             kind: .ack,
@@ -304,9 +304,10 @@ final class CompanionSyncRuntime {
             session: sessionManager.activeSession,
             now: Date(),
             serviceActive: sessionManager.activeServiceDay?.isOpen == true,
-            cabinEnabled: settings.cabinAnnouncementsEnabled
+            cabinEnabled: settings.cabinAnnouncementsEnabled,
+            pendingCabin: sessionManager.activeServiceDay?.pendingCabin?.cabin
         )
-        let envelope = try CompanionEnvelope.seal(
+        let envelope = try SyncCrypto.sealJSON(
             plaintext,
             pairingId: pairing.pairingId,
             kind: .snap,
@@ -320,7 +321,7 @@ final class CompanionSyncRuntime {
         let url = try requireRelay()
         return SyncHTTPClient(
             baseURL: url,
-            transport: CompanionHTTPTransport(baseURL: url),
+            transport: URLSessionHTTPTransport(baseURL: url),
             writeToken: pairing.writeToken,
             pairingId: pairing.pairingId
         )
@@ -344,20 +345,6 @@ final class CompanionSyncRuntime {
     }
 
     private func userFacing(_ error: Error) -> String {
-        if let sync = error as? SyncError {
-            switch sync {
-            case .notPaired, .pairingAborted, .pairingNotBound:
-                return "つながっていません"
-            case .confirmTimedOut:
-                return "確定の時間切れ。もう一度画面を向けてください"
-            case .transport(_, let code) where code == "pauseLimitReached":
-                return "停車できません（停車上限）"
-            case .transport(_, let code) where code == "notPaused":
-                return "停車中ではない"
-            default:
-                return "リレーが切れた"
-            }
-        }
-        return "リレーが切れた"
+        SyncCopy.connectionStatus(error)
     }
 }

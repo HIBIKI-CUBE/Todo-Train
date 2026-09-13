@@ -1,5 +1,5 @@
 //
-//  QuickAddBar.swift
+//  QuickAddSheet.swift
 //  Todo train
 //
 //  Thumb-zone ticket desk: single (dismiss → Hub celebration) vs continuous dump

@@ -20,19 +20,19 @@ enum TicketDeletion {
         remainingSessionIDs.filter { $0 != sessionID }.isEmpty
     }
 
-    enum RideState: Equatable {
+    nonisolated enum RideState: Equatable {
         case unused
         case idle
         case paused
         case running
     }
 
-    static func displayTitle(_ raw: String, fallback: String) -> String {
+    nonisolated static func displayTitle(_ raw: String, fallback: String) -> String {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? fallback : trimmed
     }
 
-    static func rideState(
+    nonisolated static func rideState(
         hasEndedSessions: Bool,
         isPaused: Bool,
         isRunning: Bool
@@ -51,7 +51,7 @@ enum TicketDeletion {
         )
     }
 
-    static func ticketDeleteFooter(ride: RideState) -> String {
+    nonisolated static func ticketDeleteFooter(ride: RideState) -> String {
         switch ride {
         case .unused:
             "削除したあと、しばらく取り消せます。"

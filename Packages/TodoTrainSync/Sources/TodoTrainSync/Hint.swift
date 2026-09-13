@@ -81,6 +81,20 @@ public enum HintPolling: Sendable {
     public static func outcome(
         subscriber: HintSubscriber,
         previous: HintPlaintext?,
+        result: HintGetResult
+    ) -> HintPollOutcome {
+        outcome(
+            subscriber: subscriber,
+            previous: previous,
+            status: result.notModified ? 304 : 200,
+            hint: result.hint,
+            responseETag: result.etag
+        )
+    }
+
+    public static func outcome(
+        subscriber: HintSubscriber,
+        previous: HintPlaintext?,
         status: Int,
         hint: HintPlaintext?,
         responseETag: String?

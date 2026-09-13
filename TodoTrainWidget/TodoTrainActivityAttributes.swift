@@ -8,7 +8,7 @@ import Foundation
 #if canImport(ActivityKit)
 import ActivityKit
 
-struct TodoTrainActivityAttributes: ActivityAttributes {
+nonisolated struct TodoTrainActivityAttributes: ActivityAttributes {
     struct ContentState: Codable, Hashable {
         var title: String
         var deadline: Date

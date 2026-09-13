@@ -37,11 +37,6 @@ public protocol LocalAuthenticating: Sendable {
     func confirmPresence() async throws
 }
 
-/// Camera / paste. Tests inject the optically-read URL string.
-public protocol OpticalProviding: Sendable {
-    func waitForURL() async throws -> String
-}
-
 public struct HTTPRequest: Equatable, Sendable {
     public var method: String
     public var path: String

@@ -5,7 +5,7 @@
 
 import Foundation
 
-enum PauseLimitGuard {
+nonisolated enum PauseLimitGuard {
     static let defaultLimit = 2
 
     /// New rides are blocked when paused tickets already sit at the WIP cap.

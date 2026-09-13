@@ -1,6 +1,6 @@
 # 08 — 現状ステータス
 
-最終更新: 2026-09-12（リレー `todo-train.hibiki-cube.dev` / `dev.todo-train.hibiki-cube.dev`。Mac はメニューバー吹き出し＋乗務中 PiP。進捗車内放送は PiP。確認は [16](16-wakeup-checklist.md)）
+最終更新: 2026-09-13（リレー `todo-train.hibiki-cube.dev` / `dev.todo-train.hibiki-cube.dev`。Mac はメニューバー吹き出し＋乗務中 PiP。進捗車内放送は PiP。運行中アイドルは iPhone 本尊の通知。確認は [16](16-wakeup-checklist.md)）
 
 ## 結論
 
@@ -34,7 +34,7 @@
 | SYNC-2 Swift 芯 | ✅ | `Packages/TodoTrainSync`。Mac は SYNC-4、iOS は SYNC-3 でリンク。CI `sync-swift` |
 | SYNC-5 Linux E2E | ✅ | `sync/e2e/run.sh`。CI `sync-swift` |
 | SYNC-3 iOS UI | `develop` 済み。実機待ち | Settings セルフィー + 発車などで snap。Mac 名とペア識別子（#35） |
-| SYNC-4 macOS | `develop` 済み。実機待ち | メニューバー吹き出しで即ペアリング。乗務中 PiP（四隅スナップ。端へは同じカードのまま追い出す。ホバーで停車/再乗車。進捗車内放送は PiP）。歯車 / 右クリックで設定、そこから解除（#39） |
+| SYNC-4 macOS | `develop` 済み。実機待ち | メニューバー吹き出しで即ペアリング。乗務中 PiP（四隅スナップ。端へは同じカードのまま追い出す。ホバーで停車/再乗車。進捗車内放送は PiP。運行中アイドルは UserNotifications）。歯車 / 右クリックで設定、そこから解除（#39） |
 
 ### v2 進捗
 
@@ -46,7 +46,7 @@
 | UI polish | ✅ `TrainTheme` / `TrainChrome` / 横向き compact（[12](12-ui-design.md)） |
 | 切符・履歴の削除 | ✅ Hub はフルスワイプ。履歴はコンテキストメニュー + バナー Undo（[12](12-ui-design.md)） |
 | 定時到着 / 定時運行 | ✅ 到着は完了として案内。定時・早着はいい結果の見出し。超過でも取り下げない |
-| 車内放送 | ✅ `CheckInScheduling` + Focus 4 択 + 背面 LA alert（ロック中は沈黙） |
+| 車内放送 | ✅ `CheckInScheduling` + Focus 4 択 + 背面 LA alert（ロック中は沈黙）。運行中アイドルは iPhone が `pendingCabin=idle` |
 | 発券 App Intent | ✅ `IssueTicketIntent`。見積は Heuristic / 直前発行 |
 
 ## ディレクトリ（実装の地図）
@@ -56,34 +56,34 @@ Todo train/
   ContentView.swift        TabView（切符 / 履歴 / 設定）+ Focus cover
   App/                     AppModelContainer, CloudKitSync（`isConfigured` 既定 false）
   Core/
-    Session/               SessionManager, TicketDeletion, DeletionUndo, CheckInScheduling, DeviceLock
-    Alarms/                AlarmScheduling, EndBellDelivery, SessionEndSchedule
+    Session/               SessionManager（+ Boarding / ServiceDay / CheckIn / Lifecycle など）, TicketDeletion, DeletionUndo, CheckInScheduling, DeviceLock
+    Alarms/                AlarmScheduling, AlarmKitScheduler, EndBellDelivery, SessionEndSchedule
     Notifications/         OvertimeNotifier, CheckInNotifier
-    History/               HistorySearch, TicketReissue, WeeklyReport, Punctuality, SessionTimeline
+    History/               HistorySearch, HistoryStats, TicketReissue, WeeklyReport, Punctuality, SessionTimeline, TimelineModels
     Settings/              AppSettings
     Companion/             CompanionSyncRuntime, セルフィー配線（SYNC-3）
     Coaching/              CoachingEngine（Heuristic + OnDevice 1 行）
     Intents/               IssueTicketIntent
-    Tickets/               TicketSortOrdering, TicketIssuer
+    Tickets/               TicketSortOrdering, TicketIssuer, TicketLineageService
   DesignSystem/            TrainTheme, TrainChrome, TrainLayout, TicketDeckLayout, EstimateChips,
                            DeleteConfirmation, EstimateSnapMapping, EstimateSnapGauge,
                            TicketIssueEject, TicketMotion, ArrivalInvalidateOverlay, PunctualityMomentOverlay,
                            MarsTicketSpec, MarsTicketView, TicketStackLayout
   Features/
-    Hub/                   HubView, QuickAddBar（親指発券帯）, ServiceSummaryBar,
+    Hub/                   HubView, HubTicketPresentLayer, QuickAddSheet（親指発券帯）, ServiceSummaryBar,
                            TicketStackView（peek。選択中はスロットの実券を隠す。未選択フルスワイプ。出入りは手前へ潜る）, HubMarsTicketCard,
                            HubStationChevronSign（提示レイヤ LED。Hiragino 量子化ドット）
-    Focus/                 FocusView, FocusControlsView（車内放送 4 択含む）, OvertimeSheet
-    Arrival/               PauseLimitSheet, TransferCanvasPresenter
+    Focus/                 FocusView, FocusControlsView, CheckInControlsView, OvertimeControlsView, FocusExtendPanel, OvertimeSheet
+    Arrival/               PauseLimitSheet, TransferCanvasPresenter, TransferCanvasLaunch
     History/               HistoryView, HistoryCalendarStrip, HistoryDayPager, HistoryDayClockView, HistoryRideDetailView, WeeklyReportView
     LiveActivity/          LiveActivityManaging
     Reorder/               ReorderView
     Settings/              SettingsView
 TodoTrainWidget/           Home Widget + Session LA + Alarm LA
-TodoTrainCompanion/        macOS メニューバー accessory + 乗務中 PiP（SYNC-4）
-Todo trainTests/           Swift Testing（CheckInScheduling / TicketIssuer 含む）
+TodoTrainCompanion/        macOS メニューバー accessory + 乗務中 PiP（SYNC-4）。CompanionMacRuntime は Pairing / Relay / Commands / Cabin に分割
+Todo trainTests/           Swift Testing（SessionManager は領域ごと。CheckInScheduling / TicketIssuer 含む）
 TodoTrainCompanionTests/   停車送信の純関数
-Packages/TodoTrainSync/    同期芯（暗号・ペアリング・停車判定・メニューバー/PiP 表示。UI なし）
+Packages/TodoTrainSync/    同期芯（暗号・ペアリング・停車判定・CabinKind / Scheduling / Interrupt・WireDTOs。UI なし）
 sync/contract/             ワイヤ契約の正本
 sync/worker/               Hono + Durable Object
 sync/e2e/                  Linux 結合（client ↔ worker）
@@ -107,7 +107,7 @@ sync/e2e/                  Linux 結合（client ↔ worker）
 | Session LA からの Intent | 走行中の停車は `SessionPauseIntent`。停車中の再乗車は `SessionResumeIntent`。到着・延長は deep link |
 | iPad 最適化 | v2 以降。iPhone アプリの自由リサイズ（ミラーリング）は Hub がシーン幅に追従 |
 | 乗り継ぎキャンバスのゲージ統一 | Phase 2（Quick Add のみ線形スナップ・ゲージ） |
-| Mac Companion | Linux 芯は完了（[13](13-sync-mac-companion.md) / [15](15-agent-work-plan.md)）。メニューバー吹き出しは SYNC-4。乗務中は四隅 PiP（ホバーで停車/再乗車。端へは同じカードのまま追い出す）。進捗車内放送は PiP に「まだ乗ってる？」（停車 / まだやってる）。答えは snap の `checkInFiredCount` と cmd `still` で共有。ペア済みなら iPhone の進捗ローカル通知は出さない。次の運行中アイドル通知は同じチャネルに載せる。iOS は Settings セルフィー + 発車/停車/延長/到着/超過と `ScenePhase.active` で snap。WS は ping で保ち、切れたら自動再接せず公開 hint で追いつく。WS の Bearer は接続ごとの session に載せる。hint の 404 では止めない。設定は歯車 / 右クリックのウィンドウ。体験は [14](14-mac-companion-ux.md)。実機確認は [16](16-wakeup-checklist.md) |
+| Mac Companion | Linux 芯は完了（[13](13-sync-mac-companion.md) / [15](15-agent-work-plan.md)）。メニューバー吹き出しは SYNC-4。乗務中は四隅 PiP（ホバーで停車/再乗車。端へは同じカードのまま追い出す）。進捗車内放送は PiP に「まだ乗ってる？」（停車 / まだやってる）。答えは snap の `checkInFiredCount` と cmd `still` で共有。ペア済みなら iPhone の進捗ローカル通知は出さない。運行中アイドルは iPhone が `pendingCabin=idle` を立て、両端末が「運行は続いてる」を出す（Mac は通知だけ。PiP なし。ペアしても iPhone は止めない）。iOS は Settings セルフィー + 発車/停車/延長/到着/超過と `ScenePhase.active` で snap。WS は ping で保ち、切れたら自動再接せず公開 hint で追いつく。WS の Bearer は接続ごとの session に載せる。hint の 404 では止めない。設定は歯車 / 右クリックのウィンドウ。体験は [14](14-mac-companion-ux.md)。実機確認は [16](16-wakeup-checklist.md) |
 
 ## テスト
 
@@ -146,7 +146,8 @@ xcodebuild test-without-building -scheme "Todo train" \
 - [ ] 発行祝祭と Return 一発発券が壊れていない
 - [ ] Siri / ショートカット「切符を発行」
 - [ ] ペア済み Mac: 同じ放送が PiP に出る。片方でまだやってるともう片方は出ない。端出し中なら戻って出る
-- [ ] 次の運行中アイドル通知はまだ出ない（チャネルだけ予約）
+- [ ] 運行中で乗っていない: 12–20 分で「運行は続いてる」。まだやってるで消える。2 回目は 25–40 分。Hub を開いただけでは延びない。発車したら出ない
+- [ ] 同じ idle が Mac の通知にも出る（PiP は出ない）。片方でまだやってるともう片方は消える。ペアしても iPhone の idle は残る
 
 ## Personal Team でできるデバッグ
 

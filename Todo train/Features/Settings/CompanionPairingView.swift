@@ -121,7 +121,7 @@ struct CompanionPairingView: View {
             qr = try await pairing.presentQR()
             phase = await pairing.phase
         } catch {
-            errorText = "リレー URL を設定に書いてから、もう一度。"
+            errorText = SyncCopy.relayURLMissing
         }
     }
 
@@ -140,29 +140,21 @@ struct CompanionPairingView: View {
             bindTask?.cancel()
             bindTask = Task { await pollBind() }
         } catch {
-            errorText = "その QR ではつながらない"
+            errorText = SyncCopy.invalidQR
         }
     }
 
     private func pollBind() async {
         guard let flow else { return }
-        let deadline = Date().addingTimeInterval(TimeInterval(SyncConstants.offerTtlSeconds))
-        while Date() < deadline {
-            if Task.isCancelled { return }
-            do {
-                let response = try await flow.refreshBind()
-                phase = await flow.phase
-                if response.bound {
-                    UINotificationFeedbackGenerator().notificationOccurred(.success)
-                    return
-                }
-            } catch {
-                errorText = "つなぎ直しが必要"
-                return
-            }
-            try? await Task.sleep(nanoseconds: 250_000_000)
+        do {
+            try await flow.waitUntilBound()
+            phase = await flow.phase
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+        } catch is CancellationError {
+            return
+        } catch {
+            errorText = SyncCopy.reconnectNeeded
         }
-        errorText = "つなぎ直しが必要"
     }
 
     private func confirm() async {
@@ -172,10 +164,10 @@ struct CompanionPairingView: View {
             phase = await flow.phase
             runtime.refreshPaired()
             UINotificationFeedbackGenerator().notificationOccurred(.success)
-            try? await Task.sleep(nanoseconds: 800_000_000)
+            try? await Task.sleep(nanoseconds: SyncTiming.pairingDismissPauseNanoseconds)
             dismiss()
         } catch {
-            errorText = "確定できなかった。自分に戻してからもう一度。"
+            errorText = SyncCopy.confirmFailed
         }
     }
 }

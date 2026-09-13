@@ -24,6 +24,7 @@ public struct MenuBarInput: Equatable, Sendable {
     public var outgoingPause: OutgoingPauseState
     public var cabinEnabledLocal: Bool
     public var optimisticFiredCount: Int
+    public var optimisticIdleConsumed: Bool
 
     public init(
         pairing: PairingStatus,
@@ -32,7 +33,8 @@ public struct MenuBarInput: Equatable, Sendable {
         connection: ConnectionStatus = .connected,
         outgoingPause: OutgoingPauseState = .idle,
         cabinEnabledLocal: Bool = true,
-        optimisticFiredCount: Int = 0
+        optimisticFiredCount: Int = 0,
+        optimisticIdleConsumed: Bool = false
     ) {
         self.pairing = pairing
         self.snap = snap
@@ -41,6 +43,7 @@ public struct MenuBarInput: Equatable, Sendable {
         self.outgoingPause = outgoingPause
         self.cabinEnabledLocal = cabinEnabledLocal
         self.optimisticFiredCount = optimisticFiredCount
+        self.optimisticIdleConsumed = optimisticIdleConsumed
     }
 }
 
@@ -105,9 +108,9 @@ public struct MenuBarPresentation: Equatable, Sendable {
             let remaining = snap.remainingSeconds(at: input.now)
             let detail: String
             if input.connection == .disconnected {
-                detail = "リレーが切れた"
+                detail = SyncCopy.relayDisconnected
             } else if sending {
-                detail = "iPhone に送った"
+                detail = SyncCopy.sentToIPhone
             } else {
                 detail = "停車中"
             }
@@ -131,9 +134,9 @@ public struct MenuBarPresentation: Equatable, Sendable {
             let bar = [truncated, remainingLabel].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " ")
             let detail: String
             if input.connection == .disconnected {
-                detail = "リレーが切れた"
+                detail = SyncCopy.relayDisconnected
             } else if sending {
-                detail = "iPhone に送った"
+                detail = SyncCopy.sentToIPhone
             } else if overtime {
                 detail = "超過 \(remainingLabel)"
             } else {
@@ -162,19 +165,16 @@ public struct MenuBarPresentation: Equatable, Sendable {
 
     public static func formatRemaining(_ seconds: Int) -> String {
         let sign = seconds < 0 ? "+" : ""
-        let abs = abs(seconds)
-        let minutes = abs / 60
-        let remainder = abs % 60
-        return "\(sign)\(minutes):\(String(format: "%02d", remainder))"
+        return sign + ClockTime.mmss(seconds)
     }
 
     public static func failureCopy(_ error: WireError) -> String {
         switch error {
-        case .pauseLimitReached: "停車できません（停車上限）"
+        case .pauseLimitReached: SyncCopy.pauseLimitReached
         case .noActiveService: "乗務なし"
         case .sessionMismatch: "乗務が変わった"
         case .decryptFailed: "送れなかった"
-        case .notPaused: "停車中ではない"
+        case .notPaused: SyncCopy.notPaused
         }
     }
 
@@ -192,7 +192,7 @@ public struct MenuBarPresentation: Equatable, Sendable {
             canReconnect: disconnected,
             isSending: sending,
             popoverTitle: "乗務なし",
-            popoverDetail: disconnected ? "リレーが切れた" : "乗務なし",
+            popoverDetail: disconnected ? SyncCopy.relayDisconnected : "乗務なし",
             failureLine: failureLine
         )
     }

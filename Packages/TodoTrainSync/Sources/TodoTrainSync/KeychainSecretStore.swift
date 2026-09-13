@@ -1,12 +1,12 @@
+#if canImport(Security)
 import Foundation
 import Security
-import TodoTrainSync
 
-struct KeychainSecretStore: SecretStoring {
-    var service: String
-    var account: String
+public struct KeychainSecretStore: SecretStoring {
+    public var service: String
+    public var account: String
 
-    init(
+    public init(
         service: String = "dev.hibiki-cube.Todo-train.companion",
         account: String = "pairing"
     ) {
@@ -14,7 +14,7 @@ struct KeychainSecretStore: SecretStoring {
         self.account = account
     }
 
-    func load() throws -> PairingSecrets? {
+    public func load() throws -> PairingSecrets? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -31,7 +31,7 @@ struct KeychainSecretStore: SecretStoring {
         return try JSONDecoder().decode(PairingSecrets.self, from: data)
     }
 
-    func save(_ secrets: PairingSecrets) throws {
+    public func save(_ secrets: PairingSecrets) throws {
         let data = try JSONEncoder().encode(secrets)
         try delete()
         let query: [String: Any] = [
@@ -45,7 +45,7 @@ struct KeychainSecretStore: SecretStoring {
         guard status == errSecSuccess else { throw SyncError.notPaired }
     }
 
-    func delete() throws {
+    public func delete() throws {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -57,3 +57,4 @@ struct KeychainSecretStore: SecretStoring {
         }
     }
 }
+#endif

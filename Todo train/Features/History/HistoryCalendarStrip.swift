@@ -167,7 +167,7 @@ struct HistoryCalendarStrip: View {
         guard weekKey != key else { return }
         isProgrammaticScroll = true
         weekKey = key
-        DispatchQueue.main.async {
+        Task { @MainActor in
             isProgrammaticScroll = false
         }
     }

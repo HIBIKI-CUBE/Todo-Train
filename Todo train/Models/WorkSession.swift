@@ -125,13 +125,20 @@ final class WorkSession {
     }
 
     func elapsedSeconds(at now: Date) -> TimeInterval {
-        if let pausedAt {
+        if pausedAt != nil {
             return accumulatedActiveSeconds
         }
         guard let segmentStartedAt else {
             return accumulatedActiveSeconds
         }
         return accumulatedActiveSeconds + now.timeIntervalSince(segmentStartedAt)
+    }
+
+    func closeActiveSegment(at now: Date) {
+        if let segmentStartedAt {
+            accumulatedActiveSeconds += now.timeIntervalSince(segmentStartedAt)
+        }
+        segmentStartedAt = nil
     }
 
     func remainingSeconds(at now: Date) -> TimeInterval {

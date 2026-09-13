@@ -117,6 +117,32 @@ public enum SyncCrypto {
         try WireJSON.encoder().encode(value)
     }
 
+    public static func sealJSON<T: Encodable>(
+        _ value: T,
+        pairingId: UUID,
+        kind: WireKind,
+        rev: Int,
+        encKey: Data
+    ) throws -> Envelope {
+        try seal(
+            plaintext: encodeJSON(value),
+            pairingId: pairingId,
+            kind: kind,
+            rev: rev,
+            encKey: encKey,
+            nonce: randomBytes(12)
+        )
+    }
+
+    public static func openJSON<T: Decodable>(
+        _ type: T.Type,
+        envelope: Envelope,
+        pairingId: UUID,
+        encKey: Data
+    ) throws -> T {
+        try decodeJSON(type, from: try open(envelope, pairingId: pairingId, encKey: encKey))
+    }
+
     private static func hkdf(ikm: SymmetricKey, salt: Data, info: String) -> Data {
         let key = HKDF<SHA256>.deriveKey(
             inputKeyMaterial: ikm,

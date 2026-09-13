@@ -8,7 +8,7 @@
 import CoreGraphics
 import Foundation
 
-enum HistoryRideDensity: Equatable, Sendable {
+nonisolated enum HistoryRideDensity: Equatable, Sendable {
     case day
     case compact
     case week
@@ -62,7 +62,7 @@ enum HistoryRideDensity: Equatable, Sendable {
     }
 }
 
-enum HistoryCanvasZoom {
+nonisolated enum HistoryCanvasZoom {
     enum GestureAxis: Equatable, Sendable {
         case horizontal
         case vertical

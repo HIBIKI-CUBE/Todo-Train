@@ -25,6 +25,56 @@ struct CabinBroadcastSchedulingTests {
     }
 }
 
+@Suite("Cabin idle scheduling")
+struct CabinIdleSchedulingTests {
+    private let seed = UUID(uuidString: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE")!
+
+    @Test func sameSeedMatchesDelays() {
+        let first = CabinIdleScheduling.delay(firedCount: 0, seed: seed)
+        let again = CabinIdleScheduling.delay(firedCount: 0, seed: seed)
+        #expect(first == again)
+        #expect(first != nil)
+    }
+
+    @Test func delaysSitInsideBands() throws {
+        let first = try #require(CabinIdleScheduling.delay(firedCount: 0, seed: seed))
+        let second = try #require(CabinIdleScheduling.delay(firedCount: 1, seed: seed))
+        #expect(first >= CabinIdleScheduling.firstBand.lowerBound)
+        #expect(first <= CabinIdleScheduling.firstBand.upperBound)
+        #expect(second >= CabinIdleScheduling.secondBand.lowerBound)
+        #expect(second <= CabinIdleScheduling.secondBand.upperBound)
+        #expect(CabinIdleScheduling.delay(firedCount: 2, seed: seed) == nil)
+    }
+
+    @Test func dueOnlyAfterElapsed() throws {
+        #expect(
+            !CabinIdleScheduling.isDue(
+                firedCount: 0,
+                elapsedSinceActivity: 11 * 60,
+                hasPending: false,
+                seed: seed
+            )
+        )
+        let delay = try #require(CabinIdleScheduling.delay(firedCount: 0, seed: seed))
+        #expect(
+            CabinIdleScheduling.isDue(
+                firedCount: 0,
+                elapsedSinceActivity: delay,
+                hasPending: false,
+                seed: seed
+            )
+        )
+        #expect(
+            !CabinIdleScheduling.isDue(
+                firedCount: 0,
+                elapsedSinceActivity: delay,
+                hasPending: true,
+                seed: seed
+            )
+        )
+    }
+}
+
 @Suite("Cabin delivery")
 struct CabinDeliveryTests {
     @Test func progressWithRideUsesPip() {
@@ -158,7 +208,9 @@ struct CabinInterruptWatchTests {
         )
         #expect(interrupt.isDue)
         #expect(interrupt.delivery == .notification)
+        #expect(interrupt.showsNotification)
         #expect(!interrupt.showsPip)
+        #expect(interrupt.prompt == CabinCopy.idle)
     }
 
     @Test func localDisabledHides() {
@@ -216,5 +268,22 @@ struct CabinInterruptWatchTests {
         )
         #expect(interrupt.isDue)
         #expect(interrupt.showsPip)
+    }
+
+    @Test func optimisticIdleConsumeHidesNotification() {
+        var snap = running
+        snap.phase = .idle
+        snap.sessionId = nil
+        snap.serviceActive = true
+        snap.pendingCabin = .idle
+        let interrupt = CabinInterruptWatch.evaluate(
+            snap: snap,
+            now: 1_768_000_120,
+            localEnabled: true,
+            optimisticFiredCount: 0,
+            optimisticIdleConsumed: true
+        )
+        #expect(!interrupt.isDue)
+        #expect(!interrupt.showsNotification)
     }
 }

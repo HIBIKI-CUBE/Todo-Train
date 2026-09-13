@@ -11,15 +11,9 @@ struct ServiceEndSheet: View {
 
     var onError: (String) -> Void
 
-    @State private var canvasLaunch: CanvasLaunch?
+    @State private var canvasLaunch: TransferCanvasLaunch?
     @State private var localError = ""
     @State private var showLocalError = false
-
-    private struct CanvasLaunch: Identifiable {
-        let id = UUID()
-        let parent: Ticket
-        let sessionID: UUID?
-    }
 
     private var pausedSessions: [WorkSession] {
         sessionManager.pausedSessions
@@ -120,7 +114,7 @@ struct ServiceEndSheet: View {
         let sessionID = session.id
         do {
             try sessionManager.partialDisembark(session: session)
-            canvasLaunch = CanvasLaunch(parent: ticket, sessionID: sessionID)
+            canvasLaunch = TransferCanvasLaunch(parent: ticket, sessionID: sessionID)
         } catch {
             present(error)
         }

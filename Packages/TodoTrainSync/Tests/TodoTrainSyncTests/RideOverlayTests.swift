@@ -63,11 +63,23 @@ struct RideOverlayPresentationTests {
             MenuBarInput(pairing: .paired, snap: idle, now: 1_768_000_120)
         )
         #expect(!idleView.isVisible)
+        #expect(idleView.cabinPrompt == nil)
 
         let unpaired = RideOverlayPresentation.make(
             MenuBarInput(pairing: .unpaired, snap: running, now: 1_768_000_120)
         )
         #expect(!unpaired.isVisible)
+    }
+
+    @Test func idlePendingDoesNotShowPip() {
+        var snap = idle
+        snap.serviceActive = true
+        snap.pendingCabin = .idle
+        let view = RideOverlayPresentation.make(
+            MenuBarInput(pairing: .paired, snap: snap, now: 1_768_000_120)
+        )
+        #expect(!view.isVisible)
+        #expect(view.cabinPrompt == nil)
     }
 
     @Test func sendingAndFailureCopy() {

@@ -14,7 +14,7 @@ struct LinuxE2ETests {
     }
 
     @Test func encryptedClientRoundTripsSnapPauseAck() async throws {
-        let recording = RecordingHTTPTransport(AbsoluteURLHTTPTransport(baseURL: baseURL))
+        let recording = RecordingHTTPTransport(E2EHTTP.transport(baseURL: baseURL))
         let iphoneStore = InMemorySecretStore()
         let macStore = InMemorySecretStore()
         let iphoneFlow = PairingFlow(
@@ -176,7 +176,7 @@ struct LinuxE2ETests {
     }
 
     @Test func oneSidedOpticalDoesNotEstablishPairing() async throws {
-        let transport = AbsoluteURLHTTPTransport(baseURL: baseURL)
+        let transport = E2EHTTP.transport(baseURL: baseURL)
 
         let iphoneOnly = PairingFlow(
             role: .iphone,
@@ -226,7 +226,7 @@ struct LinuxE2ETests {
     }
 
     @Test func oneSidedConfirmDoesNotEstablishPairing() async throws {
-        let transport = AbsoluteURLHTTPTransport(baseURL: baseURL)
+        let transport = E2EHTTP.transport(baseURL: baseURL)
         let iphoneStore = InMemorySecretStore()
         let macStore = InMemorySecretStore()
         let iphone = PairingFlow(
