@@ -59,4 +59,12 @@ struct AppSettingsTests {
         let settings = AppSettings.makeForTesting(timetableVisibleCalendarIDs: [])
         #expect(!settings.isTimetableCalendarVisible("work"))
     }
+
+    @Test func developerTools_areOffByDefaultInTests() {
+        #expect(AppSettings.developerUnlockTapCount == 7)
+        let settings = AppSettings.makeForTesting()
+        #expect(settings.developerToolsUnlocked == false)
+        let unlocked = AppSettings.makeForTesting(developerToolsUnlocked: true)
+        #expect(unlocked.developerToolsUnlocked == true)
+    }
 }

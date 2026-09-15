@@ -43,8 +43,23 @@ enum MarsTicketSpec {
         static let liftRise: CGFloat = 22
         static let liftScale: CGFloat = 1.025
         /// LED 発車看板. Fraction of the Mars face height.
-        static let departSignHeightRatio: CGFloat = 0.6
+        static let departSignHeightRatio: CGFloat = 0.44
         static let departSignGap: CGFloat = 10
+        /// Pair under the lifted ticket. Same family as the LED lattice.
+        static let timetablePlateHeightRatio: CGFloat = 0.44
+        static let timetablePlateBottomMargin: CGFloat = 8
+
+        static func timetablePlateHeight(ticketHeight: CGFloat) -> CGFloat {
+            ticketHeight * timetablePlateHeightRatio
+        }
+
+        enum TimetableReveal {
+            static let fillDuration: Double = 0.55
+            static let caretAppearDelay: Double = 0.48
+            static let caretAppearDuration: Double = 0.22
+            static let caretTravelDelay: Double = 0.68
+            static let caretTravelDuration: Double = 0.4
+        }
         /// Non-focused peers while one ticket is held.
         static let focusPeerOpacity: Double = 0.55
         /// Lift. Low bounce so the card does not pop through neighbors.
@@ -66,11 +81,11 @@ enum MarsTicketSpec {
         case hub
     }
 
-    // MARK: - Fixed paper inks (never semantic / adaptive)
+    // MARK: - Paper inks (not dark-mode adaptive; print / serial / stamp stay fixed)
 
-    /// Water-cyan stock (ref: docs/references/mars-joshaken.png). Not salmon Edmondson.
-    static let paper = Color(red: 0xD5 / 255, green: 0xE6 / 255, blue: 0xEA / 255)
-    static let paperBand = Color(red: 0xE7 / 255, green: 0xF1 / 255, blue: 0xF3 / 255)
+    /// Untagged water-cyan stock (ref: docs/references/mars-joshaken.png). Not salmon Edmondson.
+    static let paper = TicketStockColor.untagged.paper.color
+    static let paperBand = TicketStockColor.untagged.band.color
     static let printInk = Color(red: 0x1A / 255, green: 0x1A / 255, blue: 0x1A / 255)
     /// Purple vertical serial ink from the Mars stub edge.
     static let serialInk = Color(red: 0x7A / 255, green: 0x3D / 255, blue: 0x8A / 255)
@@ -80,32 +95,57 @@ enum MarsTicketSpec {
 
     // MARK: - Type (gothic / default design only — no .rounded)
 
-    static func kindFont() -> Font {
-        .system(size: 11, weight: .semibold, design: .default)
-    }
+    /// Destination-scale task title.
+    static let titlePointSize: CGFloat = 22
+    /// Fare-scale estimate (yen-sized on a Mars face).
+    static let farePointSize: CGFloat = 28
+    static let fareUnitPointSize: CGFloat = 11
+    static let viaPointSize: CGFloat = 12
+    static let metaPointSize: CGFloat = 11
+    static let validityDayPointSize: CGFloat = 15
+    static let terminalPointSize: CGFloat = 9
+    static let serialPointSize: CGFloat = 9
+    static let stampPointSize: CGFloat = 10
+
+    /// 60-minute printed estimate track (12 × 5 min). Not remaining time.
+    static let durationTrackHeight: CGFloat = 6.5
+    static let durationTrackGap: CGFloat = 1.5
+    static let durationTrackEmptyOpacity: Double = 0.22
 
     static func titleFont() -> Font {
-        .system(size: 24, weight: .bold, design: .default)
+        .system(size: titlePointSize, weight: .bold, design: .default)
+    }
+
+    static func fareFont() -> Font {
+        .system(size: farePointSize, weight: .bold, design: .default)
+    }
+
+    static func fareUnitFont() -> Font {
+        .system(size: fareUnitPointSize, weight: .semibold, design: .default)
     }
 
     static func viaFont() -> Font {
-        .system(size: 12, weight: .medium, design: .default)
+        .system(size: viaPointSize, weight: .medium, design: .default)
     }
 
     static func metaFont() -> Font {
-        .system(size: 11, weight: .medium, design: .default)
+        .system(size: metaPointSize, weight: .medium, design: .default)
+    }
+
+    static func validityDayFont() -> Font {
+        .system(size: validityDayPointSize, weight: .bold, design: .default)
     }
 
     static func terminalFont() -> Font {
-        .system(size: 9, weight: .regular, design: .default)
+        .system(size: terminalPointSize, weight: .regular, design: .default)
     }
 
     static func serialFont() -> Font {
-        .system(size: 9, weight: .semibold, design: .default)
+        .system(size: serialPointSize, weight: .semibold, design: .default)
     }
 
     static func stampFont() -> Font {
-        .system(size: 10, weight: .bold, design: .default)
+        .system(size: stampPointSize, weight: .bold, design: .default)
     }
 
     // MARK: - Issue motion (fixed ms; no reused celebration spring)

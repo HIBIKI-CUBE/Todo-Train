@@ -35,17 +35,32 @@ struct HubDepartLEDSign: View {
     }
 
     private var housing: some View {
-        RoundedRectangle(cornerRadius: 6, style: .continuous)
-            .fill(Color.black.opacity(0.9))
-            .overlay {
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .strokeBorder(TrainTheme.signalGreen.opacity(canBoard ? 0.5 : 0.18), lineWidth: 1.2)
-            }
-            .shadow(color: TrainTheme.signalGreen.opacity(canBoard ? 0.4 : 0), radius: 12, y: 2)
+        StationSignHousing(rimLit: canBoard)
+            .shadow(color: LEDPhosphor.on.opacity(canBoard ? 0.35 : 0), radius: 12, y: 2)
     }
 
     private func chasePhase(at date: Date) -> Double {
         date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 0.9) / 0.9
+    }
+}
+
+enum LEDPhosphor {
+    static let on = Color(red: 0.42, green: 0.90, blue: 0.58)
+    static let off = Color(red: 0.10, green: 0.22, blue: 0.16)
+    static let housing = Color(red: 0.04, green: 0.055, blue: 0.05)
+    static let rim = Color(red: 0.16, green: 0.36, blue: 0.26)
+}
+
+struct StationSignHousing: View {
+    var rimLit: Bool
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 10, style: .continuous)
+            .fill(LEDPhosphor.housing)
+            .overlay {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(LEDPhosphor.rim.opacity(rimLit ? 0.55 : 0.28), lineWidth: 1)
+            }
     }
 }
 

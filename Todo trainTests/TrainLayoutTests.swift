@@ -60,4 +60,23 @@ struct TrainLayoutTests {
         #expect(abs(clamped.height - MarsTicketSpec.height(forWidth: clamped.width)) < 0.5)
         #expect(abs(clamped.midX - huge.midX) < 0.5)
     }
+
+    @Test func shouldShowTimetablePlate_hidesWhenOverlayIsShort() {
+        let ticketHeight: CGFloat = 150
+        let plate = MarsTicketSpec.HubStack.timetablePlateHeight(ticketHeight: ticketHeight)
+        #expect(
+            TrainLayout.shouldShowTimetablePlate(
+                overlayHeight: 800,
+                ticketHeight: ticketHeight,
+                plateHeight: plate
+            )
+        )
+        #expect(
+            !TrainLayout.shouldShowTimetablePlate(
+                overlayHeight: 280,
+                ticketHeight: ticketHeight,
+                plateHeight: plate
+            )
+        )
+    }
 }

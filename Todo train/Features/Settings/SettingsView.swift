@@ -5,6 +5,7 @@
 
 import SwiftUI
 import SwiftData
+import UIKit
 
 struct SettingsView: View {
     @Environment(AppSettings.self) private var settings
@@ -121,11 +122,42 @@ struct SettingsView: View {
             } footer: {
                 Text("画面を向けたその Mac だけが読めます。名前はペアしたときのコンピュータ名です。識別子が同じなら同じペアです。解除はこちらと Mac の設定のどちらからでもできます。")
             }
+
+            if settings.developerToolsUnlocked {
+                Section {
+                    NavigationLink {
+                        DeveloperForecastLogView()
+                    } label: {
+                        Text("予測の内部")
+                    }
+                    Button("開発者メニューを隠す") {
+                        settings.developerToolsUnlocked = false
+                    }
+                    .foregroundStyle(.secondary)
+                } header: {
+                    Text("開発者")
+                } footer: {
+                    Text("Hub で切符を持ち上げたときのオンデバイス予測の入力・生応答・クランプです。日常の設定ではありません。")
+                }
+            }
         }
         .navigationTitle("設定")
         .navigationBarTitleDisplayMode(
             TrainLayout.navigationBarTitleDisplayMode(verticalSizeClass: verticalSizeClass)
         )
+        .safeAreaInset(edge: .bottom) {
+            Text("Todo train")
+                .font(.footnote)
+                .foregroundStyle(.tertiary)
+                .frame(maxWidth: .infinity)
+                .padding(.bottom, 8)
+                .onTapGesture(count: AppSettings.developerUnlockTapCount) {
+                    guard !settings.developerToolsUnlocked else { return }
+                    settings.developerToolsUnlocked = true
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                }
+                .accessibilityHidden(true)
+        }
     }
 }
 
@@ -138,6 +170,7 @@ struct SettingsView: View {
             .environment(manager)
             .environment(CompanionSyncRuntime())
             .environment(DeletionUndoCenter())
+            .environment(ArrivalForecastTraceLog.shared)
             .modelContainer(container)
     }
 }
