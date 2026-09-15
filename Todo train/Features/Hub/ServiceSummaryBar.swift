@@ -77,6 +77,13 @@ struct ServiceSummaryBar: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
+
+                if let occupancy = occupancyLine {
+                    Text(occupancy)
+                        .font(TrainTheme.TypeScale.meta())
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
             }
 
             Spacer(minLength: 8)
@@ -98,6 +105,19 @@ struct ServiceSummaryBar: View {
                     )
             }
         }
+    }
+
+    private var occupancyLine: String? {
+        guard sessionManager.isInService else { return nil }
+        let now = sessionManager.clock.now
+        let fit = sessionManager.timetableFit(at: now)
+        if let current = fit.currentBlock {
+            return TimetableCopy.occupyingLine(title: current.title)
+        }
+        if let next = fit.nextBlock {
+            return TimetableFit.nextBlockLine(title: next.title, startsAt: next.startsAt, now: now)
+        }
+        return nil
     }
 
     private var statusTitle: String {

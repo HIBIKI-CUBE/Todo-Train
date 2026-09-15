@@ -43,4 +43,20 @@ struct AppSettingsTests {
         #expect(settings.companionRelayURL?.scheme == "https")
         #expect(settings.companionRelayURL?.host == "todo-train.hibiki-cube.dev")
     }
+
+    @Test func timetableCalendarFilter_nilMeansAll() {
+        let settings = AppSettings.makeForTesting(timetableVisibleCalendarIDs: nil)
+        #expect(settings.isTimetableCalendarVisible("work"))
+        settings.setTimetableCalendar("work", visible: false, knownIdentifiers: ["work", "personal"])
+        #expect(settings.timetableVisibleCalendarIDs == ["personal"])
+        #expect(!settings.isTimetableCalendarVisible("work"))
+        #expect(settings.isTimetableCalendarVisible("personal"))
+        settings.setTimetableCalendar("work", visible: true, knownIdentifiers: ["work", "personal"])
+        #expect(settings.timetableVisibleCalendarIDs == ["work", "personal"])
+    }
+
+    @Test func timetableCalendarFilter_emptyHidesAll() {
+        let settings = AppSettings.makeForTesting(timetableVisibleCalendarIDs: [])
+        #expect(!settings.isTimetableCalendarVisible("work"))
+    }
 }

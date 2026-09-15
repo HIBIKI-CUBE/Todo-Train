@@ -15,6 +15,9 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
     public var cabinEnabled: Bool
     public var checkInFiredCount: Int
     public var pendingCabin: CabinKind?
+    public var nextBlockTitle: String?
+    public var nextBlockStartsAt: Int?
+    public var timetablePauseAt: Int?
 
     public init(
         rev: Int,
@@ -30,7 +33,10 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
         serviceActive: Bool = false,
         cabinEnabled: Bool = true,
         checkInFiredCount: Int = 0,
-        pendingCabin: CabinKind? = nil
+        pendingCabin: CabinKind? = nil,
+        nextBlockTitle: String? = nil,
+        nextBlockStartsAt: Int? = nil,
+        timetablePauseAt: Int? = nil
     ) {
         self.rev = rev
         self.sessionId = sessionId
@@ -46,12 +52,16 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
         self.cabinEnabled = cabinEnabled
         self.checkInFiredCount = checkInFiredCount
         self.pendingCabin = pendingCabin
+        self.nextBlockTitle = nextBlockTitle
+        self.nextBlockStartsAt = nextBlockStartsAt
+        self.timetablePauseAt = timetablePauseAt
     }
 
     enum CodingKeys: String, CodingKey {
         case rev, sessionId, ticketId, title, phase
         case startedAt, estimatedSeconds, pausedAccumulated, pausedAt, boardedDeviceID
         case serviceActive, cabinEnabled, checkInFiredCount, pendingCabin
+        case nextBlockTitle, nextBlockStartsAt, timetablePauseAt
     }
 
     public init(from decoder: Decoder) throws {
@@ -78,6 +88,9 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
         } else {
             pendingCabin = nil
         }
+        nextBlockTitle = try container.decodeIfPresent(String.self, forKey: .nextBlockTitle)
+        nextBlockStartsAt = try container.decodeIfPresent(Int.self, forKey: .nextBlockStartsAt)
+        timetablePauseAt = try container.decodeIfPresent(Int.self, forKey: .timetablePauseAt)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -96,6 +109,9 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
         try container.encode(cabinEnabled, forKey: .cabinEnabled)
         try container.encode(checkInFiredCount, forKey: .checkInFiredCount)
         try container.encode(pendingCabin, forKey: .pendingCabin)
+        try container.encodeIfPresent(nextBlockTitle, forKey: .nextBlockTitle)
+        try container.encodeIfPresent(nextBlockStartsAt, forKey: .nextBlockStartsAt)
+        try container.encodeIfPresent(timetablePauseAt, forKey: .timetablePauseAt)
     }
 
     /// Remaining seconds using the contract formula. Idle / missing fields → nil.

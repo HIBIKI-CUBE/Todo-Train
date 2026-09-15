@@ -19,6 +19,7 @@ struct HistoryDayPager: View {
     var onSelect: (WorkSession) -> Void
     var onReissue: ((Ticket) -> Void)?
     var onDelete: (WorkSession) -> Void
+    var stripsByDay: [String: [DayClockStrip]] = [:]
 
     @Environment(\.calendar) private var calendar
 
@@ -58,7 +59,8 @@ struct HistoryDayPager: View {
             viewportWidth: viewportWidth,
             onSelect: onSelect,
             onReissue: onReissue,
-            onDelete: onDelete
+            onDelete: onDelete,
+            stripsByDay: stripsByDay
         )
     }
 }
@@ -73,6 +75,7 @@ private struct HistoryDayInteractiveCanvas: View {
     var onSelect: (WorkSession) -> Void
     var onReissue: ((Ticket) -> Void)?
     var onDelete: (WorkSession) -> Void
+    var stripsByDay: [String: [DayClockStrip]] = [:]
 
     @Environment(\.calendar) private var calendar
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -215,7 +218,8 @@ private struct HistoryDayInteractiveCanvas: View {
                 minHeight: clockMinHeight,
                 onSelect: onSelect,
                 onReissue: onReissue,
-                onDelete: onDelete
+                onDelete: onDelete,
+                strips: stripsByDay[key] ?? []
             )
             if sessions.isEmpty {
                 emptyDayChrome(day: day)

@@ -236,6 +236,16 @@ struct FocusView: View {
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 12)
+
+                if let line = timetableLine(now: context.date) {
+                    Text(line)
+                        .font(.system(size: 13, weight: .medium, design: .default))
+                        .foregroundStyle(FocusPanel.muted)
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 14)
+                        .padding(.bottom, 10)
+                }
             }
             .background(FocusPanel.fill)
         }
@@ -370,6 +380,17 @@ struct FocusView: View {
         formatter.locale = Locale(identifier: "ja_JP")
         formatter.dateFormat = "予定 HH:mm"
         return formatter.string(from: deadline)
+    }
+
+    private func timetableLine(now: Date) -> String? {
+        let fit = sessionManager.timetableFit(at: now)
+        if let current = fit.currentBlock {
+            return TimetableCopy.occupyingLine(title: current.title)
+        }
+        if let next = fit.nextBlock {
+            return TimetableFit.nextBlockLine(title: next.title, startsAt: next.startsAt, now: now)
+        }
+        return nil
     }
 
     private func applyExtend(minutes: Int) {

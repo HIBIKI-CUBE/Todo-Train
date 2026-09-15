@@ -20,6 +20,7 @@ struct TicketDetailView: View {
     @State private var errorMessage = ""
     @State private var showError = false
     @State private var showPauseLimitSheet = false
+    @State private var overlapConflict: TimetableBoardingConflict?
 
     private var canBoard: Bool {
         sessionManager.isInService
@@ -203,7 +204,7 @@ struct TicketDetailView: View {
             if ticket.isOpen {
                 Section {
                     Button(isPaused ? "再乗車" : "発車") {
-                        board()
+                        requestBoard()
                     }
                     .disabled(!canBoard)
                 }
@@ -224,10 +225,16 @@ struct TicketDetailView: View {
             try? modelContext.save()
         }
         .errorAlert(isPresented: $showError, message: errorMessage)
+        .timetableBoardingConfirm(conflict: $overlapConflict) {
+            board()
+        }
+        .task {
+            await sessionManager.refreshCalendarBoardIfAuthorized()
+        }
         .sheet(isPresented: $showPauseLimitSheet) {
             PauseLimitSheet(
                 pendingTicket: ticket,
-                onSlotFreedTryBoard: { board() }
+                onSlotFreedTryBoard: { requestBoard() }
             )
         }
     }
@@ -253,6 +260,15 @@ struct TicketDetailView: View {
         } else {
             row
         }
+    }
+
+    private func requestBoard() {
+        guard canBoard else { return }
+        if let conflict = sessionManager.boardingConflict(for: ticket) {
+            overlapConflict = conflict
+            return
+        }
+        board()
     }
 
     private func board() {

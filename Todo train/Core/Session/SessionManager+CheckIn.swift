@@ -79,6 +79,14 @@ extension SessionManager {
         consumeIdleCabinStill(now: now)
     }
 
+    func handleNotification(identifier: String, action: String) {
+        if TimetableNotification.isTimetable(identifier) {
+            handleTimetableNotification(identifier: identifier, action: action)
+            return
+        }
+        handleCheckInNotification(identifier: identifier, action: action)
+    }
+
     /// Unlocked background only. Locked / end-bell LA / cabin-off: no away watch.
     func beginAwayWatch(now: Date? = nil) {
         if deviceLock.isLocked {
@@ -93,6 +101,7 @@ extension SessionManager {
         guard session.remainingSeconds(at: now) > 0 else { return }
         guard session.pendingCheckIn == nil else { return }
         guard session.awayDueAt == nil else { return }
+        guard !timetableFit(at: now).shouldSuppressAway else { return }
 
         let delay = CheckInScheduling.awayDelay(
             seed: session.id,

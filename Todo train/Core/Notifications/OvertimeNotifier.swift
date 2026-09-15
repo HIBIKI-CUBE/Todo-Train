@@ -129,7 +129,7 @@ final class OvertimeNotifier: NSObject, OvertimeNotifying, UNUserNotificationCen
         let identifier = response.notification.request.identifier
         let action = response.actionIdentifier
         await MainActor.run {
-            sessionManager?.handleCheckInNotification(identifier: identifier, action: action)
+            sessionManager?.handleNotification(identifier: identifier, action: action)
         }
     }
 }

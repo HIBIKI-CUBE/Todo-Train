@@ -32,6 +32,12 @@ struct ContentView: View {
                 }
             }
 
+            Tab(TimetableCopy.board, systemImage: "calendar") {
+                NavigationStack {
+                    TimetableDayView()
+                }
+            }
+
             Tab("履歴", systemImage: "clock") {
                 NavigationStack {
                     HistoryView()

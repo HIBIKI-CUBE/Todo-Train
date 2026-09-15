@@ -298,6 +298,13 @@ final class CompanionSyncRuntime {
         client: SyncHTTPClient
     ) async throws {
         snapRev += 1
+        let fit = sessionManager.timetableFit()
+        let visible = fit.visibleBlock
+        let pauseAt = sessionManager.activeSession.flatMap { session -> Int? in
+            guard session.isOpen, !session.isPaused else { return nil }
+            return sessionManager.openTimetableProtectionBoundary(for: session.id)
+                .map { Int($0.timeIntervalSince1970) }
+        }
         let plaintext = CompanionSnapBuilding.snap(
             rev: snapRev,
             phase: sessionManager.phase,
@@ -305,7 +312,10 @@ final class CompanionSyncRuntime {
             now: Date(),
             serviceActive: sessionManager.activeServiceDay?.isOpen == true,
             cabinEnabled: settings.cabinAnnouncementsEnabled,
-            pendingCabin: sessionManager.activeServiceDay?.pendingCabin?.cabin
+            pendingCabin: sessionManager.activeServiceDay?.pendingCabin?.cabin,
+            nextBlockTitle: visible?.title,
+            nextBlockStartsAt: visible.map { Int($0.startsAt.timeIntervalSince1970) },
+            timetablePauseAt: pauseAt
         )
         let envelope = try SyncCrypto.sealJSON(
             plaintext,
