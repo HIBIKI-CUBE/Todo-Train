@@ -29,6 +29,7 @@ struct RideOverlayPresentationTests {
         #expect(view.peekTitle == "週次レポート")
         #expect(view.timerPhase == .cruise)
         #expect(view.cabinPrompt == nil)
+        #expect(view.nextBlockLine == nil)
     }
 
     @Test func overtimeFillsProgress() {
@@ -165,6 +166,19 @@ struct RideOverlayPresentationTests {
         #expect(RideOverlayPresentation.timerPhase(remaining: 30, estimated: budget, overtime: false) == .final)
         #expect(RideOverlayPresentation.timerPhase(remaining: -1, estimated: budget, overtime: false) == .overtime)
         #expect(RideOverlayPresentation.timerPhase(remaining: 120, estimated: budget, overtime: true) == .overtime)
+    }
+
+    @Test func nextBlockLine_usesTitleWithoutFormattingTime() {
+        var snap = running
+        snap.nextBlockTitle = "週次レポート"
+        snap.nextBlockStartsAt = 1_768_000_400
+        let upcoming = RideOverlayPresentation.nextBlockLine(snap: snap, now: 1_768_000_120)
+        #expect(upcoming == "次 週次レポート")
+        snap.nextBlockStartsAt = 1_768_000_000
+        let current = RideOverlayPresentation.nextBlockLine(snap: snap, now: 1_768_000_120)
+        #expect(current == "週次レポート")
+        snap.nextBlockTitle = nil
+        #expect(RideOverlayPresentation.nextBlockLine(snap: snap, now: 1_768_000_120) == nil)
     }
 }
 

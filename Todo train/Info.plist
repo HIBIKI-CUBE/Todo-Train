@@ -2,6 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>今日の運転図表にカレンダーの掲示を重ねるために使います。載せた予定だけ運行から外します。</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>今日の運転図表にカレンダーの掲示を重ねるために使います。載せた予定だけ運行から外します。</string>
 	<key>NSAlarmKitUsageDescription</key>
 	<string>見積もり時間の終了を知らせる終了ベルを鳴らすために使います。</string>
 	<key>NSCameraUsageDescription</key>

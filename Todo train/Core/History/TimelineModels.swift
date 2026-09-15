@@ -65,6 +65,23 @@ struct TimelineMarker: Equatable, Sendable, Identifiable {
     var until: Date?
 }
 
+struct DayClockStrip: Equatable, Sendable, Identifiable {
+    enum Style: Equatable, Sendable {
+        /// 掲示 — live calendar, not adopted.
+        case notice
+        /// ダイヤ — adopted occupancy.
+        case adopted
+        /// 履歴 — adopted only, thinner.
+        case history
+    }
+
+    var id: UUID
+    var title: String
+    var startsAt: Date
+    var endsAt: Date
+    var style: Style
+}
+
 struct DayClockLayout: Equatable, Sendable {
     var start: Date
     var end: Date

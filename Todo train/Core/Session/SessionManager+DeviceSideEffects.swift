@@ -190,6 +190,7 @@ extension SessionManager {
             return
         }
         guard settings.endBellEnabled else {
+            lastScheduledEndBellFireAt = nil
             alarmScheduler.cancel(sessionID: session.id)
             return
         }
@@ -202,14 +203,24 @@ extension SessionManager {
         // Keep a paused AlarmKit Live Activity; resume / retention / a new ride tears it down.
         guard !session.isPaused else { return }
         let elapsed = session.elapsedSeconds(at: now)
-        guard let fireAt = SessionEndSchedule.fireAt(
+        let budgetFire = SessionEndSchedule.fireAt(
             budgetSeconds: session.budgetSecondsAtStart,
             elapsedSeconds: elapsed,
             now: now
-        ) else {
+        )
+        let nextBlockStart = timetableFit(at: now).nextBlock?.startsAt
+        let fireAt = [budgetFire, nextBlockStart].compactMap { $0 }.filter { $0 > now }.min()
+        guard let fireAt else {
+            lastScheduledEndBellFireAt = nil
             alarmScheduler.cancel(sessionID: session.id)
             return
         }
+        if let last = lastScheduledEndBellFireAt,
+           abs(last.timeIntervalSince(fireAt)) < 0.5,
+           alarmScheduler.hasAlarm(sessionID: session.id) {
+            return
+        }
+        lastScheduledEndBellFireAt = fireAt
         let title = session.ticket?.title ?? "切符"
         alarmScheduler.scheduleEndBell(
             sessionID: session.id,

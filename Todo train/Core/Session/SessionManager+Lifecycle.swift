@@ -34,10 +34,13 @@ extension SessionManager {
                 phase = .idle
                 liveActivityManager.end()
                 refreshIdleCabin(now: now)
+                applyTimetableEffects(now: now)
                 return
             }
             return reconcile(now: now)
         }
+
+        applyTimetableEffects(now: now)
 
         if session.isPaused {
             phase = .paused

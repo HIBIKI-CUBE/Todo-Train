@@ -8,6 +8,7 @@ extension CompanionMacRuntime {
             while !Task.isCancelled {
                 self?.now = Int(Date().timeIntervalSince1970)
                 self?.syncCabinNotification()
+                self?.maybeSendTimetablePause()
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
             }
         }

@@ -19,6 +19,7 @@ struct HistoryDayClockView: View {
     var onSelect: (WorkSession) -> Void
     var onReissue: ((Ticket) -> Void)?
     var onDelete: (WorkSession) -> Void
+    var strips: [DayClockStrip] = []
 
     @Environment(\.calendar) private var calendar
 
@@ -78,6 +79,8 @@ struct HistoryDayClockView: View {
                 .frame(height: canvasHeight(layout))
                 .allowsHitTesting(false)
 
+            stripOverlay(layout: layout)
+
             HStack(alignment: .top, spacing: density.laneSpacing) {
                 ForEach(0..<layout.laneCount, id: \.self) { lane in
                     laneColumn(lane, layout: layout, rides: rides, sessionByID: sessionByID)
@@ -96,6 +99,52 @@ struct HistoryDayClockView: View {
             }
         }
         .frame(maxWidth: .infinity, minHeight: canvasHeight(layout), alignment: .topLeading)
+    }
+
+    @ViewBuilder
+    private func stripOverlay(layout: DayClockLayout) -> some View {
+        ForEach(strips) { strip in
+            let y = CGFloat(layout.y(for: max(strip.startsAt, layout.start)))
+            let height = max(
+                CGFloat(layout.height(from: max(strip.startsAt, layout.start), to: min(strip.endsAt, layout.end))),
+                4
+            )
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                .fill(Self.stripFill(strip.style))
+                .overlay {
+                    if strip.style != .history {
+                        RoundedRectangle(cornerRadius: 4, style: .continuous)
+                            .strokeBorder(Self.stripStroke(strip.style), lineWidth: strip.style == .adopted ? 0 : 1)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: height)
+                .padding(.top, y)
+                .accessibilityHidden(true)
+                .allowsHitTesting(false)
+        }
+    }
+
+    private static func stripFill(_ style: DayClockStrip.Style) -> Color {
+        switch style {
+        case .notice:
+            return TrainTheme.rail.opacity(0.10)
+        case .adopted:
+            return TrainTheme.rail.opacity(0.32)
+        case .history:
+            return TrainTheme.rail.opacity(0.14)
+        }
+    }
+
+    private static func stripStroke(_ style: DayClockStrip.Style) -> Color {
+        switch style {
+        case .notice:
+            return TrainTheme.rail.opacity(0.28)
+        case .adopted:
+            return TrainTheme.rail.opacity(0.55)
+        case .history:
+            return .clear
+        }
     }
 
     private func laneColumn(
@@ -402,7 +451,7 @@ struct HistoryTimeGutter: View {
     }()
 }
 
-private struct HourGridCanvas: View {
+struct HourGridCanvas: View {
     let layout: DayClockLayout
     var density: HistoryRideDensity = .day
 

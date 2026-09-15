@@ -20,7 +20,8 @@ enum SessionManagerFixtures {
         checkInNotifier: (any CheckInNotifying)? = nil,
         liveActivityManager: (any LiveActivityManaging)? = nil,
         deviceIdentity: (any DeviceIdentifying)? = nil,
-        deviceLock: (any DeviceLockReading)? = nil
+        deviceLock: (any DeviceLockReading)? = nil,
+        calendarBoard: (any CalendarBoard)? = nil
     ) throws -> (SessionManager, ModelContext, FixedSessionClock, InMemoryAlarmScheduler) {
         let container = try AppModelContainer.make(inMemory: true)
         let context = ModelContext(container)
@@ -39,7 +40,8 @@ enum SessionManagerFixtures {
             liveActivityManager: liveActivityManager,
             alarmScheduler: scheduler,
             deviceIdentity: deviceIdentity ?? FixedDeviceIdentity(id: "test-device"),
-            deviceLock: deviceLock ?? FixedDeviceLock(isLocked: false)
+            deviceLock: deviceLock ?? FixedDeviceLock(isLocked: false),
+            calendarBoard: calendarBoard ?? InMemoryCalendarBoard()
         )
         return (manager, context, clock, scheduler)
     }

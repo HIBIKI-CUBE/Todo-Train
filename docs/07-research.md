@@ -15,6 +15,8 @@
 | 道具 > コーチ | [Barkley 1997](https://doi.org/10.1037/0033-2909.121.1.65)。介入自体が実行機能を消費する | **中** |
 | 見積もり校正は中央値 | 平均より Planning Fallacy に強い | **中** |
 | 定時は帯域内・非通貨。到着は完了優先 | Goodhart。超過で祝祭を取り上げると責めになる。[Deci & Ryan SDT](https://doi.org/10.1037/0003-066X.55.1.68) | **中** |
+| 計画は if-then、状況認識は乗務の現場、網は掛け損ねだけ | [Gollwitzer implementation intentions](https://doi.org/10.1037/0033-2909.124.2.163); [Endsley SA](https://doi.org/10.1177/0018720815573149); [Wood 習慣](https://doi.org/10.1146/annurev-psych-122216-011705)。タブを毎日開かせるのは別行動を鍛える | **中** |
+| ATS に運転を任せない | [Bainbridge 自動化の皮肉](https://doi.org/10.1016/0003-6870(83)90223-0)。網の回数を成績にすると外的調整になる | **中** |
 
 警告だけで停車上限を守らせるのは弱い。枠を臨時停車で増やさない。
 
@@ -57,3 +59,11 @@ StandBy は Clock アプリ級の没入 UI ではない。ActivityKit は提案�
 ## CloudKit / ADP
 
 SwiftData の私有同期は有料 Apple Developer Program の iCloud コンテナが要る。Personal Team に entitlement を足すと署名が失敗する。`@Attribute(.unique)` は CloudKit と両立しない。同期の土管は CloudKit にしない（[13](13-sync-mac-companion.md)）。
+
+## カレンダーと ATS
+
+EventKit は **掲示** であり、所属の正ではない。載せた枠だけがダイヤ。終日と辞退は対象外。掲示するカレンダーはユーザーが選ぶ。選んでいないカレンダーは図表に出さない。載せたダイヤは消さない。
+
+iOS はバックグラウンドで任意時刻に SwiftData を確実に更新できない。ATS の 60 秒停車は前面ならその場、背景なら次の `reconcile()` で境界へ遡及する。AlarmKit は終了ベル用で **1 本**。見積終了と次のダイヤ開始の早い方に畳む。ダイヤ開始用に 2 本目を足さない。
+
+状況認識（次枠・いま被っている枠）は案内板と Focus / PiP、Hub 運行の一行に出す。Hub に掲示リストは常設しない。許可済みなら Hub でも掲示を温める（表示はしない）。発車が見積と載せた枠、またはいまの掲示と重なるときは確認する。発車は止めない。

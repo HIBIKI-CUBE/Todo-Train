@@ -32,6 +32,7 @@ final class SessionManager {
     let alarmScheduler: any AlarmScheduling
     let deviceIdentity: any DeviceIdentifying
     let deviceLock: any DeviceLockReading
+    let calendarBoard: any CalendarBoard
 
     var awayFireTask: Task<Void, Never>?
     var idleWatchTask: Task<Void, Never>?
@@ -54,6 +55,12 @@ final class SessionManager {
     var checkInHapticTick: Int = 0
     /// Paired Mac owns the desk progress interrupt; skip iPhone progress local notifications.
     var suppressProgressLocalNotifications = false
+    /// Calendar 掲示 (eligible, not necessarily adopted). Warmed from the ダイヤ tab, and Hub if already authorized.
+    var noticeOccurrences: [CalendarOccurrence] = []
+    /// Shown in the 停車中 block after ATS. Cleared on 再乗車 / 発車.
+    var timetableQuietMessage: String?
+    /// Last AlarmKit / end-bell fire we scheduled, so reconcile does not hammer AlarmKit.
+    var lastScheduledEndBellFireAt: Date?
 
     var punctualityMoment: PunctualityMoment? { punctualityQueue.first }
 
@@ -102,7 +109,8 @@ final class SessionManager {
         liveActivityManager: (any LiveActivityManaging)? = nil,
         alarmScheduler: (any AlarmScheduling)? = nil,
         deviceIdentity: (any DeviceIdentifying)? = nil,
-        deviceLock: (any DeviceLockReading)? = nil
+        deviceLock: (any DeviceLockReading)? = nil,
+        calendarBoard: (any CalendarBoard)? = nil
     ) {
         self.modelContext = modelContext
         self.clock = clock
@@ -115,6 +123,7 @@ final class SessionManager {
         self.alarmScheduler = alarmScheduler ?? NoOpAlarmScheduler()
         self.deviceIdentity = deviceIdentity ?? SystemDeviceIdentity()
         self.deviceLock = deviceLock ?? SystemDeviceLock()
+        self.calendarBoard = calendarBoard ?? EventKitCalendarBoard()
     }
 
     var elapsedSeconds: TimeInterval {

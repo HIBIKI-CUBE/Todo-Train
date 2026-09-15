@@ -12,9 +12,9 @@ enum SessionTimeline {
     /// 2pt/min (120pt/hour) is a slightly zoomed Calendar day, so 15–30分の切符が読める。
     static let pointsPerMinute: Double = 2.0
 
-    static func rides(from sessions: [WorkSession]) -> [TimelineRide] {
+    static func rides(from sessions: [WorkSession], openEndedAt: Date? = nil) -> [TimelineRide] {
         sessions.compactMap { session -> TimelineRide? in
-            guard let endedAt = session.endedAt else { return nil }
+            guard let endedAt = session.endedAt ?? openEndedAt else { return nil }
             let extensions = session.extensions
                 .sorted { $0.createdAt < $1.createdAt }
                 .map {
@@ -195,6 +195,31 @@ enum SessionTimeline {
             )
         }
         return projected
+    }
+
+    /// Full civil day, idle included. Used by the ダイヤ tab so empty hours stay on the same scale.
+    static func calendarDayLayout(
+        on day: Date,
+        calendar: Calendar = .current,
+        pointsPerMinute: Double = pointsPerMinute,
+        minHeight: Double = 0
+    ) -> DayClockLayout {
+        let start = calendar.startOfDay(for: day)
+        let end = calendar.date(byAdding: .day, value: 1, to: start) ?? start.addingTimeInterval(86_400)
+        let stretched = stretchedEnd(
+            start: start,
+            end: end,
+            minHeight: minHeight,
+            pointsPerMinute: pointsPerMinute
+        )
+        return DayClockLayout(
+            start: start,
+            end: stretched,
+            pointsPerMinute: pointsPerMinute,
+            laneByRideID: [:],
+            laneCount: 1,
+            hourTicks: hourTicks(from: start, to: stretched, calendar: calendar)
+        )
     }
 
     static func fallbackLayout(

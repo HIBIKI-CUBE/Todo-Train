@@ -19,6 +19,8 @@ public struct RideOverlayPresentation: Equatable, Sendable {
     public var peekTitle: String
     /// Progress 車内放送 on the PiP. Nil when idle.
     public var cabinPrompt: String?
+    /// Next or current ダイヤ. Title only so tests are timezone-stable.
+    public var nextBlockLine: String?
 
     public static let peekTitleLimit = 6
 
@@ -36,7 +38,8 @@ public struct RideOverlayPresentation: Equatable, Sendable {
         failureLine: nil,
         statusLine: nil,
         peekTitle: "",
-        cabinPrompt: nil
+        cabinPrompt: nil,
+        nextBlockLine: nil
     )
 
     public static func make(_ input: MenuBarInput) -> RideOverlayPresentation {
@@ -102,8 +105,17 @@ public struct RideOverlayPresentation: Equatable, Sendable {
             failureLine: bar.failureLine,
             statusLine: statusLine,
             peekTitle: truncatedPeekTitle(title),
-            cabinPrompt: cabinPrompt
+            cabinPrompt: cabinPrompt,
+            nextBlockLine: nextBlockLine(snap: snap, now: input.now)
         )
+    }
+
+    public static func nextBlockLine(snap: SnapPlaintext, now: Int) -> String? {
+        guard let title = snap.nextBlockTitle, !title.isEmpty else { return nil }
+        if let startsAt = snap.nextBlockStartsAt, startsAt > now {
+            return "次 \(title)"
+        }
+        return title
     }
 
     public static func progress(

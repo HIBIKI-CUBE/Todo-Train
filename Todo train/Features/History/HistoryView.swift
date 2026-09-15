@@ -14,6 +14,8 @@ struct HistoryView: View {
 
     @Query(sort: \WorkSession.endedAt, order: .reverse)
     private var sessions: [WorkSession]
+    @Query(sort: \TimetableBlock.startsAt)
+    private var timetableBlocks: [TimetableBlock]
 
     @State private var searchText = ""
     @State private var errorMessage = ""
@@ -62,6 +64,30 @@ struct HistoryView: View {
 
     private var sessionsByDay: [String: [WorkSession]] {
         Dictionary(uniqueKeysWithValues: groups.map { ($0.dayKey, $0.sessions) })
+    }
+
+    private var timetableStripsByDay: [String: [DayClockStrip]] {
+        var map: [String: [DayClockStrip]] = [:]
+        for block in timetableBlocks where block.isActive {
+            let start = calendar.startOfDay(for: block.startsAt)
+            let endDay = calendar.startOfDay(for: block.endsAt.addingTimeInterval(-1))
+            var day = start
+            while day <= endDay {
+                let key = HistoryStats.dayKey(for: day, calendar: calendar)
+                map[key, default: []].append(
+                    DayClockStrip(
+                        id: block.id,
+                        title: block.title,
+                        startsAt: block.startsAt,
+                        endsAt: block.endsAt,
+                        style: .history
+                    )
+                )
+                guard let next = calendar.date(byAdding: .day, value: 1, to: day) else { break }
+                day = next
+            }
+        }
+        return map
     }
 
     private var canvasDayRange: (start: Date, end: Date) {
@@ -241,7 +267,8 @@ struct HistoryView: View {
                         selectedRideID = session.id
                     },
                     onReissue: reissue,
-                    onDelete: deleteSession
+                    onDelete: deleteSession,
+                    stripsByDay: timetableStripsByDay
                 )
                 .safeAreaPadding(.bottom)
             }

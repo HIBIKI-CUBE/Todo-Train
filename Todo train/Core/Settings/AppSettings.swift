@@ -20,6 +20,7 @@ final class AppSettings {
         static let cabinAnnouncementsEnabled = "settings.cabinAnnouncementsEnabled"
         static let lastIssuedEstimateMinutes = "settings.lastIssuedEstimateMinutes"
         static let companionRelayURL = "settings.companionRelayURL"
+        static let timetableCalendarIDs = "settings.timetableCalendarIDs"
     }
 
     var pauseLimit: Int {
@@ -88,6 +89,34 @@ final class AppSettings {
         return nil
     }
 
+    /// `nil` = 全カレンダーを掲示。空配列 = どれも掲示しない。載せたダイヤは消さない。
+    var timetableVisibleCalendarIDs: [String]? {
+        didSet {
+            if let ids = timetableVisibleCalendarIDs {
+                UserDefaults.standard.set(ids, forKey: Keys.timetableCalendarIDs)
+            } else {
+                UserDefaults.standard.removeObject(forKey: Keys.timetableCalendarIDs)
+            }
+        }
+    }
+
+    func isTimetableCalendarVisible(_ identifier: String) -> Bool {
+        guard let ids = timetableVisibleCalendarIDs else { return true }
+        return ids.contains(identifier)
+    }
+
+    func setTimetableCalendar(_ identifier: String, visible: Bool, knownIdentifiers: [String]) {
+        var selected = Set(timetableVisibleCalendarIDs ?? knownIdentifiers)
+        if visible {
+            selected.insert(identifier)
+        } else {
+            selected.remove(identifier)
+        }
+        let ordered = knownIdentifiers.filter { selected.contains($0) }
+        let extras = selected.subtracting(knownIdentifiers).sorted()
+        timetableVisibleCalendarIDs = ordered + extras
+    }
+
     static func makeForTesting(
         pauseLimit: Int = PauseLimitGuard.defaultLimit,
         overtimeSoundEnabled: Bool = true,
@@ -95,7 +124,8 @@ final class AppSettings {
         keepAwakeWhileChargingInFocus: Bool = true,
         cabinAnnouncementsEnabled: Bool = true,
         lastIssuedEstimateMinutes: Int? = nil,
-        companionRelayURLString: String = ""
+        companionRelayURLString: String = "",
+        timetableVisibleCalendarIDs: [String]? = nil
     ) -> AppSettings {
         let settings = AppSettings()
         settings.pauseLimit = Self.clampPauseLimit(pauseLimit)
@@ -105,6 +135,7 @@ final class AppSettings {
         settings.cabinAnnouncementsEnabled = cabinAnnouncementsEnabled
         settings.lastIssuedEstimateMinutes = lastIssuedEstimateMinutes.map(Self.clampEstimateMinutes)
         settings.companionRelayURLString = companionRelayURLString
+        settings.timetableVisibleCalendarIDs = timetableVisibleCalendarIDs
         return settings
     }
 
@@ -148,6 +179,12 @@ final class AppSettings {
             UserDefaults.standard.string(forKey: Keys.companionRelayURL)
         )
         UserDefaults.standard.set(companionRelayURLString, forKey: Keys.companionRelayURL)
+
+        if UserDefaults.standard.object(forKey: Keys.timetableCalendarIDs) == nil {
+            timetableVisibleCalendarIDs = nil
+        } else {
+            timetableVisibleCalendarIDs = UserDefaults.standard.stringArray(forKey: Keys.timetableCalendarIDs) ?? []
+        }
     }
 
     nonisolated static func clampPauseLimit(_ value: Int) -> Int {

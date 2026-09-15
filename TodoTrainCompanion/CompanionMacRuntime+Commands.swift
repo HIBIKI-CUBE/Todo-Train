@@ -25,6 +25,25 @@ extension CompanionMacRuntime {
         await sendRideCommand(.still)
     }
 
+    func maybeSendTimetablePause() {
+        let view = overlayPresentation
+        let pauseAt = snap?.timetablePauseAt
+        guard TimetablePauseDispatching.shouldSend(
+            now: now,
+            pauseAt: pauseAt,
+            alreadySent: sentTimetablePauseAt,
+            canPause: view.canPause,
+            isSending: view.isSending
+        ) else {
+            if pauseAt == nil || snap?.phase == .paused || snap?.phase == .idle {
+                sentTimetablePauseAt = nil
+            }
+            return
+        }
+        sentTimetablePauseAt = pauseAt
+        Task { await sendPause() }
+    }
+
     func sendRideCommand(_ op: WireOp) async {
         switch op {
         case .pause:

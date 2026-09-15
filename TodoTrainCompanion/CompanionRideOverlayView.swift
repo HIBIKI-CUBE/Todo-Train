@@ -72,6 +72,12 @@ struct CompanionRideOverlayView: View {
                         .foregroundStyle(.white)
                         .lineLimit(1)
                         .padding(.horizontal, 12)
+                } else if let line = presentation.nextBlockLine {
+                    Text(line)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.85))
+                        .lineLimit(1)
+                        .padding(.horizontal, 12)
                 } else if let status = presentation.statusLine {
                     Text(status)
                         .font(.caption)

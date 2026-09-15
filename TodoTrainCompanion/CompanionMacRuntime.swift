@@ -39,6 +39,7 @@ final class CompanionMacRuntime {
     var outgoingPause: OutgoingPauseState = .idle
     var now = Int(Date().timeIntervalSince1970)
     var lastStatus: String?
+    var sentTimetablePauseAt: Int?
     var pairingPhase: PairingPhase = .idle
     var pairingQR: PairingURL?
     var pairingCue: PairingCue = .scanning

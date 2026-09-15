@@ -24,6 +24,8 @@ struct HubView: View {
     @State private var showError = false
     @State private var showPauseLimitSheet = false
     @State private var pendingBoardTicket: Ticket?
+    @State private var overlapTicket: Ticket?
+    @State private var overlapConflict: TimetableBoardingConflict?
     /// Single-issue celebration playing on Hub (may overlap sheet dismiss).
     @State private var hubIssueEject: TicketIssueEjectEvent?
     @State private var focusedTicketID: UUID?
@@ -162,12 +164,22 @@ struct HubView: View {
             }
         }
         .errorAlert(isPresented: $showError, message: errorMessage)
+        .timetableBoardingConfirm(conflict: $overlapConflict) {
+            if let overlapTicket {
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                proceedBoard(overlapTicket)
+            }
+            overlapTicket = nil
+        }
+        .task {
+            await sessionManager.refreshCalendarBoardIfAuthorized()
+        }
         .sheet(isPresented: $showPauseLimitSheet) {
             PauseLimitSheet(
                 pendingTicket: pendingBoardTicket,
                 onSlotFreedTryBoard: {
                     if let pendingBoardTicket {
-                        board(pendingBoardTicket)
+                        requestBoard(pendingBoardTicket)
                     }
                 }
             )
@@ -304,6 +316,13 @@ struct HubView: View {
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, TrainTheme.Space.lg)
 
+            if let quiet = sessionManager.timetableQuietMessage {
+                Text(quiet)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, TrainTheme.Space.lg)
+            }
+
             VStack(spacing: TrainTheme.Space.sm) {
                 ForEach(sessionManager.pausedSessions, id: \.id) { session in
                     if let ticket = session.ticket {
@@ -350,7 +369,7 @@ struct HubView: View {
                     isPuttingBack: isPuttingBack,
                     onFocusTicket: { focusTicket($0) },
                     onDismissFocus: { dismissTicketFocus() },
-                    onBoard: { boardFromFocus($0) },
+                    onBoard: { requestBoard($0) },
                     onOpenDetail: { ticket in
                         detailTicket = ticket
                     },
@@ -423,7 +442,7 @@ struct HubView: View {
                         onDismiss: { dismissTicketFocus() },
                         onHoldDragEnded: { finishPresentDrag($0, ticket: ticket) },
                         onOpenDetail: { detailTicket = ticket },
-                        onBoard: { boardFromFocus(ticket) },
+                        onBoard: { requestBoard(ticket) },
                         onDelete: { deleteTicket(ticket) }
                     )
                 }
@@ -517,8 +536,12 @@ struct HubView: View {
                 inertial: flicked
             )
         case .board:
+            if sessionManager.boardingConflict(for: ticket) != nil {
+                requestBoard(ticket)
+                return .snap
+            }
             UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-            boardFromFocus(ticket)
+            proceedBoard(ticket)
         case .snap:
             break
         }
@@ -535,8 +558,17 @@ struct HubView: View {
         }
     }
 
-    private func boardFromFocus(_ ticket: Ticket) {
+    private func requestBoard(_ ticket: Ticket) {
         guard canBoardGenerally else { return }
+        if let conflict = sessionManager.boardingConflict(for: ticket) {
+            overlapTicket = ticket
+            overlapConflict = conflict
+            return
+        }
+        proceedBoard(ticket)
+    }
+
+    private func proceedBoard(_ ticket: Ticket) {
         ticketMotion.zoomSourceID = ticket.id
         departingTicketID = ticket.id
         board(ticket)
@@ -600,8 +632,7 @@ struct HubView: View {
             .buttonStyle(.plain)
 
             Button("再乗車") {
-                ticketMotion.zoomSourceID = ticket.id
-                board(ticket)
+                requestBoard(ticket)
             }
             .buttonStyle(.borderedProminent)
             .tint(TrainTheme.rail)
