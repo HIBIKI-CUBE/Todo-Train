@@ -53,6 +53,8 @@ struct ContentView: View {
         .tint(TrainTheme.rail)
         .environment(transferCanvas)
         .environment(ticketMotion)
+        .environment(ArrivalForecastTraceLog.shared)
+        .environment(ArrivalForecastStore.shared)
         .environment(\.focusZoomNamespace, focusZoom)
         .environment(\.isFocusCoverPresented, isFocusPresented)
         .overlay {
@@ -241,5 +243,7 @@ struct ContentView: View {
         .environment(AppSettings.shared)
         .environment(DeletionUndoCenter())
         .environment(CompanionSyncRuntime())
+        .environment(ArrivalForecastTraceLog.shared)
+        .environment(ArrivalForecastStore.shared)
         .modelContainer(container)
 }

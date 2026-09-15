@@ -69,5 +69,9 @@ enum TicketLineageService {
         }
 
         try modelContext.save()
+        let sessions = (try? modelContext.fetch(FetchDescriptor<WorkSession>())) ?? []
+        for child in created {
+            ArrivalForecastStore.shared.prefetch(ticket: child, sessions: sessions, priority: .user)
+        }
     }
 }

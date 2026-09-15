@@ -86,6 +86,18 @@ enum TrainLayout {
             height: height
         )
     }
+
+    /// Hub present: boarding forecast plate under the ticket when vertical room remains.
+    static func shouldShowTimetablePlate(
+        overlayHeight: CGFloat,
+        ticketHeight: CGFloat,
+        plateHeight: CGFloat,
+        gap: CGFloat = MarsTicketSpec.HubStack.departSignGap,
+        bottomMargin: CGFloat = MarsTicketSpec.HubStack.timetablePlateBottomMargin
+    ) -> Bool {
+        let available = overlayHeight / 2 - ticketHeight / 2 - gap - bottomMargin
+        return available >= plateHeight
+    }
 }
 
 extension EnvironmentValues {

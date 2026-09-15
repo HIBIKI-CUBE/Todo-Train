@@ -68,6 +68,8 @@ struct Todo_trainApp: App {
                 .environment(settings)
                 .environment(deletionUndo)
                 .environment(companion)
+                .environment(ArrivalForecastTraceLog.shared)
+                .environment(ArrivalForecastStore.shared)
                 .modelContainer(container)
         }
     }

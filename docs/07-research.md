@@ -50,7 +50,7 @@ StandBy は Clock アプリ級の没入 UI ではない。ActivityKit は提案�
 
 ## Foundation Models / PCC
 
-オンデバイスは entitlement 不要。PCC は `com.apple.developer.private-cloud-compute` と日次クォータ。得意は短い構造化出力であり、汎用チャットボットではない。見積もり数値は Heuristic で足りる。
+オンデバイスは entitlement 不要。PCC は `com.apple.developer.private-cloud-compute` と日次クォータ。得意は短い構造化出力であり、汎用チャットボットではない。見積もりの骨格は Heuristic。発車前の到着予測は中央値を骨格に、オンデバイスで題名・開始時刻・見積と延長・早着を見て思考つきの構造化出力から分だけ調整する。思考は内部。
 
 ## フォーカスの限界
 

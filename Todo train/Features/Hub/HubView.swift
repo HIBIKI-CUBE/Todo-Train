@@ -32,8 +32,10 @@ struct HubView: View {
     @State private var ticketSlotFrames: [UUID: CGRect] = [:]
     @State private var departingTicketID: UUID?
     @State private var isPuttingBack = false
+    @State private var lastWarmedBand: WorkHourBand?
 
     @Environment(TicketMotionBridge.self) private var ticketMotion
+    @Environment(ArrivalForecastStore.self) private var forecastStore
     @Environment(\.focusZoomNamespace) private var focusZoomNamespace
     @Environment(\.isFocusCoverPresented) private var isFocusCoverPresented
     @Namespace private var previewZoomNamespace
@@ -63,6 +65,17 @@ struct HubView: View {
             list.append(ticket)
         }
         return list
+    }
+
+    private var currentBand: WorkHourBand {
+        WorkHourBand.of(hour: Calendar.current.component(.hour, from: .now))
+    }
+
+    private func warmForecasts() {
+        guard !isFocusCoverPresented else { return }
+        lastWarmedBand = currentBand
+        let sessions = (try? modelContext.fetch(FetchDescriptor<WorkSession>())) ?? []
+        forecastStore.warm(tickets: stackTickets, sessions: sessions)
     }
 
     private var zoomNamespace: Namespace.ID {
@@ -211,6 +224,16 @@ struct HubView: View {
         }
         .onAppear {
             presentServiceEndIfNeeded()
+            warmForecasts()
+        }
+        .task {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(60))
+                guard !Task.isCancelled else { return }
+                if !isFocusCoverPresented, lastWarmedBand != currentBand {
+                    warmForecasts()
+                }
+            }
         }
         .onChange(of: sessionManager.needsServiceDayEndPrompt) { _, needs in
             if needs {
@@ -221,13 +244,16 @@ struct HubView: View {
             presentServiceEndIfNeeded()
         }
         .onChange(of: isFocusCoverPresented) { _, presented in
-            guard presented else { return }
-            var transaction = Transaction()
-            transaction.disablesAnimations = true
-            withTransaction(transaction) {
-                departingTicketID = nil
-                focusedTicketID = nil
-                isPuttingBack = false
+            if presented {
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) {
+                    departingTicketID = nil
+                    focusedTicketID = nil
+                    isPuttingBack = false
+                }
+            } else if lastWarmedBand != currentBand {
+                warmForecasts()
             }
         }
     }

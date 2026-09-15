@@ -390,6 +390,8 @@ struct QuickAddSheet: View {
         addPulse += 1
         settings.lastIssuedEstimateMinutes = issuedMinutes
 
+        ArrivalForecastStore.shared.prefetch(ticket: ticket, sessions: Array(allSessions), priority: .user)
+
         if allowsContinuousDump && continuousDump {
             undoPayload = UndoPayload(
                 ticketID: ticket.id,

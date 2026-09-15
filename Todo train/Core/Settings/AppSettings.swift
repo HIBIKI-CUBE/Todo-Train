@@ -21,6 +21,7 @@ final class AppSettings {
         static let lastIssuedEstimateMinutes = "settings.lastIssuedEstimateMinutes"
         static let companionRelayURL = "settings.companionRelayURL"
         static let timetableCalendarIDs = "settings.timetableCalendarIDs"
+        static let developerToolsUnlocked = "settings.developerToolsUnlocked"
     }
 
     var pauseLimit: Int {
@@ -117,6 +118,15 @@ final class AppSettings {
         timetableVisibleCalendarIDs = ordered + extras
     }
 
+    /// Hidden Settings gesture. Not a product toggle.
+    static let developerUnlockTapCount = 7
+
+    var developerToolsUnlocked: Bool {
+        didSet {
+            UserDefaults.standard.set(developerToolsUnlocked, forKey: Keys.developerToolsUnlocked)
+        }
+    }
+
     static func makeForTesting(
         pauseLimit: Int = PauseLimitGuard.defaultLimit,
         overtimeSoundEnabled: Bool = true,
@@ -125,7 +135,8 @@ final class AppSettings {
         cabinAnnouncementsEnabled: Bool = true,
         lastIssuedEstimateMinutes: Int? = nil,
         companionRelayURLString: String = "",
-        timetableVisibleCalendarIDs: [String]? = nil
+        timetableVisibleCalendarIDs: [String]? = nil,
+        developerToolsUnlocked: Bool = false
     ) -> AppSettings {
         let settings = AppSettings()
         settings.pauseLimit = Self.clampPauseLimit(pauseLimit)
@@ -136,6 +147,7 @@ final class AppSettings {
         settings.lastIssuedEstimateMinutes = lastIssuedEstimateMinutes.map(Self.clampEstimateMinutes)
         settings.companionRelayURLString = companionRelayURLString
         settings.timetableVisibleCalendarIDs = timetableVisibleCalendarIDs
+        settings.developerToolsUnlocked = developerToolsUnlocked
         return settings
     }
 
@@ -174,6 +186,8 @@ final class AppSettings {
                 UserDefaults.standard.integer(forKey: Keys.lastIssuedEstimateMinutes)
             )
         }
+
+        developerToolsUnlocked = UserDefaults.standard.bool(forKey: Keys.developerToolsUnlocked)
 
         companionRelayURLString = RelayEndpoint.coalesceStored(
             UserDefaults.standard.string(forKey: Keys.companionRelayURL)
