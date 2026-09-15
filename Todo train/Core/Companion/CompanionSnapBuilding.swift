@@ -18,7 +18,10 @@ enum CompanionSnapBuilding {
         now: Date,
         serviceActive: Bool,
         cabinEnabled: Bool,
-        pendingCabin: CabinKind? = nil
+        pendingCabin: CabinKind? = nil,
+        nextBlockTitle: String? = nil,
+        nextBlockStartsAt: Date? = nil,
+        timetablePauseAt: Date? = nil
     ) -> SnapPlaintext {
         guard let session, session.isOpen, phase != .idle else {
             return idle(
@@ -55,7 +58,10 @@ enum CompanionSnapBuilding {
             serviceActive: serviceActive,
             cabinEnabled: cabinEnabled,
             checkInFiredCount: session.checkInFiredCount,
-            pendingCabin: session.pendingCheckIn?.cabin
+            pendingCabin: session.pendingCheckIn?.cabin,
+            nextBlockTitle: nextBlockTitle,
+            nextBlockStartsAt: nextBlockStartsAt.map { Int($0.timeIntervalSince1970) },
+            timetablePauseAt: timetablePauseAt.map { Int($0.timeIntervalSince1970) }
         )
     }
 

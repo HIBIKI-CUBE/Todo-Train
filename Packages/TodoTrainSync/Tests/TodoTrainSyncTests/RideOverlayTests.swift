@@ -149,6 +149,18 @@ struct RideOverlayPresentationTests {
         #expect(view.statusLine == "リレーが切れた")
     }
 
+    @Test func nextBlockLineFromSnap() {
+        var snap = running
+        snap.nextBlockTitle = "1on1"
+        snap.nextBlockStartsAt = 1_768_000_000 + 3600
+        snap.timetablePauseAt = 1_768_000_000 + 3660
+        let view = RideOverlayPresentation.make(
+            MenuBarInput(pairing: .paired, snap: snap, now: 1_768_000_120)
+        )
+        #expect(view.nextBlockLine?.contains("1on1") == true)
+        #expect(view.timetablePauseAt == snap.timetablePauseAt)
+    }
+
     @Test func truncatesPeekTitle() {
         #expect(RideOverlayPresentation.truncatedPeekTitle("") == "乗務")
         #expect(RideOverlayPresentation.truncatedPeekTitle("短い") == "短い")

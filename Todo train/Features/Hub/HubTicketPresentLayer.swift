@@ -14,7 +14,7 @@ struct HubPresentCover: Identifiable {
     var id: UUID { ticket.id }
 }
 
-/// Centered ticket + LED. Tilt/shadow start as the deck card so the hero does not pop.
+/// Centered ticket + LED + timetable plate. Tilt/shadow start as the deck card so the hero does not pop.
 struct HubTicketPresentLayer: View {
     let ticket: Ticket
     let size: CGSize
@@ -68,6 +68,18 @@ struct HubTicketPresentLayer: View {
         size.height * MarsTicketSpec.HubStack.departSignHeightRatio
     }
 
+    private var plateHeight: CGFloat {
+        MarsTicketSpec.HubStack.timetablePlateHeight(ticketHeight: size.height)
+    }
+
+    private var showsTimetablePlate: Bool {
+        TrainLayout.shouldShowTimetablePlate(
+            overlayHeight: overlaySize.height,
+            ticketHeight: size.height,
+            plateHeight: plateHeight
+        )
+    }
+
     var body: some View {
         ZStack {
             Color.black.opacity(looksSettled ? MarsTicketSpec.HubStack.focusDimOpacity : 0)
@@ -95,6 +107,22 @@ struct HubTicketPresentLayer: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
             .opacity(looksSettled ? 1 : 0)
             .allowsHitTesting(false)
+
+            if showsTimetablePlate {
+                HubTimetablePlate(
+                    ticket: ticket,
+                    ticketWidth: size.width,
+                    plateHeight: plateHeight,
+                    playReveal: looksSettled
+                )
+                .id(ticket.id)
+                .offset(
+                    y: size.height / 2 + MarsTicketSpec.HubStack.departSignGap + plateHeight / 2
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                .opacity(looksSettled ? 1 : 0)
+                .allowsHitTesting(false)
+            }
         }
         .onAppear {
             var parked = Transaction()

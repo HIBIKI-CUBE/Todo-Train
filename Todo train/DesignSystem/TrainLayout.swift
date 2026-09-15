@@ -74,6 +74,18 @@ enum TrainLayout {
         reported.filter { ids.contains($0.key) }
     }
 
+    /// Hide the timetable plate when the overlay cannot fit it under the ticket.
+    static func shouldShowTimetablePlate(
+        overlayHeight: CGFloat,
+        ticketHeight: CGFloat,
+        plateHeight: CGFloat,
+        gap: CGFloat = MarsTicketSpec.HubStack.departSignGap,
+        bottomMargin: CGFloat = MarsTicketSpec.HubStack.timetablePlateBottomMargin
+    ) -> Bool {
+        let available = overlayHeight / 2 - ticketHeight / 2 - gap - bottomMargin
+        return available >= plateHeight
+    }
+
     /// Shrink an oversized landing frame around its center; keep Mars aspect.
     static func clampedLandingRect(_ rect: CGRect, containerSize: CGSize) -> CGRect {
         let face = ticketFaceSize(containerWidth: containerSize.width)

@@ -26,6 +26,8 @@ protocol CheckInNotifying: AnyObject {
     func cancelProgress(sessionID: UUID)
     func cancelIdle(serviceDayID: UUID)
     func cancelAll()
+    func scheduleTimetablePause(sessionID: UUID, guardID: UUID, title: String, fireAt: Date)
+    func cancelTimetablePause(sessionID: UUID)
 }
 
 @MainActor
@@ -44,6 +46,8 @@ final class NoOpCheckInNotifier: CheckInNotifying {
     func cancelProgress(sessionID: UUID) {}
     func cancelIdle(serviceDayID: UUID) {}
     func cancelAll() {}
+    func scheduleTimetablePause(sessionID: UUID, guardID: UUID, title: String, fireAt: Date) {}
+    func cancelTimetablePause(sessionID: UUID) {}
 }
 
 @MainActor
@@ -78,6 +82,7 @@ final class InMemoryCheckInNotifier: CheckInNotifying {
     func cancel(sessionID: UUID) {
         progress.removeAll { $0.sessionID == sessionID }
         away.removeAll { $0.sessionID == sessionID }
+        timetable.removeAll { $0.sessionID == sessionID }
     }
 
     func cancelProgress(sessionID: UUID) {
@@ -92,13 +97,26 @@ final class InMemoryCheckInNotifier: CheckInNotifying {
         progress.removeAll()
         away.removeAll()
         idle.removeAll()
+        timetable.removeAll()
     }
+
+    func scheduleTimetablePause(sessionID: UUID, guardID: UUID, title: String, fireAt: Date) {
+        timetable.removeAll { $0.sessionID == sessionID }
+        timetable.append((sessionID, guardID, fireAt, title))
+    }
+
+    func cancelTimetablePause(sessionID: UUID) {
+        timetable.removeAll { $0.sessionID == sessionID }
+    }
+
+    private(set) var timetable: [(sessionID: UUID, guardID: UUID, fireAt: Date, title: String)] = []
 }
 
 nonisolated enum CheckInNotification {
     static let categoryIdentifier = "todotrain.checkin"
     static let awayCategoryIdentifier = "todotrain.checkin.away"
     static let idleCategoryIdentifier = "todotrain.checkin.idle"
+    static let timetableCategoryIdentifier = "todotrain.timetable.pause"
     static let pauseAction = "todotrain.checkin.pause"
     static let stillOnItAction = "todotrain.checkin.still"
 
@@ -114,8 +132,12 @@ nonisolated enum CheckInNotification {
         "checkin.idle.\(serviceDayID.uuidString)"
     }
 
+    static func timetableIdentifier(sessionID: UUID, guardID: UUID) -> String {
+        "timetable.pause.\(sessionID.uuidString).\(guardID.uuidString)"
+    }
+
     static func isCheckIn(_ identifier: String) -> Bool {
-        identifier.hasPrefix("checkin.")
+        identifier.hasPrefix("checkin.") || identifier.hasPrefix("timetable.pause.")
     }
 
     static func isAway(_ identifier: String) -> Bool {
@@ -124,6 +146,16 @@ nonisolated enum CheckInNotification {
 
     static func isIdle(_ identifier: String) -> Bool {
         identifier.hasPrefix("checkin.idle.")
+    }
+
+    static func isTimetable(_ identifier: String) -> Bool {
+        identifier.hasPrefix("timetable.pause.")
+    }
+
+    static func timetableSessionID(from identifier: String) -> UUID? {
+        let parts = identifier.split(separator: ".")
+        guard parts.count >= 4, parts[0] == "timetable", parts[1] == "pause" else { return nil }
+        return UUID(uuidString: String(parts[2]))
     }
 }
 
@@ -166,7 +198,13 @@ final class CheckInNotifier: CheckInNotifying {
             intentIdentifiers: [],
             options: []
         )
-        center.setNotificationCategories([progress, away, idle])
+        let timetable = UNNotificationCategory(
+            identifier: CheckInNotification.timetableCategoryIdentifier,
+            actions: [pause],
+            intentIdentifiers: [],
+            options: []
+        )
+        center.setNotificationCategories([progress, away, idle, timetable])
     }
 
     func requestAuthorizationIfNeeded() {
@@ -223,6 +261,7 @@ final class CheckInNotifier: CheckInNotifying {
         }
         center.removePendingNotificationRequests(withIdentifiers: identifiers)
         center.removeDeliveredNotifications(withIdentifiers: identifiers)
+        cancelTimetablePause(sessionID: sessionID)
     }
 
     func cancelProgress(sessionID: UUID) {
@@ -238,6 +277,27 @@ final class CheckInNotifier: CheckInNotifying {
         let identifier = CheckInNotification.idleIdentifier(serviceDayID: serviceDayID)
         center.removePendingNotificationRequests(withIdentifiers: [identifier])
         center.removeDeliveredNotifications(withIdentifiers: [identifier])
+    }
+
+    func scheduleTimetablePause(sessionID: UUID, guardID: UUID, title: String, fireAt: Date) {
+        let identifier = CheckInNotification.timetableIdentifier(sessionID: sessionID, guardID: guardID)
+        enqueue(
+            identifier: identifier,
+            title: TimetableCopy.board,
+            body: title,
+            fireAt: fireAt,
+            categoryIdentifier: CheckInNotification.timetableCategoryIdentifier
+        )
+    }
+
+    func cancelTimetablePause(sessionID: UUID) {
+        Task {
+            let ids = await center.pendingNotificationRequests()
+                .map(\.identifier)
+                .filter { $0.hasPrefix("timetable.pause.\(sessionID.uuidString)") }
+            center.removePendingNotificationRequests(withIdentifiers: ids)
+            center.removeDeliveredNotifications(withIdentifiers: ids)
+        }
     }
 
     func cancelAll() {

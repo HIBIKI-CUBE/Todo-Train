@@ -390,6 +390,8 @@ struct QuickAddSheet: View {
         addPulse += 1
         settings.lastIssuedEstimateMinutes = issuedMinutes
 
+        ArrivalForecastStore.shared.prefetch(ticket: ticket, sessions: Array(allSessions), priority: .user)
+
         if allowsContinuousDump && continuousDump {
             undoPayload = UndoPayload(
                 ticketID: ticket.id,
@@ -401,17 +403,7 @@ struct QuickAddSheet: View {
             title = ""
             titleFocusNonce += 1
         } else {
-            onSingleIssued?(
-                TicketIssueEjectEvent(
-                    ticketID: ticket.id,
-                    title: issuedTitle,
-                    minutes: issuedMinutes,
-                    tagNames: allTags
-                        .filter { selectedTagIDs.contains($0.id) }
-                        .sorted { $0.sortOrder < $1.sortOrder }
-                        .map(\.name)
-                )
-            )
+            onSingleIssued?(TicketIssueEjectEvent(ticket: ticket))
             dismiss()
         }
     }

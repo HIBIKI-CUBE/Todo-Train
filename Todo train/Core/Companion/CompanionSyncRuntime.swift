@@ -305,7 +305,10 @@ final class CompanionSyncRuntime {
             now: Date(),
             serviceActive: sessionManager.activeServiceDay?.isOpen == true,
             cabinEnabled: settings.cabinAnnouncementsEnabled,
-            pendingCabin: sessionManager.activeServiceDay?.pendingCabin?.cabin
+            pendingCabin: sessionManager.activeServiceDay?.pendingCabin?.cabin,
+            nextBlockTitle: sessionManager.nextTimetableBlock()?.title,
+            nextBlockStartsAt: sessionManager.nextTimetableBlock()?.startsAt,
+            timetablePauseAt: sessionManager.timetablePauseAt()
         )
         let envelope = try SyncCrypto.sealJSON(
             plaintext,

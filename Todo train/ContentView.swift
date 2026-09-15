@@ -47,6 +47,8 @@ struct ContentView: View {
         .tint(TrainTheme.rail)
         .environment(transferCanvas)
         .environment(ticketMotion)
+        .environment(ArrivalForecastTraceLog.shared)
+        .environment(ArrivalForecastStore.shared)
         .environment(\.focusZoomNamespace, focusZoom)
         .environment(\.isFocusCoverPresented, isFocusPresented)
         .overlay {
@@ -89,10 +91,13 @@ struct ContentView: View {
             if newPhase == .active {
                 // Foreground: recompute Date-based phase only.
                 // Do not re-run recoverOnLaunch (would re-schedule cancelled end bells).
+                sessionManager.isSceneActive = true
                 sessionManager.endAwayWatch()
+                sessionManager.reconcile()
                 applyPendingFocusAction()
                 syncFocusPresentation()
             } else if newPhase == .background {
+                sessionManager.isSceneActive = false
                 sessionManager.beginAwayWatch()
             }
         }
@@ -235,5 +240,7 @@ struct ContentView: View {
         .environment(AppSettings.shared)
         .environment(DeletionUndoCenter())
         .environment(CompanionSyncRuntime())
+        .environment(ArrivalForecastTraceLog.shared)
+        .environment(ArrivalForecastStore.shared)
         .modelContainer(container)
 }

@@ -27,7 +27,9 @@ struct PunctualityMoment: Identifiable, Equatable, Sendable {
             title: String,
             estimateSeconds: Int,
             actualSeconds: TimeInterval,
-            punctuality: ArrivalPunctuality
+            punctuality: ArrivalPunctuality,
+            tagNames: [String],
+            colorHex: String?
         )
         case onTimeService
     }

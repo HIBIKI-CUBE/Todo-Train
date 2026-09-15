@@ -27,33 +27,37 @@ struct TagManagerView: View {
 
     var body: some View {
         List {
-            if tags.isEmpty {
-                Text("タグはまだありません。追加して切符に付けられます。先頭のタグが新規追加時の候補になります。")
-                    .foregroundStyle(.secondary)
-            } else {
-                ForEach(tags, id: \.id) { tag in
-                    Button {
-                        editorMode = .edit(tag)
-                    } label: {
-                        HStack {
-                            TagChipView(name: tag.name, colorHex: tag.colorHex)
-                            Spacer()
-                            if tag.sortOrder == 0 {
-                                Text("デフォルト候補")
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
+            Section {
+                if tags.isEmpty {
+                    Text("タグはまだありません。追加して切符に付けられます。")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(tags, id: \.id) { tag in
+                        Button {
+                            editorMode = .edit(tag)
+                        } label: {
+                            HStack {
+                                TagChipView(name: tag.name, colorHex: tag.colorHex)
+                                Spacer()
+                                if tag.sortOrder == 0 {
+                                    Text("デフォルト候補")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
+                                    .foregroundStyle(.tertiary)
                             }
-                            Image(systemName: "chevron.right")
-                                .font(.caption)
-                                .foregroundStyle(.tertiary)
+                        }
+                        .buttonStyle(.plain)
+                        .deleteSwipeAction(accessibilityName: tag.name) {
+                            deleteTag(tag)
                         }
                     }
-                    .buttonStyle(.plain)
-                    .deleteSwipeAction(accessibilityName: tag.name) {
-                        deleteTag(tag)
-                    }
+                    .onMove(perform: moveTags)
                 }
-                .onMove(perform: moveTags)
+            } footer: {
+                Text("並びの上が、複数タグのときの切符の色になります。")
             }
         }
         .navigationTitle("タグ")

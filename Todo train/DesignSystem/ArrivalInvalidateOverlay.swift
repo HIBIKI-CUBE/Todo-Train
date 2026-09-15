@@ -32,10 +32,10 @@ struct ArrivalInvalidateOverlay: View {
     @State private var locked = false
     @State private var stampHaptic = 0
 
-    private var arrival: (title: String, minutes: Int, punctuality: ArrivalPunctuality)? {
+    private var arrival: (title: String, minutes: Int, punctuality: ArrivalPunctuality, tagNames: [String], colorHex: String?)? {
         switch moment.kind {
-        case .arrival(let title, let estimate, _, let punctuality):
-            (title, max(estimate / 60, 1), punctuality)
+        case .arrival(let title, let estimate, _, let punctuality, let tagNames, let colorHex):
+            (title, max(estimate / 60, 1), punctuality, tagNames, colorHex)
         case .onTimeService:
             nil
         }
@@ -54,8 +54,13 @@ struct ArrivalInvalidateOverlay: View {
     }
 
     @ViewBuilder
-    private func scene(arrival: (title: String, minutes: Int, punctuality: ArrivalPunctuality)) -> some View {
-        let ticket = MarsTicketContent(title: arrival.title, minutes: arrival.minutes)
+    private func scene(arrival: (title: String, minutes: Int, punctuality: ArrivalPunctuality, tagNames: [String], colorHex: String?)) -> some View {
+        let ticket = MarsTicketContent(
+            title: arrival.title,
+            minutes: arrival.minutes,
+            tagNames: arrival.tagNames,
+            colorHex: arrival.colorHex
+        )
         let scrim = 0.12 + 0.23 * Double(enter) * (1 - Double(exit) * 0.85)
 
         ZStack {
@@ -244,12 +249,12 @@ struct ArrivalInvalidateOverlay: View {
         }
     }
 
-    private func accessibilityText(arrival: (title: String, minutes: Int, punctuality: ArrivalPunctuality)) -> String {
+    private func accessibilityText(arrival: (title: String, minutes: Int, punctuality: ArrivalPunctuality, tagNames: [String], colorHex: String?)) -> String {
         let head = Punctuality.arrivalHeadline(arrival.punctuality)
         return "\(head)。\(arrival.title)。検札印を押してください"
     }
 
-    private func announceIfNeeded(arrival: (title: String, minutes: Int, punctuality: ArrivalPunctuality)) {
+    private func announceIfNeeded(arrival: (title: String, minutes: Int, punctuality: ArrivalPunctuality, tagNames: [String], colorHex: String?)) {
         #if canImport(UIKit)
         UIAccessibility.post(notification: .announcement, argument: accessibilityText(arrival: arrival))
         #endif
@@ -328,7 +333,9 @@ struct MarsTicketUsedMarks: View {
                 title: "週次レビューの下書き",
                 estimateSeconds: 1_500,
                 actualSeconds: 1_440,
-                punctuality: .onTime
+                punctuality: .onTime,
+                tagNames: ["仕事"],
+                colorHex: "#0091FF"
             )
         )
     )

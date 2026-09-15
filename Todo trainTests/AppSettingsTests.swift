@@ -43,4 +43,12 @@ struct AppSettingsTests {
         #expect(settings.companionRelayURL?.scheme == "https")
         #expect(settings.companionRelayURL?.host == "todo-train.hibiki-cube.dev")
     }
+
+    @Test func developerTools_areOffByDefaultInTests() {
+        #expect(AppSettings.developerUnlockTapCount == 7)
+        let settings = AppSettings.makeForTesting()
+        #expect(settings.developerToolsUnlocked == false)
+        let unlocked = AppSettings.makeForTesting(developerToolsUnlocked: true)
+        #expect(unlocked.developerToolsUnlocked == true)
+    }
 }

@@ -19,6 +19,7 @@ final class CompanionRideOverlayController: NSObject {
     private var dragStart: NSRect?
     private var lastVisible = false
     private var lastCabinPrompt: String?
+    private var lastAutoPauseAt: Int?
 
     init(runtime: CompanionMacRuntime, defaults: UserDefaults = .standard) {
         self.runtime = runtime
@@ -122,6 +123,16 @@ final class CompanionRideOverlayController: NSObject {
         }
         lastVisible = visible
         lastCabinPrompt = presentation.cabinPrompt
+        maybeAutoPause(presentation)
+    }
+
+    private func maybeAutoPause(_ presentation: RideOverlayPresentation) {
+        guard presentation.canPause,
+              let pauseAt = presentation.timetablePauseAt,
+              runtime.now >= pauseAt,
+              lastAutoPauseAt != pauseAt else { return }
+        lastAutoPauseAt = pauseAt
+        Task { await runtime.sendPause() }
     }
 
     private func dragChanged(mouse: NSPoint, startFrame: NSRect, startMouse: NSPoint) {

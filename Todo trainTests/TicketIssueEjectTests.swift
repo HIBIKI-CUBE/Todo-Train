@@ -25,10 +25,18 @@ struct TicketIssueEjectTests {
     }
 
     @Test func ejectEvent_storesTitleMinutesAndTags() {
-        let event = TicketIssueEjectEvent(ticketID: UUID(), title: "メモ", minutes: 15, tagNames: ["仕事"])
+        let event = TicketIssueEjectEvent(
+            ticketID: UUID(),
+            title: "メモ",
+            minutes: 15,
+            tagNames: ["仕事"],
+            colorHex: "#0091FF"
+        )
         #expect(event.title == "メモ")
         #expect(event.minutes == 15)
         #expect(event.tagNames == ["仕事"])
+        #expect(event.colorHex == "#0091FF")
         #expect(event.ticketContent.title == "メモ")
+        #expect(event.ticketContent.colorHex == "#0091FF")
     }
 }

@@ -52,8 +52,15 @@ final class SessionManager {
     var punctualityHapticTick: Int = 0
     /// Bumps when a 車内放送 panel appears.
     var checkInHapticTick: Int = 0
-    /// Paired Mac owns the desk progress interrupt; skip iPhone progress local notifications.
+    /// Ephemeral one-liner after ATS pause. Not a score.
+    var timetableQuietMessage: String?
+    /// Scene is active — used so tests can stay on a FixedSessionClock.
+    var isSceneActive = true
+    /// Paired Mac already shows 車内放送 on PiP — skip progress locals, keep away.
     var suppressProgressLocalNotifications = false
+    /// Today's 掲示. Membership stays on `TimetableBlock`.
+    var noticeOccurrences: [CalendarOccurrence] = []
+    let calendarBoard: any CalendarBoardReading
 
     var punctualityMoment: PunctualityMoment? { punctualityQueue.first }
 
@@ -102,7 +109,8 @@ final class SessionManager {
         liveActivityManager: (any LiveActivityManaging)? = nil,
         alarmScheduler: (any AlarmScheduling)? = nil,
         deviceIdentity: (any DeviceIdentifying)? = nil,
-        deviceLock: (any DeviceLockReading)? = nil
+        deviceLock: (any DeviceLockReading)? = nil,
+        calendarBoard: (any CalendarBoardReading)? = nil
     ) {
         self.modelContext = modelContext
         self.clock = clock
@@ -115,6 +123,11 @@ final class SessionManager {
         self.alarmScheduler = alarmScheduler ?? NoOpAlarmScheduler()
         self.deviceIdentity = deviceIdentity ?? SystemDeviceIdentity()
         self.deviceLock = deviceLock ?? SystemDeviceLock()
+        #if canImport(EventKit)
+        self.calendarBoard = calendarBoard ?? EventKitCalendarBoard()
+        #else
+        self.calendarBoard = calendarBoard ?? NoOpCalendarBoard()
+        #endif
     }
 
     var elapsedSeconds: TimeInterval {

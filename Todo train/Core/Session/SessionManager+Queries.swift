@@ -57,13 +57,16 @@ extension SessionManager {
     func enqueueArrivalMomentIfNeeded(_ session: WorkSession) {
         guard Punctuality.shouldCelebrateArrival(outcome: session.outcome) else { return }
         let title = session.ticket?.title ?? "切符"
+        let tags = (session.ticket?.tags ?? []).sorted { $0.sortOrder < $1.sortOrder }
         enqueuePunctualityMoment(
             PunctualityMoment(
                 kind: .arrival(
                     title: title,
                     estimateSeconds: session.estimatedSecondsAtStart,
                     actualSeconds: session.accumulatedActiveSeconds,
-                    punctuality: Punctuality.classify(session)
+                    punctuality: Punctuality.classify(session),
+                    tagNames: tags.map(\.name),
+                    colorHex: TicketStockColor.winningColorHex(tags: tags)
                 )
             )
         )

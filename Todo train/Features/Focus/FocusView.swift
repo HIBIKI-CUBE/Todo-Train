@@ -236,6 +236,18 @@ struct FocusView: View {
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 12)
+
+                if let block = sessionManager.nextTimetableBlock(now: context.date) {
+                    HStack {
+                        Text(TimetableCopy.nextLine(kind: .board, title: block.title, startsAt: block.startsAt))
+                            .font(.system(size: 13, weight: .semibold, design: .default))
+                            .foregroundStyle(FocusPanel.muted)
+                            .lineLimit(1)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.bottom, 10)
+                }
             }
             .background(FocusPanel.fill)
         }

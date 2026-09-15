@@ -60,6 +60,8 @@ enum HubPreviewSeed {
                 .environment(AppSettings.shared)
                 .environment(DeletionUndoCenter())
                 .environment(TicketMotionBridge())
+                .environment(ArrivalForecastTraceLog.shared)
+                .environment(ArrivalForecastStore.shared)
                 .modelContainer(container)
         }
     }

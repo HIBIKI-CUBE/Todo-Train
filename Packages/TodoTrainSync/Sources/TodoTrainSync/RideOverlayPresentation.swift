@@ -19,6 +19,10 @@ public struct RideOverlayPresentation: Equatable, Sendable {
     public var peekTitle: String
     /// Progress 車内放送 on the PiP. Nil when idle.
     public var cabinPrompt: String?
+    /// Next adopted ダイヤ, e.g. "14:00 1on1". Nil when none.
+    public var nextBlockLine: String?
+    /// Unix time when Mac should send pause if still running.
+    public var timetablePauseAt: Int?
 
     public static let peekTitleLimit = 6
 
@@ -36,7 +40,9 @@ public struct RideOverlayPresentation: Equatable, Sendable {
         failureLine: nil,
         statusLine: nil,
         peekTitle: "",
-        cabinPrompt: nil
+        cabinPrompt: nil,
+        nextBlockLine: nil,
+        timetablePauseAt: nil
     )
 
     public static func make(_ input: MenuBarInput) -> RideOverlayPresentation {
@@ -102,8 +108,20 @@ public struct RideOverlayPresentation: Equatable, Sendable {
             failureLine: bar.failureLine,
             statusLine: statusLine,
             peekTitle: truncatedPeekTitle(title),
-            cabinPrompt: cabinPrompt
+            cabinPrompt: cabinPrompt,
+            nextBlockLine: nextBlockLine(snap: snap, now: input.now),
+            timetablePauseAt: snap.timetablePauseAt
         )
+    }
+
+    static func nextBlockLine(snap: SnapPlaintext, now: Int) -> String? {
+        guard let title = snap.nextBlockTitle, !title.isEmpty,
+              let start = snap.nextBlockStartsAt else { return nil }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ja_JP")
+        formatter.dateFormat = "HH:mm"
+        let time = formatter.string(from: Date(timeIntervalSince1970: TimeInterval(start)))
+        return "\(time) \(title)"
     }
 
     public static func progress(

@@ -60,6 +60,14 @@ struct CompanionRideOverlayView: View {
                     .padding(.horizontal, 12)
                     .padding(.top, 10)
 
+                if let next = presentation.nextBlockLine, presentation.cabinPrompt == nil {
+                    Text(next)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.72))
+                        .lineLimit(1)
+                        .padding(.horizontal, 12)
+                }
+
                 if let line = presentation.failureLine {
                     Text(line)
                         .font(.caption)

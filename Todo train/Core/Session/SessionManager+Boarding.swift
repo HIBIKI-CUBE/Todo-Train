@@ -96,6 +96,7 @@ extension SessionManager {
         applyCheckInSchedule(to: session, title: ticket.title, estimatedSeconds: estimate)
         activeSession = session
         phase = .running
+        timetableQuietMessage = nil
         clearIdleCabin(touch: true, now: now)
         bumpCompanionSync()
         try save()
@@ -211,6 +212,7 @@ extension SessionManager {
         session.pausedAt = nil
         session.segmentStartedAt = now
         phase = .running
+        timetableQuietMessage = nil
         noteCabinActivity(now: now, clearPendingIdle: true)
         bumpCompanionSync()
     }

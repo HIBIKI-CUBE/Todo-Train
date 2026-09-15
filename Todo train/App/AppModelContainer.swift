@@ -15,6 +15,9 @@ enum AppModelContainer {
         Tag.self,
         TaskLineage.self,
         ServiceDay.self,
+        TimetableBlock.self,
+        TimetableGuard.self,
+        TimetableSeriesRule.self,
     ])
 
     static func make(inMemory: Bool = false) throws -> ModelContainer {

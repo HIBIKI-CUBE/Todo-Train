@@ -19,6 +19,7 @@ struct HistoryDayClockView: View {
     var onSelect: (WorkSession) -> Void
     var onReissue: ((Ticket) -> Void)?
     var onDelete: (WorkSession) -> Void
+    var timetableBands: [TimetableFit.Block] = []
 
     @Environment(\.calendar) private var calendar
 
@@ -78,6 +79,8 @@ struct HistoryDayClockView: View {
                 .frame(height: canvasHeight(layout))
                 .allowsHitTesting(false)
 
+            timetableBandLayer(layout: layout)
+
             HStack(alignment: .top, spacing: density.laneSpacing) {
                 ForEach(0..<layout.laneCount, id: \.self) { lane in
                     laneColumn(lane, layout: layout, rides: rides, sessionByID: sessionByID)
@@ -96,6 +99,25 @@ struct HistoryDayClockView: View {
             }
         }
         .frame(maxWidth: .infinity, minHeight: canvasHeight(layout), alignment: .topLeading)
+    }
+
+    @ViewBuilder
+    private func timetableBandLayer(layout: DayClockLayout) -> some View {
+        let dayStart = calendar.startOfDay(for: layout.start)
+        let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart) ?? layout.start.addingTimeInterval(86_400)
+        ForEach(timetableBands.filter { $0.isActive && $0.startsAt < dayEnd && $0.endsAt > dayStart }) { band in
+            let start = max(band.startsAt, dayStart)
+            let end = min(band.endsAt, dayEnd)
+            let y = CGFloat(layout.y(for: start))
+            let height = max(CGFloat(layout.height(from: start, to: end)), 3)
+            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                .fill(TrainTheme.rail.opacity(0.08))
+                .frame(maxWidth: .infinity)
+                .frame(height: height)
+                .padding(.top, y)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
     }
 
     private func laneColumn(

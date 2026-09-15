@@ -7,6 +7,7 @@ import Foundation
 import Observation
 import SwiftData
 import TodoTrainSync
+import UserNotifications
 #if canImport(UIKit)
 import UIKit
 #endif
@@ -93,6 +94,8 @@ extension SessionManager {
         guard session.remainingSeconds(at: now) > 0 else { return }
         guard session.pendingCheckIn == nil else { return }
         guard session.awayDueAt == nil else { return }
+        let blocks = fitBlocks()
+        guard !TimetableGuardLogic.shouldSuppressAway(blocks: blocks, now: now) else { return }
 
         let delay = CheckInScheduling.awayDelay(
             seed: session.id,
@@ -154,10 +157,19 @@ extension SessionManager {
         reconcile()
         guard ownsActiveRide else { return }
         guard let session = activeSession, session.isOpen, !session.isPaused else { return }
+
+        if CheckInNotification.isTimetable(identifier) {
+            guard let sessionID = CheckInNotification.timetableSessionID(from: identifier),
+                  sessionID == session.id else { return }
+            if action == CheckInNotification.pauseAction || action == UNNotificationDefaultActionIdentifier {
+                try? pause()
+            }
+            return
+        }
+
         guard session.remainingSeconds(at: clock.now) > CheckInScheduling.overtimeGuardSeconds else { return }
 
-        let isAway = CheckInNotification.isAway(identifier)
-        if isAway {
+        if CheckInNotification.isAway(identifier) {
             if action == CheckInNotification.pauseAction {
                 try? pause()
             }

@@ -27,7 +27,9 @@ struct SessionManagerPunctualityTests {
                 title: ticket.title,
                 estimateSeconds: 600,
                 actualSeconds: 560,
-                punctuality: .onTime
+                punctuality: .onTime,
+                tagNames: [],
+                colorHex: nil
             )
         )
     }
@@ -48,7 +50,9 @@ struct SessionManagerPunctualityTests {
                 title: ticket.title,
                 estimateSeconds: 600,
                 actualSeconds: 10,
-                punctuality: .early
+                punctuality: .early,
+                tagNames: [],
+                colorHex: nil
             )
         )
     }
@@ -68,7 +72,9 @@ struct SessionManagerPunctualityTests {
                 title: ticket.title,
                 estimateSeconds: 120,
                 actualSeconds: 180,
-                punctuality: .late
+                punctuality: .late,
+                tagNames: [],
+                colorHex: nil
             )
         )
     }
@@ -161,10 +167,40 @@ struct SessionManagerPunctualityTests {
                 title: ticket.title,
                 estimateSeconds: 600,
                 actualSeconds: 560,
-                punctuality: .onTime
+                punctuality: .onTime,
+                tagNames: [],
+                colorHex: nil
             )
         )
         manager.consumePunctualityMoment()
         #expect(manager.punctualityMoment?.kind == .onTimeService)
+    }
+
+    @Test func arrive_taggedTicket_carriesWinningStockColor() throws {
+        let (manager, context, clock, _) = try SessionManagerFixtures.makeHarness()
+        try manager.startService()
+        let work = Tag(name: "仕事", colorHex: "#0091FF", sortOrder: 0)
+        let home = Tag(name: "家", colorHex: "#30A46C", sortOrder: 1)
+        context.insert(work)
+        context.insert(home)
+        let ticket = try SessionManagerFixtures.makeTicket(context, seconds: 600)
+        ticket.tags = [home, work]
+        try context.save()
+
+        try manager.board(ticket: ticket)
+        clock.advance(by: 560)
+        try manager.arrive()
+
+        let moment = try #require(manager.punctualityMoment)
+        #expect(
+            moment.kind == .arrival(
+                title: ticket.title,
+                estimateSeconds: 600,
+                actualSeconds: 560,
+                punctuality: .onTime,
+                tagNames: ["仕事", "家"],
+                colorHex: "#0091FF"
+            )
+        )
     }
 }

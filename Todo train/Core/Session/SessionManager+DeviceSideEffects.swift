@@ -202,15 +202,23 @@ extension SessionManager {
         // Keep a paused AlarmKit Live Activity; resume / retention / a new ride tears it down.
         guard !session.isPaused else { return }
         let elapsed = session.elapsedSeconds(at: now)
-        guard let fireAt = SessionEndSchedule.fireAt(
+        let budgetFire = SessionEndSchedule.fireAt(
             budgetSeconds: session.budgetSecondsAtStart,
             elapsedSeconds: elapsed,
             now: now
-        ) else {
+        )
+        let upcoming = nextNoticeFireAt(now: now, session: session)
+        let fireAt = TimetableFit.nextDeadline(budgetEnd: budgetFire, nextBlockStart: upcoming?.fireAt)
+        guard let fireAt else {
             alarmScheduler.cancel(sessionID: session.id)
             return
         }
-        let title = session.ticket?.title ?? "切符"
+        let title: String
+        if let upcoming, upcoming.fireAt <= (budgetFire ?? upcoming.fireAt) {
+            title = upcoming.block.title
+        } else {
+            title = session.ticket?.title ?? "切符"
+        }
         alarmScheduler.scheduleEndBell(
             sessionID: session.id,
             ticketTitle: title,

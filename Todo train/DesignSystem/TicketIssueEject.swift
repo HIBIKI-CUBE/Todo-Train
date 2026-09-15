@@ -14,6 +14,7 @@ struct TicketIssueEjectEvent: Identifiable, Equatable {
     let title: String
     let minutes: Int
     let tagNames: [String]
+    let colorHex: String?
     let issuedAt: Date
 
     init(
@@ -22,6 +23,7 @@ struct TicketIssueEjectEvent: Identifiable, Equatable {
         title: String,
         minutes: Int,
         tagNames: [String] = [],
+        colorHex: String? = nil,
         issuedAt: Date = .now
     ) {
         self.id = id
@@ -29,17 +31,18 @@ struct TicketIssueEjectEvent: Identifiable, Equatable {
         self.title = title
         self.minutes = minutes
         self.tagNames = tagNames
+        self.colorHex = colorHex
         self.issuedAt = issuedAt
     }
 
     init(ticket: Ticket) {
+        let tags = ticket.tags.sorted { $0.sortOrder < $1.sortOrder }
         self.init(
             ticketID: ticket.id,
             title: ticket.title,
             minutes: max(1, ticket.estimatedSeconds / 60),
-            tagNames: ticket.tags
-                .sorted { $0.sortOrder < $1.sortOrder }
-                .map(\.name),
+            tagNames: tags.map(\.name),
+            colorHex: TicketStockColor.winningColorHex(tags: tags),
             issuedAt: ticket.createdAt
         )
     }
@@ -49,6 +52,7 @@ struct TicketIssueEjectEvent: Identifiable, Equatable {
             title: title,
             minutes: minutes,
             tagNames: tagNames,
+            colorHex: colorHex,
             issuedAt: issuedAt
         )
     }
@@ -366,7 +370,8 @@ struct TicketIssueEjectOverlay: View {
                 ticketID: UUID(),
                 title: "週次レビューの下書き",
                 minutes: 25,
-                tagNames: ["仕事"]
+                tagNames: ["仕事"],
+                colorHex: "#0091FF"
             )
         )
     }

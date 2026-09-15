@@ -12,6 +12,8 @@ struct MarsTicketContent: Equatable {
     var title: String
     var minutes: Int
     var tagNames: [String]
+    /// Winning tag chip hex (`sortOrder` min). Nil = untagged cyan stock.
+    var colorHex: String?
     var issuedAt: Date
     var serial: String
 
@@ -19,22 +21,25 @@ struct MarsTicketContent: Equatable {
         title: String,
         minutes: Int,
         tagNames: [String] = [],
+        colorHex: String? = nil,
         issuedAt: Date = .now,
         serial: String? = nil
     ) {
         self.title = title
         self.minutes = max(minutes, 1)
         self.tagNames = tagNames
+        self.colorHex = colorHex
         self.issuedAt = issuedAt
         self.serial = serial ?? MarsTicketContent.makeSerial(from: issuedAt)
     }
 
     init(ticket: Ticket) {
-        let tags = ticket.tags.sorted { $0.sortOrder < $1.sortOrder }.map(\.name)
+        let tags = ticket.tags.sorted { $0.sortOrder < $1.sortOrder }
         self.init(
             title: ticket.title,
             minutes: max(ticket.estimatedSeconds / 60, 1),
-            tagNames: tags,
+            tagNames: tags.map(\.name),
+            colorHex: TicketStockColor.winningColorHex(tags: tags),
             issuedAt: ticket.createdAt,
             serial: MarsTicketContent.makeSerial(from: ticket.createdAt, salt: ticket.id)
         )
@@ -72,6 +77,14 @@ struct MarsTicketContent: Equatable {
         f.dateFormat = "M.d"
         return f.string(from: issuedAt)
     }
+
+    var issuedMonth: Int {
+        Calendar.current.component(.month, from: issuedAt)
+    }
+
+    var issuedDay: Int {
+        Calendar.current.component(.day, from: issuedAt)
+    }
 }
 
 /// Pure unused ticket face. Animation lives in overlays / Hub stack.
@@ -89,13 +102,17 @@ struct MarsTicketView: View {
         density == .hub ? 4 : 6
     }
 
+    private var stock: TicketStockColor.Stock {
+        TicketStockColor.stock(for: content.colorHex)
+    }
+
     var body: some View {
         GeometryReader { geo in
             let w = geo.size.width
             let h = geo.size.height
             ZStack(alignment: .topLeading) {
                 paperBackground
-                MarsTicketSpec.paperBand
+                stock.band.color
                     .frame(height: h * 0.34)
                     .frame(maxWidth: .infinity)
                     .offset(y: h * 0.28)
@@ -133,7 +150,7 @@ struct MarsTicketView: View {
 
     private var paperBackground: some View {
         ZStack {
-            MarsTicketSpec.paper
+            stock.paper.color
             MarsTicketGroundPattern()
                 .opacity(MarsTicketSpec.groundPatternOpacity)
                 .foregroundStyle(MarsTicketSpec.printInk)
@@ -142,38 +159,100 @@ struct MarsTicketView: View {
 
     private var faceColumn: some View {
         VStack(alignment: .leading, spacing: columnSpacing) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("切符")
-                    .font(MarsTicketSpec.kindFont())
-                    .foregroundStyle(MarsTicketSpec.printInk)
-                    .tracking(2)
-                Spacer(minLength: 4)
-                Text("\(content.minutes)分")
-                    .font(MarsTicketSpec.metaFont().weight(.bold))
-                    .foregroundStyle(MarsTicketSpec.printInk)
-                    .monospacedDigit()
+            durationTrack
+
+            HStack(alignment: .top, spacing: 8) {
+                VStack(alignment: .leading, spacing: columnSpacing) {
+                    titleRow
+
+                    if !content.tagNames.isEmpty {
+                        viaRow
+                    }
+
+                    if density == .celebration {
+                        validityRow
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                fareColumn
             }
 
-            titleRow
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.vertical, density == .hub ? 2 : 4)
+            Spacer(minLength: 0)
 
-            if density == .celebration {
-                if !content.tagNames.isEmpty {
-                    Text("経由：" + content.tagNames.joined(separator: "・"))
-                        .font(MarsTicketSpec.viaFont())
-                        .foregroundStyle(MarsTicketSpec.printInk)
-                        .lineLimit(1)
+            footerRow
+        }
+    }
+
+    private var durationTrack: some View {
+        let fill = TicketDurationScale.filled(minutes: content.minutes)
+        return HStack(spacing: MarsTicketSpec.durationTrackGap) {
+            ForEach(0..<TicketDurationScale.cellCount, id: \.self) { index in
+                durationCell(amount: TicketDurationScale.cellFillAmount(index: index, fill: fill))
+            }
+        }
+        .frame(height: MarsTicketSpec.durationTrackHeight)
+        .accessibilityHidden(true)
+    }
+
+    private func durationCell(amount: Double) -> some View {
+        let ink = MarsTicketSpec.printInk
+        let shape = RoundedRectangle(cornerRadius: 0.7, style: .continuous)
+        return ZStack(alignment: .leading) {
+            shape.strokeBorder(ink.opacity(MarsTicketSpec.durationTrackEmptyOpacity), lineWidth: 0.5)
+            if amount >= 1 {
+                shape.fill(ink)
+            } else if amount > 0 {
+                GeometryReader { geo in
+                    Rectangle()
+                        .fill(ink)
+                        .frame(width: geo.size.width * amount)
                 }
+                .clipShape(shape)
+            }
+        }
+    }
 
-                Text(content.validityLine)
-                    .font(MarsTicketSpec.metaFont())
-                    .foregroundStyle(MarsTicketSpec.printInk)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
+    private var viaRow: some View {
+        Text(density == .celebration
+             ? "経由：" + content.tagNames.joined(separator: "・")
+             : content.tagNames.joined(separator: "・"))
+            .font(MarsTicketSpec.viaFont())
+            .foregroundStyle(MarsTicketSpec.printInk.opacity(density == .hub ? 0.85 : 1))
+            .lineLimit(1)
+    }
 
-                Spacer(minLength: 0)
+    private var validityRow: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 0) {
+            Text("\(content.issuedMonth)月")
+            Text("\(content.issuedDay)")
+                .font(MarsTicketSpec.validityDayFont())
+                .monospacedDigit()
+            Text("日から \(content.minutes)分間有効")
+        }
+        .font(MarsTicketSpec.metaFont())
+        .foregroundStyle(MarsTicketSpec.printInk)
+        .lineLimit(1)
+        .minimumScaleFactor(0.85)
+    }
 
+    private var fareColumn: some View {
+        HStack(alignment: .lastTextBaseline, spacing: 1) {
+            Text("\(content.minutes)")
+                .font(MarsTicketSpec.fareFont())
+                .monospacedDigit()
+                .tracking(-0.6)
+            Text("分")
+                .font(MarsTicketSpec.fareUnitFont())
+        }
+        .foregroundStyle(MarsTicketSpec.printInk)
+        .fixedSize()
+        .accessibilityHidden(true)
+    }
+
+    private var footerRow: some View {
+        Group {
+            if density == .celebration {
                 Text("Todo train発行  \(content.terminalDate)  \(content.serial)")
                     .font(MarsTicketSpec.terminalFont())
                     .foregroundStyle(MarsTicketSpec.printInk.opacity(0.85))
@@ -181,13 +260,6 @@ struct MarsTicketView: View {
                     .minimumScaleFactor(0.8)
                     .monospacedDigit()
             } else {
-                if !content.tagNames.isEmpty {
-                    Text(content.tagNames.joined(separator: "・"))
-                        .font(MarsTicketSpec.viaFont())
-                        .foregroundStyle(MarsTicketSpec.printInk.opacity(0.85))
-                        .lineLimit(1)
-                }
-                Spacer(minLength: 0)
                 Text(content.terminalDate)
                     .font(MarsTicketSpec.terminalFont())
                     .foregroundStyle(MarsTicketSpec.printInk.opacity(0.75))
@@ -198,7 +270,7 @@ struct MarsTicketView: View {
 
     private var titleRow: some View {
         Text(content.title)
-            .font(density == .hub ? MarsTicketSpec.titleFont().weight(.bold) : MarsTicketSpec.titleFont())
+            .font(MarsTicketSpec.titleFont())
             .foregroundStyle(MarsTicketSpec.printInk)
             .lineLimit(2)
             .minimumScaleFactor(0.7)
@@ -247,11 +319,31 @@ private struct MarsTicketGroundPattern: View {
     }
 }
 
-#Preview("短題・明") {
+#Preview("短題・祝祭") {
     ZStack {
         Color(uiColor: .systemGroupedBackground).ignoresSafeArea()
         MarsTicketView(
-            content: MarsTicketContent(title: "メモ", minutes: 15, tagNames: ["仕事"])
+            content: MarsTicketContent(
+                title: "メモ",
+                minutes: 15,
+                tagNames: ["仕事"],
+                colorHex: "#0091FF"
+            )
+        )
+        .padding(.horizontal, MarsTicketSpec.horizontalMargin)
+    }
+}
+
+#Preview("長題・60分") {
+    ZStack {
+        Color(uiColor: .systemGroupedBackground).ignoresSafeArea()
+        MarsTicketView(
+            content: MarsTicketContent(
+                title: "週次レビューの下書きを共有してコメントを整理する",
+                minutes: 60,
+                tagNames: ["仕事", "レビュー"],
+                colorHex: "#0091FF"
+            )
         )
         .padding(.horizontal, MarsTicketSpec.horizontalMargin)
     }
@@ -260,10 +352,30 @@ private struct MarsTicketGroundPattern: View {
 #Preview("Hub密度") {
     ZStack {
         Color(uiColor: .systemGroupedBackground).ignoresSafeArea()
-        MarsTicketView(
-            content: MarsTicketContent(title: "週次レビューの下書き", minutes: 25, tagNames: ["仕事"]),
-            density: .hub
-        )
+        VStack(spacing: 16) {
+            MarsTicketView(
+                content: MarsTicketContent(
+                    title: "週次レビューの下書き",
+                    minutes: 25,
+                    tagNames: ["仕事"],
+                    colorHex: "#0091FF"
+                ),
+                density: .hub
+            )
+            MarsTicketView(
+                content: MarsTicketContent(
+                    title: "買い物",
+                    minutes: 5,
+                    tagNames: ["生活"],
+                    colorHex: "#30A46C"
+                ),
+                density: .hub
+            )
+            MarsTicketView(
+                content: MarsTicketContent(title: "無題の掃き出し", minutes: 20),
+                density: .hub
+            )
+        }
         .padding(.horizontal, MarsTicketSpec.HubStack.horizontalInset)
     }
 }

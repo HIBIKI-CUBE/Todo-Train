@@ -31,13 +31,16 @@ extension SessionManager {
             if let running = fetchRunningSession() {
                 activeSession = running
             } else {
-                phase = .idle
-                liveActivityManager.end()
-                refreshIdleCabin(now: now)
-                return
+            phase = .idle
+            liveActivityManager.end()
+            refreshIdleCabin(now: now)
+            applyTimetableEffects(now: now)
+            return
             }
             return reconcile(now: now)
         }
+
+        applyTimetableEffects(now: now)
 
         if session.isPaused {
             phase = .paused
