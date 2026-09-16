@@ -252,6 +252,37 @@ struct BoardingForecastTests {
         #expect(refined.predictedArrival == now.addingTimeInterval(40 * 60))
     }
 
+    @Test func showsPredictedClock_onlyWhenMinutesDifferFromScheduled() {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let none = BoardingForecast.Snapshot(
+            scheduledArrival: now.addingTimeInterval(30 * 60),
+            scheduledMinutes: 30,
+            predictedArrival: nil,
+            predictedMinutes: nil,
+            sampleCount: 0
+        )
+        #expect(none.showsPredictedClock == false)
+
+        let same = BoardingForecast.Snapshot(
+            scheduledArrival: now.addingTimeInterval(30 * 60),
+            scheduledMinutes: 30,
+            predictedArrival: now.addingTimeInterval(30 * 60),
+            predictedMinutes: 30,
+            sampleCount: 3
+        )
+        #expect(same.hasPrediction)
+        #expect(same.showsPredictedClock == false)
+
+        let different = same.withPredictedMinutes(38, now: now)
+        #expect(different.hasPrediction)
+        #expect(different.showsPredictedClock)
+        #expect(different.predictedMinutes == 38)
+
+        let aligned = different.withPredictedMinutes(30, now: now)
+        #expect(aligned.hasPrediction)
+        #expect(aligned.showsPredictedClock == false)
+    }
+
     private func arrived(
         _ context: ModelContext,
         ticket: Ticket,
