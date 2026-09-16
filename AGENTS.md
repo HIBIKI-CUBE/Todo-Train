@@ -16,6 +16,7 @@
 - 同期のなぜ → [docs/13-sync-mac-companion.md](docs/13-sync-mac-companion.md)
 - Mac の役割 → [docs/14-mac-companion-ux.md](docs/14-mac-companion-ux.md)
 - 実機でしか閉じない確認 → [docs/16-wakeup-checklist.md](docs/16-wakeup-checklist.md)
+- カレンダーの体験を直す → [docs/17-calendar-experience.md](docs/17-calendar-experience.md)（契約は [02](docs/02-requirements.md) / [12](docs/12-ui-design.md)）
 
 ## 作業時の原則
 
