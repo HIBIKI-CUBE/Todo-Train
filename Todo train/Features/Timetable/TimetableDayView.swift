@@ -2,7 +2,7 @@
 //  TimetableDayView.swift
 //  Todo train
 //
-//  今日の運転図表. 載せる = if-then. 空きは折らない. 毎日開けとは言わない.
+//  今日の運転図表. 着発 = if-then. 空きは折らない. 毎日開けとは言わない.
 //
 
 import SwiftUI
@@ -17,10 +17,9 @@ struct TimetableDayView: View {
     @Query(sort: \WorkSession.startedAt) private var sessions: [WorkSession]
 
     @State private var didScrollToNow = false
-    @State private var adoptTarget: CalendarOccurrence?
-    @State private var unadoptID: UUID?
     @State private var showManual = false
     @State private var availableCalendars: [CalendarSource] = []
+    @State private var togglePulse = 0
 
     private var day: Date {
         calendar.startOfDay(for: sessionManager.clock.now)
@@ -55,19 +54,10 @@ struct TimetableDayView: View {
                 .padding(.horizontal, TrainTheme.Space.lg)
                 .padding(.vertical, TrainTheme.Space.sm)
         }
+        .sensoryFeedback(.selection, trigger: togglePulse)
         .task {
             await sessionManager.refreshCalendarBoard()
             availableCalendars = sessionManager.calendarBoard.availableCalendars()
-        }
-        .sheet(item: $adoptTarget) { occurrence in
-            TimetableAdoptSheet(occurrence: occurrence) { scope in
-                sessionManager.adoptOccurrence(occurrence, scope: scope)
-            }
-        }
-        .sheet(item: unadoptSheet) { target in
-            TimetableUnadoptSheet(block: target.block) { scope in
-                sessionManager.unadopt(blockID: target.block.id, scope: scope)
-            }
         }
         .sheet(isPresented: $showManual) {
             TimetableManualSheet(day: day) { title, start, end in
@@ -88,9 +78,6 @@ struct TimetableDayView: View {
 
     private var diagramChrome: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(TimetableCopy.diagramLead)
-                .font(.footnote)
-                .foregroundStyle(.secondary)
             HStack(spacing: TrainTheme.Space.md) {
                 legendDot(opacity: 0.35, label: TimetableCopy.legendNotice)
                 legendDot(opacity: 0.9, label: TimetableCopy.legendAdopted)
@@ -157,22 +144,17 @@ struct TimetableDayView: View {
         )
     }
 
-    private var unadoptSheet: Binding<UnadoptTarget?> {
-        Binding(
-            get: {
-                guard let unadoptID,
-                      let block = storedBlocks.first(where: { $0.id == unadoptID }) else { return nil }
-                return UnadoptTarget(id: block.id, block: block)
-            },
-            set: { unadoptID = $0?.id }
-        )
-    }
-
     private func canvas(now: Date) -> some View {
         let layout = SessionTimeline.calendarDayLayout(on: day, calendar: calendar)
         let rides = SessionTimeline.rides(
             from: sessions.filter { calendar.isDate($0.startedAt, inSameDayAs: day) },
             openEndedAt: now
+        )
+        let events = diagramEvents(layout: layout)
+        let placements = TimetableStripLayout.placements(
+            for: events.map {
+                TimetableStripLayout.Interval(id: $0.id, startsAt: $0.startsAt, endsAt: $0.endsAt)
+            }
         )
         return ScrollViewReader { proxy in
             ScrollView {
@@ -182,16 +164,12 @@ struct TimetableDayView: View {
                         HourGridCanvas(layout: layout, density: .day)
                             .allowsHitTesting(false)
 
-                        ForEach(noticeItems(layout: layout)) { item in
-                            stripButton(item.strip, layout: layout) {
-                                adoptTarget = item.occurrence
-                            }
-                        }
-
-                        ForEach(adoptedStrips()) { strip in
-                            stripButton(strip, layout: layout) {
-                                unadoptID = strip.id
-                            }
+                        ForEach(events) { event in
+                            stripButton(
+                                event,
+                                layout: layout,
+                                placement: placements[event.id] ?? .init(lane: 0, laneCount: 1)
+                            )
                         }
 
                         rideOverlay(rides: rides, layout: layout)
@@ -211,20 +189,18 @@ struct TimetableDayView: View {
         }
     }
 
-    private func adoptedStrips() -> [DayClockStrip] {
-        storedBlocks.filter(\.isActive).map { block in
-            DayClockStrip(
-                id: block.id,
+    private func diagramEvents(layout: DayClockLayout) -> [DiagramEvent] {
+        let adopted = storedBlocks.filter(\.isActive).compactMap { block -> DiagramEvent? in
+            guard block.startsAt < layout.end, block.endsAt > layout.start else { return nil }
+            return DiagramEvent(
+                id: block.id.uuidString,
+                source: .adopted(block),
                 title: block.title,
                 startsAt: block.startsAt,
-                endsAt: block.endsAt,
-                style: .adopted
+                endsAt: block.endsAt
             )
         }
-    }
-
-    private func noticeItems(layout: DayClockLayout) -> [NoticeItem] {
-        sessionManager.noticeOccurrences.compactMap { occurrence in
+        let notices = sessionManager.noticeOccurrences.compactMap { occurrence -> DiagramEvent? in
             guard occurrence.startsAt < layout.end, occurrence.endsAt > layout.start else { return nil }
             if storedBlocks.contains(where: {
                 $0.isActive && $0.calendarEventIdentifier == occurrence.eventIdentifier
@@ -232,58 +208,102 @@ struct TimetableDayView: View {
             }) {
                 return nil
             }
-            return NoticeItem(
+            return DiagramEvent(
                 id: occurrence.id,
-                occurrence: occurrence,
-                strip: DayClockStrip(
-                    id: UUID(),
-                    title: occurrence.title,
-                    startsAt: occurrence.startsAt,
-                    endsAt: occurrence.endsAt,
-                    style: .notice
-                )
+                source: .notice(occurrence),
+                title: occurrence.title,
+                startsAt: occurrence.startsAt,
+                endsAt: occurrence.endsAt
             )
+        }
+        return (adopted + notices).sorted {
+            if $0.startsAt != $1.startsAt { return $0.startsAt < $1.startsAt }
+            return $0.id < $1.id
         }
     }
 
-    private func stripButton(_ strip: DayClockStrip, layout: DayClockLayout, action: @escaping () -> Void) -> some View {
-        let y = CGFloat(layout.y(for: max(strip.startsAt, layout.start)))
+    private func stripButton(
+        _ event: DiagramEvent,
+        layout: DayClockLayout,
+        placement: TimetableStripLayout.Placement
+    ) -> some View {
+        let y = CGFloat(layout.y(for: max(event.startsAt, layout.start)))
         let height = max(
-            CGFloat(layout.height(from: max(strip.startsAt, layout.start), to: min(strip.endsAt, layout.end))),
-            22
+            CGFloat(layout.height(from: max(event.startsAt, layout.start), to: min(event.endsAt, layout.end))),
+            28
         )
-        return Button(action: action) {
-            HStack(spacing: 6) {
-                Capsule()
-                    .fill(TrainTheme.rail.opacity(strip.style == .adopted ? 0.9 : 0.35))
-                    .frame(width: 4)
-                    .padding(.vertical, 4)
-                    .padding(.leading, 6)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(strip.title)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
-                    Text(timeRange(strip.startsAt, strip.endsAt))
-                        .font(.caption2.monospacedDigit())
-                        .foregroundStyle(.secondary)
+        return HStack(spacing: 4) {
+            ForEach(0..<placement.laneCount, id: \.self) { lane in
+                Group {
+                    if lane == placement.lane {
+                        Button {
+                            toggle(event)
+                        } label: {
+                            stripLabel(event, height: height)
+                        }
+                        .buttonStyle(StripToggleStyle())
+                        .modifier(SeriesAdoptionMenu(event: event) { scope in
+                            toggle(event, scope: scope)
+                        })
+                        .accessibilityLabel("\(event.isAdopted ? TimetableCopy.board : TimetableCopy.notice) \(event.title)")
+                        .accessibilityValue(event.isAdopted ? TimetableCopy.board : TimetableCopy.notice)
+                        .accessibilityHint(event.isAdopted ? TimetableCopy.unadoptThisTime : TimetableCopy.adoptThisTime)
+                        .accessibilityAddTraits(event.isAdopted ? .isSelected : AccessibilityTraits())
+                    } else {
+                        Color.clear
+                            .allowsHitTesting(false)
+                    }
                 }
-                Spacer(minLength: 0)
-                Text(strip.style == .adopted ? TimetableCopy.unadopt : TimetableCopy.adopt)
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(strip.style == .adopted ? .secondary : TrainTheme.rail)
-                    .padding(.trailing, 8)
-            }
-            .frame(maxWidth: .infinity, minHeight: height, maxHeight: height, alignment: .topLeading)
-            .background {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(TrainTheme.rail.opacity(strip.style == .adopted ? 0.28 : 0.10))
+                .frame(maxWidth: .infinity)
             }
         }
-        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity, minHeight: height, maxHeight: height, alignment: .topLeading)
         .padding(.top, y)
-        .accessibilityLabel("\(strip.style == .adopted ? TimetableCopy.board : TimetableCopy.notice) \(strip.title)")
-        .accessibilityHint(strip.style == .adopted ? TimetableCopy.unadopt : TimetableCopy.adopt)
+    }
+
+    private func stripLabel(_ event: DiagramEvent, height: CGFloat) -> some View {
+        HStack(spacing: 6) {
+            Rectangle()
+                .fill(TrainTheme.rail.opacity(event.isAdopted ? 0.9 : 0.35))
+                .frame(width: 4)
+                .padding(.vertical, 4)
+                .padding(.leading, 6)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(event.title)
+                    .font(.caption.weight(.semibold))
+                    .tracking(StationSignMetrics.nameTracking(event.title, compact: true))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                Text(timeRange(event.startsAt, event.endsAt))
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 0)
+            Image(systemName: event.isAdopted ? "checkmark.circle.fill" : "circle")
+                .font(.body.weight(.semibold))
+                .foregroundStyle(event.isAdopted ? TrainTheme.rail : TrainTheme.rail.opacity(0.55))
+                .padding(.trailing, 8)
+                .accessibilityHidden(true)
+        }
+        .frame(maxWidth: .infinity, minHeight: height, maxHeight: height, alignment: .topLeading)
+        .background {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(TrainTheme.rail.opacity(event.isAdopted ? 0.28 : 0.10))
+        }
+        .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    private func toggle(_ event: DiagramEvent, scope: TimetableAdoptionScope = .occurrence) {
+        withAnimation(.snappy) {
+            switch event.source {
+            case .notice(let occurrence):
+                sessionManager.adoptOccurrence(occurrence, scope: scope)
+            case .adopted(let block):
+                sessionManager.unadopt(blockID: block.id, scope: scope)
+            }
+        }
+        togglePulse += 1
     }
 
     private func rideOverlay(rides: [TimelineRide], layout: DayClockLayout) -> some View {
@@ -333,95 +353,57 @@ struct TimetableDayView: View {
     }()
 }
 
-private struct NoticeItem: Identifiable {
+private struct DiagramEvent: Identifiable {
+    enum Source {
+        case notice(CalendarOccurrence)
+        case adopted(TimetableBlock)
+    }
+
     var id: String
-    var occurrence: CalendarOccurrence
-    var strip: DayClockStrip
-}
+    var source: Source
+    var title: String
+    var startsAt: Date
+    var endsAt: Date
 
-private struct UnadoptTarget: Identifiable {
-    var id: UUID
-    var block: TimetableBlock
-}
-
-private struct TimetableAdoptSheet: View {
-    let occurrence: CalendarOccurrence
-    let onAdopt: (TimetableAdoptionScope) -> Void
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationStack {
-            List {
-                Section {
-                    Text(occurrence.title)
-                    Text(range)
-                        .font(.body.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                }
-                Section {
-                    Button(TimetableCopy.thisTime) {
-                        onAdopt(.occurrence)
-                        dismiss()
-                    }
-                    if occurrence.recurrenceIdentifier != nil {
-                        Button(TimetableCopy.ongoing) {
-                            onAdopt(.series)
-                            dismiss()
-                        }
-                    }
-                } footer: {
-                    Text("載せるは、この枠なら停車するという決めです。発車は止めません。")
-                }
-            }
-            .navigationTitle(TimetableCopy.adopt)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("閉じる") { dismiss() }
-                }
-            }
-        }
-        .presentationDetents([.medium])
+    var isAdopted: Bool {
+        if case .adopted = source { return true }
+        return false
     }
 
-    private var range: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm"
-        return "\(formatter.string(from: occurrence.startsAt))–\(formatter.string(from: occurrence.endsAt))"
+    var isRecurring: Bool {
+        switch source {
+        case .notice(let occurrence):
+            return occurrence.recurrenceIdentifier != nil
+        case .adopted(let block):
+            return block.calendarRecurrenceIdentifier != nil
+        }
     }
 }
 
-private struct TimetableUnadoptSheet: View {
-    let block: TimetableBlock
-    let onUnadopt: (TimetableAdoptionScope) -> Void
-    @Environment(\.dismiss) private var dismiss
+private struct SeriesAdoptionMenu: ViewModifier {
+    let event: DiagramEvent
+    let onToggle: (TimetableAdoptionScope) -> Void
 
-    var body: some View {
-        NavigationStack {
-            List {
-                Section {
-                    Text(block.title)
-                }
-                Section {
-                    Button(TimetableCopy.thisTime) {
-                        onUnadopt(.occurrence)
-                        dismiss()
-                    }
-                    if block.calendarRecurrenceIdentifier != nil {
-                        Button(TimetableCopy.ongoing) {
-                            onUnadopt(.series)
-                            dismiss()
-                        }
-                    }
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if event.isRecurring {
+            content.contextMenu {
+                Button(event.isAdopted ? TimetableCopy.unadoptOngoing : TimetableCopy.adoptOngoing) {
+                    onToggle(.series)
                 }
             }
-            .navigationTitle(TimetableCopy.unadopt)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("閉じる") { dismiss() }
-                }
-            }
+        } else {
+            content
         }
-        .presentationDetents([.medium])
+    }
+}
+
+private struct StripToggleStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .opacity(configuration.isPressed ? 0.78 : 1)
+            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
     }
 }
 
@@ -454,7 +436,7 @@ private struct TimetableManualSheet: View {
                     Button("閉じる") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("載せる") {
+                    Button(TimetableCopy.adopt) {
                         onSave(title, startsAt, endsAt)
                         dismiss()
                     }

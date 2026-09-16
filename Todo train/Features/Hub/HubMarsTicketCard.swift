@@ -8,6 +8,7 @@
 //
 
 import SwiftUI
+import SwiftData
 
 struct HubMarsTicketCard: View {
     let ticket: Ticket
@@ -24,6 +25,7 @@ struct HubMarsTicketCard: View {
     var onDeckSwipeEnded: (TicketStackLayout.DeckSwipeRelease) -> Void = { _ in }
 
     @Environment(\.layoutDirection) private var layoutDirection
+    @Environment(SessionManager.self) private var sessionManager
     @State private var dragTranslation: CGSize = .zero
     @State private var deckX: CGFloat = 0
 
@@ -61,7 +63,13 @@ struct HubMarsTicketCard: View {
             if allowsDeckSwipe, !isLifted {
                 deckActionBackdrop
             }
-            MarsTicketView(content: content, density: .hub)
+            TimelineView(.periodic(from: .now, by: 15)) { timeline in
+                let fit = sessionManager.timetableFit(at: timeline.date)
+                MarsTicketView(
+                    content: content,
+                    density: .hub,
+                    occupancyMarks: TimetableFit.occupancyMarks(fit: fit, now: timeline.date)
+                )
                 .contentShape(Rectangle())
                 .onTapGesture(perform: handleTap)
                 .gesture(isLifted && followsFinger ? holdDrag : nil)
@@ -80,6 +88,7 @@ struct HubMarsTicketCard: View {
                     radius: isHeldVisually || isLifted ? 16 : 10,
                     y: isHeldVisually || isLifted ? 8 : 5
                 )
+            }
         }
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isButton)
@@ -199,6 +208,7 @@ struct HubMarsTicketCard: View {
 }
 
 #Preview {
+    let (container, manager) = HubPreviewSeed.make(scenario: .inService)
     let ticket = Ticket(title: "週次レビュー", estimatedSeconds: 1_500, sortOrder: 0)
     return HubMarsTicketCard(
         ticket: ticket,
@@ -208,4 +218,6 @@ struct HubMarsTicketCard: View {
     )
     .padding()
     .background(Color(uiColor: .systemGroupedBackground))
+    .environment(manager)
+    .modelContainer(container)
 }

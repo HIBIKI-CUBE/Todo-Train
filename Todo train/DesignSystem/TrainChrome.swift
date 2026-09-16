@@ -52,6 +52,9 @@ enum FocusPanel {
 struct FocusProgressBar: View {
     let progress: Double
     let phase: FocusTimerPhase
+    var occupancy: TimetableProgressOccupancy = .empty
+    var pinch: Bool = false
+    var overrun: Bool = false
 
     private var clampedProgress: Double {
         min(max(progress, 0), 1)
@@ -71,12 +74,38 @@ struct FocusProgressBar: View {
                         .frame(width: 4)
                         .frame(maxWidth: .infinity, alignment: .trailing)
                 }
+                occupancyMarks(width: proxy.size.width, height: proxy.size.height)
             }
         }
         .frame(height: 10)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("進捗")
         .accessibilityValue("\(Int(clampedProgress * 100))パーセント")
+    }
+
+    @ViewBuilder
+    private func occupancyMarks(width: CGFloat, height: CGFloat) -> some View {
+        let heat = pinch || overrun
+        let band = heat ? LEDPhosphor.heat.opacity(overrun ? 0.5 : 0.42) : Color.white.opacity(0.28)
+        let tick = heat ? LEDPhosphor.heat.opacity(0.95) : Color.white.opacity(0.92)
+        if overrun, let start = occupancy.mark ?? occupancy.spanStart ?? occupancy.spanEnd {
+            Rectangle()
+                .fill(LEDPhosphor.heat.opacity(0.22))
+                .frame(width: max(4, width * (1 - start)), height: height)
+                .offset(x: width * start)
+        }
+        if let start = occupancy.spanStart, let end = occupancy.spanEnd, end > start {
+            Capsule()
+                .fill(band)
+                .frame(width: max(6, width * (end - start)), height: height)
+                .offset(x: width * start)
+        }
+        if let mark = occupancy.mark {
+            Capsule()
+                .fill(tick)
+                .frame(width: 5, height: height)
+                .offset(x: width * mark - 2.5)
+        }
     }
 }
 
@@ -171,5 +200,32 @@ struct FocusControlCellStyle: ButtonStyle {
             .background(fill.opacity(configuration.isPressed ? 0.78 : 1))
             .contentShape(Rectangle())
             .animation(TrainTheme.Motion.spring, value: configuration.isPressed)
+    }
+}
+
+/// 駅名標: short CJK titles open out. Not a JY/Metro code.
+nonisolated enum StationSignMetrics {
+    static func nameTracking(_ title: String, compact: Bool) -> CGFloat {
+        let trimmed = title.filter { !$0.isWhitespace && $0 != "　" }
+        guard (2...4).contains(trimmed.count),
+              trimmed.unicodeScalars.allSatisfy(isJapaneseLetter)
+        else { return 0 }
+        switch (trimmed.count, compact) {
+        case (2, true): return 5
+        case (2, false): return 11
+        case (3, true): return 2
+        case (3, false): return 6
+        case (_, true): return 1
+        default: return 3
+        }
+    }
+
+    private static func isJapaneseLetter(_ scalar: Unicode.Scalar) -> Bool {
+        switch scalar.value {
+        case 0x3040...0x30FF, 0x3400...0x9FFF, 0xF900...0xFAFF:
+            true
+        default:
+            false
+        }
     }
 }

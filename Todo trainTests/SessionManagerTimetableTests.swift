@@ -11,6 +11,11 @@ import Testing
 @MainActor
 struct SessionManagerTimetableTests {
     private let start = Date(timeIntervalSince1970: 1_700_000_000)
+    private let utcCalendar: Calendar = {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        return calendar
+    }()
 
     private func insertBlock(
         _ context: ModelContext,
@@ -69,6 +74,9 @@ struct SessionManagerTimetableTests {
         #expect(manager.activeSession?.elapsedSeconds(at: clock.now) == 60)
         #expect(manager.timetableQuietMessage == TimetableCopy.quiet)
         #expect(armed[0].resolvedAt != nil)
+        #expect(manager.activeSession?.timetableHeld == true)
+        #expect(manager.pausedCountTowardLimit == 0)
+        #expect(manager.pausedTicketCount == 1)
     }
 
     @Test func backgroundRecover_pausesAtBoundary() throws {
@@ -181,6 +189,43 @@ struct SessionManagerTimetableTests {
         #expect(manager.activeSession?.awayDueAt == nil)
     }
 
+    @Test func away_suppressedDuringUnadoptedNotice() async throws {
+        let board = InMemoryCalendarBoard()
+        board.events = [
+            calendarOccurrence(id: "n", calendar: "work", title: "定例", startOffset: -60)
+        ]
+        let (manager, context, _, _) = try SessionManagerFixtures.makeHarness(
+            now: start,
+            cabinAnnouncementsEnabled: true,
+            calendarBoard: board
+        )
+        try manager.startService()
+        await manager.refreshCalendarBoard()
+        let ticket = try SessionManagerFixtures.makeTicket(context, seconds: 1800)
+        try manager.board(ticket: ticket)
+        manager.beginAwayWatch()
+        #expect(manager.activeSession?.awayDueAt == nil)
+        #expect(manager.timetableFit().shouldSuppressAway)
+    }
+
+    @Test func away_notSuppressedForUpcomingUnadoptedNotice() async throws {
+        let board = InMemoryCalendarBoard()
+        board.events = [
+            calendarOccurrence(id: "n", calendar: "work", title: "定例", startOffset: 600)
+        ]
+        let (manager, context, _, _) = try SessionManagerFixtures.makeHarness(
+            now: start,
+            cabinAnnouncementsEnabled: true,
+            calendarBoard: board
+        )
+        try manager.startService()
+        await manager.refreshCalendarBoard()
+        let ticket = try SessionManagerFixtures.makeTicket(context, seconds: 1800)
+        try manager.board(ticket: ticket)
+        manager.beginAwayWatch()
+        #expect(manager.activeSession?.awayDueAt != nil)
+    }
+
     @Test func resume_clearsQuietMessage() throws {
         let (manager, context, clock, _) = try SessionManagerFixtures.makeHarness(now: start)
         try manager.startService()
@@ -191,8 +236,109 @@ struct SessionManagerTimetableTests {
         manager.reconcile()
         #expect(manager.timetableQuietMessage == TimetableCopy.quiet)
 
-        try manager.resume()
         #expect(manager.timetableQuietMessage == nil)
+        #expect(manager.activeSession?.timetableHeld == false)
+    }
+
+    @Test func resumeWithoutUnadopt_rearmsAndPausesAgain() throws {
+        let (manager, context, clock, _) = try SessionManagerFixtures.makeHarness(now: start)
+        try manager.startService()
+        _ = insertBlock(context, startOffset: 0, duration: 1800)
+        let ticket = try SessionManagerFixtures.makeTicket(context, seconds: 1800)
+        try manager.board(ticket: ticket)
+        clock.advance(by: 61)
+        manager.reconcile()
+        #expect(manager.phase == .paused)
+
+        try manager.resume()
+        #expect(manager.phase == .running)
+        let armed = try context.fetch(FetchDescriptor<TimetableGuard>()).filter(\.isOpen)
+        #expect(armed.count == 1)
+
+        clock.advance(by: 61)
+        manager.reconcile()
+        #expect(manager.phase == .paused)
+    }
+
+    @Test func unadoptCurrent_whileRunning_letsRideContinue() throws {
+        let (manager, context, clock, _) = try SessionManagerFixtures.makeHarness(now: start)
+        try manager.startService()
+        _ = insertBlock(context, startOffset: 0)
+        let ticket = try SessionManagerFixtures.makeTicket(context, seconds: 1800)
+        try manager.board(ticket: ticket)
+        #expect(try context.fetch(FetchDescriptor<TimetableGuard>()).filter(\.isOpen).count == 1)
+
+        manager.unadoptCurrentOccurrence()
+        #expect(manager.fetchActiveTimetableBlocks().isEmpty)
+        #expect(try context.fetch(FetchDescriptor<TimetableGuard>()).filter(\.isOpen).isEmpty)
+
+        clock.advance(by: 61)
+        manager.reconcile()
+        #expect(manager.phase == .running)
+        #expect(manager.timetableQuietMessage == nil)
+    }
+
+    @Test func unadoptCurrent_afterAtsPause_resumeDoesNotRearm() throws {
+        let (manager, context, clock, _) = try SessionManagerFixtures.makeHarness(now: start)
+        try manager.startService()
+        _ = insertBlock(context, startOffset: 0, duration: 1800)
+        let ticket = try SessionManagerFixtures.makeTicket(context, seconds: 1800)
+        try manager.board(ticket: ticket)
+        clock.advance(by: 61)
+        manager.reconcile()
+        #expect(manager.phase == .paused)
+        #expect(manager.timetableFit().currentBlock != nil)
+
+        manager.unadoptCurrentOccurrence()
+        #expect(manager.fetchActiveTimetableBlocks().isEmpty)
+
+        try manager.resume()
+        clock.advance(by: 61)
+        manager.reconcile()
+        #expect(manager.phase == .running)
+        #expect(try context.fetch(FetchDescriptor<TimetableGuard>()).filter(\.isOpen).isEmpty)
+    }
+
+    @Test func adoptCurrentNoticeThisTime_insertsOccurrence() async throws {
+        let board = InMemoryCalendarBoard()
+        board.events = [
+            calendarOccurrence(id: "n", calendar: "work", title: "定例", startOffset: -60)
+        ]
+        let (manager, _, _, _) = try SessionManagerFixtures.makeHarness(
+            now: start,
+            calendarBoard: board
+        )
+        try manager.startService()
+        await manager.refreshCalendarBoard()
+        #expect(manager.currentUnadoptedNotice()?.title == "定例")
+        #expect(manager.fetchActiveTimetableBlocks().isEmpty)
+
+        manager.adoptCurrentNoticeThisTime()
+        #expect(manager.fetchActiveTimetableBlocks().map(\.title) == ["定例"])
+        #expect(manager.currentUnadoptedNotice() == nil)
+        #expect(manager.timetableFit().currentBlock?.title == "定例")
+        #expect(manager.timetableFit().currentOccupancy?.title == "定例")
+        #expect(manager.timetableFit().currentOccupancy?.isAdopted == true)
+    }
+
+    @Test func boardDuringNotice_runsWithoutArming() async throws {
+        let board = InMemoryCalendarBoard()
+        board.events = [
+            calendarOccurrence(id: "n", calendar: "work", title: "定例", startOffset: -60)
+        ]
+        let (manager, context, _, _) = try SessionManagerFixtures.makeHarness(
+            now: start,
+            calendarBoard: board
+        )
+        try manager.startService()
+        await manager.refreshCalendarBoard()
+        let ticket = try SessionManagerFixtures.makeTicket(context, seconds: 1800)
+        try manager.board(ticket: ticket)
+        #expect(manager.phase == .running)
+        #expect(try context.fetch(FetchDescriptor<TimetableGuard>()).isEmpty)
+        #expect(manager.timetableFit().currentOccupancy?.title == "定例")
+        #expect(manager.timetableFit().currentOccupancy?.isAdopted == false)
+        #expect(TimetableFit.dutyLine(fit: manager.timetableFit(), now: start, calendar: utcCalendar) == "掲示 22:42 29分 定例")
     }
 
     @Test func refresh_filtersNoticesBySelectedCalendars() async throws {
@@ -231,33 +377,68 @@ struct SessionManagerTimetableTests {
         #expect(manager.noticeOccurrences.isEmpty)
     }
 
-    @Test func boardingConflict_adoptedNowAndNoticeNow() async throws {
+    @Test func atsHold_doesNotConsumePauseLimit() throws {
+        let (manager, context, clock, _) = try SessionManagerFixtures.makeHarness(now: start)
+        try manager.startService()
+        _ = insertBlock(context, startOffset: 0, duration: 3600)
+        let a = try SessionManagerFixtures.makeTicket(context, title: "A", seconds: 1800)
+        let b = try SessionManagerFixtures.makeTicket(context, title: "B", seconds: 1800)
+        let c = try SessionManagerFixtures.makeTicket(context, title: "C", seconds: 1800)
+
+        try manager.board(ticket: a)
+        clock.advance(by: 61)
+        manager.reconcile()
+        #expect(manager.activeSession?.timetableHeld == true)
+        #expect(manager.pausedCountTowardLimit == 0)
+
+        try manager.board(ticket: b)
+        #expect(manager.phase == .running)
+        clock.advance(by: 61)
+        manager.reconcile()
+        #expect(manager.pausedTicketCount == 2)
+        #expect(manager.pausedCountTowardLimit == 0)
+
+        try manager.board(ticket: c)
+        #expect(manager.phase == .running)
+        #expect(manager.activeSession?.ticket?.title == "C")
+    }
+
+    @Test func occupancyEnd_clearsQuietAndHold() throws {
+        let (manager, context, clock, _) = try SessionManagerFixtures.makeHarness(now: start)
+        try manager.startService()
+        _ = insertBlock(context, startOffset: 0, duration: 180)
+        let ticket = try SessionManagerFixtures.makeTicket(context, seconds: 1800)
+        try manager.board(ticket: ticket)
+        clock.advance(by: 61)
+        manager.reconcile()
+        #expect(manager.timetableQuietMessage == TimetableCopy.quiet)
+        #expect(manager.activeSession?.timetableHeld == true)
+
+        clock.advance(by: 130)
+        manager.reconcile()
+        #expect(manager.phase == .paused)
+        #expect(manager.timetableQuietMessage == nil)
+        #expect(manager.activeSession?.timetableHeld == false)
+        #expect(manager.pausedCountTowardLimit == 1)
+        #expect(manager.timetableFit().currentOccupancy == nil)
+    }
+
+    @Test func fit_upcomingNoticeIsNextOccupancy() async throws {
         let board = InMemoryCalendarBoard()
         board.events = [
-            calendarOccurrence(id: "n", calendar: "work", title: "定例", startOffset: -60)
+            calendarOccurrence(id: "n", calendar: "work", title: "定例", startOffset: 600)
         ]
-        let (manager, context, _, _) = try SessionManagerFixtures.makeHarness(
+        let (manager, _, _, _) = try SessionManagerFixtures.makeHarness(
             now: start,
             calendarBoard: board
         )
         try manager.startService()
-        let ticket = try SessionManagerFixtures.makeTicket(context, seconds: 1800)
-
         await manager.refreshCalendarBoard()
-        #expect(manager.boardingConflict(for: ticket) == .noticeNow(title: "定例"))
-
-        _ = insertBlock(context, title: "週次", startOffset: -300)
-        #expect(manager.boardingConflict(for: ticket) == .adoptedNow(title: "週次"))
-    }
-
-    @Test func boardingConflict_adoptedSoonOnlyInsideEstimate() throws {
-        let (manager, context, _, _) = try SessionManagerFixtures.makeHarness(now: start)
-        try manager.startService()
-        _ = insertBlock(context, title: "1on1", startOffset: 600)
-        let longTicket = try SessionManagerFixtures.makeTicket(context, title: "long", seconds: 1800)
-        let shortTicket = try SessionManagerFixtures.makeTicket(context, title: "short", seconds: 300)
-        #expect(manager.boardingConflict(for: longTicket) == .adoptedSoon(title: "1on1"))
-        #expect(manager.boardingConflict(for: shortTicket) == nil)
+        let fit = manager.timetableFit()
+        #expect(fit.currentOccupancy == nil)
+        #expect(fit.nextOccupancy?.title == "定例")
+        #expect(fit.nextOccupancy?.isAdopted == false)
+        #expect(TimetableFit.occupancyLines(fit: fit, now: start, calendar: utcCalendar) == ["次 22:23 10分 定例"])
     }
 
     private func calendarOccurrence(

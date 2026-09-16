@@ -93,6 +93,8 @@ struct MarsTicketView: View {
     var density: MarsTicketSpec.Density = .celebration
     /// 0…1 — title row reveal for thermal scan (1 = fully printed).
     var titleReveal: CGFloat = 1
+    /// Hub peek/deck only. Printed occupancy on the 60-minute scale.
+    var occupancyMarks: [TimetableOccupancyMark] = []
 
     private var pad: CGFloat {
         density == .hub ? MarsTicketSpec.hubContentPad : MarsTicketSpec.contentPad
@@ -186,13 +188,66 @@ struct MarsTicketView: View {
 
     private var durationTrack: some View {
         let fill = TicketDurationScale.filled(minutes: content.minutes)
-        return HStack(spacing: MarsTicketSpec.durationTrackGap) {
-            ForEach(0..<TicketDurationScale.cellCount, id: \.self) { index in
-                durationCell(amount: TicketDurationScale.cellFillAmount(index: index, fill: fill))
+        return ZStack(alignment: .leading) {
+            HStack(spacing: MarsTicketSpec.durationTrackGap) {
+                ForEach(0..<TicketDurationScale.cellCount, id: \.self) { index in
+                    durationCell(amount: TicketDurationScale.cellFillAmount(index: index, fill: fill))
+                }
+            }
+            if density == .hub, !occupancyMarks.isEmpty {
+                occupancyPrint(fillMinutes: content.minutes)
             }
         }
         .frame(height: MarsTicketSpec.durationTrackHeight)
         .accessibilityHidden(true)
+    }
+
+    private func occupancyPrint(fillMinutes: Int) -> some View {
+        let fillFraction = TicketDurationScale.unitFraction(minutes: fillMinutes)
+        let ink = MarsTicketSpec.printInk
+        return GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                ForEach(occupancyMarks) { mark in
+                    if mark.isCurrent, mark.span > 0 {
+                        Rectangle()
+                            .fill(ink.opacity(mark.isAdopted ? 0.28 : 0.14))
+                            .frame(width: max(4, geo.size.width * mark.span), height: geo.size.height)
+                            .offset(x: geo.size.width * mark.position)
+                    }
+                    if fillFraction > mark.position {
+                        Rectangle()
+                            .fill(ink.opacity(0.4))
+                            .frame(
+                                width: max(2, geo.size.width * (min(1, fillFraction) - mark.position)),
+                                height: geo.size.height
+                            )
+                            .offset(x: geo.size.width * mark.position)
+                    }
+                    occupancyGate(
+                        at: mark.isCurrent ? mark.position + mark.span : mark.position,
+                        adopted: mark.isAdopted,
+                        width: geo.size.width,
+                        height: geo.size.height,
+                        ink: ink
+                    )
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func occupancyGate(
+        at position: Double,
+        adopted: Bool,
+        width: CGFloat,
+        height: CGFloat,
+        ink: Color
+    ) -> some View {
+        let clamped = min(1, max(0, position))
+        RoundedRectangle(cornerRadius: 0.5, style: .continuous)
+            .fill(ink.opacity(adopted ? 0.95 : 0.48))
+            .frame(width: adopted ? 2.2 : 1.6, height: height + 1)
+            .offset(x: width * clamped - 1, y: -0.5)
     }
 
     private func durationCell(amount: Double) -> some View {

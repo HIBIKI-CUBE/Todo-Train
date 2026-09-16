@@ -32,7 +32,6 @@ struct HubTicketPresentLayer: View {
     let onBoard: () -> Void
     let onDelete: () -> Void
 
-    @Environment(SessionManager.self) private var sessionManager
     @State private var settled = false
     @State private var pose: CGSize?
 
@@ -109,19 +108,6 @@ struct HubTicketPresentLayer: View {
             .opacity(looksSettled ? 1 : 0)
             .allowsHitTesting(false)
 
-            HubTimetablePlate(
-                fit: sessionManager.timetableFit(),
-                noticeNow: sessionManager.currentUnadoptedNotice(),
-                now: sessionManager.clock.now,
-                width: size.width
-            )
-            .offset(
-                y: -(size.height / 2 + MarsTicketSpec.HubStack.departSignGap + signHeight + 22)
-            )
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-            .opacity(looksSettled ? 1 : 0)
-            .allowsHitTesting(false)
-
             if showsBoardingForecastPlate {
                 HubBoardingForecastPlate(
                     ticket: ticket,
@@ -135,6 +121,7 @@ struct HubTicketPresentLayer: View {
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                 .opacity(looksSettled ? 1 : 0)
+                .allowsHitTesting(looksSettled)
             }
         }
         .onAppear {

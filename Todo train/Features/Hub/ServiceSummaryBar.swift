@@ -78,11 +78,18 @@ struct ServiceSummaryBar: View {
                         .lineLimit(1)
                 }
 
-                if let occupancy = occupancyLine {
-                    Text(occupancy)
-                        .font(TrainTheme.TypeScale.meta())
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                TimelineView(.periodic(from: .now, by: 15)) { context in
+                    let fit = sessionManager.timetableFit(at: context.date)
+                    TimetableOccupancyMeter(
+                        rows: TimetableFit.occupancyRows(
+                            fit: fit,
+                            now: context.date,
+                            calendar: sessionManager.calendar
+                        ),
+                        marks: TimetableFit.occupancyMarks(fit: fit, now: context.date),
+                        chrome: .grouped
+                    )
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
 
@@ -92,32 +99,19 @@ struct ServiceSummaryBar: View {
                 Text("停車")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
-                Text("\(sessionManager.pausedTicketCount)/\(sessionManager.pauseLimit)")
+                Text("\(sessionManager.pausedCountTowardLimit)/\(sessionManager.pauseLimit)")
                     .font(
                         usesTightVerticalLayout
                             ? .body.weight(.semibold).monospacedDigit()
                             : .title3.weight(.semibold).monospacedDigit()
                     )
                     .foregroundStyle(
-                        sessionManager.pausedTicketCount >= sessionManager.pauseLimit
+                        sessionManager.pausedCountTowardLimit >= sessionManager.pauseLimit
                             ? TrainTheme.signalAmber
                             : .primary
                     )
             }
         }
-    }
-
-    private var occupancyLine: String? {
-        guard sessionManager.isInService else { return nil }
-        let now = sessionManager.clock.now
-        let fit = sessionManager.timetableFit(at: now)
-        if let current = fit.currentBlock {
-            return TimetableCopy.occupyingLine(title: current.title)
-        }
-        if let next = fit.nextBlock {
-            return TimetableFit.nextBlockLine(title: next.title, startsAt: next.startsAt, now: now)
-        }
-        return nil
     }
 
     private var statusTitle: String {

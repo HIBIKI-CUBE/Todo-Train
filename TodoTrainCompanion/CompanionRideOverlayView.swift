@@ -72,6 +72,8 @@ struct CompanionRideOverlayView: View {
                         .foregroundStyle(.white)
                         .lineLimit(1)
                         .padding(.horizontal, 12)
+                } else if let occupancy = presentation.occupancy {
+                    occupancyStrip(occupancy)
                 } else if let line = presentation.nextBlockLine {
                     Text(line)
                         .font(.system(size: 15, weight: .semibold))
@@ -112,6 +114,31 @@ struct CompanionRideOverlayView: View {
             .accessibilityHidden(true)
     }
 
+    private func occupancyStrip(_ occupancy: RideOccupancyInstrument) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text(occupancy.prefix == "次" ? "次" : "いま")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(.white)
+            Text(occupancy.title)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+            Spacer(minLength: 4)
+            Text(occupancy.clock)
+                .font(.system(size: 14, weight: .semibold).monospacedDigit())
+                .foregroundStyle(.white.opacity(0.88))
+            if let minutes = occupancy.minutes {
+                Text("\(minutes)分")
+                    .font(.system(size: 13, weight: .semibold).monospacedDigit())
+                    .foregroundStyle(.white.opacity(0.88))
+            }
+        }
+        .padding(.horizontal, 12)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(occupancy.spokenLine)
+    }
+
     private var bottomRow: some View {
         ZStack {
             progressRow
@@ -149,13 +176,14 @@ struct CompanionRideOverlayView: View {
                     total: geo.size.width
                 )
             )
-            ZStack {
+            ZStack(alignment: .leading) {
                 Color.black
                 HStack(spacing: 0) {
                     RideOverlayPalette.fill(for: presentation)
                         .frame(width: fillWidth)
                     Spacer(minLength: 0)
                 }
+                occupancyProgressMarks(width: geo.size.width, height: geo.size.height)
                 remainingDigits(RideOverlayPalette.onTrack)
                 remainingDigits(RideOverlayPalette.onFill(for: presentation))
                     .mask {
@@ -168,6 +196,24 @@ struct CompanionRideOverlayView: View {
             .frame(width: geo.size.width, height: geo.size.height)
         }
         .clipped()
+    }
+
+    @ViewBuilder
+    private func occupancyProgressMarks(width: CGFloat, height: CGFloat) -> some View {
+        if let occupancy = presentation.occupancy {
+            if let start = occupancy.spanStart, let end = occupancy.spanEnd, end > start {
+                Capsule()
+                    .fill(Color.white.opacity(0.28))
+                    .frame(width: max(6, width * (end - start)), height: height)
+                    .offset(x: width * start)
+            }
+            if let mark = occupancy.markPosition {
+                Capsule()
+                    .fill(Color.white.opacity(0.92))
+                    .frame(width: 5, height: height)
+                    .offset(x: width * mark - 2.5)
+            }
+        }
     }
 
     private func remainingDigits(_ color: Color) -> some View {
@@ -276,6 +322,29 @@ struct CompanionRideOverlayView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
             .background(Color.black)
+            .overlay {
+                occupancyPeekMarks(height: geo.size.height)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func occupancyPeekMarks(height: CGFloat) -> some View {
+        if let occupancy = presentation.occupancy {
+            ZStack(alignment: .bottom) {
+                if let start = occupancy.spanStart, let end = occupancy.spanEnd, end > start {
+                    Rectangle()
+                        .fill(Color.white.opacity(0.28))
+                        .frame(height: max(4, height * (end - start)))
+                        .padding(.bottom, height * start)
+                }
+                if let mark = occupancy.markPosition {
+                    Capsule()
+                        .fill(Color.white.opacity(0.92))
+                        .frame(height: 5)
+                        .padding(.bottom, max(0, height * mark - 2.5))
+                }
+            }
         }
     }
 

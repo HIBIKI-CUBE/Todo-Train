@@ -251,7 +251,7 @@ final class CompanionSyncRuntime {
         if processedCommandIDs.contains(command.id) { return }
         let decision = RemotePauseEvaluating.evaluate(
             openSessionId: sessionManager.activeSession?.id,
-            pausedCount: sessionManager.pausedTicketCount,
+            pausedCount: sessionManager.pausedCountTowardLimit,
             pauseLimit: sessionManager.pauseLimit,
             isPaused: sessionManager.activeSession?.isPaused == true,
             command: command
@@ -299,7 +299,7 @@ final class CompanionSyncRuntime {
     ) async throws {
         snapRev += 1
         let fit = sessionManager.timetableFit()
-        let visible = fit.visibleBlock
+        let visible = fit.visibleOccupancy
         let pauseAt = sessionManager.activeSession.flatMap { session -> Int? in
             guard session.isOpen, !session.isPaused else { return nil }
             return sessionManager.openTimetableProtectionBoundary(for: session.id)
@@ -315,6 +315,7 @@ final class CompanionSyncRuntime {
             pendingCabin: sessionManager.activeServiceDay?.pendingCabin?.cabin,
             nextBlockTitle: visible?.title,
             nextBlockStartsAt: visible.map { Int($0.startsAt.timeIntervalSince1970) },
+            nextBlockEndsAt: visible.map { Int($0.endsAt.timeIntervalSince1970) },
             timetablePauseAt: pauseAt
         )
         let envelope = try SyncCrypto.sealJSON(

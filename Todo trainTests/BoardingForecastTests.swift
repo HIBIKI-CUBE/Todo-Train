@@ -203,6 +203,7 @@ struct BoardingForecastTests {
     @Test func predictedCopy_marksForecast() {
         #expect(BoardingForecast.predictedCaption(minutes: 38, sampleCount: 5) == "予測 約38分 · 参考5件")
         #expect(BoardingForecast.durationLabel(minutes: 30) == "30分")
+        #expect(BoardingForecast.predictedDurationLabel(minutes: 12) == "約12分")
         #expect(BoardingForecast.scheduledHeadline == "予定の到着")
         #expect(BoardingForecast.predictedHeadline == "予測の到着")
     }

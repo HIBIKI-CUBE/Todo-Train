@@ -20,7 +20,12 @@ extension SessionManager {
         } else {
             budgetEndsAt = nil
         }
-        return TimetableFit.snapshot(blocks: blocks, now: now, budgetEndsAt: budgetEndsAt)
+        return TimetableFit.snapshot(
+            blocks: blocks,
+            notices: unadoptedNoticeBlocks(at: now),
+            now: now,
+            budgetEndsAt: budgetEndsAt
+        )
     }
 
     func applyTimetableEffects(now: Date) {
@@ -63,6 +68,7 @@ extension SessionManager {
         applyTimetableGuardEffect(effect, openGuard: openModel, now: now)
         suppressAwayIfTimetableQuiet(now: now)
         refreshEndBellIfDeadlineChanged(now: now)
+        refreshTimetableHold(now: now)
     }
 
     func refreshCalendarBoard() async {
@@ -72,51 +78,39 @@ extension SessionManager {
         await applyCalendarBoardFetch()
     }
 
-    /// Hub では許可ダイアログを出さない。許可済みなら掲示を温めて発車時の重なりを読めるようにする。
+    /// Hub では許可ダイアログを出さない。許可済みなら掲示を温めて案内板が読めるようにする。
     func refreshCalendarBoardIfAuthorized() async {
         guard calendarBoard.authorizationStatus() == .authorized else { return }
         await applyCalendarBoardFetch()
     }
 
-    func boardingConflict(for ticket: Ticket, at now: Date? = nil) -> TimetableBoardingConflict? {
-        let now = now ?? clock.now
-        let remaining: TimeInterval
-        if let paused = openPausedSessions().first(where: { $0.ticket?.id == ticket.id }) {
-            remaining = max(paused.remainingSeconds(at: now), 0)
-        } else {
-            remaining = TimeInterval(max(ticket.estimatedSeconds, 0))
-        }
-        let rideEnd = now.addingTimeInterval(remaining)
-        let blocks = fetchActiveTimetableBlocks()
-        let adopted = blocks.map {
-            TimetableBoardInterval(title: $0.title, startsAt: $0.startsAt, endsAt: $0.endsAt)
-        }
-        let notices = noticeOccurrences
-            .filter { occurrence in
-                !blocks.contains(where: {
-                    $0.calendarEventIdentifier == occurrence.eventIdentifier
-                        && abs(($0.occurrenceStartKey ?? $0.startsAt.timeIntervalSince1970) - occurrence.occurrenceStartKey) < 0.5
-                })
-            }
-            .map { TimetableBoardInterval(title: $0.title, startsAt: $0.startsAt, endsAt: $0.endsAt) }
-        return TimetableBoardingOverlap.conflict(
-            now: now,
-            rideEnd: rideEnd,
-            adopted: adopted,
-            notices: notices
-        )
-    }
-
     func currentUnadoptedNotice(at now: Date? = nil) -> CalendarOccurrence? {
         let now = now ?? clock.now
+        return unadoptedNotices(at: now).first { occurrence in
+            occurrence.startsAt <= now && now < occurrence.endsAt
+        }
+    }
+
+    private func unadoptedNotices(at now: Date) -> [CalendarOccurrence] {
         let blocks = fetchActiveTimetableBlocks()
-        return noticeOccurrences.first { occurrence in
-            occurrence.startsAt <= now
+        return noticeOccurrences.filter { occurrence in
+            occurrence.startsAt < occurrence.endsAt
                 && now < occurrence.endsAt
                 && !blocks.contains(where: {
                     $0.isActive && $0.calendarEventIdentifier == occurrence.eventIdentifier
                         && abs(($0.occurrenceStartKey ?? $0.startsAt.timeIntervalSince1970) - occurrence.occurrenceStartKey) < 0.5
                 })
+        }
+    }
+
+    private func unadoptedNoticeBlocks(at now: Date) -> [TimetableFitBlock] {
+        unadoptedNotices(at: now).map {
+            TimetableFitBlock(
+                id: TimetableFit.noticeBlockID($0.id),
+                title: $0.title,
+                startsAt: $0.startsAt,
+                endsAt: $0.endsAt
+            )
         }
     }
 
@@ -130,7 +124,7 @@ extension SessionManager {
         } catch {
             return
         }
-        // Membership sees every calendar so hiding a calendar does not 外す.
+        // Membership sees every calendar so hiding a calendar does not 通過.
         persist(TimetableAdoption.refreshCalendarMembership(
             occurrences: fetched,
             membership: loadMembership()
@@ -151,11 +145,23 @@ extension SessionManager {
         reconcile()
     }
 
+    /// 案内板の掲示一行。今回だけ着発。発車は阻まない。
+    func adoptCurrentNoticeThisTime() {
+        guard let notice = currentUnadoptedNotice() else { return }
+        adoptOccurrence(notice, scope: .occurrence)
+    }
+
     func unadopt(blockID: UUID, scope: TimetableAdoptionScope) {
         persist(TimetableAdoption.unadopt(blockID: blockID, scope: scope, membership: loadMembership()))
         try? save()
         lastScheduledEndBellFireAt = nil
         reconcile()
+    }
+
+    /// いま重なっているダイヤを今回だけ通過。確認は出さない。
+    func unadoptCurrentOccurrence() {
+        guard let current = timetableFit().currentBlock else { return }
+        unadopt(blockID: current.id, scope: .occurrence)
     }
 
     func unadoptOccurrence(_ occurrence: CalendarOccurrence, scope: TimetableAdoptionScope) {
@@ -188,7 +194,7 @@ extension SessionManager {
         let isPause = action == TimetableNotification.pauseAction
             || action == UNNotificationDefaultActionIdentifier
         if isPause {
-            try? pause()
+            try? pause(timetableHeld: true)
         }
     }
 
@@ -276,6 +282,7 @@ extension SessionManager {
         guard let session = activeSession, session.isOpen, !session.isPaused else { return }
         let clamped = max(pauseAt, session.segmentStartedAt ?? session.startedAt)
         flushToPaused(session, now: clamped)
+        session.timetableHeld = true
         phase = .paused
         timetableQuietMessage = TimetableCopy.quiet
         noteCabinActivity(now: clamped, clearPendingIdle: true)
@@ -304,6 +311,23 @@ extension SessionManager {
     private func cancelTimetableNotification(sessionID: UUID?) {
         guard let sessionID else { return }
         checkInNotifier.cancelTimetable(sessionID: sessionID)
+    }
+
+    private func refreshTimetableHold(now: Date) {
+        guard timetableFit(at: now).currentOccupancy == nil else { return }
+        var didChange = false
+        if timetableQuietMessage != nil {
+            timetableQuietMessage = nil
+            didChange = true
+        }
+        for session in openPausedSessions() where session.timetableHeld {
+            session.timetableHeld = false
+            didChange = true
+        }
+        if didChange {
+            bumpCompanionSync()
+            try? save()
+        }
     }
 
     private func suppressAwayIfTimetableQuiet(now: Date) {

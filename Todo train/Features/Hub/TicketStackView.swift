@@ -8,6 +8,7 @@
 //
 
 import SwiftUI
+import SwiftData
 import UIKit
 
 enum HubTicketCanvas {
@@ -139,6 +140,7 @@ struct TicketStackView: View {
         ]
 
         var body: some View {
+            let (container, manager) = HubPreviewSeed.make(scenario: .inService)
             ScrollView {
                 TicketStackView(
                     tickets: tickets,
@@ -163,6 +165,8 @@ struct TicketStackView: View {
             }
             .coordinateSpace(.named(HubTicketCanvas.spaceName))
             .background(Color(uiColor: .systemGroupedBackground))
+            .environment(manager)
+            .modelContainer(container)
         }
     }
     return PreviewHost()

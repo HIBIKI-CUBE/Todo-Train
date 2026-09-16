@@ -49,17 +49,26 @@ enum LEDPhosphor {
     static let off = Color(red: 0.10, green: 0.22, blue: 0.16)
     static let housing = Color(red: 0.04, green: 0.055, blue: 0.05)
     static let rim = Color(red: 0.16, green: 0.36, blue: 0.26)
+    /// Dispatch pinch — hotter phosphor, not 停車 amber or 超過 red.
+    static let heat = Color(red: 0.78, green: 0.98, blue: 0.38)
+    static let heatOff = Color(red: 0.16, green: 0.20, blue: 0.06)
+    static let heatHousing = Color(red: 0.055, green: 0.06, blue: 0.02)
+    static let heatRim = Color(red: 0.42, green: 0.52, blue: 0.14)
 }
 
 struct StationSignHousing: View {
     var rimLit: Bool
+    var heat: Bool = false
 
     var body: some View {
         RoundedRectangle(cornerRadius: 10, style: .continuous)
-            .fill(LEDPhosphor.housing)
+            .fill(heat ? LEDPhosphor.heatHousing : LEDPhosphor.housing)
             .overlay {
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .strokeBorder(LEDPhosphor.rim.opacity(rimLit ? 0.55 : 0.28), lineWidth: 1)
+                    .strokeBorder(
+                        (heat ? LEDPhosphor.heatRim : LEDPhosphor.rim).opacity(rimLit ? 0.7 : 0.28),
+                        lineWidth: 1
+                    )
             }
     }
 }

@@ -52,7 +52,7 @@ struct PauseLimitSheet: View {
                 }
 
                 if let pendingTicket,
-                   sessionManager.pausedTicketCount < sessionManager.pauseLimit {
+                   sessionManager.pausedCountTowardLimit < sessionManager.pauseLimit {
                     Section {
                         Button("「\(pendingTicket.title)」を発車") {
                             onSlotFreedTryBoard()

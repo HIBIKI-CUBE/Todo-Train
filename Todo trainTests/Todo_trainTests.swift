@@ -21,6 +21,19 @@ struct Todo_trainTests {
         #expect(PauseLimitGuard.canBoardNewRide(pausedCount: 2, limit: 3))
     }
 
+    @Test func pausedCountTowardLimit_skipsHeld() {
+        #expect(PauseLimitGuard.pausedCountTowardLimit(isHeld: []) == 0)
+        #expect(PauseLimitGuard.pausedCountTowardLimit(isHeld: [false, false]) == 2)
+        #expect(PauseLimitGuard.pausedCountTowardLimit(isHeld: [true, false]) == 1)
+        #expect(PauseLimitGuard.pausedCountTowardLimit(isHeld: [true, true]) == 0)
+        #expect(
+            PauseLimitGuard.canBoardNewRide(
+                pausedCount: PauseLimitGuard.pausedCountTowardLimit(isHeld: [true, true]),
+                limit: 2
+            )
+        )
+    }
+
     @Test func pauseLiveActivityRetention_expiresAfterTwoHours() {
         let pausedAt = Date(timeIntervalSince1970: 1_700_000_000)
         #expect(!PauseLiveActivityRetention.isExpired(pausedAt: pausedAt, now: pausedAt.addingTimeInterval(2 * 60 * 60 - 1)))
