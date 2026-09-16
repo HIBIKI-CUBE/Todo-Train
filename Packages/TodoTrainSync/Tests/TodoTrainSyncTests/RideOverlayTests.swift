@@ -168,17 +168,24 @@ struct RideOverlayPresentationTests {
         #expect(RideOverlayPresentation.timerPhase(remaining: 120, estimated: budget, overtime: true) == .overtime)
     }
 
-    @Test func nextBlockLine_usesTitleWithoutFormattingTime() {
+    @Test func nextBlockLine_appendsMinutesInsideWindow() {
         var snap = running
         snap.nextBlockTitle = "週次レポート"
         snap.nextBlockStartsAt = 1_768_000_400
         let upcoming = RideOverlayPresentation.nextBlockLine(snap: snap, now: 1_768_000_120)
-        #expect(upcoming == "次 週次レポート")
+        #expect(upcoming == "次 週次レポート 4分")
         snap.nextBlockStartsAt = 1_768_000_000
+        snap.nextBlockEndsAt = 1_768_001_320
         let current = RideOverlayPresentation.nextBlockLine(snap: snap, now: 1_768_000_120)
-        #expect(current == "週次レポート")
+        #expect(current == "週次レポート 20分")
         snap.nextBlockTitle = nil
         #expect(RideOverlayPresentation.nextBlockLine(snap: snap, now: 1_768_000_120) == nil)
+    }
+
+    @Test func markMinutes_floorsAndCaps() {
+        #expect(RideOverlayPresentation.markMinutes(until: 1_768_001_320, now: 1_768_000_120) == 20)
+        #expect(RideOverlayPresentation.markMinutes(until: 1_768_000_150, now: 1_768_000_120) == nil)
+        #expect(RideOverlayPresentation.markMinutes(until: 1_768_003_780, now: 1_768_000_120) == nil)
     }
 }
 

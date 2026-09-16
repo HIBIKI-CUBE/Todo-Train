@@ -21,6 +21,7 @@ enum CompanionSnapBuilding {
         pendingCabin: CabinKind? = nil,
         nextBlockTitle: String? = nil,
         nextBlockStartsAt: Int? = nil,
+        nextBlockEndsAt: Int? = nil,
         timetablePauseAt: Int? = nil
     ) -> SnapPlaintext {
         guard let session, session.isOpen, phase != .idle else {
@@ -61,6 +62,7 @@ enum CompanionSnapBuilding {
             pendingCabin: session.pendingCheckIn?.cabin,
             nextBlockTitle: nextBlockTitle,
             nextBlockStartsAt: nextBlockStartsAt,
+            nextBlockEndsAt: nextBlockEndsAt,
             timetablePauseAt: timetablePauseAt
         )
     }

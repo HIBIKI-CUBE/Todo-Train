@@ -110,14 +110,7 @@ struct ServiceSummaryBar: View {
     private var occupancyLine: String? {
         guard sessionManager.isInService else { return nil }
         let now = sessionManager.clock.now
-        let fit = sessionManager.timetableFit(at: now)
-        if let current = fit.currentBlock {
-            return TimetableCopy.occupyingLine(title: current.title)
-        }
-        if let next = fit.nextBlock {
-            return TimetableFit.nextBlockLine(title: next.title, startsAt: next.startsAt, now: now)
-        }
-        return nil
+        return TimetableFit.dutyLine(fit: sessionManager.timetableFit(at: now), now: now)
     }
 
     private var statusTitle: String {

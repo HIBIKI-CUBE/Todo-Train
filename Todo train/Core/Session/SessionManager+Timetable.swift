@@ -20,7 +20,12 @@ extension SessionManager {
         } else {
             budgetEndsAt = nil
         }
-        return TimetableFit.snapshot(blocks: blocks, now: now, budgetEndsAt: budgetEndsAt)
+        return TimetableFit.snapshot(
+            blocks: blocks,
+            notices: unadoptedNoticeBlocks(at: now),
+            now: now,
+            budgetEndsAt: budgetEndsAt
+        )
     }
 
     func applyTimetableEffects(now: Date) {
@@ -80,14 +85,31 @@ extension SessionManager {
 
     func currentUnadoptedNotice(at now: Date? = nil) -> CalendarOccurrence? {
         let now = now ?? clock.now
+        return unadoptedNotices(at: now).first { occurrence in
+            occurrence.startsAt <= now && now < occurrence.endsAt
+        }
+    }
+
+    private func unadoptedNotices(at now: Date) -> [CalendarOccurrence] {
         let blocks = fetchActiveTimetableBlocks()
-        return noticeOccurrences.first { occurrence in
-            occurrence.startsAt <= now
+        return noticeOccurrences.filter { occurrence in
+            occurrence.startsAt < occurrence.endsAt
                 && now < occurrence.endsAt
                 && !blocks.contains(where: {
                     $0.isActive && $0.calendarEventIdentifier == occurrence.eventIdentifier
                         && abs(($0.occurrenceStartKey ?? $0.startsAt.timeIntervalSince1970) - occurrence.occurrenceStartKey) < 0.5
                 })
+        }
+    }
+
+    private func unadoptedNoticeBlocks(at now: Date) -> [TimetableFitBlock] {
+        unadoptedNotices(at: now).map {
+            TimetableFitBlock(
+                id: UUID(),
+                title: $0.title,
+                startsAt: $0.startsAt,
+                endsAt: $0.endsAt
+            )
         }
     }
 

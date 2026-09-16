@@ -65,16 +65,12 @@ struct HubTimetablePlate: View {
     }
 
     private var caption: String? {
-        if let current = fit.currentBlock {
-            return TimetableCopy.occupyingLine(title: current.title)
-        }
-        if let noticeNow {
-            return TimetableCopy.noticeNowLine(title: noticeNow.title)
-        }
-        if let next = fit.nextBlock {
-            return TimetableFit.nextBlockLine(title: next.title, startsAt: next.startsAt, now: now)
-        }
-        return nil
+        TimetableFit.dutyLine(
+            fit: fit,
+            noticeTitle: noticeNow?.title,
+            noticeEndsAt: noticeNow?.endsAt,
+            now: now
+        )
     }
 
     private var dutyTitle: String? {
@@ -98,10 +94,7 @@ struct HubTimetablePlate: View {
     }
 
     private var dutyHint: String {
-        if fit.currentBlock != nil {
-            return "この枠を今回だけ外す。発車は止めません。"
-        }
-        return "この掲示を今回だけ載せる。発車は止めません。"
+        TimetableCopy.thisTime
     }
 
     private var plateMarks: [PlateMark] {

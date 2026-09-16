@@ -181,6 +181,43 @@ struct SessionManagerTimetableTests {
         #expect(manager.activeSession?.awayDueAt == nil)
     }
 
+    @Test func away_suppressedDuringUnadoptedNotice() async throws {
+        let board = InMemoryCalendarBoard()
+        board.events = [
+            calendarOccurrence(id: "n", calendar: "work", title: "定例", startOffset: -60)
+        ]
+        let (manager, context, _, _) = try SessionManagerFixtures.makeHarness(
+            now: start,
+            cabinAnnouncementsEnabled: true,
+            calendarBoard: board
+        )
+        try manager.startService()
+        await manager.refreshCalendarBoard()
+        let ticket = try SessionManagerFixtures.makeTicket(context, seconds: 1800)
+        try manager.board(ticket: ticket)
+        manager.beginAwayWatch()
+        #expect(manager.activeSession?.awayDueAt == nil)
+        #expect(manager.timetableFit().shouldSuppressAway)
+    }
+
+    @Test func away_notSuppressedForUpcomingUnadoptedNotice() async throws {
+        let board = InMemoryCalendarBoard()
+        board.events = [
+            calendarOccurrence(id: "n", calendar: "work", title: "定例", startOffset: 600)
+        ]
+        let (manager, context, _, _) = try SessionManagerFixtures.makeHarness(
+            now: start,
+            cabinAnnouncementsEnabled: true,
+            calendarBoard: board
+        )
+        try manager.startService()
+        await manager.refreshCalendarBoard()
+        let ticket = try SessionManagerFixtures.makeTicket(context, seconds: 1800)
+        try manager.board(ticket: ticket)
+        manager.beginAwayWatch()
+        #expect(manager.activeSession?.awayDueAt != nil)
+    }
+
     @Test func resume_clearsQuietMessage() throws {
         let (manager, context, clock, _) = try SessionManagerFixtures.makeHarness(now: start)
         try manager.startService()

@@ -26,19 +26,7 @@ enum TimetableCopy {
     static let legendAdopted = "濃い＝ダイヤ"
     static let legendRide = "帯＝乗車"
 
-    static func occupyingLine(title: String) -> String {
-        "いま \(title)"
-    }
-
-    static func nextLine(title: String) -> String {
-        "次 \(title)"
-    }
-
-    static func noticeNowLine(title: String) -> String {
-        "掲示 \(title)"
-    }
-
     static func notificationBody(title: String) -> String {
-        "『\(title)』のダイヤです。停車できます。"
+        "『\(title)』のダイヤです。"
     }
 }

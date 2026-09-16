@@ -315,6 +315,7 @@ final class CompanionSyncRuntime {
             pendingCabin: sessionManager.activeServiceDay?.pendingCabin?.cabin,
             nextBlockTitle: visible?.title,
             nextBlockStartsAt: visible.map { Int($0.startsAt.timeIntervalSince1970) },
+            nextBlockEndsAt: visible.map { Int($0.endsAt.timeIntervalSince1970) },
             timetablePauseAt: pauseAt
         )
         let envelope = try SyncCrypto.sealJSON(

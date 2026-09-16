@@ -38,10 +38,15 @@ struct TimetableFitTests {
         #expect(snap.nextBlock?.title == "1on1")
         #expect(snap.markMinutes == 20)
         #expect(snap.nextDeadline == next.startsAt)
+        #expect(snap.remainingMinutes == 10)
         #expect(snap.shouldSuppressAway)
         #expect(snap.visibleBlock?.title == "週次")
+        #expect(TimetableFit.occupyingLine(title: "週次", remainingMinutes: 10) == "いま 週次 10分")
         #expect(TimetableFit.nextBlockLine(title: "週次", startsAt: current.startsAt, now: now) == "週次")
-        #expect(TimetableFit.nextBlockLine(title: "1on1", startsAt: next.startsAt, now: now) == "次 1on1")
+        #expect(TimetableFit.nextBlockLine(title: "1on1", startsAt: next.startsAt, now: now) == "次 1on1 20分")
+        #expect(
+            TimetableFit.dutyLine(fit: snap, now: now) == "いま 週次 10分"
+        )
     }
 
     @Test func snapshot_budgetWinsWhenEarlierThanBlock() {
@@ -77,5 +82,51 @@ struct TimetableFitTests {
             budgetEndsAt: nil
         )
         #expect(!far.shouldSuppressAway)
+    }
+
+    @Test func snapshot_suppressesAwayDuringUnadoptedNoticeOnly() {
+        let notice = TimetableFitBlock(
+            title: "定例",
+            startsAt: now.addingTimeInterval(-60),
+            endsAt: now.addingTimeInterval(1800)
+        )
+        let overlapping = TimetableFit.snapshot(
+            blocks: [],
+            notices: [notice],
+            now: now,
+            budgetEndsAt: nil
+        )
+        #expect(overlapping.shouldSuppressAway)
+        let upcoming = TimetableFit.snapshot(
+            blocks: [],
+            notices: [
+                TimetableFitBlock(
+                    title: "定例",
+                    startsAt: now.addingTimeInterval(10 * 60),
+                    endsAt: now.addingTimeInterval(40 * 60)
+                )
+            ],
+            now: now,
+            budgetEndsAt: nil
+        )
+        #expect(!upcoming.shouldSuppressAway)
+    }
+
+    @Test func dutyLine_noticeWhenNoAdoptedOccupancy() {
+        let next = TimetableFitBlock(
+            title: "1on1",
+            startsAt: now.addingTimeInterval(20 * 60),
+            endsAt: now.addingTimeInterval(50 * 60)
+        )
+        let snap = TimetableFit.snapshot(blocks: [next], now: now, budgetEndsAt: nil)
+        #expect(
+            TimetableFit.dutyLine(
+                fit: snap,
+                noticeTitle: "定例",
+                noticeEndsAt: now.addingTimeInterval(15 * 60),
+                now: now
+            ) == "掲示 定例 15分"
+        )
+        #expect(TimetableFit.dutyLine(fit: snap, now: now) == "次 1on1 20分")
     }
 }

@@ -19,7 +19,7 @@ public struct RideOverlayPresentation: Equatable, Sendable {
     public var peekTitle: String
     /// Progress 車内放送 on the PiP. Nil when idle.
     public var cabinPrompt: String?
-    /// Next or current ダイヤ. Title only so tests are timezone-stable.
+    /// Next or current ダイヤ. Title and minutes from unix timestamps so tests stay timezone-stable.
     public var nextBlockLine: String?
 
     public static let peekTitleLimit = 6
@@ -113,9 +113,24 @@ public struct RideOverlayPresentation: Equatable, Sendable {
     public static func nextBlockLine(snap: SnapPlaintext, now: Int) -> String? {
         guard let title = snap.nextBlockTitle, !title.isEmpty else { return nil }
         if let startsAt = snap.nextBlockStartsAt, startsAt > now {
+            if let minutes = markMinutes(until: startsAt, now: now) {
+                return "次 \(title) \(minutes)分"
+            }
             return "次 \(title)"
         }
+        if let endsAt = snap.nextBlockEndsAt, let minutes = markMinutes(until: endsAt, now: now) {
+            return "\(title) \(minutes)分"
+        }
         return title
+    }
+
+    /// Same window as iOS `TimetableFit.markMinutes`. Floor minutes, 1...60.
+    public static func markMinutes(until unix: Int, now: Int) -> Int? {
+        let interval = unix - now
+        guard interval >= 30 else { return nil }
+        let minutes = interval / 60
+        guard (1...60).contains(minutes) else { return nil }
+        return minutes
     }
 
     public static func progress(

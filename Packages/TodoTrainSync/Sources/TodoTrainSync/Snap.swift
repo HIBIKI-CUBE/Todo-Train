@@ -17,6 +17,7 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
     public var pendingCabin: CabinKind?
     public var nextBlockTitle: String?
     public var nextBlockStartsAt: Int?
+    public var nextBlockEndsAt: Int?
     public var timetablePauseAt: Int?
 
     public init(
@@ -36,6 +37,7 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
         pendingCabin: CabinKind? = nil,
         nextBlockTitle: String? = nil,
         nextBlockStartsAt: Int? = nil,
+        nextBlockEndsAt: Int? = nil,
         timetablePauseAt: Int? = nil
     ) {
         self.rev = rev
@@ -54,6 +56,7 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
         self.pendingCabin = pendingCabin
         self.nextBlockTitle = nextBlockTitle
         self.nextBlockStartsAt = nextBlockStartsAt
+        self.nextBlockEndsAt = nextBlockEndsAt
         self.timetablePauseAt = timetablePauseAt
     }
 
@@ -61,7 +64,7 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
         case rev, sessionId, ticketId, title, phase
         case startedAt, estimatedSeconds, pausedAccumulated, pausedAt, boardedDeviceID
         case serviceActive, cabinEnabled, checkInFiredCount, pendingCabin
-        case nextBlockTitle, nextBlockStartsAt, timetablePauseAt
+        case nextBlockTitle, nextBlockStartsAt, nextBlockEndsAt, timetablePauseAt
     }
 
     public init(from decoder: Decoder) throws {
@@ -90,6 +93,7 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
         }
         nextBlockTitle = try container.decodeIfPresent(String.self, forKey: .nextBlockTitle)
         nextBlockStartsAt = try container.decodeIfPresent(Int.self, forKey: .nextBlockStartsAt)
+        nextBlockEndsAt = try container.decodeIfPresent(Int.self, forKey: .nextBlockEndsAt)
         timetablePauseAt = try container.decodeIfPresent(Int.self, forKey: .timetablePauseAt)
     }
 
@@ -111,6 +115,7 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
         try container.encode(pendingCabin, forKey: .pendingCabin)
         try container.encodeIfPresent(nextBlockTitle, forKey: .nextBlockTitle)
         try container.encodeIfPresent(nextBlockStartsAt, forKey: .nextBlockStartsAt)
+        try container.encodeIfPresent(nextBlockEndsAt, forKey: .nextBlockEndsAt)
         try container.encodeIfPresent(timetablePauseAt, forKey: .timetablePauseAt)
     }
 

@@ -252,7 +252,7 @@ struct FocusView: View {
                             .foregroundStyle(FocusPanel.ink)
                             .buttonStyle(.plain)
                             .padding(.vertical, 6)
-                            .accessibilityHint("この枠を今回だけ外す。発車は止めません。")
+                            .accessibilityHint(TimetableCopy.thisTime)
                         }
                     }
                     .padding(.horizontal, 14)
@@ -395,14 +395,7 @@ struct FocusView: View {
     }
 
     private func timetableLine(now: Date) -> String? {
-        let fit = sessionManager.timetableFit(at: now)
-        if let current = fit.currentBlock {
-            return TimetableCopy.occupyingLine(title: current.title)
-        }
-        if let next = fit.nextBlock {
-            return TimetableFit.nextBlockLine(title: next.title, startsAt: next.startsAt, now: now)
-        }
-        return nil
+        TimetableFit.dutyLine(fit: sessionManager.timetableFit(at: now), now: now)
     }
 
     private func applyExtend(minutes: Int) {

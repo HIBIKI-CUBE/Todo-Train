@@ -3,6 +3,7 @@
 //  Todo train
 //
 //  Pure look-ahead for ダイヤ: next / current block, mark minutes, folded deadline.
+//  計器。指図しない。
 //
 
 import Foundation
@@ -26,6 +27,8 @@ nonisolated struct TimetableFitSnapshot: Equatable, Sendable {
     var nextBlock: TimetableFitBlock?
     /// Floor minutes until the next start. 1...60. Sub-minute (including 30s) is nil.
     var markMinutes: Int?
+    /// Floor minutes until the current block ends. Same window as markMinutes.
+    var remainingMinutes: Int?
     /// Earlier of budget end and the next ダイヤ start (not the current overlapping start).
     var nextDeadline: Date?
     var shouldSuppressAway: Bool
@@ -50,6 +53,7 @@ nonisolated enum TimetableFit {
 
     static func snapshot(
         blocks: [TimetableFitBlock],
+        notices: [TimetableFitBlock] = [],
         now: Date,
         budgetEndsAt: Date?
     ) -> TimetableFitSnapshot {
@@ -65,23 +69,64 @@ nonisolated enum TimetableFit {
         let nextStart = next?.startsAt
         let deadlineCandidates = [budgetEndsAt, nextStart].compactMap { $0 }.filter { $0 > now }
         let nextDeadline = deadlineCandidates.min()
-        let suppress = active.contains { block in
+        let suppressAdopted = active.contains { block in
             now >= block.startsAt.addingTimeInterval(-awaySuppressionLead) && now < block.endsAt
+        }
+        let suppressNotice = notices.contains { notice in
+            notice.endsAt > notice.startsAt && notice.startsAt <= now && now < notice.endsAt
         }
 
         return TimetableFitSnapshot(
             currentBlock: current,
             nextBlock: next,
             markMinutes: next.map { markMinutes(until: $0.startsAt, now: now) } ?? nil,
+            remainingMinutes: current.map { markMinutes(until: $0.endsAt, now: now) } ?? nil,
             nextDeadline: nextDeadline,
-            shouldSuppressAway: suppress
+            shouldSuppressAway: suppressAdopted || suppressNotice
         )
+    }
+
+    static func occupyingLine(title: String, remainingMinutes: Int? = nil) -> String {
+        if let remainingMinutes {
+            return "いま \(title) \(remainingMinutes)分"
+        }
+        return "いま \(title)"
     }
 
     static func nextBlockLine(title: String, startsAt: Date, now: Date) -> String {
         if startsAt <= now {
             return title
         }
+        if let minutes = markMinutes(until: startsAt, now: now) {
+            return "次 \(title) \(minutes)分"
+        }
         return "次 \(title)"
+    }
+
+    static func noticeLine(title: String, remainingMinutes: Int? = nil) -> String {
+        if let remainingMinutes {
+            return "掲示 \(title) \(remainingMinutes)分"
+        }
+        return "掲示 \(title)"
+    }
+
+    /// One instrument line. Adopted occupancy, else live notice, else next adopted.
+    static func dutyLine(
+        fit: TimetableFitSnapshot,
+        noticeTitle: String? = nil,
+        noticeEndsAt: Date? = nil,
+        now: Date
+    ) -> String? {
+        if let current = fit.currentBlock {
+            return occupyingLine(title: current.title, remainingMinutes: fit.remainingMinutes)
+        }
+        if let noticeTitle {
+            let remaining = noticeEndsAt.flatMap { markMinutes(until: $0, now: now) }
+            return noticeLine(title: noticeTitle, remainingMinutes: remaining)
+        }
+        if let next = fit.nextBlock {
+            return nextBlockLine(title: next.title, startsAt: next.startsAt, now: now)
+        }
+        return nil
     }
 }
