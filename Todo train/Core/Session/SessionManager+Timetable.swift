@@ -124,7 +124,7 @@ extension SessionManager {
         } catch {
             return
         }
-        // Membership sees every calendar so hiding a calendar does not 外す.
+        // Membership sees every calendar so hiding a calendar does not 通過.
         persist(TimetableAdoption.refreshCalendarMembership(
             occurrences: fetched,
             membership: loadMembership()
@@ -145,7 +145,7 @@ extension SessionManager {
         reconcile()
     }
 
-    /// 案内板の掲示一行。今回だけ載せる。発車は阻まない。
+    /// 案内板の掲示一行。今回だけ着発。発車は阻まない。
     func adoptCurrentNoticeThisTime() {
         guard let notice = currentUnadoptedNotice() else { return }
         adoptOccurrence(notice, scope: .occurrence)
@@ -158,7 +158,7 @@ extension SessionManager {
         reconcile()
     }
 
-    /// いま重なっているダイヤを今回だけ外す。確認は出さない。
+    /// いま重なっているダイヤを今回だけ通過。確認は出さない。
     func unadoptCurrentOccurrence() {
         guard let current = timetableFit().currentBlock else { return }
         unadopt(blockID: current.id, scope: .occurrence)

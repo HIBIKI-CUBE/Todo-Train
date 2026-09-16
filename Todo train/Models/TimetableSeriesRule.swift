@@ -2,7 +2,7 @@
 //  TimetableSeriesRule.swift
 //  Todo train
 //
-//  カレンダー繰り返しの「今後も」載せる／外す。
+//  カレンダー繰り返しの「今後も」着発／通過。
 //
 
 import Foundation
@@ -14,7 +14,7 @@ final class TimetableSeriesRule {
     var recurrenceIdentifier: String = ""
     var title: String = ""
     var adopted: Bool = false
-    /// Occurrence start Unix seconds excluded from an adopted series ("今回だけ外す").
+    /// Occurrence start Unix seconds excluded from an adopted series ("今回だけ通過").
     var excludedOccurrenceStarts: [Double] = []
 
     init(

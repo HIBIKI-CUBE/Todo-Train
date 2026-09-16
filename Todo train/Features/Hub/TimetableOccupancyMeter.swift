@@ -2,13 +2,13 @@
 //  TimetableOccupancyMeter.swift
 //  Todo train
 //
-//  Occupancy as a destination: いま／次 and title are words; clock is digits.
+//  Occupancy as a destination: 駅名標 grammar, not an LED 発車標.
 //  Race and 掲示 vs ダイヤ stay visual.
 //
 
 import SwiftUI
 
-/// 行先票. Title is the destination; clock is the timetable.
+/// 行先票 as a 駅名標: いま／次 is the index, title is the station, rail is the line band.
 struct OccupancyDestinationSign: View {
     enum Surface {
         case grouped
@@ -27,27 +27,25 @@ struct OccupancyDestinationSign: View {
     var action: (() -> Void)? = nil
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: compact ? 6 : 8) {
-            Text(row.kind.tense)
-                .font((compact ? Font.caption2 : Font.caption).weight(.bold))
-                .foregroundStyle(destinationInk)
-            Text(row.title)
-                .font(destinationFont)
-                .foregroundStyle(destinationInk)
-                .lineLimit(1)
-                .minimumScaleFactor(0.72)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            timetable
-            if let actionTitle, let action {
-                Button(actionTitle, action: action)
-                    .font((compact ? Font.caption2 : Font.caption).weight(.semibold))
-                    .foregroundStyle(actionInk)
-                    .buttonStyle(.plain)
-                    .accessibilityHint(TimetableCopy.thisTime)
+        HStack(alignment: .top, spacing: compact ? 6 : 8) {
+            indexMark
+                .padding(.top, compact ? 1 : 2)
+            VStack(alignment: .leading, spacing: compact ? 2 : 4) {
+                HStack(alignment: .firstTextBaseline, spacing: compact ? 6 : 8) {
+                    Text(row.title)
+                        .font(destinationFont)
+                        .tracking(StationSignMetrics.nameTracking(row.title, compact: compact))
+                        .foregroundStyle(destinationInk)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.72)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    timetable
+                }
+                lineBand
             }
         }
-        .padding(.horizontal, isBoarded ? 10 : 0)
-        .padding(.vertical, isBoarded ? 7 : 0)
+        .padding(.horizontal, isBoarded ? (compact ? 8 : 10) : 0)
+        .padding(.vertical, isBoarded ? (compact ? 5 : 7) : 0)
         .modifier(DestinationBoardChrome(surface: surface))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(row.spokenLine)
@@ -79,14 +77,74 @@ struct OccupancyDestinationSign: View {
         }
     }
 
+    @ViewBuilder
+    private var indexMark: some View {
+        Text(row.kind.tense)
+            .font((compact ? Font.caption2 : Font.caption).weight(.bold))
+            .foregroundStyle(indexForeground)
+            .frame(minWidth: compact ? 22 : 26)
+            .padding(.vertical, compact ? 3 : 4)
+            .background { indexBackground }
+    }
+
+    @ViewBuilder
+    private var indexBackground: some View {
+        let box = RoundedRectangle(cornerRadius: 3, style: .continuous)
+        if fillsIndex {
+            box.fill(indexFill)
+                .overlay { box.strokeBorder(indexStroke, lineWidth: 1) }
+        } else {
+            box.strokeBorder(indexStroke, lineWidth: 1)
+        }
+    }
+
+    @ViewBuilder
+    private var lineBand: some View {
+        if let actionTitle, let action {
+            Button(action: action) {
+                HStack(spacing: 0) {
+                    Rectangle()
+                        .fill(lineColor)
+                        .frame(maxWidth: .infinity)
+                    Text(actionTitle)
+                        .font((compact ? Font.caption2 : Font.caption).weight(.semibold))
+                        .foregroundStyle(actionOnBarInk)
+                        .padding(.horizontal, compact ? 8 : 10)
+                        .padding(.vertical, compact ? 3 : 4)
+                        .background(actionBarColor)
+                }
+            }
+            .buttonStyle(.plain)
+            .frame(height: compact ? 18 : 22)
+            .contentShape(Rectangle())
+            .clipped()
+            .accessibilityHidden(true)
+        } else {
+            Rectangle()
+                .fill(lineColor)
+                .frame(height: compact ? 3 : 4)
+                .frame(maxWidth: .infinity)
+                .accessibilityHidden(true)
+        }
+    }
+
     private var isBoarded: Bool {
         if case .glass = surface { return true }
         if case .station = surface { return false }
         return false
     }
 
+    private var fillsIndex: Bool {
+        row.kind == .occupying
+    }
+
     private var destinationFont: Font {
-        (compact ? Font.subheadline : Font.body).weight(.semibold)
+        switch surface {
+        case .cabin:
+            (compact ? Font.subheadline : Font.title3).weight(.medium)
+        default:
+            (compact ? Font.subheadline : Font.body).weight(.semibold)
+        }
     }
 
     private var clockFont: Font {
@@ -122,8 +180,46 @@ struct OccupancyDestinationSign: View {
         }
     }
 
-    private var actionInk: Color {
-        destinationInk
+    private var lineColor: Color {
+        row.kind == .occupying ? actionBarColor : actionBarColor.opacity(0.5)
+    }
+
+    private var actionBarColor: Color {
+        switch surface {
+        case .station(let heat): heat ? LEDPhosphor.heat : LEDPhosphor.on
+        case .grouped, .inverted, .cabin, .glass: TrainTheme.rail
+        }
+    }
+
+    private var actionOnBarInk: Color {
+        switch surface {
+        case .station(let heat): heat ? LEDPhosphor.heatHousing : LEDPhosphor.housing
+        case .grouped, .inverted, .cabin, .glass: Color.white
+        }
+    }
+
+    private var indexFill: Color {
+        switch surface {
+        case .station(let heat): (heat ? LEDPhosphor.heat : LEDPhosphor.on).opacity(0.22)
+        case .grouped, .glass: TrainTheme.rail
+        case .inverted, .cabin: TrainTheme.rail
+        }
+    }
+
+    private var indexStroke: Color {
+        switch surface {
+        case .station: destinationInk
+        case .grouped, .glass: fillsIndex ? TrainTheme.rail : destinationInk.opacity(0.7)
+        case .inverted, .cabin: fillsIndex ? TrainTheme.rail : Color.white.opacity(0.7)
+        }
+    }
+
+    private var indexForeground: Color {
+        switch surface {
+        case .station: destinationInk
+        case .grouped, .glass: fillsIndex ? Color.white : destinationInk
+        case .inverted, .cabin: Color.white
+        }
     }
 }
 
@@ -133,7 +229,9 @@ private struct DestinationAccessAction: ViewModifier {
 
     func body(content: Content) -> some View {
         if let title, let action {
-            content.accessibilityAction(named: title, action)
+            content
+                .accessibilityAction(named: title, action)
+                .accessibilityHint(TimetableCopy.thisTime)
         } else {
             content
         }
@@ -149,7 +247,7 @@ private struct DestinationBoardChrome: ViewModifier {
         case .glass:
             content.glassEffect(
                 .regular,
-                in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+                in: RoundedRectangle(cornerRadius: 8, style: .continuous)
             )
         default:
             content
@@ -295,4 +393,50 @@ extension TimetableOccupancyMeter where Accessory == EmptyView {
             compact: compact
         ) { EmptyView() }
     }
+}
+
+#Preview {
+    let occupying = TimetableOccupancyRow(
+        id: UUID(),
+        kind: .occupying,
+        clock: "14:00",
+        remainingMinutes: 12,
+        title: "会議",
+        spokenLine: "いま 会議 14:00"
+    )
+    let next = TimetableOccupancyRow(
+        id: UUID(),
+        kind: .next,
+        clock: "15:30",
+        remainingMinutes: 40,
+        title: "原稿を書く",
+        spokenLine: "次 原稿を書く 15:30"
+    )
+    VStack(alignment: .leading, spacing: 16) {
+        OccupancyDestinationSign(
+            row: occupying,
+            surface: .glass,
+            compact: true,
+            actionTitle: "通過",
+            action: {}
+        )
+        OccupancyDestinationSign(
+            row: occupying,
+            surface: .station(heat: false),
+            compact: true,
+            actionTitle: "通過",
+            action: {}
+        )
+        OccupancyDestinationSign(
+            row: occupying,
+            surface: .cabin,
+            actionTitle: "通過",
+            action: {}
+        )
+        OccupancyDestinationSign(row: next, surface: .grouped)
+            .padding(8)
+            .background(Color(uiColor: .secondarySystemGroupedBackground))
+    }
+    .padding()
+    .background(Color.black)
 }

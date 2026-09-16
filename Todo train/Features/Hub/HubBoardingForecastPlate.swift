@@ -3,7 +3,7 @@
 //  Todo train
 //
 //  Station plate under a lifted Hub ticket: printed 予定 vs 予測,
-//  occupancy as a 行先票 on the same board.
+//  occupancy as a 駅名標-shaped 行先票 on the same board.
 //
 
 import SwiftData
@@ -316,7 +316,7 @@ struct HubBoardingForecastPlate: View {
                         action: occupancy.action
                     )
                     .frame(width: placement.width)
-                    .position(x: placement.centerX, y: 36)
+                    .position(x: placement.centerX, y: 38)
                     .opacity(showsDispatchChip ? 1 : 0)
                 }
             }

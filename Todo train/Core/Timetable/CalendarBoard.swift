@@ -2,7 +2,7 @@
 //  CalendarBoard.swift
 //  Todo train
 //
-//  Live 掲示. EventKit は所属の正ではない。載せるまでダイヤにしない。
+//  Live 掲示. EventKit は所属の正ではない。着発するまで網にしない。
 //
 
 import Foundation

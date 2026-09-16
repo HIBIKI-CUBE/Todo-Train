@@ -202,3 +202,30 @@ struct FocusControlCellStyle: ButtonStyle {
             .animation(TrainTheme.Motion.spring, value: configuration.isPressed)
     }
 }
+
+/// 駅名標: short CJK titles open out. Not a JY/Metro code.
+nonisolated enum StationSignMetrics {
+    static func nameTracking(_ title: String, compact: Bool) -> CGFloat {
+        let trimmed = title.filter { !$0.isWhitespace && $0 != "　" }
+        guard (2...4).contains(trimmed.count),
+              trimmed.unicodeScalars.allSatisfy(isJapaneseLetter)
+        else { return 0 }
+        switch (trimmed.count, compact) {
+        case (2, true): return 5
+        case (2, false): return 11
+        case (3, true): return 2
+        case (3, false): return 6
+        case (_, true): return 1
+        default: return 3
+        }
+    }
+
+    private static func isJapaneseLetter(_ scalar: Unicode.Scalar) -> Bool {
+        switch scalar.value {
+        case 0x3040...0x30FF, 0x3400...0x9FFF, 0xF900...0xFAFF:
+            true
+        default:
+            false
+        }
+    }
+}

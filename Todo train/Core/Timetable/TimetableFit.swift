@@ -3,7 +3,7 @@
 //  Todo train
 //
 //  Pure look-ahead for ダイヤ: next / current block, mark minutes, folded deadline.
-//  計器。指図しない。占有はダイヤと掲示を混ぜ、載っている方が勝つ。
+//  計器。指図しない。占有はダイヤと掲示を混ぜ、着発している方が勝つ。
 //
 
 import Foundation
