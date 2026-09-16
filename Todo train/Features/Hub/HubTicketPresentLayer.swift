@@ -113,6 +113,7 @@ struct HubTicketPresentLayer: View {
                 HubTimetablePlate(
                     fit: sessionManager.timetableFit(at: context.date),
                     now: context.date,
+                    calendar: sessionManager.calendar,
                     width: size.width,
                     onAdoptNotice: { sessionManager.adoptCurrentNoticeThisTime() },
                     onUnadoptCurrent: { sessionManager.unadoptCurrentOccurrence() }

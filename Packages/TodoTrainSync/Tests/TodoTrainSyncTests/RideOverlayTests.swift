@@ -4,6 +4,7 @@ import Testing
 
 @Suite("Ride overlay presentation")
 struct RideOverlayPresentationTests {
+    let utc = TimeZone(secondsFromGMT: 0)!
     let running: SnapPlaintext = {
         let data = try! ContractFixtures.data("fixtures/snap.json")
         return try! WireJSON.decoder().decode(SnapPlaintext.self, from: data)
@@ -172,14 +173,31 @@ struct RideOverlayPresentationTests {
         var snap = running
         snap.nextBlockTitle = "週次レポート"
         snap.nextBlockStartsAt = 1_768_000_400
-        let upcoming = RideOverlayPresentation.nextBlockLine(snap: snap, now: 1_768_000_120)
-        #expect(upcoming == "次 週次レポート 4分")
+        let upcoming = RideOverlayPresentation.nextBlockLine(
+            snap: snap,
+            now: 1_768_000_120,
+            timeZone: utc
+        )
+        #expect(upcoming == "次 23:13 4分 週次レポート")
         snap.nextBlockStartsAt = 1_768_000_000
         snap.nextBlockEndsAt = 1_768_001_320
-        let current = RideOverlayPresentation.nextBlockLine(snap: snap, now: 1_768_000_120)
-        #expect(current == "いま 週次レポート 20分")
+        let current = RideOverlayPresentation.nextBlockLine(
+            snap: snap,
+            now: 1_768_000_120,
+            timeZone: utc
+        )
+        #expect(current == "いま 23:28 20分 週次レポート")
         snap.nextBlockTitle = nil
         #expect(RideOverlayPresentation.nextBlockLine(snap: snap, now: 1_768_000_120) == nil)
+        snap.nextBlockTitle = "週次レポート"
+        snap.nextBlockStartsAt = 1_768_003_780
+        snap.nextBlockEndsAt = nil
+        let far = RideOverlayPresentation.nextBlockLine(
+            snap: snap,
+            now: 1_768_000_120,
+            timeZone: utc
+        )
+        #expect(far == "次 00:09 61分 週次レポート")
     }
 
     @Test func markMinutes_floorsAndCaps() {

@@ -10,6 +10,11 @@ import Testing
 @MainActor
 struct TimetableFitTests {
     private let now = Date(timeIntervalSince1970: 1_700_000_000)
+    private let utc: Calendar = {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        return calendar
+    }()
 
     @Test func markMinutes_floorsAndCaps() {
         #expect(TimetableFit.markMinutes(until: now.addingTimeInterval(20 * 60), now: now) == 20)
@@ -45,12 +50,25 @@ struct TimetableFitTests {
         #expect(snap.shouldSuppressAway)
         #expect(snap.visibleBlock?.title == "週次")
         #expect(snap.visibleOccupancy?.title == "週次")
-        #expect(TimetableFit.occupyingLine(title: "週次", remainingMinutes: 10) == "いま 週次 10分")
+        #expect(TimetableFit.occupyingLine(
+            title: "週次",
+            endsAt: current.endsAt,
+            now: now,
+            calendar: utc
+        ) == "いま 22:23 10分 週次")
         #expect(TimetableFit.nextBlockLine(title: "週次", startsAt: current.startsAt, now: now) == "週次")
-        #expect(TimetableFit.nextBlockLine(title: "1on1", startsAt: next.startsAt, now: now) == "次 1on1 20分")
-        #expect(TimetableFit.dutyLine(fit: snap, now: now) == "いま 週次 10分")
-        #expect(TimetableFit.nextDutyLine(fit: snap, now: now) == "次 1on1 20分")
-        #expect(TimetableFit.occupancyLines(fit: snap, now: now) == ["いま 週次 10分", "次 1on1 20分"])
+        #expect(TimetableFit.nextBlockLine(
+            title: "1on1",
+            startsAt: next.startsAt,
+            now: now,
+            calendar: utc
+        ) == "次 22:33 20分 1on1")
+        #expect(TimetableFit.dutyLine(fit: snap, now: now, calendar: utc) == "いま 22:23 10分 週次")
+        #expect(TimetableFit.nextDutyLine(fit: snap, now: now, calendar: utc) == "次 22:33 20分 1on1")
+        #expect(TimetableFit.occupancyLines(fit: snap, now: now, calendar: utc) == [
+            "いま 22:23 10分 週次",
+            "次 22:33 20分 1on1"
+        ])
     }
 
     @Test func snapshot_budgetWinsWhenEarlierThanBlock() {
@@ -136,10 +154,10 @@ struct TimetableFitTests {
         #expect(snap.currentOccupancy?.title == "定例")
         #expect(snap.currentOccupancy?.isAdopted == false)
         #expect(snap.nextOccupancy?.title == "1on1")
-        #expect(TimetableFit.dutyLine(fit: snap, now: now) == "掲示 定例 15分")
-        #expect(TimetableFit.nextDutyLine(fit: snap, now: now) == "次 1on1 20分")
+        #expect(TimetableFit.dutyLine(fit: snap, now: now, calendar: utc) == "掲示 22:27 15分 定例")
+        #expect(TimetableFit.nextDutyLine(fit: snap, now: now, calendar: utc) == "次 22:33 20分 1on1")
         let adoptedOnly = TimetableFit.snapshot(blocks: [next], now: now, budgetEndsAt: nil)
-        #expect(TimetableFit.dutyLine(fit: adoptedOnly, now: now) == "次 1on1 20分")
+        #expect(TimetableFit.dutyLine(fit: adoptedOnly, now: now, calendar: utc) == "次 22:33 20分 1on1")
         #expect(TimetableFit.nextDutyLine(fit: adoptedOnly, now: now) == nil)
     }
 
@@ -163,7 +181,7 @@ struct TimetableFitTests {
         #expect(snap.currentOccupancy?.title == "週次")
         #expect(snap.currentOccupancy?.isAdopted == true)
         #expect(snap.nextOccupancy == nil)
-        #expect(TimetableFit.occupancyLines(fit: snap, now: now) == ["いま 週次 10分"])
+        #expect(TimetableFit.occupancyLines(fit: snap, now: now, calendar: utc) == ["いま 22:23 10分 週次"])
     }
 
     @Test func occupancy_nextPicksEarliestNoticeOrAdopted() {
@@ -186,7 +204,7 @@ struct TimetableFitTests {
         #expect(snap.currentOccupancy == nil)
         #expect(snap.nextOccupancy?.title == "歯医者")
         #expect(snap.nextOccupancy?.isAdopted == false)
-        #expect(TimetableFit.occupancyLines(fit: snap, now: now) == ["次 歯医者 10分"])
+        #expect(TimetableFit.occupancyLines(fit: snap, now: now, calendar: utc) == ["次 22:23 10分 歯医者"])
         #expect(snap.nextDeadline == adopted.startsAt)
     }
 
@@ -196,5 +214,21 @@ struct TimetableFitTests {
         let other = TimetableFit.noticeBlockID("event|1700000001")
         #expect(first == second)
         #expect(first != other)
+    }
+
+    @Test func remainingMinutes_uncappedAndClockLeads() {
+        #expect(TimetableFit.remainingMinutes(until: now.addingTimeInterval(90 * 60), now: now) == 90)
+        #expect(TimetableFit.remainingMinutes(until: now.addingTimeInterval(20), now: now) == nil)
+        #expect(TimetableFit.clockTime(now.addingTimeInterval(20 * 60), calendar: utc) == "22:33")
+        let far = TimetableFitBlock(
+            title: "夕方",
+            startsAt: now.addingTimeInterval(90 * 60),
+            endsAt: now.addingTimeInterval(120 * 60)
+        )
+        let snap = TimetableFit.snapshot(blocks: [far], now: now, budgetEndsAt: nil)
+        #expect(snap.markMinutes == nil)
+        #expect(
+            TimetableFit.occupancyLines(fit: snap, now: now, calendar: utc) == ["次 23:43 90分 夕方"]
+        )
     }
 }

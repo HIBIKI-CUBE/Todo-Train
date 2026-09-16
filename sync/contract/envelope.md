@@ -72,7 +72,7 @@ HMAC-SHA256(cfmKey, UTF-8("{pairingId}|{offerId}|mac"))
 
 `estimatedSeconds` は当初見積ではなく **いまの予算（延長込み）**。iOS の `WorkSession.budgetSecondsAtStart` に対応する。
 
-任意の `nextBlockTitle` / `nextBlockStartsAt` / `nextBlockEndsAt` / `timetablePauseAt` は乗務中のいま、なければ次の占有（ダイヤまたは未載せの掲示）。欠けていても旧クライアントは無視する。Encode は値があるときだけ出す。分は Date からクライアントが床する。残り秒は送らない。一行だけ。Hub のいま＋次の二行は iPhone 側。
+任意の `nextBlockTitle` / `nextBlockStartsAt` / `nextBlockEndsAt` / `timetablePauseAt` は乗務中のいま、なければ次の占有（ダイヤまたは未載せの掲示）。欠けていても旧クライアントは無視する。Encode は値があるときだけ出す。時刻と分は Date からクライアントが床する。残り秒は送らない。一行だけ。Hub のいま＋次の二行は iPhone 側。
 
 購読者の残り（Date 計算。残り秒を送らない）:
 

@@ -81,7 +81,8 @@ struct ServiceSummaryBar: View {
                 TimelineView(.periodic(from: .now, by: 15)) { context in
                     let lines = TimetableFit.occupancyLines(
                         fit: sessionManager.timetableFit(at: context.date),
-                        now: context.date
+                        now: context.date,
+                        calendar: sessionManager.calendar
                     )
                     if !lines.isEmpty {
                         VStack(alignment: .leading, spacing: 2) {

@@ -11,6 +11,11 @@ import Testing
 @MainActor
 struct SessionManagerTimetableTests {
     private let start = Date(timeIntervalSince1970: 1_700_000_000)
+    private let utcCalendar: Calendar = {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        return calendar
+    }()
 
     private func insertBlock(
         _ context: ModelContext,
@@ -333,7 +338,7 @@ struct SessionManagerTimetableTests {
         #expect(try context.fetch(FetchDescriptor<TimetableGuard>()).isEmpty)
         #expect(manager.timetableFit().currentOccupancy?.title == "定例")
         #expect(manager.timetableFit().currentOccupancy?.isAdopted == false)
-        #expect(TimetableFit.dutyLine(fit: manager.timetableFit(), now: start) == "掲示 定例 29分")
+        #expect(TimetableFit.dutyLine(fit: manager.timetableFit(), now: start, calendar: utcCalendar) == "掲示 22:42 29分 定例")
     }
 
     @Test func refresh_filtersNoticesBySelectedCalendars() async throws {
@@ -433,7 +438,7 @@ struct SessionManagerTimetableTests {
         #expect(fit.currentOccupancy == nil)
         #expect(fit.nextOccupancy?.title == "定例")
         #expect(fit.nextOccupancy?.isAdopted == false)
-        #expect(TimetableFit.occupancyLines(fit: fit, now: start) == ["次 定例 10分"])
+        #expect(TimetableFit.occupancyLines(fit: fit, now: start, calendar: utcCalendar) == ["次 22:23 10分 定例"])
     }
 
     private func calendarOccurrence(

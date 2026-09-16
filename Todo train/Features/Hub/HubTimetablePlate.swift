@@ -11,6 +11,7 @@ import SwiftUI
 struct HubTimetablePlate: View {
     var fit: TimetableFitSnapshot
     var now: Date
+    var calendar: Calendar = .autoupdatingCurrent
     var width: CGFloat
     var onAdoptNotice: (() -> Void)? = nil
     var onUnadoptCurrent: (() -> Void)? = nil
@@ -22,7 +23,7 @@ struct HubTimetablePlate: View {
     @ViewBuilder
     private func plate(now: Date) -> some View {
         let marks = plateMarks(now: now)
-        let lines = TimetableFit.occupancyLines(fit: fit, now: now)
+        let lines = TimetableFit.occupancyLines(fit: fit, now: now, calendar: calendar)
         if marks.isEmpty, lines.isEmpty {
             EmptyView()
         } else {

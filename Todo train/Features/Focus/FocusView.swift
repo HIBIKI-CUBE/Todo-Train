@@ -407,7 +407,11 @@ struct FocusView: View {
         action: (() -> Void)?
     ) {
         let fit = sessionManager.timetableFit(at: now)
-        let lines = TimetableFit.occupancyLines(fit: fit, now: now)
+        let lines = TimetableFit.occupancyLines(
+            fit: fit,
+            now: now,
+            calendar: sessionManager.calendar
+        )
         if fit.currentOccupancy?.isAdopted == true {
             return (lines, TimetableCopy.unadopt, { sessionManager.unadoptCurrentOccurrence() })
         }

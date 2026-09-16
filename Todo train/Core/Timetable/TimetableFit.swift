@@ -156,54 +156,106 @@ nonisolated enum TimetableFit {
         return (current, next)
     }
 
-    static func occupyingLine(title: String, remainingMinutes: Int? = nil) -> String {
-        if let remainingMinutes {
-            return "いま \(title) \(remainingMinutes)分"
-        }
-        return "いま \(title)"
+    static func occupyingLine(
+        title: String,
+        endsAt: Date,
+        now: Date,
+        calendar: Calendar = .autoupdatingCurrent
+    ) -> String {
+        occupancyLine(prefix: "いま", title: title, at: endsAt, now: now, calendar: calendar)
     }
 
-    static func nextBlockLine(title: String, startsAt: Date, now: Date) -> String {
+    static func nextBlockLine(
+        title: String,
+        startsAt: Date,
+        now: Date,
+        calendar: Calendar = .autoupdatingCurrent
+    ) -> String {
         if startsAt <= now {
             return title
         }
-        if let minutes = markMinutes(until: startsAt, now: now) {
-            return "次 \(title) \(minutes)分"
-        }
-        return "次 \(title)"
+        return occupancyLine(prefix: "次", title: title, at: startsAt, now: now, calendar: calendar)
     }
 
-    static func noticeLine(title: String, remainingMinutes: Int? = nil) -> String {
-        if let remainingMinutes {
-            return "掲示 \(title) \(remainingMinutes)分"
-        }
-        return "掲示 \(title)"
+    static func noticeLine(
+        title: String,
+        endsAt: Date,
+        now: Date,
+        calendar: Calendar = .autoupdatingCurrent
+    ) -> String {
+        occupancyLine(prefix: "掲示", title: title, at: endsAt, now: now, calendar: calendar)
     }
 
     /// One instrument line. Occupying now first, else next.
-    static func dutyLine(fit: TimetableFitSnapshot, now: Date) -> String? {
+    static func dutyLine(
+        fit: TimetableFitSnapshot,
+        now: Date,
+        calendar: Calendar = .autoupdatingCurrent
+    ) -> String? {
         if let current = fit.currentOccupancy {
-            let remaining = markMinutes(until: current.endsAt, now: now)
             if current.isAdopted {
-                return occupyingLine(title: current.title, remainingMinutes: remaining)
+                return occupyingLine(title: current.title, endsAt: current.endsAt, now: now, calendar: calendar)
             }
-            return noticeLine(title: current.title, remainingMinutes: remaining)
+            return noticeLine(title: current.title, endsAt: current.endsAt, now: now, calendar: calendar)
         }
         if let next = fit.nextOccupancy {
-            return nextBlockLine(title: next.title, startsAt: next.startsAt, now: now)
+            return nextBlockLine(title: next.title, startsAt: next.startsAt, now: now, calendar: calendar)
         }
         return nil
     }
 
     /// Second instrument line. Only when something occupies now and something follows.
-    static func nextDutyLine(fit: TimetableFitSnapshot, now: Date) -> String? {
+    static func nextDutyLine(
+        fit: TimetableFitSnapshot,
+        now: Date,
+        calendar: Calendar = .autoupdatingCurrent
+    ) -> String? {
         guard fit.currentOccupancy != nil, let next = fit.nextOccupancy else { return nil }
-        return nextBlockLine(title: next.title, startsAt: next.startsAt, now: now)
+        return nextBlockLine(title: next.title, startsAt: next.startsAt, now: now, calendar: calendar)
     }
 
     /// Hub / Focus / 案内板. At most now + next.
-    static func occupancyLines(fit: TimetableFitSnapshot, now: Date) -> [String] {
-        [dutyLine(fit: fit, now: now), nextDutyLine(fit: fit, now: now)].compactMap { $0 }
+    static func occupancyLines(
+        fit: TimetableFitSnapshot,
+        now: Date,
+        calendar: Calendar = .autoupdatingCurrent
+    ) -> [String] {
+        [
+            dutyLine(fit: fit, now: now, calendar: calendar),
+            nextDutyLine(fit: fit, now: now, calendar: calendar)
+        ].compactMap { $0 }
+    }
+
+    /// Clock of a occupancy edge. Tests pass a UTC calendar so the string stays stable.
+    static func clockTime(_ date: Date, calendar: Calendar = .autoupdatingCurrent) -> String {
+        String(
+            format: "%02d:%02d",
+            calendar.component(.hour, from: date),
+            calendar.component(.minute, from: date)
+        )
+    }
+
+    /// Floor minutes until a occupancy edge. 30s floor. No 60 cap — the plate still uses markMinutes.
+    static func remainingMinutes(until date: Date, now: Date) -> Int? {
+        let interval = date.timeIntervalSince(now)
+        guard interval >= markFloorSeconds else { return nil }
+        let minutes = Int(interval / 60)
+        guard minutes >= 1 else { return nil }
+        return minutes
+    }
+
+    private static func occupancyLine(
+        prefix: String,
+        title: String,
+        at date: Date,
+        now: Date,
+        calendar: Calendar
+    ) -> String {
+        let clock = clockTime(date, calendar: calendar)
+        if let minutes = remainingMinutes(until: date, now: now) {
+            return "\(prefix) \(clock) \(minutes)分 \(title)"
+        }
+        return "\(prefix) \(clock) \(title)"
     }
 
     private static func sortedValid(_ blocks: [TimetableFitBlock], now: Date) -> [TimetableFitBlock] {

@@ -110,16 +110,29 @@ public struct RideOverlayPresentation: Equatable, Sendable {
         )
     }
 
-    public static func nextBlockLine(snap: SnapPlaintext, now: Int) -> String? {
+    public static func nextBlockLine(
+        snap: SnapPlaintext,
+        now: Int,
+        timeZone: TimeZone = .current
+    ) -> String? {
         guard let title = snap.nextBlockTitle, !title.isEmpty else { return nil }
         if let startsAt = snap.nextBlockStartsAt, startsAt > now {
-            if let minutes = markMinutes(until: startsAt, now: now) {
-                return "次 \(title) \(minutes)分"
-            }
-            return "次 \(title)"
+            return occupancyLine(
+                prefix: "次",
+                title: title,
+                unix: startsAt,
+                now: now,
+                timeZone: timeZone
+            )
         }
-        if let endsAt = snap.nextBlockEndsAt, let minutes = markMinutes(until: endsAt, now: now) {
-            return "いま \(title) \(minutes)分"
+        if let endsAt = snap.nextBlockEndsAt {
+            return occupancyLine(
+                prefix: "いま",
+                title: title,
+                unix: endsAt,
+                now: now,
+                timeZone: timeZone
+            )
         }
         return "いま \(title)"
     }
@@ -131,6 +144,40 @@ public struct RideOverlayPresentation: Equatable, Sendable {
         let minutes = interval / 60
         guard (1...60).contains(minutes) else { return nil }
         return minutes
+    }
+
+    /// Floor minutes until a occupancy edge. 30s floor. No 60 cap.
+    public static func remainingMinutes(until unix: Int, now: Int) -> Int? {
+        let interval = unix - now
+        guard interval >= 30 else { return nil }
+        let minutes = interval / 60
+        guard minutes >= 1 else { return nil }
+        return minutes
+    }
+
+    public static func clockTime(unix: Int, timeZone: TimeZone = .current) -> String {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+        let date = Date(timeIntervalSince1970: TimeInterval(unix))
+        return String(
+            format: "%02d:%02d",
+            calendar.component(.hour, from: date),
+            calendar.component(.minute, from: date)
+        )
+    }
+
+    private static func occupancyLine(
+        prefix: String,
+        title: String,
+        unix: Int,
+        now: Int,
+        timeZone: TimeZone
+    ) -> String {
+        let clock = clockTime(unix: unix, timeZone: timeZone)
+        if let minutes = remainingMinutes(until: unix, now: now) {
+            return "\(prefix) \(clock) \(minutes)分 \(title)"
+        }
+        return "\(prefix) \(clock) \(title)"
     }
 
     public static func progress(
