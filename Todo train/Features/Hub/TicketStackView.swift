@@ -30,16 +30,44 @@ struct TicketStackView: View {
     let onDelete: (Ticket) -> Void
     var zoomNamespace: Namespace.ID? = nil
 
+    @Environment(SessionManager.self) private var sessionManager
+    @State private var occupancyMarks: [TimetableOccupancyMark] = []
+
     private var orderedIDs: [UUID] {
         tickets.map(\.id)
     }
 
     var body: some View {
+        deck(occupancyMarks: occupancyMarks)
+            .onChange(of: orderedIDs) { _, ids in
+                if let focusedTicketID, !ids.contains(focusedTicketID) {
+                    self.focusedTicketID = nil
+                }
+            }
+            .task {
+                refreshOccupancyMarks()
+                while !Task.isCancelled {
+                    try? await Task.sleep(for: .seconds(15))
+                    guard !Task.isCancelled else { return }
+                    refreshOccupancyMarks()
+                }
+            }
+    }
+
+    private func refreshOccupancyMarks() {
+        let now = Date()
+        occupancyMarks = TimetableFit.occupancyMarks(
+            fit: sessionManager.timetableFit(at: now),
+            now: now
+        )
+    }
+
+    private func deck(occupancyMarks: [TimetableOccupancyMark]) -> some View {
         let visibleTickets = tickets
         let anyFocused = focusedTicketID != nil
         let dimPeers = anyFocused && !isPuttingBack
 
-        TicketDeckLayout() {
+        return TicketDeckLayout() {
             ForEach(Array(visibleTickets.enumerated()), id: \.element.id) { index, ticket in
                 let isHidden = ticket.id == hiddenTicketID
                 let isFocused = ticket.id == focusedTicketID
@@ -52,13 +80,19 @@ struct TicketStackView: View {
                     isFocused: isFocused,
                     peerFocused: peerFocused,
                     blockPeerHits: anyFocused,
-                    tilt: tilt
+                    tilt: tilt,
+                    occupancyMarks: occupancyMarks
                 )
             }
         }
-        .onChange(of: orderedIDs) { _, ids in
-            if let focusedTicketID, !ids.contains(focusedTicketID) {
-                self.focusedTicketID = nil
+        .background {
+            GeometryReader { geo in
+                Color.clear
+                    .preference(
+                        key: TicketDeckFrameKey.self,
+                        value: geo.frame(in: .named(HubTicketCanvas.spaceName))
+                    )
+                    .allowsHitTesting(false)
             }
         }
     }
@@ -70,7 +104,8 @@ struct TicketStackView: View {
         isFocused: Bool,
         peerFocused: Bool,
         blockPeerHits: Bool,
-        tilt: Double
+        tilt: Double,
+        occupancyMarks: [TimetableOccupancyMark]
     ) -> some View {
         HubMarsTicketCard(
             ticket: ticket,
@@ -79,6 +114,7 @@ struct TicketStackView: View {
             disabledReason: boardDisabledReason,
             restOffset: .zero,
             allowsDeckSwipe: !isHidden && !isFocused && !blockPeerHits,
+            occupancyMarks: occupancyMarks,
             onSelect: { onFocusTicket(ticket.id) },
             onDismissLift: onDismissFocus,
             onDeckSwipeEnded: { action in
@@ -118,14 +154,6 @@ struct TicketStackView: View {
                 Button("発車") { onBoard(ticket) }
             }
             Button("削除", role: .destructive) { onDelete(ticket) }
-        }
-        .overlay {
-            GeometryReader { slotGeo in
-                Color.clear.preference(
-                    key: TicketSlotFramesKey.self,
-                    value: [ticket.id: slotGeo.frame(in: .named(HubTicketCanvas.spaceName))]
-                )
-            }
         }
     }
 }

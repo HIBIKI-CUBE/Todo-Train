@@ -28,6 +28,7 @@ struct HubView: View {
     @State private var hubIssueEject: TicketIssueEjectEvent?
     @State private var focusedTicketID: UUID?
     @State private var ticketSlotFrames: [UUID: CGRect] = [:]
+    @State private var slotFrameCache = HubSlotFrameCache()
     @State private var departingTicketID: UUID?
     @State private var isPuttingBack = false
     @State private var lastWarmedBand: WorkHourBand?
@@ -190,6 +191,7 @@ struct HubView: View {
         }
         .sheet(isPresented: $showQuickAdd) {
             QuickAddSheet { event in
+                ticketSlotFrames = slotFrameCache.frames
                 hubIssueEject = event
                 sessionManager.noteCabinActivity()
                 // Stay on the list so the issue celebration can play; do not auto-enter focus.
@@ -401,11 +403,8 @@ struct HubView: View {
                     onDelete: { deleteTicket($0) },
                     zoomNamespace: zoomNamespace
                 )
-                .onPreferenceChange(TicketSlotFramesKey.self) { reported in
-                    ticketSlotFrames = TrainLayout.slotFrames(
-                        reported: reported,
-                        keeping: Set(stackTickets.map(\.id))
-                    )
+                .onPreferenceChange(TicketDeckFrameKey.self) { deckFrame in
+                    consumeDeckFrame(deckFrame)
                 }
             }
         }
@@ -569,12 +568,28 @@ struct HubView: View {
         return action
     }
 
+    private func consumeDeckFrame(_ deckFrame: CGRect) {
+        let reported = TrainLayout.slotFrames(
+            deckFrame: deckFrame,
+            orderedIDs: stackTickets.map(\.id)
+        )
+        slotFrameCache.frames = reported
+        if TrainLayout.shouldPublishSlotFrames(
+            needsLiveFrames: focusedTicketID != nil || hubIssueEject != nil,
+            reported: reported,
+            published: ticketSlotFrames
+        ) {
+            ticketSlotFrames = reported
+        }
+    }
+
     private func focusTicket(_ id: UUID) {
         guard focusedTicketID != id, !isPuttingBack else { return }
         var insert = Transaction()
         insert.animation = nil
         withTransaction(insert) {
             isPuttingBack = false
+            ticketSlotFrames = slotFrameCache.frames
             focusedTicketID = id
         }
     }

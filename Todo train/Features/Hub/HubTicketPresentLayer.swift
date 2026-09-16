@@ -32,8 +32,10 @@ struct HubTicketPresentLayer: View {
     let onBoard: () -> Void
     let onDelete: () -> Void
 
+    @Environment(SessionManager.self) private var sessionManager
     @State private var settled = false
     @State private var pose: CGSize?
+    @State private var occupancyMarks: [TimetableOccupancyMark] = []
 
     private var looksSettled: Bool {
         settled && !isPuttingBack
@@ -90,10 +92,10 @@ struct HubTicketPresentLayer: View {
                 .accessibilityAddTraits(.isButton)
                 .accessibilityLabel("選択をやめる")
 
-            flyingTicket
+            flyingTicket(occupancyMarks: occupancyMarks)
 
             ForEach(covers) { cover in
-                coverClone(cover)
+                coverClone(cover, occupancyMarks: occupancyMarks)
             }
 
             HubDepartLEDSign(
@@ -140,9 +142,25 @@ struct HubTicketPresentLayer: View {
                 pose = .zero
             }
         }
+        .task {
+            refreshOccupancyMarks()
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(15))
+                guard !Task.isCancelled else { return }
+                refreshOccupancyMarks()
+            }
+        }
     }
 
-    private var flyingTicket: some View {
+    private func refreshOccupancyMarks() {
+        let now = Date()
+        occupancyMarks = TimetableFit.occupancyMarks(
+            fit: sessionManager.timetableFit(at: now),
+            now: now
+        )
+    }
+
+    private func flyingTicket(occupancyMarks: [TimetableOccupancyMark]) -> some View {
         HubMarsTicketCard(
             ticket: ticket,
             isLifted: looksSettled,
@@ -151,6 +169,7 @@ struct HubTicketPresentLayer: View {
             disabledReason: disabledReason,
             restOffset: .zero,
             followsFinger: false,
+            occupancyMarks: occupancyMarks,
             onSelect: {},
             onDismissLift: onDismiss,
             onHoldDragEnded: onHoldDragEnded
@@ -177,7 +196,10 @@ struct HubTicketPresentLayer: View {
     }
 
     @ViewBuilder
-    private func coverClone(_ cover: HubPresentCover) -> some View {
+    private func coverClone(
+        _ cover: HubPresentCover,
+        occupancyMarks: [TimetableOccupancyMark]
+    ) -> some View {
         let coverWidth = size.width
         let coverHeight = size.height
         HubMarsTicketCard(
@@ -188,6 +210,7 @@ struct HubTicketPresentLayer: View {
             disabledReason: disabledReason,
             restOffset: .zero,
             followsFinger: false,
+            occupancyMarks: occupancyMarks,
             onSelect: {},
             onDismissLift: {}
         )

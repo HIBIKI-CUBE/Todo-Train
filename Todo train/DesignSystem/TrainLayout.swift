@@ -74,6 +74,57 @@ enum TrainLayout {
         reported.filter { ids.contains($0.key) }
     }
 
+    /// Deck layout math in canvas space. One stack origin, not a GeometryReader per card.
+    static func slotFrames(
+        deckFrame: CGRect,
+        orderedIDs: [UUID],
+        peekStep: CGFloat = MarsTicketSpec.HubStack.peekStep,
+        horizontalInset: CGFloat = MarsTicketSpec.HubStack.horizontalInset
+    ) -> [UUID: CGRect] {
+        guard deckFrame.width > 0, !orderedIDs.isEmpty else { return [:] }
+        let face = ticketFaceSize(containerWidth: deckFrame.width, horizontalInset: horizontalInset)
+        let x = deckFrame.minX + (deckFrame.width - face.width) / 2
+        var frames: [UUID: CGRect] = [:]
+        frames.reserveCapacity(orderedIDs.count)
+        for (index, id) in orderedIDs.enumerated() {
+            frames[id] = CGRect(
+                x: x,
+                y: deckFrame.minY + CGFloat(index) * peekStep,
+                width: face.width,
+                height: face.height
+            )
+        }
+        return frames
+    }
+
+    static func slotFramesMatch(
+        _ lhs: [UUID: CGRect],
+        _ rhs: [UUID: CGRect],
+        tolerance: CGFloat = 0.5
+    ) -> Bool {
+        guard lhs.count == rhs.count else { return false }
+        for (id, left) in lhs {
+            guard let right = rhs[id] else { return false }
+            if abs(left.minX - right.minX) > tolerance
+                || abs(left.minY - right.minY) > tolerance
+                || abs(left.width - right.width) > tolerance
+                || abs(left.height - right.height) > tolerance {
+                return false
+            }
+        }
+        return true
+    }
+
+    /// Scroll reports a new deck origin every frame. Writing that into Hub `@State`
+    /// rebuilds the whole wallet. Live frames are only for present / issue overlays.
+    static func shouldPublishSlotFrames(
+        needsLiveFrames: Bool,
+        reported: [UUID: CGRect],
+        published: [UUID: CGRect]
+    ) -> Bool {
+        needsLiveFrames && !slotFramesMatch(reported, published)
+    }
+
     /// Shrink an oversized landing frame around its center; keep Mars aspect.
     static func clampedLandingRect(_ rect: CGRect, containerSize: CGSize) -> CGRect {
         let face = ticketFaceSize(containerWidth: containerSize.width)

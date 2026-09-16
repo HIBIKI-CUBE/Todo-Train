@@ -40,11 +40,19 @@ extension EnvironmentValues {
     @Entry var isFocusCoverPresented: Bool = false
 }
 
-struct TicketSlotFramesKey: PreferenceKey {
-    static var defaultValue: [UUID: CGRect] = [:]
+struct TicketDeckFrameKey: PreferenceKey {
+    static var defaultValue: CGRect = .null
 
-    static func reduce(value: inout [UUID: CGRect], nextValue: () -> [UUID: CGRect]) {
-        value.merge(nextValue(), uniquingKeysWith: { _, new in new })
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
+        let next = nextValue()
+        if !next.isNull {
+            value = next
+        }
     }
+}
+
+/// Latest deck slots. Class mutation does not invalidate Hub during scroll.
+final class HubSlotFrameCache {
+    var frames: [UUID: CGRect] = [:]
 }
 
