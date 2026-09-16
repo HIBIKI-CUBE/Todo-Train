@@ -238,21 +238,12 @@ struct FocusView: View {
                 .padding(.horizontal, 14)
                 .padding(.vertical, 12)
 
-                if let line = occupancy.lines.first {
-                    HStack(alignment: .firstTextBaseline, spacing: TrainTheme.Space.sm) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(line)
-                                .font(.system(size: 13, weight: .medium, design: .default))
-                                .foregroundStyle(FocusPanel.muted)
-                                .lineLimit(1)
-                            if occupancy.lines.count > 1 {
-                                Text(occupancy.lines[1])
-                                    .font(.system(size: 13, weight: .medium, design: .default))
-                                    .foregroundStyle(FocusPanel.muted)
-                                    .lineLimit(1)
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                if !occupancy.rows.isEmpty || !occupancy.marks.isEmpty {
+                    TimetableOccupancyMeter(
+                        rows: occupancy.rows,
+                        marks: occupancy.marks,
+                        chrome: .cabin
+                    ) {
                         if let title = occupancy.actionTitle, let action = occupancy.action {
                             Button(title, action: action)
                                 .font(.system(size: 13, weight: .semibold, design: .default))
@@ -402,23 +393,25 @@ struct FocusView: View {
     }
 
     private func occupancyInstrument(now: Date) -> (
-        lines: [String],
+        rows: [TimetableOccupancyRow],
+        marks: [TimetableOccupancyMark],
         actionTitle: String?,
         action: (() -> Void)?
     ) {
         let fit = sessionManager.timetableFit(at: now)
-        let lines = TimetableFit.occupancyLines(
+        let rows = TimetableFit.occupancyRows(
             fit: fit,
             now: now,
             calendar: sessionManager.calendar
         )
+        let marks = TimetableFit.occupancyMarks(fit: fit, now: now)
         if fit.currentOccupancy?.isAdopted == true {
-            return (lines, TimetableCopy.unadopt, { sessionManager.unadoptCurrentOccurrence() })
+            return (rows, marks, TimetableCopy.unadopt, { sessionManager.unadoptCurrentOccurrence() })
         }
         if fit.currentOccupancy?.isAdopted == false {
-            return (lines, TimetableCopy.adopt, { sessionManager.adoptCurrentNoticeThisTime() })
+            return (rows, marks, TimetableCopy.adopt, { sessionManager.adoptCurrentNoticeThisTime() })
         }
-        return (lines, nil, nil)
+        return (rows, marks, nil, nil)
     }
 
     private func applyExtend(minutes: Int) {

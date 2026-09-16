@@ -22,6 +22,39 @@ nonisolated struct TimetableFitBlock: Equatable, Sendable, Identifiable {
     }
 }
 
+/// いま / 掲示 / 次。計器のチップ。
+nonisolated enum TimetableOccupancyKind: Equatable, Sendable {
+    case occupying
+    case notice
+    case next
+
+    var prefix: String {
+        switch self {
+        case .occupying: "いま"
+        case .notice: "掲示"
+        case .next: "次"
+        }
+    }
+}
+
+nonisolated struct TimetableOccupancyRow: Equatable, Sendable, Identifiable {
+    var id: UUID
+    var kind: TimetableOccupancyKind
+    var clock: String
+    var remainingMinutes: Int?
+    var title: String
+    var spokenLine: String
+}
+
+nonisolated struct TimetableOccupancyMark: Equatable, Sendable, Identifiable {
+    var id: UUID
+    /// 0...1 along the 60-minute rail.
+    var position: Double
+    /// Remaining occupancy as a band from `position`. Next marks are 0.
+    var span: Double
+    var isCurrent: Bool
+}
+
 /// いま / 次の占有。乗る対象ではない。計器の材料。
 nonisolated struct TimetableOccupancy: Equatable, Sendable, Identifiable {
     var block: TimetableFitBlock
@@ -215,15 +248,73 @@ nonisolated enum TimetableFit {
     }
 
     /// Hub / Focus / 案内板. At most now + next.
+    static func occupancyRows(
+        fit: TimetableFitSnapshot,
+        now: Date,
+        calendar: Calendar = .autoupdatingCurrent
+    ) -> [TimetableOccupancyRow] {
+        var rows: [TimetableOccupancyRow] = []
+        if let current = fit.currentOccupancy {
+            rows.append(
+                occupancyRow(
+                    kind: current.isAdopted ? .occupying : .notice,
+                    occupancy: current,
+                    at: current.endsAt,
+                    now: now,
+                    calendar: calendar
+                )
+            )
+        }
+        if let next = fit.nextOccupancy {
+            rows.append(
+                occupancyRow(
+                    kind: .next,
+                    occupancy: next,
+                    at: next.startsAt,
+                    now: now,
+                    calendar: calendar
+                )
+            )
+        }
+        return rows
+    }
+
     static func occupancyLines(
         fit: TimetableFitSnapshot,
         now: Date,
         calendar: Calendar = .autoupdatingCurrent
     ) -> [String] {
-        [
-            dutyLine(fit: fit, now: now, calendar: calendar),
-            nextDutyLine(fit: fit, now: now, calendar: calendar)
-        ].compactMap { $0 }
+        occupancyRows(fit: fit, now: now, calendar: calendar).map(\.spokenLine)
+    }
+
+    static func occupancyMarks(fit: TimetableFitSnapshot, now: Date) -> [TimetableOccupancyMark] {
+        let window = TimeInterval(markWindowMinutes * 60)
+        var marks: [TimetableOccupancyMark] = []
+        if let current = fit.currentOccupancy, current.startsAt <= now {
+            let remaining = max(0, current.endsAt.timeIntervalSince(now))
+            marks.append(
+                TimetableOccupancyMark(
+                    id: current.id,
+                    position: 0,
+                    span: max(0, min(1, remaining / window)),
+                    isCurrent: true
+                )
+            )
+        }
+        if let next = fit.nextOccupancy {
+            let offset = next.startsAt.timeIntervalSince(now)
+            if offset >= 0, offset <= window {
+                marks.append(
+                    TimetableOccupancyMark(
+                        id: next.id,
+                        position: max(0, min(1, offset / window)),
+                        span: 0,
+                        isCurrent: false
+                    )
+                )
+            }
+        }
+        return marks
     }
 
     /// Clock of a occupancy edge. Tests pass a UTC calendar so the string stays stable.
@@ -256,6 +347,30 @@ nonisolated enum TimetableFit {
             return "\(prefix) \(clock) \(minutes)分 \(title)"
         }
         return "\(prefix) \(clock) \(title)"
+    }
+
+    private static func occupancyRow(
+        kind: TimetableOccupancyKind,
+        occupancy: TimetableOccupancy,
+        at date: Date,
+        now: Date,
+        calendar: Calendar
+    ) -> TimetableOccupancyRow {
+        let minutes = remainingMinutes(until: date, now: now)
+        return TimetableOccupancyRow(
+            id: occupancy.id,
+            kind: kind,
+            clock: clockTime(date, calendar: calendar),
+            remainingMinutes: minutes,
+            title: occupancy.title,
+            spokenLine: occupancyLine(
+                prefix: kind.prefix,
+                title: occupancy.title,
+                at: date,
+                now: now,
+                calendar: calendar
+            )
+        )
     }
 
     private static func sortedValid(_ blocks: [TimetableFitBlock], now: Date) -> [TimetableFitBlock] {

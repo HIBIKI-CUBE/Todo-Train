@@ -198,6 +198,26 @@ struct RideOverlayPresentationTests {
             timeZone: utc
         )
         #expect(far == "次 00:09 61分 週次レポート")
+        let instrument = RideOverlayPresentation.occupancyInstrument(
+            snap: snap,
+            now: 1_768_000_120,
+            timeZone: utc
+        )
+        #expect(instrument?.prefix == "次")
+        #expect(instrument?.clock == "00:09")
+        #expect(instrument?.minutes == 61)
+        #expect(instrument?.markPosition == nil)
+        #expect(instrument?.remainingSpan == 0)
+        snap.nextBlockStartsAt = 1_768_000_400
+        let near = RideOverlayPresentation.occupancyInstrument(
+            snap: snap,
+            now: 1_768_000_120,
+            timeZone: utc
+        )
+        #expect(near?.clock == "23:13")
+        #expect(near?.minutes == 4)
+        #expect(near?.markPosition != nil)
+        #expect(abs((near?.markPosition ?? -1) - (280.0 / 3600.0)) < 0.0001)
     }
 
     @Test func markMinutes_floorsAndCaps() {

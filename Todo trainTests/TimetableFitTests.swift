@@ -65,10 +65,21 @@ struct TimetableFitTests {
         ) == "次 22:33 20分 1on1")
         #expect(TimetableFit.dutyLine(fit: snap, now: now, calendar: utc) == "いま 22:23 10分 週次")
         #expect(TimetableFit.nextDutyLine(fit: snap, now: now, calendar: utc) == "次 22:33 20分 1on1")
-        #expect(TimetableFit.occupancyLines(fit: snap, now: now, calendar: utc) == [
-            "いま 22:23 10分 週次",
-            "次 22:33 20分 1on1"
-        ])
+        #expect(
+            TimetableFit.occupancyLines(fit: snap, now: now, calendar: utc) == [
+                "いま 22:23 10分 週次",
+                "次 22:33 20分 1on1"
+            ]
+        )
+        let rows = TimetableFit.occupancyRows(fit: snap, now: now, calendar: utc)
+        #expect(rows.map(\.kind) == [.occupying, .next])
+        #expect(rows.map(\.clock) == ["22:23", "22:33"])
+        #expect(rows.map(\.remainingMinutes) == [10, 20])
+        let marks = TimetableFit.occupancyMarks(fit: snap, now: now)
+        #expect(marks.count == 2)
+        #expect(marks[0].isCurrent)
+        #expect(abs(marks[0].span - (10.0 / 60.0)) < 0.0001)
+        #expect(abs(marks[1].position - (20.0 / 60.0)) < 0.0001)
     }
 
     @Test func snapshot_budgetWinsWhenEarlierThanBlock() {

@@ -72,6 +72,8 @@ struct CompanionRideOverlayView: View {
                         .foregroundStyle(.white)
                         .lineLimit(1)
                         .padding(.horizontal, 12)
+                } else if let occupancy = presentation.occupancy {
+                    occupancyStrip(occupancy)
                 } else if let line = presentation.nextBlockLine {
                     Text(line)
                         .font(.system(size: 15, weight: .semibold))
@@ -110,6 +112,59 @@ struct CompanionRideOverlayView: View {
             .padding(.trailing, 4)
             .frame(maxHeight: .infinity)
             .accessibilityHidden(true)
+    }
+
+    private func occupancyStrip(_ occupancy: RideOccupancyInstrument) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            GeometryReader { geo in
+                let inner = max(geo.size.width - 8, 1)
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Color.white.opacity(0.14))
+                    Rectangle()
+                        .fill(Color.white.opacity(0.85))
+                        .frame(width: 2, height: 10)
+                    if occupancy.remainingSpan > 0 {
+                        Capsule()
+                            .fill(Color.white.opacity(0.32))
+                            .frame(width: max(5, inner * occupancy.remainingSpan), height: 7)
+                            .offset(x: 4)
+                    }
+                    if let position = occupancy.markPosition, occupancy.remainingSpan == 0 {
+                        Circle()
+                            .fill(Color.white.opacity(0.9))
+                            .frame(width: 6, height: 6)
+                            .offset(x: 4 + inner * position)
+                    }
+                }
+            }
+            .frame(height: 10)
+            .accessibilityHidden(true)
+
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(occupancy.prefix)
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1)
+                    .background(Color.white.opacity(occupancy.prefix == "いま" ? 0.22 : 0.12), in: Capsule())
+                Text(occupancy.clock)
+                    .font(.system(size: 16, weight: .semibold).monospacedDigit())
+                    .foregroundStyle(.white)
+                if let minutes = occupancy.minutes {
+                    Text("\(minutes)分")
+                        .font(.system(size: 14, weight: .semibold).monospacedDigit())
+                        .foregroundStyle(.white)
+                }
+                Text(occupancy.title)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.7))
+                    .lineLimit(1)
+            }
+        }
+        .padding(.horizontal, 12)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(occupancy.spokenLine)
     }
 
     private var bottomRow: some View {

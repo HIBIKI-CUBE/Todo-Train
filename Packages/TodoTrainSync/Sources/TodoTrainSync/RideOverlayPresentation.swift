@@ -2,6 +2,36 @@ import Foundation
 
 public typealias RideOverlayTimerPhase = TimerUrgency
 
+public struct RideOccupancyInstrument: Equatable, Sendable {
+    public var prefix: String
+    public var clock: String
+    public var minutes: Int?
+    public var title: String
+    public var spokenLine: String
+    /// 0...1 on the 60-minute rail. Nil when the next start is outside the window.
+    public var markPosition: Double?
+    /// Remaining occupancy as a band from the left. 0 for upcoming.
+    public var remainingSpan: Double
+
+    public init(
+        prefix: String,
+        clock: String,
+        minutes: Int?,
+        title: String,
+        spokenLine: String,
+        markPosition: Double?,
+        remainingSpan: Double
+    ) {
+        self.prefix = prefix
+        self.clock = clock
+        self.minutes = minutes
+        self.title = title
+        self.spokenLine = spokenLine
+        self.markPosition = markPosition
+        self.remainingSpan = remainingSpan
+    }
+}
+
 /// Mac ride PiP from the same snap input as the menu bar. Hidden when unpaired or idle.
 public struct RideOverlayPresentation: Equatable, Sendable {
     public var isVisible: Bool
@@ -20,6 +50,8 @@ public struct RideOverlayPresentation: Equatable, Sendable {
     /// Progress 車内放送 on the PiP. Nil when idle.
     public var cabinPrompt: String?
     /// Next or current ダイヤ. Title and minutes from unix timestamps so tests stay timezone-stable.
+    /// Occupancy as digits + a 60-minute rail. Spoken line stays on `nextBlockLine`.
+    public var occupancy: RideOccupancyInstrument?
     public var nextBlockLine: String?
 
     public static let peekTitleLimit = 6
@@ -39,6 +71,7 @@ public struct RideOverlayPresentation: Equatable, Sendable {
         statusLine: nil,
         peekTitle: "",
         cabinPrompt: nil,
+        occupancy: nil,
         nextBlockLine: nil
     )
 
@@ -106,6 +139,7 @@ public struct RideOverlayPresentation: Equatable, Sendable {
             statusLine: statusLine,
             peekTitle: truncatedPeekTitle(title),
             cabinPrompt: cabinPrompt,
+            occupancy: occupancyInstrument(snap: snap, now: input.now),
             nextBlockLine: nextBlockLine(snap: snap, now: input.now)
         )
     }
@@ -135,6 +169,51 @@ public struct RideOverlayPresentation: Equatable, Sendable {
             )
         }
         return "いま \(title)"
+    }
+
+    public static func occupancyInstrument(
+        snap: SnapPlaintext,
+        now: Int,
+        timeZone: TimeZone = .current
+    ) -> RideOccupancyInstrument? {
+        guard let title = snap.nextBlockTitle, !title.isEmpty else { return nil }
+        let window = 60 * 60
+        if let startsAt = snap.nextBlockStartsAt, startsAt > now {
+            let offset = startsAt - now
+            let mark: Double? = (0...window).contains(offset) ? Double(offset) / Double(window) : nil
+            return RideOccupancyInstrument(
+                prefix: "次",
+                clock: clockTime(unix: startsAt, timeZone: timeZone),
+                minutes: remainingMinutes(until: startsAt, now: now),
+                title: title,
+                spokenLine: occupancyLine(
+                    prefix: "次",
+                    title: title,
+                    unix: startsAt,
+                    now: now,
+                    timeZone: timeZone
+                ),
+                markPosition: mark,
+                remainingSpan: 0
+            )
+        }
+        let edge = snap.nextBlockEndsAt ?? now
+        let remaining = max(0, edge - now)
+        return RideOccupancyInstrument(
+            prefix: "いま",
+            clock: clockTime(unix: edge, timeZone: timeZone),
+            minutes: remainingMinutes(until: edge, now: now),
+            title: title,
+            spokenLine: occupancyLine(
+                prefix: "いま",
+                title: title,
+                unix: edge,
+                now: now,
+                timeZone: timeZone
+            ),
+            markPosition: 0,
+            remainingSpan: min(1, Double(remaining) / Double(window))
+        )
     }
 
     /// Same window as iOS `TimetableFit.markMinutes`. Floor minutes, 1...60.

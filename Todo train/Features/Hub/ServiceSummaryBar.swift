@@ -79,21 +79,17 @@ struct ServiceSummaryBar: View {
                 }
 
                 TimelineView(.periodic(from: .now, by: 15)) { context in
-                    let lines = TimetableFit.occupancyLines(
-                        fit: sessionManager.timetableFit(at: context.date),
-                        now: context.date,
-                        calendar: sessionManager.calendar
+                    let fit = sessionManager.timetableFit(at: context.date)
+                    TimetableOccupancyMeter(
+                        rows: TimetableFit.occupancyRows(
+                            fit: fit,
+                            now: context.date,
+                            calendar: sessionManager.calendar
+                        ),
+                        marks: TimetableFit.occupancyMarks(fit: fit, now: context.date),
+                        chrome: .grouped
                     )
-                    if !lines.isEmpty {
-                        VStack(alignment: .leading, spacing: 2) {
-                            ForEach(lines, id: \.self) { line in
-                                Text(line)
-                                    .font(TrainTheme.TypeScale.meta())
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                            }
-                        }
-                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
 
