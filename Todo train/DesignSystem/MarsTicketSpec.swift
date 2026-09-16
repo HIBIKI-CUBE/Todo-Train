@@ -59,6 +59,8 @@ enum MarsTicketSpec {
             static let caretAppearDuration: Double = 0.22
             static let caretTravelDelay: Double = 0.68
             static let caretTravelDuration: Double = 0.4
+            static let zoomDelay: Double = 1.15
+            static let zoomDuration: Double = 0.55
         }
         /// Non-focused peers while one ticket is held.
         static let focusPeerOpacity: Double = 0.55

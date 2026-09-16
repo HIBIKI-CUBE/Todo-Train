@@ -55,6 +55,30 @@ nonisolated struct TimetableOccupancyMark: Equatable, Sendable, Identifiable {
     var isCurrent: Bool
 }
 
+/// Occupancy mapped onto a ride's elapsed/budget bar. Nil when the edge is past the ride.
+nonisolated struct TimetableProgressOccupancy: Equatable, Sendable {
+    var spanStart: Double?
+    var spanEnd: Double?
+    var mark: Double?
+
+    static let empty = TimetableProgressOccupancy(spanStart: nil, spanEnd: nil, mark: nil)
+}
+
+/// Hub / Focus が尺を寄せるか。窓の外なら 60 分のまま。
+nonisolated struct TimetableDispatchScale: Equatable, Sendable {
+    var zooms: Bool
+    /// Seconds from now that map to 1.0 on the instrument.
+    var windowSeconds: TimeInterval
+    /// Wall-clock occupancy edge the window is aimed at. Nil when quiet.
+    var occupancyEdge: Date?
+
+    static let quiet = TimetableDispatchScale(
+        zooms: false,
+        windowSeconds: TimeInterval(TimetableFit.markWindowMinutes * 60),
+        occupancyEdge: nil
+    )
+}
+
 /// いま / 次の占有。乗る対象ではない。計器の材料。
 nonisolated struct TimetableOccupancy: Equatable, Sendable, Identifiable {
     var block: TimetableFitBlock
@@ -91,6 +115,10 @@ nonisolated enum TimetableFit {
     static let awaySuppressionLead: TimeInterval = 120
     static let markWindowMinutes = 60
     static let markFloorSeconds: TimeInterval = 30
+    /// Slack past 予定/予測 so an occupancy just after arrival still zooms.
+    static let dispatchSlack: TimeInterval = 5 * 60
+    static let dispatchHeadroom: Double = 1.12
+    static let dispatchMinWindow: TimeInterval = 6 * 60
 
     static func markMinutes(until start: Date, now: Date) -> Int? {
         let interval = start.timeIntervalSince(now)
@@ -287,8 +315,12 @@ nonisolated enum TimetableFit {
         occupancyRows(fit: fit, now: now, calendar: calendar).map(\.spokenLine)
     }
 
-    static func occupancyMarks(fit: TimetableFitSnapshot, now: Date) -> [TimetableOccupancyMark] {
-        let window = TimeInterval(markWindowMinutes * 60)
+    static func occupancyMarks(
+        fit: TimetableFitSnapshot,
+        now: Date,
+        windowSeconds: TimeInterval = TimeInterval(markWindowMinutes * 60)
+    ) -> [TimetableOccupancyMark] {
+        let window = max(windowSeconds, 1)
         var marks: [TimetableOccupancyMark] = []
         if let current = fit.currentOccupancy, current.startsAt <= now {
             let remaining = max(0, current.endsAt.timeIntervalSince(now))
@@ -315,6 +347,104 @@ nonisolated enum TimetableFit {
             }
         }
         return marks
+    }
+
+    /// Fraction of a dispatch / 60-minute window. Nil when the offset is past the window.
+    static func dispatchFraction(offset: TimeInterval, windowSeconds: TimeInterval) -> Double? {
+        guard windowSeconds > 0, offset >= 0 else { return nil }
+        let position = offset / windowSeconds
+        guard position <= 1 else { return nil }
+        return position
+    }
+
+    /// Zoom when occupancy sits inside this boarding's arrival window (or occupies now).
+    static func boardingDispatch(
+        fit: TimetableFitSnapshot,
+        now: Date,
+        scheduledArrival: Date,
+        predictedArrival: Date?
+    ) -> TimetableDispatchScale {
+        let rideEnd = [scheduledArrival, predictedArrival].compactMap { $0 }.max() ?? scheduledArrival
+        let slackEnd = rideEnd.addingTimeInterval(dispatchSlack)
+        if let current = fit.currentOccupancy {
+            return dispatchWindow(edge: current.endsAt, now: now)
+        }
+        if let next = fit.nextOccupancy, next.startsAt <= slackEnd {
+            return dispatchWindow(edge: next.startsAt, now: now)
+        }
+        return .quiet
+    }
+
+    /// Zoom the ride bar when occupancy is still ahead on elapsed/budget.
+    static func rideDispatch(
+        occupancy: TimetableProgressOccupancy,
+        progress: Double
+    ) -> (progress: Double, occupancy: TimetableProgressOccupancy, zooms: Bool) {
+        let edge = occupancy.mark ?? occupancy.spanEnd
+        guard let edge, edge > progress, edge < 0.92 else {
+            return (progress, occupancy, false)
+        }
+        let domain = max(edge, 0.001)
+        var mapped = TimetableProgressOccupancy.empty
+        if let start = occupancy.spanStart, let end = occupancy.spanEnd, end > start {
+            mapped.spanStart = min(1, max(0, start / domain))
+            mapped.spanEnd = min(1, max(0, end / domain))
+        }
+        if let mark = occupancy.mark {
+            mapped.mark = min(1, mark / domain)
+        }
+        return (min(1, max(0, progress / domain)), mapped, true)
+    }
+
+    private static func dispatchWindow(edge: Date, now: Date) -> TimetableDispatchScale {
+        let until = max(edge.timeIntervalSince(now), markFloorSeconds)
+        let window = min(
+            max(until * dispatchHeadroom, dispatchMinWindow),
+            TimeInterval(markWindowMinutes * 60)
+        )
+        return TimetableDispatchScale(zooms: true, windowSeconds: window, occupancyEdge: edge)
+    }
+
+    /// Map occupancy onto elapsed/budget. Now sits at `elapsed / budget`; next is wall-clock from there.
+    static func occupancyOnProgress(
+        fit: TimetableFitSnapshot,
+        now: Date,
+        elapsed: TimeInterval,
+        budget: TimeInterval
+    ) -> TimetableProgressOccupancy {
+        guard budget > 0 else {
+            return TimetableProgressOccupancy(spanStart: nil, spanEnd: nil, mark: nil)
+        }
+        var spanStart: Double?
+        var spanEnd: Double?
+        var mark: Double?
+        if let current = fit.currentOccupancy {
+            let remaining = max(0, current.endsAt.timeIntervalSince(now))
+            if let start = progressPosition(elapsed: elapsed, offset: 0, budget: budget) {
+                let end = progressPosition(elapsed: elapsed, offset: remaining, budget: budget) ?? 1
+                if end > start {
+                    spanStart = start
+                    spanEnd = end
+                }
+            }
+        }
+        if let next = fit.nextOccupancy {
+            let until = next.startsAt.timeIntervalSince(now)
+            if until >= 0 {
+                mark = progressPosition(elapsed: elapsed, offset: until, budget: budget)
+            }
+        }
+        return TimetableProgressOccupancy(spanStart: spanStart, spanEnd: spanEnd, mark: mark)
+    }
+
+    private static func progressPosition(
+        elapsed: TimeInterval,
+        offset: TimeInterval,
+        budget: TimeInterval
+    ) -> Double? {
+        let position = (elapsed + offset) / budget
+        guard position >= 0, position <= 1 else { return nil }
+        return position
     }
 
     /// Clock of a occupancy edge. Tests pass a UTC calendar so the string stays stable.

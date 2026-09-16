@@ -11,6 +11,8 @@ struct TimetableOccupancyMeter<Accessory: View>: View {
     var rows: [TimetableOccupancyRow]
     var marks: [TimetableOccupancyMark]
     var chrome: Chrome
+    var showsRail: Bool
+    var compact: Bool
     var accessory: Accessory
 
     enum Chrome {
@@ -23,11 +25,15 @@ struct TimetableOccupancyMeter<Accessory: View>: View {
         rows: [TimetableOccupancyRow],
         marks: [TimetableOccupancyMark],
         chrome: Chrome,
+        showsRail: Bool = true,
+        compact: Bool = false,
         @ViewBuilder accessory: () -> Accessory
     ) {
         self.rows = rows
         self.marks = marks
         self.chrome = chrome
+        self.showsRail = showsRail
+        self.compact = compact
         self.accessory = accessory()
     }
 
@@ -35,9 +41,9 @@ struct TimetableOccupancyMeter<Accessory: View>: View {
         if rows.isEmpty, marks.isEmpty {
             EmptyView()
         } else {
-            HStack(alignment: .top, spacing: 8) {
-                VStack(alignment: .leading, spacing: 6) {
-                    if !rows.isEmpty {
+            HStack(alignment: .top, spacing: compact ? 6 : 8) {
+                VStack(alignment: .leading, spacing: compact ? 3 : 6) {
+                    if showsRail, !rows.isEmpty {
                         rail
                     }
                     ForEach(rows) { row in
@@ -80,23 +86,23 @@ struct TimetableOccupancyMeter<Accessory: View>: View {
     }
 
     private func occupancyRow(_ row: TimetableOccupancyRow) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
+        HStack(alignment: .firstTextBaseline, spacing: compact ? 6 : 8) {
             Text(row.kind.prefix)
                 .font(.caption2.weight(.bold))
                 .foregroundStyle(chipForeground(row.kind))
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
+                .padding(.horizontal, compact ? 5 : 6)
+                .padding(.vertical, compact ? 1 : 2)
                 .background(chipBackground(row.kind), in: Capsule())
             Text(row.clock)
-                .font(.body.weight(.semibold).monospacedDigit())
+                .font((compact ? Font.caption : Font.body).weight(.semibold).monospacedDigit())
                 .foregroundStyle(clockColor)
             if let minutes = row.remainingMinutes {
                 Text("\(minutes)分")
-                    .font(.subheadline.weight(.semibold).monospacedDigit())
+                    .font((compact ? Font.caption2 : Font.subheadline).weight(.semibold).monospacedDigit())
                     .foregroundStyle(clockColor)
             }
             Text(row.title)
-                .font(.caption.weight(.medium))
+                .font((compact ? Font.caption2 : Font.caption).weight(.medium))
                 .foregroundStyle(titleColor)
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -188,7 +194,19 @@ struct TimetableOccupancyMeter<Accessory: View>: View {
 }
 
 extension TimetableOccupancyMeter where Accessory == EmptyView {
-    init(rows: [TimetableOccupancyRow], marks: [TimetableOccupancyMark], chrome: Chrome) {
-        self.init(rows: rows, marks: marks, chrome: chrome) { EmptyView() }
+    init(
+        rows: [TimetableOccupancyRow],
+        marks: [TimetableOccupancyMark],
+        chrome: Chrome,
+        showsRail: Bool = true,
+        compact: Bool = false
+    ) {
+        self.init(
+            rows: rows,
+            marks: marks,
+            chrome: chrome,
+            showsRail: showsRail,
+            compact: compact
+        ) { EmptyView() }
     }
 }

@@ -212,11 +212,16 @@ struct FocusView: View {
             let remaining = sessionManager.remainingSeconds
             let phase = timerPhase(remaining: remaining)
             let occupancy = occupancyInstrument(now: context.date)
+            let dispatched = TimetableFit.rideDispatch(
+                occupancy: occupancy.progress,
+                progress: progressValue(at: context.date)
+            )
 
             VStack(spacing: 0) {
                 FocusProgressBar(
-                    progress: progressValue(at: context.date),
-                    phase: phase
+                    progress: dispatched.progress,
+                    phase: phase,
+                    occupancy: dispatched.occupancy
                 )
 
                 HStack(spacing: TrainTheme.Space.md) {
@@ -238,11 +243,12 @@ struct FocusView: View {
                 .padding(.horizontal, 14)
                 .padding(.vertical, 12)
 
-                if !occupancy.rows.isEmpty || !occupancy.marks.isEmpty {
+                if !occupancy.rows.isEmpty {
                     TimetableOccupancyMeter(
                         rows: occupancy.rows,
-                        marks: occupancy.marks,
-                        chrome: .cabin
+                        marks: [],
+                        chrome: .cabin,
+                        showsRail: false
                     ) {
                         if let title = occupancy.actionTitle, let action = occupancy.action {
                             Button(title, action: action)
@@ -394,7 +400,7 @@ struct FocusView: View {
 
     private func occupancyInstrument(now: Date) -> (
         rows: [TimetableOccupancyRow],
-        marks: [TimetableOccupancyMark],
+        progress: TimetableProgressOccupancy,
         actionTitle: String?,
         action: (() -> Void)?
     ) {
@@ -404,14 +410,20 @@ struct FocusView: View {
             now: now,
             calendar: sessionManager.calendar
         )
-        let marks = TimetableFit.occupancyMarks(fit: fit, now: now)
+        let elapsed = sessionManager.activeSession?.elapsedSeconds(at: now) ?? 0
+        let progress = TimetableFit.occupancyOnProgress(
+            fit: fit,
+            now: now,
+            elapsed: elapsed,
+            budget: currentBudgetSeconds
+        )
         if fit.currentOccupancy?.isAdopted == true {
-            return (rows, marks, TimetableCopy.unadopt, { sessionManager.unadoptCurrentOccurrence() })
+            return (rows, progress, TimetableCopy.unadopt, { sessionManager.unadoptCurrentOccurrence() })
         }
         if fit.currentOccupancy?.isAdopted == false {
-            return (rows, marks, TimetableCopy.adopt, { sessionManager.adoptCurrentNoticeThisTime() })
+            return (rows, progress, TimetableCopy.adopt, { sessionManager.adoptCurrentNoticeThisTime() })
         }
-        return (rows, marks, nil, nil)
+        return (rows, progress, nil, nil)
     }
 
     private func applyExtend(minutes: Int) {

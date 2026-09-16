@@ -207,7 +207,7 @@ struct RideOverlayPresentationTests {
         #expect(instrument?.clock == "00:09")
         #expect(instrument?.minutes == 61)
         #expect(instrument?.markPosition == nil)
-        #expect(instrument?.remainingSpan == 0)
+        #expect(instrument?.spanStart == nil)
         snap.nextBlockStartsAt = 1_768_000_400
         let near = RideOverlayPresentation.occupancyInstrument(
             snap: snap,
@@ -217,7 +217,18 @@ struct RideOverlayPresentationTests {
         #expect(near?.clock == "23:13")
         #expect(near?.minutes == 4)
         #expect(near?.markPosition != nil)
-        #expect(abs((near?.markPosition ?? -1) - (280.0 / 3600.0)) < 0.0001)
+        #expect(abs((near?.markPosition ?? -1) - (400.0 / 1500.0)) < 0.0001)
+        snap.nextBlockStartsAt = 1_768_000_000
+        snap.nextBlockEndsAt = 1_768_001_320
+        let occupying = RideOverlayPresentation.occupancyInstrument(
+            snap: snap,
+            now: 1_768_000_120,
+            timeZone: utc
+        )
+        #expect(occupying?.prefix == "いま")
+        #expect(occupying?.markPosition == nil)
+        #expect(abs((occupying?.spanStart ?? -1) - (120.0 / 1500.0)) < 0.0001)
+        #expect(abs((occupying?.spanEnd ?? -1) - (1320.0 / 1500.0)) < 0.0001)
     }
 
     @Test func markMinutes_floorsAndCaps() {

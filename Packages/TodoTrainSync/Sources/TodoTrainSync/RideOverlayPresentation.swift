@@ -8,10 +8,11 @@ public struct RideOccupancyInstrument: Equatable, Sendable {
     public var minutes: Int?
     public var title: String
     public var spokenLine: String
-    /// 0...1 on the 60-minute rail. Nil when the next start is outside the window.
+    /// Next occupancy on the ride progress bar (elapsed / estimated). Nil when past the ride.
     public var markPosition: Double?
-    /// Remaining occupancy as a band from the left. 0 for upcoming.
-    public var remainingSpan: Double
+    /// Current occupancy band on the same progress bar.
+    public var spanStart: Double?
+    public var spanEnd: Double?
 
     public init(
         prefix: String,
@@ -20,7 +21,8 @@ public struct RideOccupancyInstrument: Equatable, Sendable {
         title: String,
         spokenLine: String,
         markPosition: Double?,
-        remainingSpan: Double
+        spanStart: Double?,
+        spanEnd: Double?
     ) {
         self.prefix = prefix
         self.clock = clock
@@ -28,7 +30,8 @@ public struct RideOccupancyInstrument: Equatable, Sendable {
         self.title = title
         self.spokenLine = spokenLine
         self.markPosition = markPosition
-        self.remainingSpan = remainingSpan
+        self.spanStart = spanStart
+        self.spanEnd = spanEnd
     }
 }
 
@@ -50,7 +53,7 @@ public struct RideOverlayPresentation: Equatable, Sendable {
     /// Progress 車内放送 on the PiP. Nil when idle.
     public var cabinPrompt: String?
     /// Next or current ダイヤ. Title and minutes from unix timestamps so tests stay timezone-stable.
-    /// Occupancy as digits + a 60-minute rail. Spoken line stays on `nextBlockLine`.
+    /// Occupancy as digits on the ride remaining fill. Spoken line stays on `nextBlockLine`.
     public var occupancy: RideOccupancyInstrument?
     public var nextBlockLine: String?
 
@@ -177,10 +180,9 @@ public struct RideOverlayPresentation: Equatable, Sendable {
         timeZone: TimeZone = .current
     ) -> RideOccupancyInstrument? {
         guard let title = snap.nextBlockTitle, !title.isEmpty else { return nil }
-        let window = 60 * 60
+        let remaining = snap.remainingSeconds(at: now)
+        let estimated = snap.estimatedSeconds
         if let startsAt = snap.nextBlockStartsAt, startsAt > now {
-            let offset = startsAt - now
-            let mark: Double? = (0...window).contains(offset) ? Double(offset) / Double(window) : nil
             return RideOccupancyInstrument(
                 prefix: "次",
                 clock: clockTime(unix: startsAt, timeZone: timeZone),
@@ -193,12 +195,34 @@ public struct RideOverlayPresentation: Equatable, Sendable {
                     now: now,
                     timeZone: timeZone
                 ),
-                markPosition: mark,
-                remainingSpan: 0
+                markPosition: occupancyOnProgress(
+                    secondsFromNow: startsAt - now,
+                    remaining: remaining,
+                    estimated: estimated
+                ),
+                spanStart: nil,
+                spanEnd: nil
             )
         }
         let edge = snap.nextBlockEndsAt ?? now
-        let remaining = max(0, edge - now)
+        let occupancyRemaining = max(0, edge - now)
+        let spanStart = occupancyOnProgress(
+            secondsFromNow: 0,
+            remaining: remaining,
+            estimated: estimated
+        )
+        let mappedEnd = occupancyOnProgress(
+            secondsFromNow: occupancyRemaining,
+            remaining: remaining,
+            estimated: estimated
+        )
+        let spanEnd: Double?
+        if let spanStart {
+            let end = mappedEnd ?? 1
+            spanEnd = end > spanStart ? end : nil
+        } else {
+            spanEnd = nil
+        }
         return RideOccupancyInstrument(
             prefix: "いま",
             clock: clockTime(unix: edge, timeZone: timeZone),
@@ -211,9 +235,23 @@ public struct RideOverlayPresentation: Equatable, Sendable {
                 now: now,
                 timeZone: timeZone
             ),
-            markPosition: 0,
-            remainingSpan: min(1, Double(remaining) / Double(window))
+            markPosition: nil,
+            spanStart: spanEnd == nil ? nil : spanStart,
+            spanEnd: spanEnd
         )
+    }
+
+    /// Map a wall-clock offset onto remaining ride progress (elapsed / estimated).
+    public static func occupancyOnProgress(
+        secondsFromNow: Int,
+        remaining: Int?,
+        estimated: Int?
+    ) -> Double? {
+        guard let estimated, estimated > 0, let remaining else { return nil }
+        let elapsed = max(0, Double(estimated - remaining))
+        let position = (elapsed + Double(secondsFromNow)) / Double(estimated)
+        guard position >= 0, position <= 1 else { return nil }
+        return position
     }
 
     /// Same window as iOS `TimetableFit.markMinutes`. Floor minutes, 1...60.

@@ -115,52 +115,25 @@ struct CompanionRideOverlayView: View {
     }
 
     private func occupancyStrip(_ occupancy: RideOccupancyInstrument) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
-            GeometryReader { geo in
-                let inner = max(geo.size.width - 8, 1)
-                ZStack(alignment: .leading) {
-                    Capsule()
-                        .fill(Color.white.opacity(0.14))
-                    Rectangle()
-                        .fill(Color.white.opacity(0.85))
-                        .frame(width: 2, height: 10)
-                    if occupancy.remainingSpan > 0 {
-                        Capsule()
-                            .fill(Color.white.opacity(0.32))
-                            .frame(width: max(5, inner * occupancy.remainingSpan), height: 7)
-                            .offset(x: 4)
-                    }
-                    if let position = occupancy.markPosition, occupancy.remainingSpan == 0 {
-                        Circle()
-                            .fill(Color.white.opacity(0.9))
-                            .frame(width: 6, height: 6)
-                            .offset(x: 4 + inner * position)
-                    }
-                }
-            }
-            .frame(height: 10)
-            .accessibilityHidden(true)
-
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(occupancy.prefix)
-                    .font(.system(size: 10, weight: .bold))
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text(occupancy.prefix)
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 5)
+                .padding(.vertical, 1)
+                .background(Color.white.opacity(occupancy.prefix == "いま" ? 0.22 : 0.12), in: Capsule())
+            Text(occupancy.clock)
+                .font(.system(size: 16, weight: .semibold).monospacedDigit())
+                .foregroundStyle(.white)
+            if let minutes = occupancy.minutes {
+                Text("\(minutes)分")
+                    .font(.system(size: 14, weight: .semibold).monospacedDigit())
                     .foregroundStyle(.white)
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 1)
-                    .background(Color.white.opacity(occupancy.prefix == "いま" ? 0.22 : 0.12), in: Capsule())
-                Text(occupancy.clock)
-                    .font(.system(size: 16, weight: .semibold).monospacedDigit())
-                    .foregroundStyle(.white)
-                if let minutes = occupancy.minutes {
-                    Text("\(minutes)分")
-                        .font(.system(size: 14, weight: .semibold).monospacedDigit())
-                        .foregroundStyle(.white)
-                }
-                Text(occupancy.title)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.7))
-                    .lineLimit(1)
             }
+            Text(occupancy.title)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.white.opacity(0.7))
+                .lineLimit(1)
         }
         .padding(.horizontal, 12)
         .accessibilityElement(children: .ignore)
@@ -204,13 +177,14 @@ struct CompanionRideOverlayView: View {
                     total: geo.size.width
                 )
             )
-            ZStack {
+            ZStack(alignment: .leading) {
                 Color.black
                 HStack(spacing: 0) {
                     RideOverlayPalette.fill(for: presentation)
                         .frame(width: fillWidth)
                     Spacer(minLength: 0)
                 }
+                occupancyProgressMarks(width: geo.size.width, height: geo.size.height)
                 remainingDigits(RideOverlayPalette.onTrack)
                 remainingDigits(RideOverlayPalette.onFill(for: presentation))
                     .mask {
@@ -223,6 +197,24 @@ struct CompanionRideOverlayView: View {
             .frame(width: geo.size.width, height: geo.size.height)
         }
         .clipped()
+    }
+
+    @ViewBuilder
+    private func occupancyProgressMarks(width: CGFloat, height: CGFloat) -> some View {
+        if let occupancy = presentation.occupancy {
+            if let start = occupancy.spanStart, let end = occupancy.spanEnd, end > start {
+                Capsule()
+                    .fill(Color.white.opacity(0.28))
+                    .frame(width: max(6, width * (end - start)), height: height)
+                    .offset(x: width * start)
+            }
+            if let mark = occupancy.markPosition {
+                Capsule()
+                    .fill(Color.white.opacity(0.92))
+                    .frame(width: 5, height: height)
+                    .offset(x: width * mark - 2.5)
+            }
+        }
     }
 
     private func remainingDigits(_ color: Color) -> some View {
@@ -331,6 +323,29 @@ struct CompanionRideOverlayView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
             .background(Color.black)
+            .overlay {
+                occupancyPeekMarks(height: geo.size.height)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func occupancyPeekMarks(height: CGFloat) -> some View {
+        if let occupancy = presentation.occupancy {
+            ZStack(alignment: .bottom) {
+                if let start = occupancy.spanStart, let end = occupancy.spanEnd, end > start {
+                    Rectangle()
+                        .fill(Color.white.opacity(0.28))
+                        .frame(height: max(4, height * (end - start)))
+                        .padding(.bottom, height * start)
+                }
+                if let mark = occupancy.markPosition {
+                    Capsule()
+                        .fill(Color.white.opacity(0.92))
+                        .frame(height: 5)
+                        .padding(.bottom, max(0, height * mark - 2.5))
+                }
+            }
         }
     }
 

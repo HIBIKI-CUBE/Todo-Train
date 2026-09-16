@@ -80,6 +80,22 @@ struct TimetableFitTests {
         #expect(marks[0].isCurrent)
         #expect(abs(marks[0].span - (10.0 / 60.0)) < 0.0001)
         #expect(abs(marks[1].position - (20.0 / 60.0)) < 0.0001)
+        let onProgress = TimetableFit.occupancyOnProgress(
+            fit: snap,
+            now: now,
+            elapsed: 5 * 60,
+            budget: 30 * 60
+        )
+        #expect(abs((onProgress.spanStart ?? -1) - (5.0 / 30.0)) < 0.0001)
+        #expect(abs((onProgress.spanEnd ?? -1) - (15.0 / 30.0)) < 0.0001)
+        #expect(abs((onProgress.mark ?? -1) - (25.0 / 30.0)) < 0.0001)
+        let pastRide = TimetableFit.occupancyOnProgress(
+            fit: snap,
+            now: now,
+            elapsed: 25 * 60,
+            budget: 30 * 60
+        )
+        #expect(pastRide.mark == nil)
     }
 
     @Test func snapshot_budgetWinsWhenEarlierThanBlock() {
@@ -165,7 +181,7 @@ struct TimetableFitTests {
         #expect(snap.currentOccupancy?.title == "定例")
         #expect(snap.currentOccupancy?.isAdopted == false)
         #expect(snap.nextOccupancy?.title == "1on1")
-        #expect(TimetableFit.dutyLine(fit: snap, now: now, calendar: utc) == "掲示 22:27 15分 定例")
+        #expect(TimetableFit.dutyLine(fit: snap, now: now, calendar: utc) == "掲示 22:28 15分 定例")
         #expect(TimetableFit.nextDutyLine(fit: snap, now: now, calendar: utc) == "次 22:33 20分 1on1")
         let adoptedOnly = TimetableFit.snapshot(blocks: [next], now: now, budgetEndsAt: nil)
         #expect(TimetableFit.dutyLine(fit: adoptedOnly, now: now, calendar: utc) == "次 22:33 20分 1on1")
@@ -241,5 +257,81 @@ struct TimetableFitTests {
         #expect(
             TimetableFit.occupancyLines(fit: snap, now: now, calendar: utc) == ["次 23:43 90分 夕方"]
         )
+    }
+
+    @Test func boardingDispatch_zoomsWhenOccupancyIsInArrivalWindow() {
+        let near = TimetableFitBlock(
+            title: "タスク",
+            startsAt: now.addingTimeInterval(14 * 60),
+            endsAt: now.addingTimeInterval(44 * 60)
+        )
+        let fit = TimetableFit.snapshot(blocks: [near], now: now, budgetEndsAt: nil)
+        let scheduled = now.addingTimeInterval(10 * 60)
+        let predicted = now.addingTimeInterval(12 * 60)
+        let dispatch = TimetableFit.boardingDispatch(
+            fit: fit,
+            now: now,
+            scheduledArrival: scheduled,
+            predictedArrival: predicted
+        )
+        #expect(dispatch.zooms)
+        #expect(dispatch.occupancyEdge == near.startsAt)
+        #expect(dispatch.windowSeconds < TimeInterval(TimetableFit.markWindowMinutes * 60))
+        let fill = TimetableFit.dispatchFraction(offset: 10 * 60, windowSeconds: dispatch.windowSeconds)
+        let chip = TimetableFit.dispatchFraction(offset: 14 * 60, windowSeconds: dispatch.windowSeconds)
+        #expect((fill ?? 1) < (chip ?? 0))
+    }
+
+    @Test func boardingDispatch_staysQuietWhenOccupancyIsFar() {
+        let far = TimetableFitBlock(
+            title: "夕方",
+            startsAt: now.addingTimeInterval(50 * 60),
+            endsAt: now.addingTimeInterval(80 * 60)
+        )
+        let fit = TimetableFit.snapshot(blocks: [far], now: now, budgetEndsAt: nil)
+        let dispatch = TimetableFit.boardingDispatch(
+            fit: fit,
+            now: now,
+            scheduledArrival: now.addingTimeInterval(10 * 60),
+            predictedArrival: now.addingTimeInterval(12 * 60)
+        )
+        #expect(!dispatch.zooms)
+        #expect(dispatch.windowSeconds == TimeInterval(TimetableFit.markWindowMinutes * 60))
+    }
+
+    @Test func boardingDispatch_zoomsWhileOccupyingNow() {
+        let current = TimetableFitBlock(
+            title: "定例",
+            startsAt: now.addingTimeInterval(-60),
+            endsAt: now.addingTimeInterval(15 * 60)
+        )
+        let fit = TimetableFit.snapshot(
+            blocks: [],
+            notices: [current],
+            now: now,
+            budgetEndsAt: nil
+        )
+        let dispatch = TimetableFit.boardingDispatch(
+            fit: fit,
+            now: now,
+            scheduledArrival: now.addingTimeInterval(30 * 60),
+            predictedArrival: nil
+        )
+        #expect(dispatch.zooms)
+        #expect(dispatch.occupancyEdge == current.endsAt)
+    }
+
+    @Test func rideDispatch_magnifiesRemainingRace() {
+        let occupancy = TimetableProgressOccupancy(spanStart: nil, spanEnd: nil, mark: 0.4)
+        let zoomed = TimetableFit.rideDispatch(occupancy: occupancy, progress: 0.1)
+        #expect(zoomed.zooms)
+        #expect(abs(zoomed.progress - 0.25) < 0.0001)
+        #expect(abs((zoomed.occupancy.mark ?? -1) - 1) < 0.0001)
+        let quiet = TimetableFit.rideDispatch(
+            occupancy: TimetableProgressOccupancy(spanStart: nil, spanEnd: nil, mark: 0.96),
+            progress: 0.2
+        )
+        #expect(!quiet.zooms)
+        #expect(quiet.progress == 0.2)
     }
 }

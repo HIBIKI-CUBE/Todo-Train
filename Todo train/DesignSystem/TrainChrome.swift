@@ -52,6 +52,7 @@ enum FocusPanel {
 struct FocusProgressBar: View {
     let progress: Double
     let phase: FocusTimerPhase
+    var occupancy: TimetableProgressOccupancy = .empty
 
     private var clampedProgress: Double {
         min(max(progress, 0), 1)
@@ -71,12 +72,29 @@ struct FocusProgressBar: View {
                         .frame(width: 4)
                         .frame(maxWidth: .infinity, alignment: .trailing)
                 }
+                occupancyMarks(width: proxy.size.width, height: proxy.size.height)
             }
         }
         .frame(height: 10)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("進捗")
         .accessibilityValue("\(Int(clampedProgress * 100))パーセント")
+    }
+
+    @ViewBuilder
+    private func occupancyMarks(width: CGFloat, height: CGFloat) -> some View {
+        if let start = occupancy.spanStart, let end = occupancy.spanEnd, end > start {
+            Capsule()
+                .fill(Color.white.opacity(0.28))
+                .frame(width: max(6, width * (end - start)), height: height)
+                .offset(x: width * start)
+        }
+        if let mark = occupancy.mark {
+            Capsule()
+                .fill(Color.white.opacity(0.92))
+                .frame(width: 5, height: height)
+                .offset(x: width * mark - 2.5)
+        }
     }
 }
 
