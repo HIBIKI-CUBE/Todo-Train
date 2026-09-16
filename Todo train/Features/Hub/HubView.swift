@@ -24,8 +24,6 @@ struct HubView: View {
     @State private var showError = false
     @State private var showPauseLimitSheet = false
     @State private var pendingBoardTicket: Ticket?
-    @State private var overlapTicket: Ticket?
-    @State private var overlapConflict: TimetableBoardingConflict?
     /// Single-issue celebration playing on Hub (may overlap sheet dismiss).
     @State private var hubIssueEject: TicketIssueEjectEvent?
     @State private var focusedTicketID: UUID?
@@ -177,13 +175,6 @@ struct HubView: View {
             }
         }
         .errorAlert(isPresented: $showError, message: errorMessage)
-        .timetableBoardingConfirm(conflict: $overlapConflict) {
-            if let overlapTicket {
-                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                proceedBoard(overlapTicket)
-            }
-            overlapTicket = nil
-        }
         .task {
             await sessionManager.refreshCalendarBoardIfAuthorized()
         }
@@ -343,10 +334,18 @@ struct HubView: View {
                 .padding(.horizontal, TrainTheme.Space.lg)
 
             if let quiet = sessionManager.timetableQuietMessage {
-                Text(quiet)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, TrainTheme.Space.lg)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(quiet)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    if sessionManager.timetableFit().currentBlock != nil {
+                        Button(TimetableCopy.unadoptThisTime) {
+                            sessionManager.unadoptCurrentOccurrence()
+                        }
+                        .font(.footnote.weight(.semibold))
+                    }
+                }
+                .padding(.horizontal, TrainTheme.Space.lg)
             }
 
             VStack(spacing: TrainTheme.Space.sm) {
@@ -562,10 +561,6 @@ struct HubView: View {
                 inertial: flicked
             )
         case .board:
-            if sessionManager.boardingConflict(for: ticket) != nil {
-                requestBoard(ticket)
-                return .snap
-            }
             UIImpactFeedbackGenerator(style: .medium).impactOccurred()
             proceedBoard(ticket)
         case .snap:
@@ -586,11 +581,6 @@ struct HubView: View {
 
     private func requestBoard(_ ticket: Ticket) {
         guard canBoardGenerally else { return }
-        if let conflict = sessionManager.boardingConflict(for: ticket) {
-            overlapTicket = ticket
-            overlapConflict = conflict
-            return
-        }
         proceedBoard(ticket)
     }
 

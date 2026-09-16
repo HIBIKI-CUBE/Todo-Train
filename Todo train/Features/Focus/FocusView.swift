@@ -238,13 +238,25 @@ struct FocusView: View {
                 .padding(.vertical, 12)
 
                 if let line = timetableLine(now: context.date) {
-                    Text(line)
-                        .font(.system(size: 13, weight: .medium, design: .default))
-                        .foregroundStyle(FocusPanel.muted)
-                        .lineLimit(1)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 14)
-                        .padding(.bottom, 10)
+                    HStack(alignment: .firstTextBaseline, spacing: TrainTheme.Space.sm) {
+                        Text(line)
+                            .font(.system(size: 13, weight: .medium, design: .default))
+                            .foregroundStyle(FocusPanel.muted)
+                            .lineLimit(1)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        if sessionManager.timetableFit(at: context.date).currentBlock != nil {
+                            Button(TimetableCopy.unadopt) {
+                                sessionManager.unadoptCurrentOccurrence()
+                            }
+                            .font(.system(size: 13, weight: .semibold, design: .default))
+                            .foregroundStyle(FocusPanel.ink)
+                            .buttonStyle(.plain)
+                            .padding(.vertical, 6)
+                            .accessibilityHint("この枠を今回だけ外す。発車は止めません。")
+                        }
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.bottom, 10)
                 }
             }
             .background(FocusPanel.fill)

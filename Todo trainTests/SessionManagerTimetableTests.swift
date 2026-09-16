@@ -195,6 +195,102 @@ struct SessionManagerTimetableTests {
         #expect(manager.timetableQuietMessage == nil)
     }
 
+    @Test func resumeWithoutUnadopt_rearmsAndPausesAgain() throws {
+        let (manager, context, clock, _) = try SessionManagerFixtures.makeHarness(now: start)
+        try manager.startService()
+        _ = insertBlock(context, startOffset: 0, duration: 1800)
+        let ticket = try SessionManagerFixtures.makeTicket(context, seconds: 1800)
+        try manager.board(ticket: ticket)
+        clock.advance(by: 61)
+        manager.reconcile()
+        #expect(manager.phase == .paused)
+
+        try manager.resume()
+        #expect(manager.phase == .running)
+        let armed = try context.fetch(FetchDescriptor<TimetableGuard>()).filter(\.isOpen)
+        #expect(armed.count == 1)
+
+        clock.advance(by: 61)
+        manager.reconcile()
+        #expect(manager.phase == .paused)
+    }
+
+    @Test func unadoptCurrent_whileRunning_letsRideContinue() throws {
+        let (manager, context, clock, _) = try SessionManagerFixtures.makeHarness(now: start)
+        try manager.startService()
+        _ = insertBlock(context, startOffset: 0)
+        let ticket = try SessionManagerFixtures.makeTicket(context, seconds: 1800)
+        try manager.board(ticket: ticket)
+        #expect(try context.fetch(FetchDescriptor<TimetableGuard>()).filter(\.isOpen).count == 1)
+
+        manager.unadoptCurrentOccurrence()
+        #expect(manager.fetchActiveTimetableBlocks().isEmpty)
+        #expect(try context.fetch(FetchDescriptor<TimetableGuard>()).filter(\.isOpen).isEmpty)
+
+        clock.advance(by: 61)
+        manager.reconcile()
+        #expect(manager.phase == .running)
+        #expect(manager.timetableQuietMessage == nil)
+    }
+
+    @Test func unadoptCurrent_afterAtsPause_resumeDoesNotRearm() throws {
+        let (manager, context, clock, _) = try SessionManagerFixtures.makeHarness(now: start)
+        try manager.startService()
+        _ = insertBlock(context, startOffset: 0, duration: 1800)
+        let ticket = try SessionManagerFixtures.makeTicket(context, seconds: 1800)
+        try manager.board(ticket: ticket)
+        clock.advance(by: 61)
+        manager.reconcile()
+        #expect(manager.phase == .paused)
+        #expect(manager.timetableFit().currentBlock != nil)
+
+        manager.unadoptCurrentOccurrence()
+        #expect(manager.fetchActiveTimetableBlocks().isEmpty)
+
+        try manager.resume()
+        clock.advance(by: 61)
+        manager.reconcile()
+        #expect(manager.phase == .running)
+        #expect(try context.fetch(FetchDescriptor<TimetableGuard>()).filter(\.isOpen).isEmpty)
+    }
+
+    @Test func adoptCurrentNoticeThisTime_insertsOccurrence() async throws {
+        let board = InMemoryCalendarBoard()
+        board.events = [
+            calendarOccurrence(id: "n", calendar: "work", title: "定例", startOffset: -60)
+        ]
+        let (manager, _, _, _) = try SessionManagerFixtures.makeHarness(
+            now: start,
+            calendarBoard: board
+        )
+        try manager.startService()
+        await manager.refreshCalendarBoard()
+        #expect(manager.currentUnadoptedNotice()?.title == "定例")
+        #expect(manager.fetchActiveTimetableBlocks().isEmpty)
+
+        manager.adoptCurrentNoticeThisTime()
+        #expect(manager.fetchActiveTimetableBlocks().map(\.title) == ["定例"])
+        #expect(manager.currentUnadoptedNotice() == nil)
+        #expect(manager.timetableFit().currentBlock?.title == "定例")
+    }
+
+    @Test func boardDuringNotice_runsWithoutArming() async throws {
+        let board = InMemoryCalendarBoard()
+        board.events = [
+            calendarOccurrence(id: "n", calendar: "work", title: "定例", startOffset: -60)
+        ]
+        let (manager, context, _, _) = try SessionManagerFixtures.makeHarness(
+            now: start,
+            calendarBoard: board
+        )
+        try manager.startService()
+        await manager.refreshCalendarBoard()
+        let ticket = try SessionManagerFixtures.makeTicket(context, seconds: 1800)
+        try manager.board(ticket: ticket)
+        #expect(manager.phase == .running)
+        #expect(try context.fetch(FetchDescriptor<TimetableGuard>()).isEmpty)
+    }
+
     @Test func refresh_filtersNoticesBySelectedCalendars() async throws {
         let board = InMemoryCalendarBoard()
         board.calendars = [
@@ -229,35 +325,6 @@ struct SessionManagerTimetableTests {
         await manager.refreshCalendarBoard()
         #expect(manager.fetchActiveTimetableBlocks().count == 1)
         #expect(manager.noticeOccurrences.isEmpty)
-    }
-
-    @Test func boardingConflict_adoptedNowAndNoticeNow() async throws {
-        let board = InMemoryCalendarBoard()
-        board.events = [
-            calendarOccurrence(id: "n", calendar: "work", title: "定例", startOffset: -60)
-        ]
-        let (manager, context, _, _) = try SessionManagerFixtures.makeHarness(
-            now: start,
-            calendarBoard: board
-        )
-        try manager.startService()
-        let ticket = try SessionManagerFixtures.makeTicket(context, seconds: 1800)
-
-        await manager.refreshCalendarBoard()
-        #expect(manager.boardingConflict(for: ticket) == .noticeNow(title: "定例"))
-
-        _ = insertBlock(context, title: "週次", startOffset: -300)
-        #expect(manager.boardingConflict(for: ticket) == .adoptedNow(title: "週次"))
-    }
-
-    @Test func boardingConflict_adoptedSoonOnlyInsideEstimate() throws {
-        let (manager, context, _, _) = try SessionManagerFixtures.makeHarness(now: start)
-        try manager.startService()
-        _ = insertBlock(context, title: "1on1", startOffset: 600)
-        let longTicket = try SessionManagerFixtures.makeTicket(context, title: "long", seconds: 1800)
-        let shortTicket = try SessionManagerFixtures.makeTicket(context, title: "short", seconds: 300)
-        #expect(manager.boardingConflict(for: longTicket) == .adoptedSoon(title: "1on1"))
-        #expect(manager.boardingConflict(for: shortTicket) == nil)
     }
 
     private func calendarOccurrence(

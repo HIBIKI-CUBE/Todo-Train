@@ -72,39 +72,10 @@ extension SessionManager {
         await applyCalendarBoardFetch()
     }
 
-    /// Hub では許可ダイアログを出さない。許可済みなら掲示を温めて発車時の重なりを読めるようにする。
+    /// Hub では許可ダイアログを出さない。許可済みなら掲示を温めて案内板が読めるようにする。
     func refreshCalendarBoardIfAuthorized() async {
         guard calendarBoard.authorizationStatus() == .authorized else { return }
         await applyCalendarBoardFetch()
-    }
-
-    func boardingConflict(for ticket: Ticket, at now: Date? = nil) -> TimetableBoardingConflict? {
-        let now = now ?? clock.now
-        let remaining: TimeInterval
-        if let paused = openPausedSessions().first(where: { $0.ticket?.id == ticket.id }) {
-            remaining = max(paused.remainingSeconds(at: now), 0)
-        } else {
-            remaining = TimeInterval(max(ticket.estimatedSeconds, 0))
-        }
-        let rideEnd = now.addingTimeInterval(remaining)
-        let blocks = fetchActiveTimetableBlocks()
-        let adopted = blocks.map {
-            TimetableBoardInterval(title: $0.title, startsAt: $0.startsAt, endsAt: $0.endsAt)
-        }
-        let notices = noticeOccurrences
-            .filter { occurrence in
-                !blocks.contains(where: {
-                    $0.calendarEventIdentifier == occurrence.eventIdentifier
-                        && abs(($0.occurrenceStartKey ?? $0.startsAt.timeIntervalSince1970) - occurrence.occurrenceStartKey) < 0.5
-                })
-            }
-            .map { TimetableBoardInterval(title: $0.title, startsAt: $0.startsAt, endsAt: $0.endsAt) }
-        return TimetableBoardingOverlap.conflict(
-            now: now,
-            rideEnd: rideEnd,
-            adopted: adopted,
-            notices: notices
-        )
     }
 
     func currentUnadoptedNotice(at now: Date? = nil) -> CalendarOccurrence? {
@@ -151,11 +122,23 @@ extension SessionManager {
         reconcile()
     }
 
+    /// 案内板の掲示一行。今回だけ載せる。発車は阻まない。
+    func adoptCurrentNoticeThisTime() {
+        guard let notice = currentUnadoptedNotice() else { return }
+        adoptOccurrence(notice, scope: .occurrence)
+    }
+
     func unadopt(blockID: UUID, scope: TimetableAdoptionScope) {
         persist(TimetableAdoption.unadopt(blockID: blockID, scope: scope, membership: loadMembership()))
         try? save()
         lastScheduledEndBellFireAt = nil
         reconcile()
+    }
+
+    /// いま重なっているダイヤを今回だけ外す。確認は出さない。
+    func unadoptCurrentOccurrence() {
+        guard let current = timetableFit().currentBlock else { return }
+        unadopt(blockID: current.id, scope: .occurrence)
     }
 
     func unadoptOccurrence(_ occurrence: CalendarOccurrence, scope: TimetableAdoptionScope) {

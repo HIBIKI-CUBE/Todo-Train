@@ -113,14 +113,20 @@ struct HubTicketPresentLayer: View {
                 fit: sessionManager.timetableFit(),
                 noticeNow: sessionManager.currentUnadoptedNotice(),
                 now: sessionManager.clock.now,
-                width: size.width
+                width: size.width,
+                onAdoptNotice: { sessionManager.adoptCurrentNoticeThisTime() },
+                onUnadoptCurrent: { sessionManager.unadoptCurrentOccurrence() }
             )
-            .offset(
-                y: -(size.height / 2 + MarsTicketSpec.HubStack.departSignGap + signHeight + 22)
-            )
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+            .fixedSize()
+            .alignmentGuide(VerticalAlignment.center) { dimensions in
+                dimensions[VerticalAlignment.center]
+                    + size.height / 2
+                    + MarsTicketSpec.HubStack.departSignGap
+                    + signHeight
+                    + 22
+            }
             .opacity(looksSettled ? 1 : 0)
-            .allowsHitTesting(false)
+            .allowsHitTesting(looksSettled)
 
             if showsBoardingForecastPlate {
                 HubBoardingForecastPlate(
