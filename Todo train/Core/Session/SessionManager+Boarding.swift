@@ -35,7 +35,7 @@ extension SessionManager {
         }
 
         guard PauseLimitGuard.canBoardNewRide(
-            pausedCount: pausedTicketCount,
+            pausedCount: pausedCountTowardLimit,
             limit: settings.pauseLimit
         ) else {
             throw SessionError.pauseLimitReached
@@ -70,7 +70,7 @@ extension SessionManager {
 
             // Gate on paused tickets already sitting, before parking the current ride.
             guard PauseLimitGuard.canBoardNewRide(
-                pausedCount: pausedTicketCount,
+                pausedCount: pausedCountTowardLimit,
                 limit: settings.pauseLimit
             ) else {
                 throw SessionError.pauseLimitReached
@@ -107,21 +107,31 @@ extension SessionManager {
         requestCheckInPrompt(for: session, title: ticket.title, estimatedMinutes: estimate / 60)
     }
 
-    func pause(now: Date? = nil) throws {
+    func pause(now: Date? = nil, timetableHeld: Bool = false) throws {
         let now = now ?? clock.now
         guard let session = activeSession, session.isOpen else {
             throw SessionError.noActiveSession
         }
         guard !session.isPaused else {
             phase = .paused
+            if timetableHeld {
+                session.timetableHeld = true
+                timetableQuietMessage = TimetableCopy.quiet
+            }
             return
         }
 
-        try applyPause(session: session, now: now)
+        try applyPause(session: session, now: now, timetableHeld: timetableHeld)
     }
 
-    func applyPause(session: WorkSession, now: Date, syncAlarm: Bool = true) throws {
+    func applyPause(session: WorkSession, now: Date, syncAlarm: Bool = true, timetableHeld: Bool = false) throws {
         flushToPaused(session, now: now)
+        session.timetableHeld = timetableHeld
+        if timetableHeld {
+            timetableQuietMessage = TimetableCopy.quiet
+        } else {
+            clearTimetableQuietMessage()
+        }
         phase = .paused
         noteCabinActivity(now: now, clearPendingIdle: true)
         bumpCompanionSync()
@@ -139,6 +149,7 @@ extension SessionManager {
     /// Park the running session without setting `phase` to `.paused` (no Focus cover tear-down).
     func parkRunningSessionForSwitch(_ session: WorkSession, now: Date) throws {
         flushToPaused(session, now: now)
+        session.timetableHeld = false
         liveActivityManager.end()
         alarmScheduler.cancel(sessionID: session.id)
         try save()
@@ -211,6 +222,7 @@ extension SessionManager {
         endOpenPauseRecord(on: session, now: now)
         session.pausedAt = nil
         session.segmentStartedAt = now
+        session.timetableHeld = false
         phase = .running
         clearTimetableQuietMessage()
         noteCabinActivity(now: now, clearPendingIdle: true)

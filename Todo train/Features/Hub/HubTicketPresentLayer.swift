@@ -109,14 +109,15 @@ struct HubTicketPresentLayer: View {
             .opacity(looksSettled ? 1 : 0)
             .allowsHitTesting(false)
 
-            HubTimetablePlate(
-                fit: sessionManager.timetableFit(),
-                noticeNow: sessionManager.currentUnadoptedNotice(),
-                now: sessionManager.clock.now,
-                width: size.width,
-                onAdoptNotice: { sessionManager.adoptCurrentNoticeThisTime() },
-                onUnadoptCurrent: { sessionManager.unadoptCurrentOccurrence() }
-            )
+            TimelineView(.periodic(from: .now, by: 15)) { context in
+                HubTimetablePlate(
+                    fit: sessionManager.timetableFit(at: context.date),
+                    now: context.date,
+                    width: size.width,
+                    onAdoptNotice: { sessionManager.adoptCurrentNoticeThisTime() },
+                    onUnadoptCurrent: { sessionManager.unadoptCurrentOccurrence() }
+                )
+            }
             .fixedSize()
             .alignmentGuide(VerticalAlignment.center) { dimensions in
                 dimensions[VerticalAlignment.center]

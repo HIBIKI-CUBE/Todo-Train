@@ -75,6 +75,7 @@ struct AppStoreSnapshot: Sendable {
         var checkInAnswersJSON: String
         var awayDueAt: Date?
         var boardedDeviceID: String?
+        var timetableHeld: Bool
         var ticketID: UUID?
     }
 
@@ -157,6 +158,7 @@ struct AppStoreSnapshot: Sendable {
                 checkInAnswersJSON: session.checkInAnswersJSON,
                 awayDueAt: session.awayDueAt,
                 boardedDeviceID: session.boardedDeviceID,
+                timetableHeld: session.timetableHeld,
                 ticketID: session.ticket?.id
             )
         }
@@ -267,6 +269,7 @@ struct AppStoreSnapshot: Sendable {
             session.checkInPromptLine = row.checkInPromptLine
             session.checkInAnswersJSON = row.checkInAnswersJSON
             session.awayDueAt = row.awayDueAt
+            session.timetableHeld = row.timetableHeld
             context.insert(session)
             sessionsByID[row.id] = session
         }

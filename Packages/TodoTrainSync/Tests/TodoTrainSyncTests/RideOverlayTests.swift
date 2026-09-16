@@ -177,7 +177,7 @@ struct RideOverlayPresentationTests {
         snap.nextBlockStartsAt = 1_768_000_000
         snap.nextBlockEndsAt = 1_768_001_320
         let current = RideOverlayPresentation.nextBlockLine(snap: snap, now: 1_768_000_120)
-        #expect(current == "週次レポート 20分")
+        #expect(current == "いま 週次レポート 20分")
         snap.nextBlockTitle = nil
         #expect(RideOverlayPresentation.nextBlockLine(snap: snap, now: 1_768_000_120) == nil)
     }

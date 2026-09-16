@@ -211,6 +211,7 @@ struct FocusView: View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
             let remaining = sessionManager.remainingSeconds
             let phase = timerPhase(remaining: remaining)
+            let occupancy = occupancyInstrument(now: context.date)
 
             VStack(spacing: 0) {
                 FocusProgressBar(
@@ -237,22 +238,28 @@ struct FocusView: View {
                 .padding(.horizontal, 14)
                 .padding(.vertical, 12)
 
-                if let line = timetableLine(now: context.date) {
+                if let line = occupancy.lines.first {
                     HStack(alignment: .firstTextBaseline, spacing: TrainTheme.Space.sm) {
-                        Text(line)
-                            .font(.system(size: 13, weight: .medium, design: .default))
-                            .foregroundStyle(FocusPanel.muted)
-                            .lineLimit(1)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        if sessionManager.timetableFit(at: context.date).currentBlock != nil {
-                            Button(TimetableCopy.unadopt) {
-                                sessionManager.unadoptCurrentOccurrence()
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(line)
+                                .font(.system(size: 13, weight: .medium, design: .default))
+                                .foregroundStyle(FocusPanel.muted)
+                                .lineLimit(1)
+                            if occupancy.lines.count > 1 {
+                                Text(occupancy.lines[1])
+                                    .font(.system(size: 13, weight: .medium, design: .default))
+                                    .foregroundStyle(FocusPanel.muted)
+                                    .lineLimit(1)
                             }
-                            .font(.system(size: 13, weight: .semibold, design: .default))
-                            .foregroundStyle(FocusPanel.ink)
-                            .buttonStyle(.plain)
-                            .padding(.vertical, 6)
-                            .accessibilityHint(TimetableCopy.thisTime)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        if let title = occupancy.actionTitle, let action = occupancy.action {
+                            Button(title, action: action)
+                                .font(.system(size: 13, weight: .semibold, design: .default))
+                                .foregroundStyle(FocusPanel.ink)
+                                .buttonStyle(.plain)
+                                .padding(.vertical, 6)
+                                .accessibilityHint(TimetableCopy.thisTime)
                         }
                     }
                     .padding(.horizontal, 14)
@@ -394,8 +401,20 @@ struct FocusView: View {
         return formatter.string(from: deadline)
     }
 
-    private func timetableLine(now: Date) -> String? {
-        TimetableFit.dutyLine(fit: sessionManager.timetableFit(at: now), now: now)
+    private func occupancyInstrument(now: Date) -> (
+        lines: [String],
+        actionTitle: String?,
+        action: (() -> Void)?
+    ) {
+        let fit = sessionManager.timetableFit(at: now)
+        let lines = TimetableFit.occupancyLines(fit: fit, now: now)
+        if fit.currentOccupancy?.isAdopted == true {
+            return (lines, TimetableCopy.unadopt, { sessionManager.unadoptCurrentOccurrence() })
+        }
+        if fit.currentOccupancy?.isAdopted == false {
+            return (lines, TimetableCopy.adopt, { sessionManager.adoptCurrentNoticeThisTime() })
+        }
+        return (lines, nil, nil)
     }
 
     private func applyExtend(minutes: Int) {

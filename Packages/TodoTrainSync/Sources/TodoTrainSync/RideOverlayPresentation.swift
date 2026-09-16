@@ -119,9 +119,9 @@ public struct RideOverlayPresentation: Equatable, Sendable {
             return "次 \(title)"
         }
         if let endsAt = snap.nextBlockEndsAt, let minutes = markMinutes(until: endsAt, now: now) {
-            return "\(title) \(minutes)分"
+            return "いま \(title) \(minutes)分"
         }
-        return title
+        return "いま \(title)"
     }
 
     /// Same window as iOS `TimetableFit.markMinutes`. Floor minutes, 1...60.

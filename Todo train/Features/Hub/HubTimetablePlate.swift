@@ -2,7 +2,7 @@
 //  HubTimetablePlate.swift
 //  Todo train
 //
-//  60-minute 案内板 marks: next ダイヤ and the one overlapping now.
+//  60-minute 案内板 marks: now + next occupancy (ダイヤ and 掲示).
 //  SA support, not a decision. 発車は止めない。載せる／外すは確認ではない。
 //
 
@@ -10,15 +10,20 @@ import SwiftUI
 
 struct HubTimetablePlate: View {
     var fit: TimetableFitSnapshot
-    var noticeNow: CalendarOccurrence? = nil
     var now: Date
     var width: CGFloat
     var onAdoptNotice: (() -> Void)? = nil
     var onUnadoptCurrent: (() -> Void)? = nil
 
     var body: some View {
-        let marks = plateMarks
-        if marks.isEmpty, caption == nil {
+        plate(now: now)
+    }
+
+    @ViewBuilder
+    private func plate(now: Date) -> some View {
+        let marks = plateMarks(now: now)
+        let lines = TimetableFit.occupancyLines(fit: fit, now: now)
+        if marks.isEmpty, lines.isEmpty {
             EmptyView()
         } else {
             VStack(alignment: .leading, spacing: 4) {
@@ -41,13 +46,17 @@ struct HubTimetablePlate: View {
                     .accessibilityHidden(true)
                 }
 
-                if let line = caption {
+                if !lines.isEmpty {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text(line)
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(.white.opacity(0.9))
-                            .lineLimit(2)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                        VStack(alignment: .leading, spacing: 2) {
+                            ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
+                                Text(line)
+                                    .font(.caption2.weight(.semibold))
+                                    .foregroundStyle(.white.opacity(0.9))
+                                    .lineLimit(1)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         if let dutyTitle, let dutyAction {
                             Button(dutyTitle, action: dutyAction)
                                 .font(.caption2.weight(.semibold))
@@ -64,30 +73,21 @@ struct HubTimetablePlate: View {
         }
     }
 
-    private var caption: String? {
-        TimetableFit.dutyLine(
-            fit: fit,
-            noticeTitle: noticeNow?.title,
-            noticeEndsAt: noticeNow?.endsAt,
-            now: now
-        )
-    }
-
     private var dutyTitle: String? {
-        if fit.currentBlock != nil, onUnadoptCurrent != nil {
+        if fit.currentOccupancy?.isAdopted == true, onUnadoptCurrent != nil {
             return TimetableCopy.unadopt
         }
-        if fit.currentBlock == nil, noticeNow != nil, onAdoptNotice != nil {
+        if fit.currentOccupancy?.isAdopted == false, onAdoptNotice != nil {
             return TimetableCopy.adopt
         }
         return nil
     }
 
     private var dutyAction: (() -> Void)? {
-        if fit.currentBlock != nil {
+        if fit.currentOccupancy?.isAdopted == true {
             return onUnadoptCurrent
         }
-        if noticeNow != nil {
+        if fit.currentOccupancy?.isAdopted == false {
             return onAdoptNotice
         }
         return nil
@@ -97,13 +97,13 @@ struct HubTimetablePlate: View {
         TimetableCopy.thisTime
     }
 
-    private var plateMarks: [PlateMark] {
+    private func plateMarks(now: Date) -> [PlateMark] {
         var marks: [PlateMark] = []
         let window = TimeInterval(TimetableFit.markWindowMinutes * 60)
-        if let current = fit.currentBlock {
+        if let current = fit.currentOccupancy, current.startsAt <= now {
             marks.append(PlateMark(id: current.id, position: 0, isCurrent: true))
         }
-        if let next = fit.nextBlock {
+        if let next = fit.nextOccupancy {
             let offset = next.startsAt.timeIntervalSince(now)
             if offset >= 0, offset <= window {
                 marks.append(

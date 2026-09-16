@@ -140,6 +140,11 @@ final class SessionManager {
         pausedSessions.count
     }
 
+    /// 停車上限の分子。ATS が停めた枠は占有中は数えない。
+    var pausedCountTowardLimit: Int {
+        PauseLimitGuard.pausedCountTowardLimit(isHeld: pausedSessions.map(\.timetableHeld))
+    }
+
     /// Open sessions that are currently paused (for Hub resume UI).
     var pausedSessions: [WorkSession] {
         openPausedSessions()

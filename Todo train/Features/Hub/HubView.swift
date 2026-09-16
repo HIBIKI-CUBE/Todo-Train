@@ -96,7 +96,7 @@ struct HubView: View {
         if sessionManager.phase == .running || sessionManager.phase == .overtime {
             return "すでに走行中の切符があります"
         }
-        if sessionManager.pausedTicketCount >= sessionManager.pauseLimit {
+        if sessionManager.pausedCountTowardLimit >= sessionManager.pauseLimit {
             return "停車が上限です。先に片付けるか、停車中から再乗車してください"
         }
         return "発車できません"
@@ -338,7 +338,7 @@ struct HubView: View {
                     Text(quiet)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
-                    if sessionManager.timetableFit().currentBlock != nil {
+                    if sessionManager.timetableFit().currentOccupancy?.isAdopted == true {
                         Button(TimetableCopy.unadoptThisTime) {
                             sessionManager.unadoptCurrentOccurrence()
                         }

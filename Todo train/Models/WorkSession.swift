@@ -38,6 +38,8 @@ final class WorkSession {
     var awayDueAt: Date?
     /// Device that boarded this ride. Alarms / 車内放送 / LA は自機だけ。
     var boardedDeviceID: String?
+    /// ATS が停めた停車。占有が続いているあいだは上限に数えない。
+    var timetableHeld: Bool = false
 
     var ticket: Ticket?
 
@@ -84,6 +86,7 @@ final class WorkSession {
         self.checkInAnswersJSON = "[]"
         self.awayDueAt = nil
         self.boardedDeviceID = boardedDeviceID
+        self.timetableHeld = false
         self.ticket = ticket
         self.extensions = []
         self.pauses = []

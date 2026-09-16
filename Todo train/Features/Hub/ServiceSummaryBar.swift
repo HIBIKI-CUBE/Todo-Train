@@ -78,11 +78,21 @@ struct ServiceSummaryBar: View {
                         .lineLimit(1)
                 }
 
-                if let occupancy = occupancyLine {
-                    Text(occupancy)
-                        .font(TrainTheme.TypeScale.meta())
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                TimelineView(.periodic(from: .now, by: 15)) { context in
+                    let lines = TimetableFit.occupancyLines(
+                        fit: sessionManager.timetableFit(at: context.date),
+                        now: context.date
+                    )
+                    if !lines.isEmpty {
+                        VStack(alignment: .leading, spacing: 2) {
+                            ForEach(lines, id: \.self) { line in
+                                Text(line)
+                                    .font(TrainTheme.TypeScale.meta())
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+                        }
+                    }
                 }
             }
 
@@ -92,25 +102,19 @@ struct ServiceSummaryBar: View {
                 Text("停車")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
-                Text("\(sessionManager.pausedTicketCount)/\(sessionManager.pauseLimit)")
+                Text("\(sessionManager.pausedCountTowardLimit)/\(sessionManager.pauseLimit)")
                     .font(
                         usesTightVerticalLayout
                             ? .body.weight(.semibold).monospacedDigit()
                             : .title3.weight(.semibold).monospacedDigit()
                     )
                     .foregroundStyle(
-                        sessionManager.pausedTicketCount >= sessionManager.pauseLimit
+                        sessionManager.pausedCountTowardLimit >= sessionManager.pauseLimit
                             ? TrainTheme.signalAmber
                             : .primary
                     )
             }
         }
-    }
-
-    private var occupancyLine: String? {
-        guard sessionManager.isInService else { return nil }
-        let now = sessionManager.clock.now
-        return TimetableFit.dutyLine(fit: sessionManager.timetableFit(at: now), now: now)
     }
 
     private var statusTitle: String {

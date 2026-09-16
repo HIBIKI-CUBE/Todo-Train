@@ -68,6 +68,7 @@ extension SessionManager {
         applyTimetableGuardEffect(effect, openGuard: openModel, now: now)
         suppressAwayIfTimetableQuiet(now: now)
         refreshEndBellIfDeadlineChanged(now: now)
+        refreshTimetableHold(now: now)
     }
 
     func refreshCalendarBoard() async {
@@ -105,7 +106,7 @@ extension SessionManager {
     private func unadoptedNoticeBlocks(at now: Date) -> [TimetableFitBlock] {
         unadoptedNotices(at: now).map {
             TimetableFitBlock(
-                id: UUID(),
+                id: TimetableFit.noticeBlockID($0.id),
                 title: $0.title,
                 startsAt: $0.startsAt,
                 endsAt: $0.endsAt
@@ -193,7 +194,7 @@ extension SessionManager {
         let isPause = action == TimetableNotification.pauseAction
             || action == UNNotificationDefaultActionIdentifier
         if isPause {
-            try? pause()
+            try? pause(timetableHeld: true)
         }
     }
 
@@ -281,6 +282,7 @@ extension SessionManager {
         guard let session = activeSession, session.isOpen, !session.isPaused else { return }
         let clamped = max(pauseAt, session.segmentStartedAt ?? session.startedAt)
         flushToPaused(session, now: clamped)
+        session.timetableHeld = true
         phase = .paused
         timetableQuietMessage = TimetableCopy.quiet
         noteCabinActivity(now: clamped, clearPendingIdle: true)
@@ -309,6 +311,23 @@ extension SessionManager {
     private func cancelTimetableNotification(sessionID: UUID?) {
         guard let sessionID else { return }
         checkInNotifier.cancelTimetable(sessionID: sessionID)
+    }
+
+    private func refreshTimetableHold(now: Date) {
+        guard timetableFit(at: now).currentOccupancy == nil else { return }
+        var didChange = false
+        if timetableQuietMessage != nil {
+            timetableQuietMessage = nil
+            didChange = true
+        }
+        for session in openPausedSessions() where session.timetableHeld {
+            session.timetableHeld = false
+            didChange = true
+        }
+        if didChange {
+            bumpCompanionSync()
+            try? save()
+        }
     }
 
     private func suppressAwayIfTimetableQuiet(now: Date) {
