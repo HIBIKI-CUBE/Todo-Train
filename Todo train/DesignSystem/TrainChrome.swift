@@ -53,6 +53,8 @@ struct FocusProgressBar: View {
     let progress: Double
     let phase: FocusTimerPhase
     var occupancy: TimetableProgressOccupancy = .empty
+    var pinch: Bool = false
+    var overrun: Bool = false
 
     private var clampedProgress: Double {
         min(max(progress, 0), 1)
@@ -83,15 +85,24 @@ struct FocusProgressBar: View {
 
     @ViewBuilder
     private func occupancyMarks(width: CGFloat, height: CGFloat) -> some View {
+        let heat = pinch || overrun
+        let band = heat ? LEDPhosphor.heat.opacity(overrun ? 0.5 : 0.42) : Color.white.opacity(0.28)
+        let tick = heat ? LEDPhosphor.heat.opacity(0.95) : Color.white.opacity(0.92)
+        if overrun, let start = occupancy.mark ?? occupancy.spanStart ?? occupancy.spanEnd {
+            Rectangle()
+                .fill(LEDPhosphor.heat.opacity(0.22))
+                .frame(width: max(4, width * (1 - start)), height: height)
+                .offset(x: width * start)
+        }
         if let start = occupancy.spanStart, let end = occupancy.spanEnd, end > start {
             Capsule()
-                .fill(Color.white.opacity(0.28))
+                .fill(band)
                 .frame(width: max(6, width * (end - start)), height: height)
                 .offset(x: width * start)
         }
         if let mark = occupancy.mark {
             Capsule()
-                .fill(Color.white.opacity(0.92))
+                .fill(tick)
                 .frame(width: 5, height: height)
                 .offset(x: width * mark - 2.5)
         }

@@ -2,8 +2,8 @@
 //  HubBoardingForecastPlate.swift
 //  Todo train
 //
-//  Station plate under a lifted Hub ticket: printed 予定 vs 予測.
-//  Fill grows as 予定; the caret travels to the forecast so the two stay distinct.
+//  Station plate under a lifted Hub ticket: printed 予定 vs 予測,
+//  occupancy as a 行先票 on the same board.
 //
 
 import SwiftData
@@ -85,10 +85,6 @@ struct HubBoardingForecastPlate: View {
         plateHeight >= 96 ? 20 : 16
     }
 
-    private var showsDurationFoot: Bool {
-        plateHeight >= 88
-    }
-
     private func heuristicSnapshot(at now: Date) -> BoardingForecast.Snapshot {
         BoardingForecast.make(now: now, ticket: ticket, sessions: Array(sessions))
     }
@@ -115,72 +111,48 @@ struct HubBoardingForecastPlate: View {
             scheduledArrival: snapshot.scheduledArrival,
             predictedArrival: snapshot.predictedArrival
         )
-        let zoomed = dispatch.zooms
+        let clearance = TimetableFit.boardingClearance(
+            fit: occupancy.fit,
+            now: now,
+            scheduledArrival: snapshot.scheduledArrival,
+            predictedArrival: snapshot.predictedArrival
+        )
+        let zoomed = clearance.zooms
         let tight = zoomed || !occupancy.rows.isEmpty
         VStack(alignment: .leading, spacing: tight ? 3 : 5) {
-            clocks(snapshot, compact: tight)
+            clockDigits(
+                time: BoardingForecast.timeString(from: snapshot.scheduledArrival),
+                foot: BoardingForecast.durationLabel(minutes: snapshot.scheduledMinutes),
+                visible: showsScheduledClock,
+                pointSize: tight ? compactTimePointSize : timePointSize,
+                compact: tight,
+                ink: zoomed ? LEDPhosphor.heat : LEDPhosphor.on
+            )
             track(
                 snapshot,
                 occupancy: occupancy,
                 dispatch: dispatch,
+                clearance: clearance,
                 at: now
             )
-            if zoomed {
-                dispatchCaption(occupancy)
-            } else if !occupancy.rows.isEmpty {
-                TimetableOccupancyMeter(
-                    rows: occupancy.rows,
-                    marks: [],
-                    chrome: .inverted,
-                    showsRail: false,
-                    compact: true
-                ) {
-                    if let title = occupancy.actionTitle, let action = occupancy.action {
-                        Button(title, action: action)
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(LEDPhosphor.on)
-                            .buttonStyle(.plain)
-                            .padding(.vertical, 4)
-                            .accessibilityHint(TimetableCopy.thisTime)
-                    }
-                }
+            if !zoomed, let row = occupancy.rows.first {
+                OccupancyDestinationSign(
+                    row: row,
+                    surface: .station(heat: false),
+                    compact: true,
+                    actionTitle: occupancy.actionTitle,
+                    action: occupancy.action
+                )
             }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, tight ? 6 : 8)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-        .background { StationSignHousing(rimLit: true) }
+        .background { StationSignHousing(rimLit: true, heat: zoomed) }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityLabel(snapshot, occupancy: occupancy))
         .modifier(OccupancyAccessAction(title: occupancy.actionTitle, action: occupancy.action))
         .allowsHitTesting(settings.developerToolsUnlocked || occupancy.actionTitle != nil)
-    }
-
-    @ViewBuilder
-    private func dispatchCaption(
-        _ occupancy: (
-            fit: TimetableFitSnapshot,
-            rows: [TimetableOccupancyRow],
-            actionTitle: String?,
-            action: (() -> Void)?
-        )
-    ) -> some View {
-        if let row = occupancy.rows.first {
-            HStack(spacing: 8) {
-                Text(row.title)
-                    .font(.caption2.weight(.medium))
-                    .foregroundStyle(LEDPhosphor.on.opacity(0.78))
-                    .lineLimit(1)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                if let title = occupancy.actionTitle, let action = occupancy.action {
-                    Button(title, action: action)
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(LEDPhosphor.on)
-                        .buttonStyle(.plain)
-                        .accessibilityHint(TimetableCopy.thisTime)
-                }
-            }
-        }
     }
 
     private func occupancyInstrument(at now: Date) -> (
@@ -204,80 +176,33 @@ struct HubBoardingForecastPlate: View {
         return (fit, rows, nil, nil)
     }
 
-    @ViewBuilder
-    private func clocks(_ snapshot: BoardingForecast.Snapshot, compact: Bool) -> some View {
-        let pointSize = compact ? compactTimePointSize : timePointSize
-        let showFoot = compact ? false : showsDurationFoot
-        if snapshot.hasPrediction,
-           let predicted = snapshot.predictedArrival,
-           let predictedMinutes = snapshot.predictedMinutes {
-            HStack(alignment: .top, spacing: 12) {
-                clockColumn(
-                    headline: BoardingForecast.scheduledHeadline,
-                    time: BoardingForecast.timeString(from: snapshot.scheduledArrival),
-                    foot: BoardingForecast.durationLabel(minutes: snapshot.scheduledMinutes),
-                    visible: showsScheduledClock,
-                    pointSize: pointSize,
-                    showFoot: showFoot
-                )
-                clockColumn(
-                    headline: BoardingForecast.predictedHeadline,
-                    time: BoardingForecast.predictedTimeString(from: predicted),
-                    foot: BoardingForecast.predictedCaption(
-                        minutes: predictedMinutes,
-                        sampleCount: snapshot.sampleCount
-                    ),
-                    visible: showsPredictedMark,
-                    pointSize: pointSize,
-                    showFoot: showFoot
-                )
-            }
-        } else {
-            clockColumn(
-                headline: BoardingForecast.scheduledHeadline,
-                time: BoardingForecast.timeString(from: snapshot.scheduledArrival),
-                foot: showFoot
-                    ? BoardingForecast.durationLabel(minutes: snapshot.scheduledMinutes)
-                    : nil,
-                visible: showsScheduledClock,
-                pointSize: pointSize,
-                showFoot: showFoot
-            )
-            .frame(maxWidth: .infinity)
-        }
-    }
-
-    private func clockColumn(
-        headline: String,
+    private func clockDigits(
         time: String,
         foot: String?,
         visible: Bool,
         pointSize: CGFloat,
-        showFoot: Bool
+        compact: Bool,
+        ink: Color
     ) -> some View {
-        VStack(alignment: .center, spacing: 1) {
-            Text(headline)
-                .font(.system(size: 10, weight: .semibold, design: .default))
-                .foregroundStyle(LEDPhosphor.on.opacity(0.58))
-                .lineLimit(1)
-                .minimumScaleFactor(0.85)
+        HStack(alignment: .firstTextBaseline, spacing: 5) {
             Text(time)
                 .font(.system(size: pointSize, weight: .semibold, design: .default))
                 .monospacedDigit()
-                .foregroundStyle(LEDPhosphor.on)
+                .foregroundStyle(ink)
                 .minimumScaleFactor(0.7)
                 .lineLimit(1)
-            if showFoot, let foot {
+            if let foot {
                 Text(foot)
-                    .font(.system(size: 10, weight: .medium, design: .default))
-                    .foregroundStyle(LEDPhosphor.on.opacity(0.45))
+                    .font(.system(size: compact ? 11 : 13, weight: .semibold, design: .default))
+                    .foregroundStyle(ink.opacity(0.88))
                     .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                    .minimumScaleFactor(0.75)
             }
         }
         .frame(maxWidth: .infinity)
         .opacity(visible ? 1 : 0)
         .offset(y: visible ? 0 : 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func track(
@@ -289,91 +214,177 @@ struct HubBoardingForecastPlate: View {
             action: (() -> Void)?
         ),
         dispatch: TimetableDispatchScale,
+        clearance: TimetableClearance,
         at now: Date
     ) -> some View {
         let window = max(scaleWindowSeconds, 1)
+        let quiet = TimeInterval(TimetableFit.markWindowMinutes * 60)
+        let zoomX = CGFloat(quiet / window)
+        let pinch = clearance.zooms
+        let onColor = pinch ? LEDPhosphor.heat : LEDPhosphor.on
+        let offColor = pinch ? LEDPhosphor.heatOff : LEDPhosphor.off
         let revealedMinutes = Double(snapshot.scheduledScaleMinutes) * fillProgress
-        let fillFraction = min(1, revealedMinutes * 60 / window)
-        let fill = TicketDurationScale.filled(exactMinutes: fillFraction * Double(TicketDurationScale.maxMinutes))
+        let fill = TicketDurationScale.filled(exactMinutes: revealedMinutes)
         let fillBrightness = fillBrightness(snapshot)
         let caretBrightness = caretBrightness(snapshot)
-        let caretX = min(1, caretMinutes * 60 / window)
-        let marks = TimetableFit.occupancyMarks(
+        let worldMarks = TimetableFit.occupancyMarks(
+            fit: occupancy.fit,
+            now: now,
+            windowSeconds: quiet
+        )
+        let viewMarks = TimetableFit.occupancyMarks(
             fit: occupancy.fit,
             now: now,
             windowSeconds: window
         )
-        let currentSpan = marks.first(where: \.isCurrent)?.span ?? 0
-        let nextMark = marks.first(where: { !$0.isCurrent })?.position
-        let chipX: Double? = {
-            if currentSpan > 0 { return currentSpan }
-            return nextMark
-        }()
+        let caretWorldX = min(1, caretMinutes / CGFloat(TicketDurationScale.maxMinutes))
+        let caretViewX = min(1, caretMinutes * 60 / window)
+        let fillWorld = min(1, revealedMinutes / Double(TicketDurationScale.maxMinutes))
+        let currentView = viewMarks.first(where: \.isCurrent)
+        let nextView = viewMarks.first(where: { !$0.isCurrent })
         let chipRow = occupancy.rows.first
-        let chipDrops = chipX.map { abs(caretX - $0) < 0.1 } ?? false
-        let trackHeight: CGFloat = dispatch.zooms ? 36 : 17
+        let trackHeight: CGFloat = pinch ? 54 : 17
         return ZStack(alignment: .top) {
-            HStack(spacing: MarsTicketSpec.durationTrackGap) {
-                ForEach(0..<TicketDurationScale.cellCount, id: \.self) { index in
-                    trackCell(
-                        amount: TicketDurationScale.cellFillAmount(index: index, fill: fill),
-                        brightness: fillBrightness
+            GeometryReader { geo in
+                ZStack(alignment: .topLeading) {
+                    HStack(spacing: MarsTicketSpec.durationTrackGap) {
+                        ForEach(0..<TicketDurationScale.cellCount, id: \.self) { index in
+                            trackCell(
+                                amount: TicketDurationScale.cellFillAmount(index: index, fill: fill),
+                                brightness: fillBrightness,
+                                on: onColor,
+                                off: offColor
+                            )
+                        }
+                    }
+                    .frame(width: geo.size.width, height: 10)
+                    .offset(y: 7)
+
+                    occupancyWorldMarks(
+                        marks: worldMarks,
+                        fillWorld: fillWorld,
+                        overrun: clearance == .overrun,
+                        width: geo.size.width
                     )
-                }
-            }
-            .frame(height: 10)
-            .padding(.top, 7)
 
-            if currentSpan > 0, dispatch.zooms {
-                GeometryReader { geo in
-                    Capsule()
-                        .fill(.ultraThinMaterial)
-                        .frame(width: max(8, geo.size.width * currentSpan), height: 10)
-                        .position(x: geo.size.width * currentSpan / 2, y: 12)
+                    if snapshot.hasPrediction {
+                        TimetableCaret()
+                            .fill(onColor.opacity(caretBrightness))
+                            .frame(width: 9, height: 7)
+                            .position(x: geo.size.width * caretWorldX, y: 4)
+                            .opacity(showsPredictedMark ? 1 : 0)
+                    }
                 }
+                .frame(width: geo.size.width, height: 17, alignment: .topLeading)
+                .scaleEffect(x: zoomX, anchor: .topLeading)
             }
+            .frame(height: 17)
+            .clipped()
+            .accessibilityHidden(true)
 
-            if snapshot.hasPrediction {
+            if snapshot.hasPrediction, let predicted = snapshot.predictedArrival {
                 GeometryReader { geo in
-                    TimetableCaret()
-                        .fill(LEDPhosphor.on.opacity(caretBrightness))
-                        .frame(width: 9, height: 7)
-                        .position(x: geo.size.width * caretX, y: 4)
+                    Text(BoardingForecast.timeString(from: predicted))
+                        .font(.system(size: 10, weight: .semibold, design: .default))
+                        .monospacedDigit()
+                        .foregroundStyle(onColor.opacity(caretBrightness))
+                        .position(
+                            x: min(geo.size.width - 26, max(26, geo.size.width * caretViewX + 18)),
+                            y: 5
+                        )
                         .opacity(showsPredictedMark ? 1 : 0)
                 }
+                .frame(height: 17)
+                .allowsHitTesting(false)
             }
 
-            if let chipX, let chipRow, dispatch.zooms {
+            if let chipRow, pinch {
                 GeometryReader { geo in
-                    OccupancyDispatchChip(
+                    let placement = destinationPlacement(
+                        width: geo.size.width,
+                        current: currentView,
+                        next: nextView
+                    )
+                    OccupancyDestinationSign(
                         row: chipRow,
-                        end: occupancy.fit.currentOccupancy?.endsAt
-                            ?? occupancy.fit.nextOccupancy?.startsAt
-                            ?? now,
-                        now: now
+                        surface: .glass,
+                        compact: true,
+                        liveEnd: occupancy.fit.currentOccupancy?.endsAt
+                            ?? occupancy.fit.nextOccupancy?.startsAt,
+                        now: now,
+                        actionTitle: occupancy.actionTitle,
+                        action: occupancy.action
                     )
-                    .position(
-                        x: min(geo.size.width - 54, max(54, geo.size.width * chipX)),
-                        y: chipDrops ? 28 : 22
-                    )
+                    .frame(width: placement.width)
+                    .position(x: placement.centerX, y: 36)
                     .opacity(showsDispatchChip ? 1 : 0)
                 }
             }
         }
         .frame(height: trackHeight)
-        .accessibilityHidden(true)
     }
 
-    private func trackCell(amount: Double, brightness: Double) -> some View {
+    private func destinationPlacement(
+        width: CGFloat,
+        current: TimetableOccupancyMark?,
+        next: TimetableOccupancyMark?
+    ) -> (width: CGFloat, centerX: CGFloat) {
+        let minWidth = min(width, 208)
+        if let current, current.span > 0 {
+            let signWidth = min(width, max(minWidth, width * current.span))
+            let center = width * (current.span / 2)
+            return (signWidth, clampedCenter(center, width: width, signWidth: signWidth))
+        }
+        if let next {
+            let signWidth = min(width, 232)
+            return (signWidth, clampedCenter(width * next.position, width: width, signWidth: signWidth))
+        }
+        return (minWidth, width / 2)
+    }
+
+    private func clampedCenter(_ raw: CGFloat, width: CGFloat, signWidth: CGFloat) -> CGFloat {
+        let half = signWidth / 2
+        return min(width - half, max(half, raw))
+    }
+
+    @ViewBuilder
+    private func occupancyWorldMarks(
+        marks: [TimetableOccupancyMark],
+        fillWorld: Double,
+        overrun: Bool,
+        width: CGFloat
+    ) -> some View {
+        ForEach(marks) { mark in
+            let gate = mark.isCurrent ? mark.position + mark.span : mark.position
+            if mark.isCurrent, mark.span > 0 {
+                Capsule()
+                    .fill(.ultraThinMaterial)
+                    .frame(width: max(8, width * mark.span), height: 10)
+                    .position(x: width * (mark.position + mark.span / 2), y: 12)
+            }
+            if overrun, fillWorld > mark.position {
+                Rectangle()
+                    .fill(LEDPhosphor.heat.opacity(0.28))
+                    .frame(width: max(2, width * (min(1, fillWorld) - mark.position)), height: 10)
+                    .offset(x: width * mark.position, y: 7)
+            }
+            Capsule()
+                .fill((overrun ? LEDPhosphor.heat : LEDPhosphor.on).opacity(mark.isAdopted ? 0.95 : 0.55))
+                .frame(width: mark.isAdopted ? 3 : 2, height: 12)
+                .position(x: width * min(1, max(0, gate)), y: 12)
+        }
+    }
+
+    private func trackCell(amount: Double, brightness: Double, on: Color, off: Color) -> some View {
         let shape = RoundedRectangle(cornerRadius: 0.7, style: .continuous)
         return ZStack(alignment: .leading) {
-            shape.fill(LEDPhosphor.off)
+            shape.fill(off)
             if amount >= 1 {
-                shape.fill(LEDPhosphor.on.opacity(brightness))
+                shape.fill(on.opacity(brightness))
             } else if amount > 0 {
                 GeometryReader { geo in
                     Rectangle()
-                        .fill(LEDPhosphor.on.opacity(brightness))
+                        .fill(on.opacity(brightness))
                         .frame(width: geo.size.width * amount)
                 }
                 .clipShape(shape)
@@ -426,6 +437,12 @@ struct HubBoardingForecastPlate: View {
             scheduledArrival: snapshot.scheduledArrival,
             predictedArrival: snapshot.predictedArrival
         )
+        let clearance = TimetableFit.boardingClearance(
+            fit: fit,
+            now: .now,
+            scheduledArrival: snapshot.scheduledArrival,
+            predictedArrival: snapshot.predictedArrival
+        )
         let scheduledMinutes = CGFloat(snapshot.scheduledScaleMinutes)
         let predictedMinutes = snapshot.predictedScaleMinutes.map { CGFloat($0) }
         let quietWindow = TimeInterval(TimetableFit.markWindowMinutes * 60)
@@ -450,10 +467,10 @@ struct HubBoardingForecastPlate: View {
             withTransaction(parked) {
                 fillProgress = 1
                 caretMinutes = predictedMinutes ?? scheduledMinutes
-                scaleWindowSeconds = dispatch.zooms ? dispatch.windowSeconds : quietWindow
+                scaleWindowSeconds = clearance.zooms ? dispatch.windowSeconds : quietWindow
                 showsScheduledClock = true
                 showsPredictedMark = snapshot.hasPrediction
-                showsDispatchChip = dispatch.zooms
+                showsDispatchChip = clearance.zooms
             }
             return
         }
@@ -485,7 +502,7 @@ struct HubBoardingForecastPlate: View {
                 caretMinutes = predictedMinutes
             }
         }
-        guard dispatch.zooms else { return }
+        guard clearance.zooms else { return }
         withAnimation(.smooth(duration: motion.zoomDuration).delay(motion.zoomDelay)) {
             scaleWindowSeconds = dispatch.windowSeconds
             showsDispatchChip = true
@@ -552,37 +569,6 @@ private struct TimetableCaret: Shape {
         path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
         path.closeSubpath()
         return path
-    }
-}
-
-private struct OccupancyDispatchChip: View {
-    var row: TimetableOccupancyRow
-    var end: Date
-    var now: Date
-
-    var body: some View {
-        HStack(spacing: 5) {
-            Text(row.clock)
-                .font(.caption.weight(.semibold).monospacedDigit())
-            Text(
-                timerInterval: countdown,
-                countsDown: true,
-                showsHours: false
-            )
-            .font(.caption2.weight(.semibold).monospacedDigit())
-            .monospacedDigit()
-        }
-        .foregroundStyle(.primary)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .glassEffect(.regular, in: .capsule)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(row.spokenLine)
-    }
-
-    private var countdown: ClosedRange<Date> {
-        if end >= now { return now...end }
-        return now...now
     }
 }
 

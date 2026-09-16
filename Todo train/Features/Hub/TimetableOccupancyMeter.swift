@@ -2,10 +2,160 @@
 //  TimetableOccupancyMeter.swift
 //  Todo train
 //
-//  Occupancy as a 60-minute rail + clock/remaining digits. Not a list. Not a lesson.
+//  Occupancy as a destination: いま／次 and title are words; clock is digits.
+//  Race and 掲示 vs ダイヤ stay visual.
 //
 
 import SwiftUI
+
+/// 行先票. Title is the destination; clock is the timetable.
+struct OccupancyDestinationSign: View {
+    enum Surface {
+        case grouped
+        case inverted
+        case cabin
+        case station(heat: Bool)
+        case glass
+    }
+
+    var row: TimetableOccupancyRow
+    var surface: Surface
+    var compact: Bool = false
+    var liveEnd: Date? = nil
+    var now: Date = .now
+    var actionTitle: String? = nil
+    var action: (() -> Void)? = nil
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: compact ? 6 : 8) {
+            Text(row.kind.tense)
+                .font((compact ? Font.caption2 : Font.caption).weight(.bold))
+                .foregroundStyle(destinationInk)
+            Text(row.title)
+                .font(destinationFont)
+                .foregroundStyle(destinationInk)
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            timetable
+            if let actionTitle, let action {
+                Button(actionTitle, action: action)
+                    .font((compact ? Font.caption2 : Font.caption).weight(.semibold))
+                    .foregroundStyle(actionInk)
+                    .buttonStyle(.plain)
+                    .accessibilityHint(TimetableCopy.thisTime)
+            }
+        }
+        .padding(.horizontal, isBoarded ? 10 : 0)
+        .padding(.vertical, isBoarded ? 7 : 0)
+        .modifier(DestinationBoardChrome(surface: surface))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(row.spokenLine)
+        .modifier(DestinationAccessAction(title: actionTitle, action: action))
+    }
+
+    @ViewBuilder
+    private var timetable: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 5) {
+            Text(row.clock)
+                .font(clockFont)
+                .monospacedDigit()
+                .foregroundStyle(clockInk)
+            if let liveEnd {
+                Text(
+                    timerInterval: liveEnd >= now ? now...liveEnd : now...now,
+                    countsDown: true,
+                    showsHours: false
+                )
+                .font(minuteFont)
+                .monospacedDigit()
+                .foregroundStyle(clockInk)
+            } else if let minutes = row.remainingMinutes {
+                Text("\(minutes)分")
+                    .font(minuteFont)
+                    .monospacedDigit()
+                    .foregroundStyle(clockInk)
+            }
+        }
+    }
+
+    private var isBoarded: Bool {
+        if case .glass = surface { return true }
+        if case .station = surface { return false }
+        return false
+    }
+
+    private var destinationFont: Font {
+        (compact ? Font.subheadline : Font.body).weight(.semibold)
+    }
+
+    private var clockFont: Font {
+        (compact ? Font.caption : Font.subheadline).weight(.semibold)
+    }
+
+    private var minuteFont: Font {
+        (compact ? Font.caption2 : Font.caption).weight(.semibold)
+    }
+
+    private var destinationInk: Color {
+        let base: Color = {
+            switch surface {
+            case .grouped: TrainTheme.ink
+            case .inverted, .cabin: Color.white
+            case .glass: Color.primary
+            case .station(let heat): heat ? LEDPhosphor.heat : LEDPhosphor.on
+            }
+        }()
+        switch row.kind {
+        case .occupying: return base
+        case .notice: return base.opacity(0.72)
+        case .next: return base.opacity(0.82)
+        }
+    }
+
+    private var clockInk: Color {
+        switch surface {
+        case .grouped: TrainTheme.ink
+        case .inverted, .cabin: Color.white.opacity(0.82)
+        case .glass: Color.primary.opacity(0.82)
+        case .station(let heat): (heat ? LEDPhosphor.heat : LEDPhosphor.on).opacity(0.88)
+        }
+    }
+
+    private var actionInk: Color {
+        destinationInk
+    }
+}
+
+private struct DestinationAccessAction: ViewModifier {
+    var title: String?
+    var action: (() -> Void)?
+
+    func body(content: Content) -> some View {
+        if let title, let action {
+            content.accessibilityAction(named: title, action)
+        } else {
+            content
+        }
+    }
+}
+
+private struct DestinationBoardChrome: ViewModifier {
+    var surface: OccupancyDestinationSign.Surface
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        switch surface {
+        case .glass:
+            content.glassEffect(
+                .regular,
+                in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+            )
+        default:
+            content
+        }
+    }
+}
 
 struct TimetableOccupancyMeter<Accessory: View>: View {
     var rows: [TimetableOccupancyRow]
@@ -47,7 +197,11 @@ struct TimetableOccupancyMeter<Accessory: View>: View {
                         rail
                     }
                     ForEach(rows) { row in
-                        occupancyRow(row)
+                        OccupancyDestinationSign(
+                            row: row,
+                            surface: destinationSurface,
+                            compact: compact
+                        )
                     }
                 }
                 accessory
@@ -85,30 +239,12 @@ struct TimetableOccupancyMeter<Accessory: View>: View {
         .accessibilityHidden(true)
     }
 
-    private func occupancyRow(_ row: TimetableOccupancyRow) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: compact ? 6 : 8) {
-            Text(row.kind.prefix)
-                .font(.caption2.weight(.bold))
-                .foregroundStyle(chipForeground(row.kind))
-                .padding(.horizontal, compact ? 5 : 6)
-                .padding(.vertical, compact ? 1 : 2)
-                .background(chipBackground(row.kind), in: Capsule())
-            Text(row.clock)
-                .font((compact ? Font.caption : Font.body).weight(.semibold).monospacedDigit())
-                .foregroundStyle(clockColor)
-            if let minutes = row.remainingMinutes {
-                Text("\(minutes)分")
-                    .font((compact ? Font.caption2 : Font.subheadline).weight(.semibold).monospacedDigit())
-                    .foregroundStyle(clockColor)
-            }
-            Text(row.title)
-                .font((compact ? Font.caption2 : Font.caption).weight(.medium))
-                .foregroundStyle(titleColor)
-                .lineLimit(1)
-                .frame(maxWidth: .infinity, alignment: .leading)
+    private var destinationSurface: OccupancyDestinationSign.Surface {
+        switch chrome {
+        case .grouped: .grouped
+        case .inverted: .inverted
+        case .cabin: .cabin
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(row.spokenLine)
     }
 
     private var track: Color {
@@ -139,56 +275,6 @@ struct TimetableOccupancyMeter<Accessory: View>: View {
         switch chrome {
         case .grouped, .inverted: TrainTheme.rail
         case .cabin: Color.white.opacity(0.85)
-        }
-    }
-
-    private var clockColor: Color {
-        switch chrome {
-        case .grouped: TrainTheme.ink
-        case .inverted, .cabin: .white
-        }
-    }
-
-    private var titleColor: Color {
-        switch chrome {
-        case .grouped: TrainTheme.muted
-        case .inverted: Color.white.opacity(0.78)
-        case .cabin: FocusPanel.muted
-        }
-    }
-
-    private func chipForeground(_ kind: TimetableOccupancyKind) -> Color {
-        switch chrome {
-        case .grouped:
-            switch kind {
-            case .occupying: Color.white
-            case .notice, .next: TrainTheme.ink
-            }
-        case .inverted, .cabin:
-            Color.white
-        }
-    }
-
-    private func chipBackground(_ kind: TimetableOccupancyKind) -> Color {
-        switch chrome {
-        case .grouped:
-            switch kind {
-            case .occupying: TrainTheme.rail
-            case .notice: Color.primary.opacity(0.08)
-            case .next: Color.primary.opacity(0.10)
-            }
-        case .inverted:
-            switch kind {
-            case .occupying: TrainTheme.rail
-            case .notice: Color.white.opacity(0.10)
-            case .next: Color.white.opacity(0.16)
-            }
-        case .cabin:
-            switch kind {
-            case .occupying: TrainTheme.rail
-            case .notice: Color.white.opacity(0.08)
-            case .next: Color.white.opacity(0.12)
-            }
         }
     }
 }

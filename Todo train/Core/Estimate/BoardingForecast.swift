@@ -136,6 +136,10 @@ enum BoardingForecast {
         "\(minutes)分"
     }
 
+    static func predictedDurationLabel(minutes: Int) -> String {
+        "約\(minutes)分"
+    }
+
     static func predictedCaption(minutes: Int, sampleCount: Int) -> String {
         "予測 約\(minutes)分 · 参考\(sampleCount)件"
     }

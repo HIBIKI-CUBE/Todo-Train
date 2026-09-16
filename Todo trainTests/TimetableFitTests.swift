@@ -73,6 +73,8 @@ struct TimetableFitTests {
         )
         let rows = TimetableFit.occupancyRows(fit: snap, now: now, calendar: utc)
         #expect(rows.map(\.kind) == [.occupying, .next])
+        #expect(rows.map(\.kind.tense) == ["いま", "次"])
+        #expect(TimetableOccupancyKind.notice.tense == "いま")
         #expect(rows.map(\.clock) == ["22:23", "22:33"])
         #expect(rows.map(\.remainingMinutes) == [10, 20])
         let marks = TimetableFit.occupancyMarks(fit: snap, now: now)
@@ -333,5 +335,116 @@ struct TimetableFitTests {
         )
         #expect(!quiet.zooms)
         #expect(quiet.progress == 0.2)
+    }
+
+    @Test func boardingClearance_pinchWhenGateSitsJustAfterFill() {
+        let near = TimetableFitBlock(
+            title: "タスク",
+            startsAt: now.addingTimeInterval(14 * 60),
+            endsAt: now.addingTimeInterval(44 * 60)
+        )
+        let fit = TimetableFit.snapshot(blocks: [near], now: now, budgetEndsAt: nil)
+        let clearance = TimetableFit.boardingClearance(
+            fit: fit,
+            now: now,
+            scheduledArrival: now.addingTimeInterval(10 * 60),
+            predictedArrival: nil
+        )
+        #expect(clearance == .pinch)
+        #expect(clearance.zooms)
+    }
+
+    @Test func boardingClearance_overrunWhenFillCrossesGate() {
+        let near = TimetableFitBlock(
+            title: "タスク",
+            startsAt: now.addingTimeInterval(14 * 60),
+            endsAt: now.addingTimeInterval(44 * 60)
+        )
+        let fit = TimetableFit.snapshot(blocks: [near], now: now, budgetEndsAt: nil)
+        let clearance = TimetableFit.boardingClearance(
+            fit: fit,
+            now: now,
+            scheduledArrival: now.addingTimeInterval(45 * 60),
+            predictedArrival: nil
+        )
+        #expect(clearance == .overrun)
+        #expect(clearance.zooms)
+    }
+
+    @Test func boardingClearance_slackWhenGateSitsAfterFill() {
+        let far = TimetableFitBlock(
+            title: "夕方",
+            startsAt: now.addingTimeInterval(50 * 60),
+            endsAt: now.addingTimeInterval(80 * 60)
+        )
+        let fit = TimetableFit.snapshot(blocks: [far], now: now, budgetEndsAt: nil)
+        let clearance = TimetableFit.boardingClearance(
+            fit: fit,
+            now: now,
+            scheduledArrival: now.addingTimeInterval(10 * 60),
+            predictedArrival: nil
+        )
+        #expect(clearance == .slack)
+        #expect(!clearance.zooms)
+    }
+
+    @Test func boardingClearance_overrunWhileOccupyingNow() {
+        let current = TimetableFitBlock(
+            title: "定例",
+            startsAt: now.addingTimeInterval(-60),
+            endsAt: now.addingTimeInterval(15 * 60)
+        )
+        let fit = TimetableFit.snapshot(
+            blocks: [],
+            notices: [current],
+            now: now,
+            budgetEndsAt: nil
+        )
+        let clearance = TimetableFit.boardingClearance(
+            fit: fit,
+            now: now,
+            scheduledArrival: now.addingTimeInterval(10 * 60),
+            predictedArrival: nil
+        )
+        #expect(clearance == .overrun)
+    }
+
+    @Test func boardingClearance_quietWhenOccupancyIsPastTheTrack() {
+        let far = TimetableFitBlock(
+            title: "夜",
+            startsAt: now.addingTimeInterval(90 * 60),
+            endsAt: now.addingTimeInterval(120 * 60)
+        )
+        let fit = TimetableFit.snapshot(blocks: [far], now: now, budgetEndsAt: nil)
+        let clearance = TimetableFit.boardingClearance(
+            fit: fit,
+            now: now,
+            scheduledArrival: now.addingTimeInterval(10 * 60),
+            predictedArrival: nil
+        )
+        #expect(clearance == .quiet)
+    }
+
+    @Test func boardingClearance_predictedArrivalCanStretchTheEnd() {
+        let near = TimetableFitBlock(
+            title: "タスク",
+            startsAt: now.addingTimeInterval(14 * 60),
+            endsAt: now.addingTimeInterval(44 * 60)
+        )
+        let fit = TimetableFit.snapshot(blocks: [near], now: now, budgetEndsAt: nil)
+        let scheduledOnly = TimetableFit.boardingClearance(
+            fit: fit,
+            now: now,
+            scheduledArrival: now.addingTimeInterval(10 * 60),
+            predictedArrival: nil
+        )
+        let withLateForecast = TimetableFit.boardingClearance(
+            fit: fit,
+            now: now,
+            scheduledArrival: now.addingTimeInterval(10 * 60),
+            predictedArrival: now.addingTimeInterval(20 * 60)
+        )
+        #expect(scheduledOnly == .pinch)
+        #expect(withLateForecast == .overrun)
     }
 }

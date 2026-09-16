@@ -35,6 +35,14 @@ nonisolated enum TimetableOccupancyKind: Equatable, Sendable {
         case .next: "次"
         }
     }
+
+    /// On-screen tense. 掲示 is spoken, not a legend chip.
+    var tense: String {
+        switch self {
+        case .occupying, .notice: "いま"
+        case .next: "次"
+        }
+    }
 }
 
 nonisolated struct TimetableOccupancyRow: Equatable, Sendable, Identifiable {
@@ -53,6 +61,23 @@ nonisolated struct TimetableOccupancyMark: Equatable, Sendable, Identifiable {
     /// Remaining occupancy as a band from `position`. Next marks are 0.
     var span: Double
     var isCurrent: Bool
+    var isAdopted: Bool
+}
+
+/// Fill vs occupancy on the 60-minute instrument. No copy. Not a signal.
+nonisolated enum TimetableClearance: Equatable, Sendable {
+    /// Occupancy is outside the 60-minute track.
+    case quiet
+    /// Gate sits after the fill.
+    case slack
+    /// Gate sits just after the fill, inside the arrival window.
+    case pinch
+    /// Occupying now, or the fill crosses the gate.
+    case overrun
+
+    var zooms: Bool {
+        self == .pinch || self == .overrun
+    }
 }
 
 /// Occupancy mapped onto a ride's elapsed/budget bar. Nil when the edge is past the ride.
@@ -329,7 +354,8 @@ nonisolated enum TimetableFit {
                     id: current.id,
                     position: 0,
                     span: max(0, min(1, remaining / window)),
-                    isCurrent: true
+                    isCurrent: true,
+                    isAdopted: current.isAdopted
                 )
             )
         }
@@ -341,7 +367,8 @@ nonisolated enum TimetableFit {
                         id: next.id,
                         position: max(0, min(1, offset / window)),
                         span: 0,
-                        isCurrent: false
+                        isCurrent: false,
+                        isAdopted: next.isAdopted
                     )
                 )
             }
@@ -355,6 +382,32 @@ nonisolated enum TimetableFit {
         let position = offset / windowSeconds
         guard position <= 1 else { return nil }
         return position
+    }
+
+    /// Printed 予定 vs occupancy on the 60-minute track. Predicted arrival, if any, stretches the end.
+    static func boardingClearance(
+        fit: TimetableFitSnapshot,
+        now: Date,
+        scheduledArrival: Date,
+        predictedArrival: Date?
+    ) -> TimetableClearance {
+        let rideEnd = [scheduledArrival, predictedArrival].compactMap { $0 }.max() ?? scheduledArrival
+        let windowEnd = now.addingTimeInterval(TimeInterval(markWindowMinutes * 60))
+        let slackEnd = rideEnd.addingTimeInterval(dispatchSlack)
+        if fit.currentOccupancy != nil {
+            return .overrun
+        }
+        guard let next = fit.nextOccupancy else { return .quiet }
+        if next.startsAt > windowEnd {
+            return .quiet
+        }
+        if next.startsAt < rideEnd {
+            return .overrun
+        }
+        if next.startsAt <= slackEnd {
+            return .pinch
+        }
+        return .slack
     }
 
     /// Zoom when occupancy sits inside this boarding's arrival window (or occupies now).
