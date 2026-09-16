@@ -81,10 +81,6 @@ struct HubBoardingForecastPlate: View {
         plateHeight >= 96 ? 26 : 20
     }
 
-    private var compactTimePointSize: CGFloat {
-        plateHeight >= 96 ? 20 : 16
-    }
-
     private func heuristicSnapshot(at now: Date) -> BoardingForecast.Snapshot {
         BoardingForecast.make(now: now, ticket: ticket, sessions: Array(sessions))
     }
@@ -122,10 +118,8 @@ struct HubBoardingForecastPlate: View {
         VStack(alignment: .leading, spacing: tight ? 3 : 5) {
             clockDigits(
                 time: BoardingForecast.timeString(from: snapshot.scheduledArrival),
-                foot: BoardingForecast.durationLabel(minutes: snapshot.scheduledMinutes),
                 visible: showsScheduledClock,
-                pointSize: tight ? compactTimePointSize : timePointSize,
-                compact: tight,
+                pointSize: timePointSize,
                 ink: zoomed ? LEDPhosphor.heat : LEDPhosphor.on
             )
             track(
@@ -178,31 +172,19 @@ struct HubBoardingForecastPlate: View {
 
     private func clockDigits(
         time: String,
-        foot: String?,
         visible: Bool,
         pointSize: CGFloat,
-        compact: Bool,
         ink: Color
     ) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 5) {
-            Text(time)
-                .font(.system(size: pointSize, weight: .semibold, design: .default))
-                .monospacedDigit()
-                .foregroundStyle(ink)
-                .minimumScaleFactor(0.7)
-                .lineLimit(1)
-            if let foot {
-                Text(foot)
-                    .font(.system(size: compact ? 11 : 13, weight: .semibold, design: .default))
-                    .foregroundStyle(ink.opacity(0.88))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .opacity(visible ? 1 : 0)
-        .offset(y: visible ? 0 : 6)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        Text(time)
+            .font(.system(size: pointSize, weight: .semibold, design: .default))
+            .monospacedDigit()
+            .foregroundStyle(ink)
+            .minimumScaleFactor(0.7)
+            .lineLimit(1)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .opacity(visible ? 1 : 0)
+            .offset(y: visible ? 0 : 6)
     }
 
     private func track(
@@ -282,10 +264,10 @@ struct HubBoardingForecastPlate: View {
             .clipped()
             .accessibilityHidden(true)
 
-            if snapshot.hasPrediction, let predicted = snapshot.predictedArrival {
+            if snapshot.showsPredictedClock, let predicted = snapshot.predictedArrival {
                 GeometryReader { geo in
                     Text(BoardingForecast.timeString(from: predicted))
-                        .font(.system(size: 10, weight: .semibold, design: .default))
+                        .font(.system(size: 9, weight: .regular, design: .default))
                         .monospacedDigit()
                         .foregroundStyle(onColor.opacity(caretBrightness))
                         .position(
