@@ -19,13 +19,13 @@ struct HubMarsTicketCard: View {
     var restOffset: CGSize = .zero
     var followsFinger: Bool = true
     var allowsDeckSwipe: Bool = false
+    var occupancyMarks: [TimetableOccupancyMark] = []
     let onSelect: () -> Void
     var onDismissLift: () -> Void = {}
     var onHoldDragEnded: ((DragGesture.Value) -> TicketStackLayout.HoldRelease)?
     var onDeckSwipeEnded: (TicketStackLayout.DeckSwipeRelease) -> Void = { _ in }
 
     @Environment(\.layoutDirection) private var layoutDirection
-    @Environment(SessionManager.self) private var sessionManager
     @State private var dragTranslation: CGSize = .zero
     @State private var deckX: CGFloat = 0
 
@@ -63,32 +63,30 @@ struct HubMarsTicketCard: View {
             if allowsDeckSwipe, !isLifted {
                 deckActionBackdrop
             }
-            TimelineView(.periodic(from: .now, by: 15)) { timeline in
-                let fit = sessionManager.timetableFit(at: timeline.date)
-                MarsTicketView(
-                    content: content,
-                    density: .hub,
-                    occupancyMarks: TimetableFit.occupancyMarks(fit: fit, now: timeline.date)
+            MarsTicketView(
+                content: content,
+                density: .hub,
+                occupancyMarks: occupancyMarks
+            )
+            .equatable()
+            .contentShape(Rectangle())
+            .onTapGesture(perform: handleTap)
+            .gesture(isLifted && followsFinger ? holdDrag : nil)
+            .gesture(
+                DeckHorizontalPanGesture(
+                    isEnabled: allowsDeckSwipe && !isLifted,
+                    onChanged: { x in
+                        deckX = x
+                    },
+                    onEnded: finishDeckSwipe
                 )
-                .contentShape(Rectangle())
-                .onTapGesture(perform: handleTap)
-                .gesture(isLifted && followsFinger ? holdDrag : nil)
-                .gesture(
-                    DeckHorizontalPanGesture(
-                        isEnabled: allowsDeckSwipe && !isLifted,
-                        onChanged: { x in
-                            deckX = x
-                        },
-                        onEnded: finishDeckSwipe
-                    )
-                )
-                .offset(displayedOffset)
-                .shadow(
-                    color: .black.opacity(isHeldVisually || isLifted ? 0.28 : 0.18),
-                    radius: isHeldVisually || isLifted ? 16 : 10,
-                    y: isHeldVisually || isLifted ? 8 : 5
-                )
-            }
+            )
+            .offset(displayedOffset)
+            .shadow(
+                color: .black.opacity(isHeldVisually || isLifted ? 0.28 : 0.18),
+                radius: isHeldVisually || isLifted ? 16 : 10,
+                y: isHeldVisually || isLifted ? 8 : 5
+            )
         }
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isButton)

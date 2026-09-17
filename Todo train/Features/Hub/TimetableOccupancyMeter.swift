@@ -67,12 +67,12 @@ struct OccupancyDestinationSign: View {
                 )
                 .font(minuteFont)
                 .monospacedDigit()
-                .foregroundStyle(clockInk)
+                .foregroundStyle(minuteInk)
             } else if let minutes = row.remainingMinutes {
                 Text("\(minutes)分")
                     .font(minuteFont)
                     .monospacedDigit()
-                    .foregroundStyle(clockInk)
+                    .foregroundStyle(minuteInk)
             }
         }
     }
@@ -142,17 +142,29 @@ struct OccupancyDestinationSign: View {
         switch surface {
         case .cabin:
             (compact ? Font.subheadline : Font.title3).weight(.medium)
+        case .station:
+            (compact ? Font.subheadline : Font.body).weight(.bold)
         default:
             (compact ? Font.subheadline : Font.body).weight(.semibold)
         }
     }
 
     private var clockFont: Font {
-        (compact ? Font.caption : Font.subheadline).weight(.semibold)
+        switch surface {
+        case .station:
+            Font.caption.weight(.regular)
+        default:
+            (compact ? Font.caption : Font.subheadline).weight(.semibold)
+        }
     }
 
     private var minuteFont: Font {
-        (compact ? Font.caption2 : Font.caption).weight(.semibold)
+        switch surface {
+        case .station:
+            Font.caption2.weight(.regular)
+        default:
+            (compact ? Font.caption2 : Font.caption).weight(.semibold)
+        }
     }
 
     private var destinationInk: Color {
@@ -176,8 +188,17 @@ struct OccupancyDestinationSign: View {
         case .grouped: TrainTheme.ink
         case .inverted, .cabin: Color.white.opacity(0.82)
         case .glass: Color.primary.opacity(0.82)
-        case .station(let heat): (heat ? LEDPhosphor.heat : LEDPhosphor.on).opacity(0.88)
+        case .station(let heat): (heat ? LEDPhosphor.heat : LEDPhosphor.on).opacity(0.58)
         }
+    }
+
+    private var minuteInk: Color {
+        clockInk.opacity(isStationTimetable ? 0.72 : 1)
+    }
+
+    private var isStationTimetable: Bool {
+        if case .station = surface { return true }
+        return false
     }
 
     private var lineColor: Color {

@@ -88,7 +88,7 @@ struct MarsTicketContent: Equatable {
 }
 
 /// Pure unused ticket face. Animation lives in overlays / Hub stack.
-struct MarsTicketView: View {
+struct MarsTicketView: View, Equatable {
     let content: MarsTicketContent
     var density: MarsTicketSpec.Density = .celebration
     /// 0…1 — title row reveal for thermal scan (1 = fully printed).
@@ -138,6 +138,7 @@ struct MarsTicketView: View {
             )
         }
         .aspectRatio(MarsTicketSpec.aspectRatio, contentMode: .fit)
+        .modifier(HubTicketRasterization(enabled: density == .hub))
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityLabel)
     }
@@ -348,6 +349,19 @@ struct MarsTicketView: View {
             .rotationEffect(.degrees(90))
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .accessibilityHidden(true)
+    }
+}
+
+/// Flatten Hub faces to a texture so Wallet scroll composites bitmaps, not Canvas + cells.
+private struct HubTicketRasterization: ViewModifier {
+    var enabled: Bool
+
+    func body(content: Content) -> some View {
+        if enabled {
+            content.drawingGroup()
+        } else {
+            content
+        }
     }
 }
 

@@ -52,6 +52,63 @@ struct TrainLayoutTests {
         #expect(result[stale] == nil)
     }
 
+    @Test func slotFrames_fromDeckFrameMatchPeekLayout() {
+        let back = UUID()
+        let front = UUID()
+        let deck = CGRect(x: 10, y: 80, width: 390, height: 500)
+        let frames = TrainLayout.slotFrames(deckFrame: deck, orderedIDs: [back, front])
+        let face = TrainLayout.ticketFaceSize(containerWidth: 390)
+        let x = deck.minX + (deck.width - face.width) / 2
+        #expect(frames[back] == CGRect(x: x, y: 80, width: face.width, height: face.height))
+        #expect(frames[front] == CGRect(
+            x: x,
+            y: 80 + MarsTicketSpec.HubStack.peekStep,
+            width: face.width,
+            height: face.height
+        ))
+        #expect(TrainLayout.slotFrames(deckFrame: .zero, orderedIDs: [back]).isEmpty)
+        #expect(TrainLayout.slotFrames(deckFrame: deck, orderedIDs: []).isEmpty)
+    }
+
+    @Test func slotFrames_scrollMustNotPublishWhileIdle() {
+        let id = UUID()
+        let parked = [id: CGRect(x: 0, y: 100, width: 200, height: 120)]
+        let scrolled = [id: CGRect(x: 0, y: 40, width: 200, height: 120)]
+        #expect(
+            TrainLayout.shouldPublishSlotFrames(
+                needsLiveFrames: false,
+                reported: scrolled,
+                published: parked
+            ) == false
+        )
+        #expect(
+            TrainLayout.shouldPublishSlotFrames(
+                needsLiveFrames: true,
+                reported: scrolled,
+                published: parked
+            )
+        )
+        #expect(
+            TrainLayout.shouldPublishSlotFrames(
+                needsLiveFrames: true,
+                reported: scrolled,
+                published: scrolled
+            ) == false
+        )
+        #expect(
+            TrainLayout.slotFramesMatch(
+                parked,
+                [id: CGRect(x: 0, y: 100.2, width: 200, height: 120)]
+            )
+        )
+        #expect(
+            !TrainLayout.slotFramesMatch(
+                parked,
+                [id: CGRect(x: 0, y: 40, width: 200, height: 120)]
+            )
+        )
+    }
+
     @Test func clampedLandingRect_shrinksToContainer() {
         let huge = CGRect(x: 0, y: 0, width: 500, height: 400)
         let clamped = TrainLayout.clampedLandingRect(huge, containerSize: CGSize(width: 200, height: 400))

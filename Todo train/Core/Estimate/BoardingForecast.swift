@@ -26,6 +26,12 @@ enum BoardingForecast {
 
         var hasPrediction: Bool { predictedArrival != nil && predictedMinutes != nil }
 
+        /// Caret caption only. Hidden when it would duplicate the scheduled hero clock.
+        var showsPredictedClock: Bool {
+            guard hasPrediction, let predictedMinutes else { return false }
+            return predictedMinutes != scheduledMinutes
+        }
+
         func withPredictedMinutes(_ minutes: Int?, now: Date) -> Snapshot {
             guard let minutes else { return self }
             let clamped = max(minutes, 1)
