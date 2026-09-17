@@ -96,4 +96,37 @@ extension SessionManager {
     func save() throws {
         try modelContext.save()
     }
+
+    func workSessions(onDayKey dayKey: String) -> [WorkSession] {
+        guard let day = HistoryStats.date(from: dayKey, calendar: calendar) else { return [] }
+        let start = calendar.startOfDay(for: day)
+        let end = calendar.date(byAdding: .day, value: 1, to: start) ?? start.addingTimeInterval(86_400)
+        let descriptor = FetchDescriptor<WorkSession>(
+            sortBy: [SortDescriptor(\.startedAt)]
+        )
+        let all = (try? modelContext.fetch(descriptor)) ?? []
+        return all.filter { session in
+            let ended = session.endedAt ?? clock.now
+            return session.startedAt < end && ended > start
+        }
+    }
+
+    func historyStrips(onDayKey dayKey: String) -> [DayClockStrip] {
+        guard let day = HistoryStats.date(from: dayKey, calendar: calendar) else { return [] }
+        return fetchTimetableBlocks(overlapping: day).map { block in
+            DayClockStrip(
+                id: block.id,
+                title: block.title,
+                startsAt: block.startsAt,
+                endsAt: block.endsAt,
+                style: .history
+            )
+        }
+    }
+
+    func setExtensionReason(_ reason: String?, on item: SessionExtension) {
+        let trimmed = reason?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        item.reason = trimmed.isEmpty ? nil : trimmed
+        try? save()
+    }
 }

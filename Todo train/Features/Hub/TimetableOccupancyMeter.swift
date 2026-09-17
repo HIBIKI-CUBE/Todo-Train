@@ -312,7 +312,7 @@ struct TimetableOccupancyMeter<Accessory: View>: View {
         } else {
             HStack(alignment: .top, spacing: compact ? 6 : 8) {
                 VStack(alignment: .leading, spacing: compact ? 3 : 6) {
-                    if showsRail, !rows.isEmpty {
+                    if showsRail, !rows.isEmpty || !marks.isEmpty {
                         rail
                     }
                     ForEach(rows) { row in

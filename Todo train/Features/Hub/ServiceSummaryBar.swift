@@ -9,7 +9,7 @@ struct ServiceSummaryBar: View {
     @Environment(SessionManager.self) private var sessionManager
     @Environment(\.verticalSizeClass) private var verticalSizeClass
 
-    let onError: (String) -> Void
+    let onRequestStartService: () -> Void
     let onRequestEndService: () -> Void
 
     private var canEndOpenService: Bool {
@@ -36,23 +36,19 @@ struct ServiceSummaryBar: View {
             statusPauseRow
 
             if canEndOpenService {
-                Button(
-                    sessionManager.needsServiceDayEndPrompt ? "昨日を終了" : "運行終了",
-                    role: .destructive,
+                ServiceCabinKey(
+                    title: sessionManager.needsServiceDayEndPrompt ? "昨日を終了" : "運行終了",
+                    kind: .power,
+                    compact: usesTightVerticalLayout,
                     action: onRequestEndService
                 )
-                .frame(maxWidth: .infinity)
             } else {
-                Button("運行開始") {
-                    do {
-                        try sessionManager.startService()
-                    } catch {
-                        onError(error.localizedDescription)
-                    }
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(TrainTheme.rail)
-                .frame(maxWidth: .infinity)
+                ServiceCabinKey(
+                    title: "運行開始",
+                    kind: .stand,
+                    compact: usesTightVerticalLayout,
+                    action: onRequestStartService
+                )
             }
         }
         .padding(.vertical, usesTightVerticalLayout ? 2 : 4)
@@ -88,6 +84,11 @@ struct ServiceSummaryBar: View {
                         ),
                         marks: TimetableFit.occupancyMarks(fit: fit, now: context.date),
                         chrome: .grouped
+                    )
+                    .opacity(
+                        sessionManager.isInService || sessionManager.needsServiceDayEndPrompt
+                            ? 1
+                            : 0.32
                     )
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }

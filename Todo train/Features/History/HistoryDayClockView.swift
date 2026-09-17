@@ -20,6 +20,7 @@ struct HistoryDayClockView: View {
     var onReissue: ((Ticket) -> Void)?
     var onDelete: (WorkSession) -> Void
     var strips: [DayClockStrip] = []
+    var openEndedAt: Date? = nil
 
     @Environment(\.calendar) private var calendar
 
@@ -41,7 +42,7 @@ struct HistoryDayClockView: View {
 
     private var prepared: PreparedDay? {
         let clipped: [TimelineRide] = {
-            let raw = SessionTimeline.rides(from: sessions)
+            let raw = SessionTimeline.rides(from: sessions, openEndedAt: openEndedAt)
             guard let day else { return raw }
             return raw.compactMap { SessionTimeline.clip($0, toDay: day, calendar: calendar) }
         }()

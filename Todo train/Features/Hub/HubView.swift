@@ -17,7 +17,8 @@ struct HubView: View {
     @Query(sort: \Ticket.sortOrder) private var allTickets: [Ticket]
 
     @State private var showQuickAdd = false
-    @State private var showServiceEndSheet = false
+    @State private var showServiceBootCover = false
+    @State private var showServiceShutdownCover = false
     @State private var hubDestination: HubDestination?
     @State private var detailTicket: Ticket?
     @State private var errorMessage = ""
@@ -209,11 +210,16 @@ struct HubView: View {
                 }
             }
         }
-        .sheet(isPresented: $showServiceEndSheet) {
-            ServiceEndSheet { message in
+        .fullScreenCover(isPresented: $showServiceBootCover) {
+            ServiceBootCover()
+                .environment(sessionManager)
+        }
+        .fullScreenCover(isPresented: $showServiceShutdownCover) {
+            ServiceShutdownCover { message in
                 errorMessage = message
                 showError = true
             }
+            .environment(sessionManager)
         }
         .onAppear {
             presentServiceEndIfNeeded()
@@ -315,9 +321,8 @@ struct HubView: View {
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, TrainTheme.Space.lg)
             ServiceSummaryBar(
-                onError: { message in
-                    errorMessage = message
-                    showError = true
+                onRequestStartService: {
+                    requestStartService()
                 },
                 onRequestEndService: {
                     requestEndService()
@@ -619,26 +624,31 @@ struct HubView: View {
         }
     }
 
-    /// S-03: after a day change, surface the end-of-service flow (once Focus is not blocking).
+    /// S-03: after a day change, surface shutdown (once Focus is not blocking).
     private func presentServiceEndIfNeeded() {
         guard sessionManager.needsServiceDayEndPrompt else { return }
         guard sessionManager.phase != .running, sessionManager.phase != .overtime else { return }
-        if !showServiceEndSheet {
-            showServiceEndSheet = true
+        if !showServiceShutdownCover {
+            showServiceShutdownCover = true
+        }
+    }
+
+    private func requestStartService() {
+        do {
+            try sessionManager.startService()
+            showServiceBootCover = true
+        } catch {
+            if sessionManager.needsServiceDayEndPrompt {
+                showServiceShutdownCover = true
+            } else {
+                errorMessage = error.localizedDescription
+                showError = true
+            }
         }
     }
 
     private func requestEndService() {
-        if sessionManager.pausedTicketCount == 0 {
-            do {
-                try sessionManager.endService()
-            } catch {
-                errorMessage = error.localizedDescription
-                showError = true
-            }
-        } else {
-            showServiceEndSheet = true
-        }
+        showServiceShutdownCover = true
     }
 
     @ViewBuilder

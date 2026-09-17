@@ -242,4 +242,18 @@ struct SessionManagerServiceTests {
         #expect(manager.phase == .running)
         #expect(manager.activeSession?.ticket?.id == a.id)
     }
+
+    @Test func workSessions_onDayKey_includeOpenRides() throws {
+        let (manager, context, clock, _) = try SessionManagerFixtures.makeHarness()
+        try manager.startService()
+        let ticket = try SessionManagerFixtures.makeTicket(context, title: "A")
+        try manager.board(ticket: ticket)
+        let key = try #require(manager.activeServiceDay?.calendarDayKey)
+        let sessions = manager.workSessions(onDayKey: key)
+        #expect(sessions.count == 1)
+        #expect(sessions.first?.ticket?.id == ticket.id)
+        clock.advance(by: 60)
+        try manager.arrive()
+        #expect(manager.workSessions(onDayKey: key).count == 1)
+    }
 }
