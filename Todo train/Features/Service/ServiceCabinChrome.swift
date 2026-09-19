@@ -2,9 +2,8 @@
 //  ServiceCabinChrome.swift
 //  Todo train
 //
-//  Focus の盤の上に、実機の初期化だけ借りる。
-//  表示灯は順に点いてため、テープと秒尺は別々に振り切る。時計は実時刻のまま灯る。
-//  光の後付けはしない。
+//  Focus の盤の上に、実機の初期化だけ借りる。シャットダウンは振り切り。
+//  起動の門の進行は ServiceGateSequence。
 //
 
 import SwiftUI
@@ -17,6 +16,11 @@ enum ServiceCabinMotion {
     static let clockLock = Animation.spring(response: 0.48, dampingFraction: 0.78)
     static let lampClick = Animation.easeOut(duration: 0.09)
     static let rowIn = Animation.spring(response: 0.44, dampingFraction: 0.86)
+    static let cabinRise = Animation.spring(response: 0.62, dampingFraction: 0.82)
+    static let bloom = Animation.easeOut(duration: 0.28)
+    static let primeCharge = Animation.easeInOut(duration: 0.08)
+    static let departUnlock = Animation.easeIn(duration: 0.28)
+    static let departOpen = Animation.easeOut(duration: 0.32)
 }
 
 struct ServiceCabinPanel<Content: View>: View {
@@ -79,7 +83,7 @@ struct ServiceCabinAnnunciators: View {
             .background(on ? FocusPanel.fillRaised : Color.clear)
             .animation(ServiceCabinMotion.lampClick, value: on)
             .accessibilityLabel(id.rawValue)
-            .accessibilityValue(lamp == .test || (lamp >= .live && !isSettled(id)) ? "試験" : (on ? "点灯" : "消灯"))
+            .accessibilityValue(lamp == .test || (lamp >= .live && !isSettled(id)) ? "試験" : (on ? "灯" : "消"))
     }
 
     private func isSettled(_ id: ServiceCabinAnnunciator) -> Bool {
