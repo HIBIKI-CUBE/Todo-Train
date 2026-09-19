@@ -3,6 +3,7 @@
 //  Todo train
 //
 //  運行開始の門. 起動 → 今日が揃う → 発車用意 → ホームへ。
+//  演出の正本は Issue #53。
 //
 
 import SwiftData
@@ -15,18 +16,20 @@ struct ServiceBootCover: View {
     @Environment(SessionManager.self) private var sessionManager
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Ticket.sortOrder) private var allTickets: [Ticket]
 
     @State private var phase: ServiceGatePhase = .entering
     @State private var illuminateElapsed: TimeInterval = 0
+    @State private var departElapsed: TimeInterval = 0
     @State private var skipIlluminate = false
     @State private var primeProgress: Double = 0
     @State private var lastPrimeTick = -1
     @State private var leadTicketID: UUID?
     @State private var occupancyHapticCount = 0
     @State private var didReadyHaptic = false
+    @State private var ignitionPressed = false
+    @State private var completeFlash = false
 
     private var openTickets: [Ticket] {
         allTickets.filter(\.isOpen)
@@ -52,8 +55,7 @@ struct ServiceBootCover: View {
     private var reveal: ServiceGateSequence.Reveal {
         switch phase {
         case .entering, .awaitingIgnition:
-            return ServiceGateSequence.reveal(elapsed: 0, context: gateContext)
-                .darkened
+            return .dormant
         case .illuminating:
             return ServiceGateSequence.reveal(elapsed: illuminateElapsed, context: gateContext)
         case .readyToPrime, .priming, .departing, .done:
@@ -64,41 +66,22 @@ struct ServiceBootCover: View {
         }
     }
 
+    private var departBeat: ServiceGateDepartBeat {
+        switch phase {
+        case .departing, .done:
+            return ServiceGateSequence.departBeat(elapsed: departElapsed, reduceMotion: reduceMotion)
+        default:
+            return .sealed
+        }
+    }
+
     var body: some View {
-        ZStack {
-            CabinBackground(phase: .cruise, reduceTransparency: reduceTransparency)
-                .opacity(phase == .departing || phase == .done ? (reduceMotion ? 0.35 : 0) : 1)
-
-            if phase == .departing || phase == .done {
-                Color.white.opacity(reduceMotion ? 0.10 : 0.20)
-                    .ignoresSafeArea()
-                    .allowsHitTesting(false)
-            }
-
-            VStack(spacing: 0) {
-                TimelineView(.periodic(from: .now, by: 0.05)) { context in
-                    deck(now: context.date)
-                }
-                if phase >= .readyToPrime {
-                    console
-                }
-            }
-            .opacity(panelOpacity)
-            .scaleEffect(departScale, anchor: .center)
-            .offset(y: phase == .departing || phase == .done ? -28 : 0)
-
-            if phase == .awaitingIgnition {
-                ignitionControl
-                    .frame(height: 72)
-                    .padding(.horizontal, 28)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-            }
+        GeometryReader { geo in
+            gateLayers(size: geo.size)
         }
         .environment(\.colorScheme, .dark)
-        .presentationBackground(.black)
-        .safeAreaPadding(.top, 4)
+        .presentationBackground(coverBackground)
         .interactiveDismissDisabled(phase != .done)
-        .animation(reduceMotion ? .easeOut(duration: 0.22) : ServiceCabinMotion.clockLock, value: phase)
         .task {
             await sessionManager.refreshCalendarBoardIfAuthorized()
             await runEnter()
@@ -119,7 +102,7 @@ struct ServiceBootCover: View {
             }
         }
         .onChange(of: primeProgress) { _, progress in
-            let tick = Int(progress * 3)
+            let tick = Int(progress * 4)
             if tick != lastPrimeTick, phase == .priming, progress < 1 {
                 lastPrimeTick = tick
                 ServiceGateHaptics.primeTick(progress: progress)
@@ -129,72 +112,209 @@ struct ServiceBootCover: View {
         .accessibilityLabel(accessibilityLabel)
     }
 
-    private var panelOpacity: Double {
-        switch phase {
-        case .entering:
-            return 0
-        case .departing, .done:
-            return reduceMotion ? 0.2 : 0
-        default:
-            return 1
-        }
-    }
-
-    private var departScale: CGFloat {
-        if phase == .departing || phase == .done {
-            return reduceMotion ? 1.02 : 1.06
-        }
-        return 1
+    private var coverBackground: Color {
+        departBeat == .opening ? Self.platformOpenFill : Color.black
     }
 
     @ViewBuilder
-    private func deck(now: Date) -> some View {
-        if phase == .entering || phase == .awaitingIgnition {
-            Color.clear
-        } else {
-            let occupancy = occupancyInstrument(now: now)
-            let extras = extraNotices(now: now, occupancyRows: occupancy.rows)
-            ServiceGateDeck(
-                reveal: reveal,
-                dayText: dayText,
-                now: now,
-                occupancyRows: occupancy.rows,
-                occupancyMarks: occupancy.marks,
-                occupancyActionTitle: occupancy.actionTitle,
-                occupancyAction: occupancy.action,
-                additionalOccupancyRows: extras.map(\.row),
-                additionalActionTitle: TimetableCopy.adopt,
-                additionalAction: { rowID in
-                    guard let occurrence = extras.first(where: { $0.row.id == rowID })?.occurrence else {
-                        return
-                    }
-                    sessionManager.adoptOccurrence(occurrence, scope: .occurrence)
-                },
-                consistTickets: openTickets,
-                leadTicketID: leadTicketID ?? openTickets.first?.id,
-                calendarAuthorization: sessionManager.calendarBoard.authorizationStatus(),
-                onMakeLead: makeLead,
-                onMoveConsist: moveConsist,
-                onRequestCalendar: {
-                    Task { await requestCalendar() }
-                }
+    private func gateLayers(size: CGSize) -> some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            if phase == .entering || phase == .awaitingIgnition {
+                ignitionAtmosphere
+            }
+            litDeck
+            if phase == .priming {
+                primeWash
+            }
+            ignitionLayer(width: min(size.width - 56, 420))
+            primeLayer
+            if completeFlash {
+                Color.white.opacity(0.42)
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
+            }
+            if departBeat != .sealed {
+                platformAperture(size: size)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var litDeck: some View {
+        if phase >= .illuminating {
+            TimelineView(.periodic(from: .now, by: 0.05)) { context in
+                deck(now: context.date)
+            }
+            .opacity(deckOpacity)
+            .scaleEffect(departCabinScale, anchor: .bottom)
+            .offset(y: departCabinOffset)
+            .animation(
+                reduceMotion ? .easeOut(duration: 0.14) : ServiceCabinMotion.departUnlock,
+                value: departBeat
             )
         }
     }
 
     @ViewBuilder
-    private var console: some View {
-        VStack(spacing: 0) {
-            FocusControlDivider()
-            primeControl
-                .frame(height: 72)
+    private func ignitionLayer(width: CGFloat) -> some View {
+        if phase == .awaitingIgnition || phase == .entering {
+            ignitionControl
+                .frame(width: width, height: 78)
+                .opacity(phase == .awaitingIgnition ? 1 : 0.22)
+                .scaleEffect(phase == .awaitingIgnition ? 1 : 0.92)
+                .allowsHitTesting(phase == .awaitingIgnition)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         }
+    }
+
+    @ViewBuilder
+    private var primeLayer: some View {
+        if phase == .readyToPrime || phase == .priming {
+            VStack {
+                Spacer(minLength: 0)
+                    .allowsHitTesting(false)
+                primeControl
+                    .frame(height: 88)
+            }
+            .padding(.bottom, 18)
+        }
+    }
+
+    private var deckOpacity: Double {
+        switch departBeat {
+        case .sealed:
+            return 1
+        case .unlocking:
+            return reduceMotion ? 0.55 : 0.72
+        case .opening:
+            return 0
+        }
+    }
+
+    private var departCabinScale: CGFloat {
+        switch departBeat {
+        case .sealed:
+            return 1
+        case .unlocking:
+            return reduceMotion ? 0.98 : 0.94
+        case .opening:
+            return 0.88
+        }
+    }
+
+    private var departCabinOffset: CGFloat {
+        switch departBeat {
+        case .sealed:
+            return 0
+        case .unlocking:
+            return reduceMotion ? -8 : -18
+        case .opening:
+            return -40
+        }
+    }
+
+    private var ignitionAtmosphere: some View {
+        TimelineView(.periodic(from: .now, by: reduceMotion ? 1 : 0.05)) { context in
+            let breath = reduceMotion ? 0.45 : (sin(context.date.timeIntervalSinceReferenceDate * 1.6) + 1) / 2
+            RadialGradient(
+                colors: [
+                    Color.white.opacity(0.10 + 0.08 * breath),
+                    Color.white.opacity(0.03 + 0.02 * breath),
+                    Color.clear
+                ],
+                center: .center,
+                startRadius: 20,
+                endRadius: 280
+            )
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
+        }
+    }
+
+    private var primeWash: some View {
+        GeometryReader { geo in
+            VStack {
+                Spacer(minLength: 0)
+                LinearGradient(
+                    colors: [
+                        Color.white.opacity(0.02),
+                        Color.white.opacity(0.10 + 0.38 * primeProgress)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: geo.size.height * (0.28 + 0.72 * primeProgress))
+            }
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
+    private func platformAperture(size: CGSize) -> some View {
+        let progress: CGFloat = {
+            switch departBeat {
+            case .sealed:
+                return 0
+            case .unlocking:
+                return reduceMotion ? 0.22 : 0.18
+            case .opening:
+                return 1
+            }
+        }()
+        let width = max(8, size.width * progress)
+        let height = max(12, size.height * (departBeat == .opening ? 1 : 0.42 + 0.2 * progress))
+        return RoundedRectangle(cornerRadius: departBeat == .opening ? 0 : 18, style: .continuous)
+            .fill(Self.platformOpenFill)
+            .frame(width: width, height: height)
+            .scaleEffect(departBeat == .opening ? 1.04 : 1)
+            .animation(
+                reduceMotion ? .easeOut(duration: 0.14) : ServiceCabinMotion.departOpen,
+                value: departBeat
+            )
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+
+    @ViewBuilder
+    private func deck(now: Date) -> some View {
+        let occupancy = occupancyInstrument(now: now)
+        let extras = extraNotices(now: now, occupancyRows: occupancy.rows)
+        ServiceGateDeck(
+            reveal: reveal,
+            primeProgress: phase == .priming ? primeProgress : 0,
+            dayText: dayText,
+            now: now,
+            occupancyRows: occupancy.rows,
+            occupancyMarks: occupancy.marks,
+            occupancyActionTitle: occupancy.actionTitle,
+            occupancyAction: occupancy.action,
+            additionalOccupancyRows: extras.map(\.row),
+            additionalActionTitle: TimetableCopy.adopt,
+            additionalAction: { rowID in
+                guard let occurrence = extras.first(where: { $0.row.id == rowID })?.occurrence else {
+                    return
+                }
+                sessionManager.adoptOccurrence(occurrence, scope: .occurrence)
+            },
+            consistTickets: openTickets,
+            leadTicketID: leadTicketID ?? openTickets.first?.id,
+            calendarAuthorization: sessionManager.calendarBoard.authorizationStatus(),
+            onMakeLead: makeLead,
+            onMoveConsist: moveConsist,
+            onRequestCalendar: {
+                Task { await requestCalendar() }
+            }
+        )
     }
 
     private var ignitionControl: some View {
         IgnitionPressControl(
             title: "起動",
             skipAfter: 0.65,
+            pressed: $ignitionPressed,
+            reduceMotion: reduceMotion,
             onTap: { ignite(skip: false) },
             onSkip: { ignite(skip: true) }
         )
@@ -207,6 +327,7 @@ struct ServiceBootCover: View {
             holdSeconds: ServiceGateSequence.primeHoldSeconds,
             progress: $primeProgress,
             enabled: phase == .readyToPrime || phase == .priming,
+            reduceMotion: reduceMotion,
             onBegan: {
                 phase = ServiceGateSequence.advance(phase, .primeBegan)
             },
@@ -217,6 +338,7 @@ struct ServiceBootCover: View {
             },
             onCompleted: {
                 ServiceGateHaptics.primeComplete()
+                completeFlash = true
                 phase = ServiceGateSequence.advance(phase, .primeCompleted)
             }
         )
@@ -245,11 +367,7 @@ struct ServiceBootCover: View {
         case .illuminating:
             await runIlluminate()
         case .departing:
-            let duration = ServiceGateSequence.departDuration(reduceMotion: reduceMotion)
-            try? await Task.sleep(for: .seconds(duration))
-            if Task.isCancelled { return }
-            phase = ServiceGateSequence.advance(phase, .departElapsed)
-            dismiss()
+            await runDepart()
         default:
             break
         }
@@ -257,7 +375,7 @@ struct ServiceBootCover: View {
 
     private func runIlluminate() async {
         let duration = ServiceGateSequence.illuminateDuration(context: gateContext)
-        let step: TimeInterval = reduceMotion ? duration : 0.05
+        let step: TimeInterval = reduceMotion ? duration : 0.04
         var elapsed: TimeInterval = 0
         while elapsed < duration {
             try? await Task.sleep(for: .seconds(step))
@@ -267,6 +385,21 @@ struct ServiceBootCover: View {
             if phase != .illuminating { return }
         }
         phase = ServiceGateSequence.advance(phase, .illuminateElapsed)
+    }
+
+    private func runDepart() async {
+        completeFlash = false
+        let duration = ServiceGateSequence.departDuration(reduceMotion: reduceMotion)
+        let step: TimeInterval = 0.03
+        var elapsed: TimeInterval = 0
+        while elapsed < duration {
+            try? await Task.sleep(for: .seconds(step))
+            if Task.isCancelled { return }
+            elapsed = min(duration, elapsed + step)
+            departElapsed = elapsed
+        }
+        phase = ServiceGateSequence.advance(phase, .departElapsed)
+        dismiss()
     }
 
     private func makeLead(_ ticket: Ticket) {
@@ -353,6 +486,8 @@ struct ServiceBootCover: View {
         return (rows, marks, nil, nil)
     }
 
+    private static let platformOpenFill = Color(red: 0.95, green: 0.95, blue: 0.97)
+
     private var accessibilityLabel: String {
         switch phase {
         case .entering:
@@ -360,7 +495,7 @@ struct ServiceBootCover: View {
         case .awaitingIgnition:
             return "起動"
         case .illuminating:
-            return reveal.isPeak ? "今日が読める" : "今日が揃う"
+            return reveal.fullLit ? "盤が灯った" : (reveal.isPeak ? "今日が読める" : "今日が揃う")
         case .readyToPrime, .priming:
             return "発車用意"
         case .departing, .done:
@@ -370,144 +505,21 @@ struct ServiceBootCover: View {
 }
 
 private extension ServiceGateSequence.Reveal {
-    var darkened: ServiceGateSequence.Reveal {
-        var copy = self
-        copy.edgeLift = 0
-        copy.wash = 0
-        copy.theatricalLampCount = 0
-        copy.plaque = nil
-        copy.serviceLit = false
-        copy.dateLit = false
-        copy.clockProgress = 0
-        copy.occupancySilhouettes = 0
-        copy.occupancyLive = 0
-        copy.consistSilhouettes = 0
-        copy.consistLive = 0
-        copy.tapeLive = false
-        copy.canInteract = false
-        copy.canPrime = false
-        copy.isPeak = false
-        return copy
-    }
-}
-
-private struct IgnitionPressControl: View {
-    var title: String
-    var skipAfter: TimeInterval
-    var onTap: () -> Void
-    var onSkip: () -> Void
-
-    @State private var pressStarted: Date?
-
-    var body: some View {
-        Text(title)
-            .font(.system(size: 22, weight: .bold, design: .default))
-            .foregroundStyle(FocusPanel.ink)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(FocusPanel.fillRaised)
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { _ in
-                        if pressStarted == nil {
-                            pressStarted = .now
-                        }
-                    }
-                    .onEnded { _ in
-                        let duration = Date.now.timeIntervalSince(pressStarted ?? .now)
-                        pressStarted = nil
-                        if duration >= skipAfter {
-                            onSkip()
-                        } else {
-                            onTap()
-                        }
-                    }
-            )
-            .accessibilityAddTraits(.isButton)
-            .accessibilityLabel(title)
-            .accessibilityAction {
-                onTap()
-            }
-    }
-}
-
-private struct PrimeHoldControl: View {
-    var title: String
-    var holdSeconds: TimeInterval
-    var progress: Binding<Double>
-    var enabled: Bool
-    var onBegan: () -> Void
-    var onCancelled: () -> Void
-    var onCompleted: () -> Void
-
-    @State private var pressStarted: Date?
-    @State private var holding = false
-
-    var body: some View {
-        TimelineView(.periodic(from: .now, by: holding ? 0.03 : 1)) { context in
-            let current = currentProgress(at: context.date)
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    FocusPanel.fillRaised
-                    FocusPanel.ink.opacity(0.18 + 0.16 * current)
-                        .frame(width: geo.size.width * current)
-                    Text(title)
-                        .font(.system(size: 22, weight: .bold, design: .default))
-                        .foregroundStyle(FocusPanel.ink)
-                        .frame(maxWidth: .infinity)
-                }
-            }
-            .opacity(enabled ? 1 : 0.45)
-        }
-        .contentShape(Rectangle())
-        .gesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in
-                    guard enabled else { return }
-                    if pressStarted == nil {
-                        pressStarted = .now
-                        holding = true
-                        onBegan()
-                    }
-                    if let pressStarted {
-                        let value = min(1, Date.now.timeIntervalSince(pressStarted) / holdSeconds)
-                        progress.wrappedValue = value
-                        if value >= 1 {
-                            finish()
-                        }
-                    }
-                }
-                .onEnded { _ in
-                    guard holding else { return }
-                    if (progress.wrappedValue) >= 1 {
-                        finish()
-                    } else {
-                        holding = false
-                        pressStarted = nil
-                        progress.wrappedValue = 0
-                        onCancelled()
-                    }
-                }
-        )
-        .accessibilityAddTraits(.isButton)
-        .accessibilityLabel(title)
-        .accessibilityHint("押し続ける")
-        .accessibilityAction {
-            onBegan()
-            onCompleted()
-        }
-    }
-
-    private func currentProgress(at date: Date) -> Double {
-        guard let pressStarted, holding else { return progress.wrappedValue }
-        return min(1, date.timeIntervalSince(pressStarted) / holdSeconds)
-    }
-
-    private func finish() {
-        guard holding else { return }
-        holding = false
-        pressStarted = nil
-        progress.wrappedValue = 1
-        onCompleted()
-    }
+    static let dormant = ServiceGateSequence.Reveal(
+        rise: 0,
+        wash: 0,
+        bloom: 0,
+        theatricalLampCount: 0,
+        plaque: nil,
+        serviceLit: false,
+        dateLit: false,
+        clockProgress: 0,
+        occupancyLive: 0,
+        consistLive: 0,
+        tapeLive: false,
+        canInteract: false,
+        canPrime: false,
+        isPeak: false,
+        fullLit: false
+    )
 }

@@ -28,12 +28,12 @@ enum ServiceGateHaptics {
     }
 
     static func primeTick(progress: Double) {
-        let intensity = 0.28 + min(max(progress, 0), 1) * 0.50
-        impact(.light, intensity: intensity)
+        let intensity = 0.32 + min(max(progress, 0), 1) * 0.55
+        impact(.rigid, intensity: intensity)
     }
 
     static func primeComplete() {
-        impact(.heavy, intensity: 1.0)
+        impact(.rigid, intensity: 1.0)
     }
 
     private static func impact(_ style: ImpactStyle, intensity: Double) {
@@ -45,7 +45,7 @@ enum ServiceGateHaptics {
     }
 
     private enum ImpactStyle {
-        case light, medium, heavy
+        case light, medium, heavy, rigid
 
         #if canImport(UIKit)
         var ui: UIImpactFeedbackGenerator.FeedbackStyle {
@@ -53,6 +53,7 @@ enum ServiceGateHaptics {
             case .light: .light
             case .medium: .medium
             case .heavy: .heavy
+            case .rigid: .rigid
             }
         }
         #endif

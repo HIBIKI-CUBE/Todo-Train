@@ -16,6 +16,11 @@ enum ServiceCabinMotion {
     static let clockLock = Animation.spring(response: 0.48, dampingFraction: 0.78)
     static let lampClick = Animation.easeOut(duration: 0.09)
     static let rowIn = Animation.spring(response: 0.44, dampingFraction: 0.86)
+    static let cabinRise = Animation.spring(response: 0.62, dampingFraction: 0.82)
+    static let bloom = Animation.easeOut(duration: 0.28)
+    static let primeCharge = Animation.easeInOut(duration: 0.08)
+    static let departUnlock = Animation.easeIn(duration: 0.28)
+    static let departOpen = Animation.easeOut(duration: 0.32)
 }
 
 struct ServiceCabinPanel<Content: View>: View {

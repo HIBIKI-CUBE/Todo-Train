@@ -2,12 +2,12 @@
 //  ServiceGateSequence.swift
 //  Todo train
 //
-//  運行開始の門. 進行の主人はここ。表示灯試験は主人にしない。
+//  運行開始の門. 進行の主人はここ。演出の正本は Issue #53。
 //
 
 import Foundation
 
-enum ServiceGatePhase: Int, Comparable, CaseIterable, Sendable {
+nonisolated enum ServiceGatePhase: Int, Comparable, CaseIterable, Sendable {
     case entering
     case awaitingIgnition
     case illuminating
@@ -21,7 +21,7 @@ enum ServiceGatePhase: Int, Comparable, CaseIterable, Sendable {
     }
 }
 
-enum ServiceGateEvent: Equatable, Sendable {
+nonisolated enum ServiceGateEvent: Equatable, Sendable {
     case enterElapsed
     case ignited(skipIlluminate: Bool)
     case illuminateElapsed
@@ -31,13 +31,24 @@ enum ServiceGateEvent: Equatable, Sendable {
     case departElapsed
 }
 
-enum ServiceGateSequence {
-    static let enterHoldSeconds: TimeInterval = 0.38
-    static let primeHoldSeconds: TimeInterval = 0.55
-    static let departHoldSeconds: TimeInterval = 0.58
-    static let reduceMotionDepartHoldSeconds: TimeInterval = 0.26
-    static let richIlluminateSeconds: TimeInterval = 2.40
-    static let emptyIlluminateSeconds: TimeInterval = 1.28
+nonisolated enum ServiceGateDepartBeat: Equatable, Sendable {
+    case sealed
+    case unlocking
+    case opening
+}
+
+nonisolated enum ServiceGateSequence {
+    static let enterHoldSeconds: TimeInterval = 0.42
+    static let primeHoldSeconds: TimeInterval = 0.58
+    static let departUnlockSeconds: TimeInterval = 0.28
+    static let departOpenSeconds: TimeInterval = 0.32
+    static let departHoldSeconds: TimeInterval = departUnlockSeconds + departOpenSeconds
+    static let reduceMotionDepartUnlockSeconds: TimeInterval = 0.10
+    static let reduceMotionDepartOpenSeconds: TimeInterval = 0.14
+    static let reduceMotionDepartHoldSeconds: TimeInterval =
+        reduceMotionDepartUnlockSeconds + reduceMotionDepartOpenSeconds
+    static let richIlluminateSeconds: TimeInterval = 2.28
+    static let emptyIlluminateSeconds: TimeInterval = 1.22
     static let reduceMotionIlluminateSeconds: TimeInterval = 0.08
     static let occupancyHandLimit = 4
     static let consistLeadLimit = 4
@@ -55,21 +66,21 @@ enum ServiceGateSequence {
     }
 
     struct Reveal: Equatable, Sendable {
-        var edgeLift: Double
+        var rise: Double
         var wash: Double
+        var bloom: Double
         var theatricalLampCount: Int
         var plaque: String?
         var serviceLit: Bool
         var dateLit: Bool
         var clockProgress: Double
-        var occupancySilhouettes: Int
         var occupancyLive: Int
-        var consistSilhouettes: Int
         var consistLive: Int
         var tapeLive: Bool
         var canInteract: Bool
         var canPrime: Bool
         var isPeak: Bool
+        var fullLit: Bool
     }
 
     static func advance(_ phase: ServiceGatePhase, _ event: ServiceGateEvent) -> ServiceGatePhase {
@@ -106,13 +117,22 @@ enum ServiceGateSequence {
         reduceMotion ? reduceMotionDepartHoldSeconds : departHoldSeconds
     }
 
+    static func departUnlockDuration(reduceMotion: Bool) -> TimeInterval {
+        reduceMotion ? reduceMotionDepartUnlockSeconds : departUnlockSeconds
+    }
+
+    static func departBeat(elapsed: TimeInterval, reduceMotion: Bool) -> ServiceGateDepartBeat {
+        if elapsed < 0 { return .sealed }
+        return elapsed < departUnlockDuration(reduceMotion: reduceMotion) ? .unlocking : .opening
+    }
+
     static func reveal(elapsed: TimeInterval, context: Context) -> Reveal {
         if context.reduceMotion || context.skipIlluminate {
             return filledReveal(context: context, canPrime: true)
         }
         let t = max(0, elapsed)
         return context.isEmptyMorning
-            ? emptyReveal(elapsed: t, context: context)
+            ? emptyReveal(elapsed: t)
             : richReveal(elapsed: t, context: context)
     }
 
@@ -128,8 +148,16 @@ enum ServiceGateSequence {
         let hour = (scramble / 100) % 24
         let minute = (scramble / 10) % 60
         let second = scramble % 60
-        let mixedHour = blendDigits(live: live.hourMinute, fake: String(format: "%02d:%02d", hour, minute), progress: progress)
-        let mixedSecond = blendDigits(live: live.second, fake: String(format: "%02d", second), progress: progress)
+        let mixedHour = blendDigits(
+            live: live.hourMinute,
+            fake: String(format: "%02d:%02d", hour, minute),
+            progress: progress
+        )
+        let mixedSecond = blendDigits(
+            live: live.second,
+            fake: String(format: "%02d", second),
+            progress: progress
+        )
         return (mixedHour, mixedSecond)
     }
 
@@ -144,163 +172,156 @@ enum ServiceGateSequence {
     private static func filledReveal(context: Context, canPrime: Bool) -> Reveal {
         let occupancy = min(max(context.occupancyCount, 0), occupancyHandLimit)
         let consist = min(max(context.consistCount, 0), consistLeadLimit)
-        let peak = true
         return Reveal(
-            edgeLift: 1,
+            rise: 1,
             wash: 1,
+            bloom: 1,
             theatricalLampCount: theatricalLampLimit,
             plaque: nil,
             serviceLit: true,
             dateLit: true,
             clockProgress: 1,
-            occupancySilhouettes: 0,
             occupancyLive: occupancy,
-            consistSilhouettes: 0,
             consistLive: consist,
             tapeLive: occupancy > 0,
             canInteract: true,
             canPrime: canPrime,
-            isPeak: peak
+            isPeak: true,
+            fullLit: true
         )
     }
 
     private static func richReveal(elapsed t: TimeInterval, context: Context) -> Reveal {
         let occupancyCap = min(max(context.occupancyCount, 0), occupancyHandLimit)
         let consistCap = min(max(context.consistCount, 0), consistLeadLimit)
+
         let theatrical: Int
-        if t < 0.10 {
+        if t < 0.12 {
             theatrical = 1
-        } else if t < 0.22 {
+        } else if t < 0.28 {
             theatrical = 3
         } else {
             theatrical = theatricalLampLimit
         }
 
         let plaque: String?
-        if t >= 0.16, t < 0.42 {
+        if t >= 0.30, t < 0.55 {
             plaque = "運行"
-        } else if t >= 1.08, t < 1.32, occupancyCap > 0 {
+        } else if t >= 0.92, t < 1.18, occupancyCap > 0 {
             plaque = "占有"
-        } else if t >= 1.44, t < 1.68, consistCap > 0 {
+        } else if t >= 1.28, t < 1.50, consistCap > 0 {
             plaque = "編成"
         } else {
             plaque = nil
         }
 
-        let serviceLit = t >= 0.30
-        let dateLit = t >= 0.46
+        let serviceLit = t >= 0.28
+        let dateLit = t >= 0.40
         let clockProgress: Double
-        if t < 0.46 {
+        if t < 0.38 {
             clockProgress = 0
-        } else if t < 0.96 {
-            clockProgress = min(1, (t - 0.46) / 0.50)
+        } else if t < 0.78 {
+            clockProgress = min(1, (t - 0.38) / 0.40)
         } else {
             clockProgress = 1
         }
 
-        let occupancySilhouettes: Int
         let occupancyLive: Int
-        if occupancyCap == 0 {
-            occupancySilhouettes = 0
-            occupancyLive = 0
-        } else if t < 0.70 {
-            occupancySilhouettes = 0
-            occupancyLive = 0
-        } else if t < 0.96 {
-            occupancySilhouettes = min(occupancyCap, 2)
+        if occupancyCap == 0 || t < 0.82 {
             occupancyLive = 0
         } else {
-            occupancySilhouettes = 0
-            occupancyLive = cascadedCount(elapsed: t, start: 0.96, stagger: 0.14, total: occupancyCap)
+            occupancyLive = cascadedCount(elapsed: t, start: 0.82, stagger: 0.11, total: occupancyCap)
         }
 
-        let consistSilhouettes: Int
         let consistLive: Int
-        if consistCap == 0 {
-            consistSilhouettes = 0
-            consistLive = 0
-        } else if t < 1.24 {
-            consistSilhouettes = 0
-            consistLive = 0
-        } else if t < 1.44 {
-            consistSilhouettes = min(consistCap, 2)
+        if consistCap == 0 || t < 1.22 {
             consistLive = 0
         } else {
-            consistSilhouettes = 0
-            consistLive = cascadedCount(elapsed: t, start: 1.44, stagger: 0.12, total: consistCap)
+            consistLive = cascadedCount(elapsed: t, start: 1.22, stagger: 0.10, total: consistCap)
         }
 
-        let tapeLive = occupancyLive > 0
-        let canInteract = occupancyLive > 0 || consistLive > 0
         let isPeak = serviceLit && dateLit && clockProgress >= 1 && (occupancyCap == 0 || occupancyLive >= 1)
-        let canPrime = t >= 2.16
-        let edgeLift = min(1, 0.08 + t / 1.6)
-        let wash = min(1, 0.10 + t / 1.9)
+        let fullLit = t >= 1.58
+        let canPrime = t >= 2.04
 
         return Reveal(
-            edgeLift: edgeLift,
-            wash: wash,
+            rise: richRise(t),
+            wash: richWash(t),
+            bloom: richBloom(t),
             theatricalLampCount: theatrical,
             plaque: plaque,
             serviceLit: serviceLit,
             dateLit: dateLit,
             clockProgress: clockProgress,
-            occupancySilhouettes: occupancySilhouettes,
             occupancyLive: occupancyLive,
-            consistSilhouettes: consistSilhouettes,
             consistLive: consistLive,
-            tapeLive: tapeLive,
-            canInteract: canInteract,
+            tapeLive: occupancyLive > 0,
+            canInteract: occupancyLive > 0 || consistLive > 0,
             canPrime: canPrime,
-            isPeak: isPeak
+            isPeak: isPeak,
+            fullLit: fullLit
         )
     }
 
-    private static func emptyReveal(elapsed t: TimeInterval, context: Context) -> Reveal {
-        _ = context
+    private static func emptyReveal(elapsed t: TimeInterval) -> Reveal {
         let theatrical: Int
-        if t < 0.12 {
+        if t < 0.10 {
             theatrical = 2
-        } else if t < 0.28 {
+        } else if t < 0.24 {
             theatrical = 4
         } else {
             theatrical = theatricalLampLimit
         }
-        let plaque: String? = (t >= 0.16 && t < 0.40) ? "運行" : nil
-        let serviceLit = t >= 0.32
-        let dateLit = t >= 0.40
+        let plaque: String? = (t >= 0.18 && t < 0.44) ? "運行" : nil
+        let serviceLit = t >= 0.26
+        let dateLit = t >= 0.34
         let clockProgress: Double
-        if t < 0.40 {
+        if t < 0.34 {
             clockProgress = 0
-        } else if t < 0.62 {
-            clockProgress = min(1, (t - 0.40) / 0.22)
+        } else if t < 0.56 {
+            clockProgress = min(1, (t - 0.34) / 0.22)
         } else {
             clockProgress = 1
         }
-        let occupancySilhouettes: Int
-        if t >= 0.52, t < 0.82 {
-            occupancySilhouettes = 2
-        } else {
-            occupancySilhouettes = 0
-        }
         let isPeak = serviceLit && dateLit && clockProgress >= 1
+        let fullLit = t >= 0.78
         return Reveal(
-            edgeLift: min(1, 0.12 + t / 1.1),
-            wash: min(1, 0.16 + t / 1.2),
+            rise: min(1, t < 0.22 ? 0.10 + t * 0.8 : 0.28 + (t - 0.22) / 0.70 * 0.72),
+            wash: min(1, 0.18 + t / 0.85),
+            bloom: min(1, t < 0.22 ? 0.20 + t : 0.42 + (t - 0.22) / 0.70 * 0.58),
             theatricalLampCount: theatrical,
             plaque: plaque,
             serviceLit: serviceLit,
             dateLit: dateLit,
             clockProgress: clockProgress,
-            occupancySilhouettes: occupancySilhouettes,
             occupancyLive: 0,
-            consistSilhouettes: 0,
             consistLive: 0,
             tapeLive: false,
-            canInteract: t >= 0.62,
-            canPrime: t >= 1.12,
-            isPeak: isPeak
+            canInteract: t >= 0.56,
+            canPrime: t >= 1.06,
+            isPeak: isPeak,
+            fullLit: fullLit
         )
+    }
+
+    private static func richRise(_ t: TimeInterval) -> Double {
+        if t < 0.22 { return 0.06 + t * 0.45 }
+        if t < 0.50 { return 0.16 + (t - 0.22) / 0.28 * 0.58 }
+        return min(1, 0.74 + (t - 0.50) / 1.50 * 0.26)
+    }
+
+    private static func richWash(_ t: TimeInterval) -> Double {
+        if t < 0.22 { return 0.08 + t * 0.5 }
+        if t < 0.50 { return 0.19 + (t - 0.22) / 0.28 * 0.42 }
+        if t < 1.58 { return 0.61 + (t - 0.50) / 1.08 * 0.22 }
+        return min(1, 0.83 + (t - 1.58) / 0.50 * 0.17)
+    }
+
+    private static func richBloom(_ t: TimeInterval) -> Double {
+        if t < 0.22 { return 0.10 + t * 0.7 }
+        if t < 0.50 { return 0.25 + (t - 0.22) / 0.28 * 0.38 }
+        if t < 1.58 { return 0.63 + (t - 0.50) / 1.08 * 0.20 }
+        return min(1, 0.83 + (t - 1.58) / 0.46 * 0.17)
     }
 
     private static func cascadedCount(
