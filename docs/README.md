@@ -11,8 +11,8 @@
 | [07-research.md](07-research.md) | 研究根拠と OS のハード制限 |
 | [12-ui-design.md](12-ui-design.md) | 見た目の骨格と祝祭の例外 |
 | [13-sync-mac-companion.md](13-sync-mac-companion.md) | 同期をこの形にした理由 |
-| [14-mac-companion-ux.md](14-mac-companion-ux.md) | Mac に何を載せ、何を載せないか |
-| [16-wakeup-checklist.md](16-wakeup-checklist.md) | 人が見ないと閉じない実機確認 |
+| [14-mac-companion-ux.md](14-mac-companion-ux.md) | Mac に何を載せ、何を載せないか（確認 1–6 は確定） |
+| [16-wakeup-checklist.md](16-wakeup-checklist.md) | 人の確認ログ（2026-09-19 完了） |
 | [17-calendar-experience.md](17-calendar-experience.md) | カレンダーは占有の計器。契約と日常が擦れていない点。直す順 |
 | [references/](references/) | マルス券の原画 |
 
