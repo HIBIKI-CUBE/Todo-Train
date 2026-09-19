@@ -13,11 +13,11 @@ struct HubView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @Environment(DeletionUndoCenter.self) private var undoCenter
+    @Environment(ServicePortalPresentation.self) private var servicePortal
 
     @Query(sort: \Ticket.sortOrder) private var allTickets: [Ticket]
 
     @State private var showQuickAdd = false
-    @State private var showServiceBootCover = false
     @State private var showServiceShutdownCover = false
     @State private var hubDestination: HubDestination?
     @State private var detailTicket: Ticket?
@@ -209,10 +209,6 @@ struct HubView: View {
                     }
                 }
             }
-        }
-        .fullScreenCover(isPresented: $showServiceBootCover) {
-            ServiceBootCover()
-                .environment(sessionManager)
         }
         .fullScreenCover(isPresented: $showServiceShutdownCover) {
             ServiceShutdownCover { message in
@@ -636,7 +632,7 @@ struct HubView: View {
     private func requestStartService() {
         do {
             try sessionManager.startService()
-            showServiceBootCover = true
+            servicePortal.presentBootCover()
         } catch {
             if sessionManager.needsServiceDayEndPrompt {
                 showServiceShutdownCover = true

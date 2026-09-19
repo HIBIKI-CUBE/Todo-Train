@@ -2,9 +2,8 @@
 //  ServiceCabinChrome.swift
 //  Todo train
 //
-//  Focus の盤の上に、実機の初期化だけ借りる。
-//  表示灯は順に点いてため、テープと秒尺は別々に振り切る。時計は実時刻のまま灯る。
-//  光の後付けはしない。
+//  Shutdown keeps BIT: lamps click, tapes sweep.
+//  Boot's place is ServicePortalSequence, not this chrome.
 //
 
 import SwiftUI

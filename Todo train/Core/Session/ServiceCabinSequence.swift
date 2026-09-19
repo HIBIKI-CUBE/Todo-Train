@@ -2,8 +2,7 @@
 //  ServiceCabinSequence.swift
 //  Todo train
 //
-//  Glass-cockpit BIT: lamps click on, tapes sweep on their own clocks, then live.
-//  ため sits on all-on. Clock lock is the peak.
+//  Shutdown still walks lamps and tapes. Boot's gate is ServicePortalSequence.
 //
 
 import Foundation

@@ -2,7 +2,8 @@
 //  ContentView.swift
 //  Todo train
 //
-//  Tab host + Focus fullScreenCover.
+//  Tab host + Focus fullScreenCover. The start gate sits over the TabView
+//  so the tab bar never leaks into the cabin.
 //
 
 import SwiftUI
@@ -20,11 +21,13 @@ struct ContentView: View {
     @State private var didRecoverOnLaunch = false
     @State private var transferCanvas = TransferCanvasPresenter()
     @State private var ticketMotion = TicketMotionBridge()
+    @State private var servicePortal = ServicePortalPresentation()
     @Namespace private var focusZoom
 
     var body: some View {
         @Bindable var transferCanvas = transferCanvas
         @Bindable var ticketMotion = ticketMotion
+        @Bindable var servicePortal = servicePortal
         TabView {
             Tab("切符", systemImage: "tram.fill") {
                 NavigationStack {
@@ -53,6 +56,7 @@ struct ContentView: View {
         .tint(TrainTheme.rail)
         .environment(transferCanvas)
         .environment(ticketMotion)
+        .environment(servicePortal)
         .environment(ArrivalForecastTraceLog.shared)
         .environment(ArrivalForecastStore.shared)
         .environment(\.focusZoomNamespace, focusZoom)
@@ -190,6 +194,16 @@ struct ContentView: View {
         }
         // Arrival haptic is driven by the invalidate gesture; service moment keeps a light success.
         .sensoryFeedback(.success, trigger: sessionManager.punctualityHapticTick)
+        .overlay {
+            ZStack {
+                if servicePortal.isBootCoverPresented {
+                    ServiceBootCover()
+                        .environment(sessionManager)
+                }
+            }
+            .ignoresSafeArea()
+            .animation(nil, value: servicePortal.isBootCoverPresented)
+        }
     }
 
     private func promoteTransferCanvasAfterFocusDismiss() {
