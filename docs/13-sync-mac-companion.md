@@ -1,8 +1,8 @@
 # 13 — 同期構成（なぜこの形か）
 
-画面の話は [14](14-mac-companion-ux.md)。ワイヤのバイト・経路・黄金 JSON の正本は [`sync/contract/`](../sync/contract/README.md)。
+ワイヤのバイト・経路・黄金 JSON の正本は [`sync/contract/`](../sync/contract/README.md)。Mac の体験は [14](14-mac-companion-ux.md)。製品の守ること・やらないことの正本は [02](02-requirements.md)。
 
-## 決めたこと
+## なぜこの形か
 
 iPhone の SwiftData + `SessionManager` が本尊。リレーは正本にしないし、復号できない。
 
@@ -14,7 +14,7 @@ iPhone の SwiftData + `SessionManager` が本尊。リレーは正本にしな�
 
 LAN / Bonjour は社内 Wi-Fi のクライアント分離で届かないことが多い。主経路にしない。
 
-クライアントが Mac メニューバーであることは前提にしない。同じ契約の購読者ならよい。
+購読者は同じ契約ならよい。メニューバーであることは前提にしない。
 
 ## ペアリングの脅威
 
@@ -30,6 +30,6 @@ LAN / Bonjour は社内 Wi-Fi のクライアント分離で届かないこと�
 
 サーバ侵害の残りは削除 DoS。許容する。
 
-## やらないこと
+## この面のやらないこと
 
-アカウント、CloudKit on、APNs、LAN 主経路、サーバ側正本、JSON エクスポート同期、画面に載る長期鍵、片側タップ確定、照合数字の目視、裏カメラへの持ち替え。
+アカウント、APNs、LAN 主経路、サーバ側正本、画面に載る長期鍵、片側タップ確定、照合数字の目視、裏カメラへの持ち替え。CloudKit と JSON エクスポート同期は [02](02-requirements.md)。

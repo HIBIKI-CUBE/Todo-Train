@@ -9,11 +9,11 @@
 | [mars-joshaken.png](mars-joshaken.png) | マルス 8.5cm 乗車券 | **発行・到着の主原画**（水色地紋・発着主役・使用済みは穴と印） |
 | [edmondson-shizuoka.png](edmondson-shizuoka.png) | 近距離エドモンソン | サイズ・鮭色は使わない。端の縦組みと未使用の清潔さだけ借りる |
 
-実装定数: `MarsTicketSpec` / `MarsTicketView`。JR ロゴ地紋は複製しない。
+JR ロゴ地紋は複製しない。
 
 ## 駅名標
 
-Commons の写真。借りるのは **題名が主、番号欄、路線色の帯**。隣駅・社名・駅コード・ローマ字・路線図は使わない。実装は `OccupancyDestinationSign`。
+Commons の写真。借りるのは **題名が主、番号欄、路線色の帯**。隣駅・社名・駅コード・ローマ字・路線図は使わない。
 
 | ファイル | 出典 | 借りる点 |
 |----------|------|----------|
