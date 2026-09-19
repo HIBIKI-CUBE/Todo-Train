@@ -157,7 +157,7 @@ nonisolated enum ServicePortalSequence {
     /// Cover charge. Priming at progress 0 still jumps; the lip fill may stay at 0.
     static func roomCharge(isPriming: Bool, progress: Double) -> Double {
         guard isPriming else { return 0 }
-        return max(primeChargeFloor, primeRoomCharge(progress))
+        return max(primeChargeFloor, primeRoomCharge(progress: progress))
     }
 
     /// Opens toward the platform. Scale > 1 is the box opening, not a sheet sinking.
