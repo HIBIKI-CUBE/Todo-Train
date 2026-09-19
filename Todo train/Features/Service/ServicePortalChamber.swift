@@ -2,14 +2,14 @@
 //  ServicePortalChamber.swift
 //  Todo train
 //
-//  閉じた運転台。光は棚から上がる。盤はリスト待ちではない。
+//  閉じた運転台。光は棚面と文字を照らす。盤は下からせり上がるシートではない。
 //
 
 import SwiftUI
 
 struct ServicePortalChamber: View {
     var presence: ServicePortalSequence.Presence
-    var primeProgress: Double
+    var roomCharge: Double
     var dayText: String
     var now: Date
     var occupancyRows: [TimetableOccupancyRow]
@@ -37,11 +37,15 @@ struct ServicePortalChamber: View {
     }
 
     private var bloom: Double {
-        min(1.25, presence.volumeGlow + primeProgress * 0.45)
+        min(1.55, presence.volumeGlow + roomCharge * 0.90)
     }
 
     private var emptyMorning: Bool {
         occupancyHands.isEmpty && consistLead.isEmpty
+    }
+
+    private var showsPlates: Bool {
+        presence.wake >= 0.5
     }
 
     var body: some View {
@@ -54,13 +58,12 @@ struct ServicePortalChamber: View {
                     .padding(.bottom, 76)
             }
         }
-        .scaleEffect(1 - 0.045 * primeProgress)
-        .animation(reduceMotion ? nil : PortalChamberMotion.rise, value: presence.shelfRise)
+        .scaleEffect(1 - ServicePortalSequence.primeRoomTighten * roomCharge)
+        .animation(reduceMotion ? nil : PortalChamberMotion.ignite, value: presence.wake)
         .animation(reduceMotion ? nil : PortalChamberMotion.wash, value: presence.washTravel)
-        .animation(reduceMotion ? nil : PortalChamberMotion.bloom, value: presence.volumeGlow)
         .animation(reduceMotion ? nil : PortalChamberMotion.seat, value: presence.occupancyLive)
         .animation(reduceMotion ? nil : PortalChamberMotion.seat, value: presence.consistLive)
-        .animation(reduceMotion ? nil : PortalChamberMotion.charge, value: primeProgress)
+        .animation(reduceMotion ? nil : PortalChamberMotion.charge, value: roomCharge)
         .accessibilityElement(children: .contain)
     }
 
@@ -69,20 +72,29 @@ struct ServicePortalChamber: View {
             LinearGradient(
                 colors: [
                     Color.clear,
-                    Color.white.opacity(0.04 * presence.wake),
-                    Color.white.opacity(0.16 * bloom)
+                    Color.white.opacity(0.06 * presence.wake + 0.10 * roomCharge),
+                    Color.white.opacity(0.22 * bloom + 0.20 * roomCharge)
                 ],
                 startPoint: .top,
                 endPoint: .bottom
             )
             RadialGradient(
                 colors: [
+                    Color.white.opacity(0.08 * bloom),
+                    Color.clear
+                ],
+                center: .init(x: 0.5, y: 0.72),
+                startRadius: 8,
+                endRadius: 280 + 80 * roomCharge
+            )
+            RadialGradient(
+                colors: [
                     Color.clear,
-                    Color.black.opacity(0.55 + 0.28 * primeProgress)
+                    Color.black.opacity(0.42 + 0.48 * roomCharge)
                 ],
                 center: .center,
-                startRadius: 40,
-                endRadius: 520
+                startRadius: 30 + 10 * (1 - roomCharge),
+                endRadius: 420 - 90 * roomCharge
             )
         }
         .allowsHitTesting(false)
@@ -97,7 +109,8 @@ struct ServicePortalChamber: View {
             progress: progress,
             salt: salt
         )
-        let glow = progress * bloom
+        let lit = 0.18 + 0.82 * progress
+        let glow = bloom * max(progress, roomCharge * 0.35)
         let fontSize = min(width * 0.22, emptyMorning ? 64 : 44)
         return VStack {
             Spacer(minLength: height * (emptyMorning ? 0.18 : 0.08))
@@ -111,11 +124,9 @@ struct ServicePortalChamber: View {
             }
             .font(.system(size: fontSize, weight: .semibold, design: .default))
             .monospacedDigit()
-            .foregroundStyle(Color.white.opacity(0.22 + 0.78 * progress))
-            .shadow(color: Color.white.opacity(0.40 * glow), radius: 18 * glow)
-            .scaleEffect(0.92 + 0.08 * progress)
+            .foregroundStyle(Color.white.opacity(lit))
+            .shadow(color: Color.white.opacity(0.28 + 0.50 * glow), radius: 14 + 12 * glow)
             .opacity(progress > 0.04 ? 1 : 0)
-            .offset(y: (1 - presence.shelfPitch) * 18)
             Spacer()
         }
         .allowsHitTesting(false)
@@ -128,6 +139,7 @@ struct ServicePortalChamber: View {
         ZStack(alignment: .top) {
             shelfBody
             wash
+            beadWash
             VStack(alignment: .leading, spacing: 12) {
                 lip
                 occupancy
@@ -140,24 +152,27 @@ struct ServicePortalChamber: View {
             .padding(.bottom, 12)
         }
         .rotation3DEffect(
-            .degrees((1 - presence.shelfPitch) * (reduceMotion ? 4 : 16)),
+            .degrees((1 - presence.shelfPitch) * (reduceMotion ? 2 : 6)),
             axis: (1, 0, 0),
             anchor: .bottom,
-            perspective: 0.85
+            perspective: 0.9
         )
-        .offset(y: (1 - presence.shelfRise) * (reduceMotion ? 12 : 72))
-        .scaleEffect(0.90 + 0.10 * presence.shelfRise, anchor: .bottom)
-        .opacity(0.22 + 0.78 * presence.horizon)
+        .offset(y: (1 - presence.shelfRise) * (reduceMotion ? 4 : 12))
+        .opacity(0.28 + 0.72 * presence.horizon)
     }
 
     private var shelfBody: some View {
         Rectangle()
-            .fill(Color.white.opacity(0.045 + 0.06 * presence.wake + 0.05 * primeProgress))
+            .fill(
+                Color.white.opacity(
+                    0.035 + 0.16 * presence.wake + 0.22 * roomCharge
+                )
+            )
             .overlay(alignment: .top) {
                 Rectangle()
-                    .fill(Color.white.opacity(0.22 + 0.45 * bloom))
+                    .fill(Color.white.opacity(0.28 + 0.55 * bloom))
                     .frame(height: 2)
-                    .shadow(color: Color.white.opacity(0.5 * bloom), radius: 10)
+                    .shadow(color: Color.white.opacity(0.65 * bloom), radius: 12)
             }
     }
 
@@ -166,16 +181,30 @@ struct ServicePortalChamber: View {
             LinearGradient(
                 colors: [
                     Color.clear,
-                    Color.white.opacity(0.18 * presence.washTravel),
+                    Color.white.opacity(0.22 * presence.washTravel + 0.12 * roomCharge),
                     Color.clear
                 ],
                 startPoint: .leading,
                 endPoint: .trailing
             )
-            .frame(width: geo.size.width * 0.42)
+            .frame(width: geo.size.width * 0.48)
             .offset(x: (presence.washTravel * 1.15 - 0.18) * geo.size.width)
-            .blur(radius: reduceTransparency ? 0 : 8)
+            .blur(radius: reduceTransparency ? 0 : 10)
         }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
+    private var beadWash: some View {
+        LinearGradient(
+            colors: [
+                Color.white.opacity(0.16 * bloom + 0.12 * roomCharge),
+                Color.white.opacity(0.04 * bloom),
+                Color.clear
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
@@ -186,16 +215,25 @@ struct ServicePortalChamber: View {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
                 Text("運行中")
                     .font(.system(size: 22, weight: .bold, design: .default))
-                    .foregroundStyle(Color.white.opacity(presence.serviceLit ? 1 : 0.08))
+                    .foregroundStyle(
+                        Color.white.opacity(presence.serviceLit ? 1 : 0.10 + 0.22 * presence.wake)
+                    )
                     .shadow(
-                        color: presence.serviceLit ? Color.white.opacity(0.50 + 0.30 * bloom) : .clear,
-                        radius: presence.serviceLit ? 12 : 0
+                        color: Color.white.opacity(
+                            presence.serviceLit ? 0.45 + 0.40 * bloom : 0.12 * presence.wake
+                        ),
+                        radius: presence.serviceLit ? 14 : 6
                     )
                 Spacer(minLength: 8)
                 Text(dayText)
                     .font(.system(size: 18, weight: .semibold, design: .default))
-                    .foregroundStyle(Color.white.opacity(presence.dateLit ? 0.96 : 0.08))
-                    .shadow(color: presence.dateLit ? Color.white.opacity(0.4) : .clear, radius: 8)
+                    .foregroundStyle(
+                        Color.white.opacity(presence.dateLit ? 0.96 : 0.10 + 0.18 * presence.wake)
+                    )
+                    .shadow(
+                        color: presence.dateLit ? Color.white.opacity(0.35 + 0.25 * bloom) : .clear,
+                        radius: 8
+                    )
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
             }
@@ -232,7 +270,7 @@ struct ServicePortalChamber: View {
 
     @ViewBuilder
     private var occupancy: some View {
-        if presence.occupancyLive > 0 {
+        if showsPlates, !occupancyHands.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
                 if presence.tapeLive {
                     ServiceCabinTape(
@@ -242,34 +280,39 @@ struct ServicePortalChamber: View {
                     )
                     .opacity(0.85)
                 }
-                ForEach(Array(occupancyHands.prefix(presence.occupancyLive).enumerated()), id: \.element.id) { _, row in
+                ForEach(Array(occupancyHands.enumerated()), id: \.element.id) { index, row in
+                    let lit = index < presence.occupancyLive
                     OccupancyDestinationSign(
                         row: row,
                         surface: .cabin,
                         compact: occupancyHands.count > 2,
-                        actionTitle: presence.canInteract ? occupancyActionTitle(for: row) : nil,
-                        action: presence.canInteract ? occupancyAction(for: row) : nil
+                        actionTitle: lit && presence.canInteract ? occupancyActionTitle(for: row) : nil,
+                        action: lit && presence.canInteract ? occupancyAction(for: row) : nil
                     )
-                    .shadow(color: Color.white.opacity(0.16 * bloom), radius: 8)
+                    .opacity(lit ? 1 : 0.16)
+                    .scaleEffect(lit ? 1 : 0.94, anchor: .bottom)
+                    .shadow(color: Color.white.opacity(lit ? 0.18 * bloom : 0), radius: 8)
+                    .allowsHitTesting(lit && presence.canInteract)
                 }
             }
-            .offset(y: presence.shelfRise >= 0.5 ? 0 : 14)
-            .scaleEffect(presence.shelfRise >= 0.5 ? 1 : 0.96, anchor: .bottom)
-            .allowsHitTesting(presence.canInteract)
+            .transition(.identity)
             .accessibilityLabel("占有")
         }
     }
 
     @ViewBuilder
     private var consist: some View {
-        if presence.consistLive > 0 {
+        if showsPlates, !consistLead.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
-                ForEach(Array(consistLead.prefix(presence.consistLive).enumerated()), id: \.element.id) { index, item in
+                ForEach(Array(consistLead.enumerated()), id: \.element.id) { index, item in
+                    let lit = index < presence.consistLive
                     consistRow(item, index: index)
+                        .opacity(lit ? 1 : 0.16)
+                        .scaleEffect(lit ? 1 : 0.94, anchor: .bottom)
+                        .allowsHitTesting(lit && presence.canInteract)
                 }
             }
-            .offset(y: presence.shelfRise >= 0.6 ? 0 : 12)
-            .allowsHitTesting(presence.canInteract)
+            .transition(.identity)
             .accessibilityLabel("編成")
         }
     }
@@ -343,13 +386,13 @@ private struct PortalShelfBead: View {
         ZStack {
             if on, !reduceTransparency {
                 Circle()
-                    .fill(Color.white.opacity(0.55 * bloom))
-                    .blur(radius: 7)
-                    .scaleEffect(2.2)
+                    .fill(Color.white.opacity(0.62 * bloom))
+                    .blur(radius: 8)
+                    .scaleEffect(x: 2.6, y: 3.4)
             }
             Circle()
-                .fill(on ? Color.white.opacity(0.78 + 0.22 * bloom) : Color.white.opacity(0.10))
-                .shadow(color: on ? Color.white.opacity(0.75 * bloom) : .clear, radius: on ? 7 : 0)
+                .fill(on ? Color.white.opacity(0.82 + 0.18 * bloom) : Color.white.opacity(0.10))
+                .shadow(color: on ? Color.white.opacity(0.8 * bloom) : .clear, radius: on ? 8 : 0)
         }
         .frame(width: 11, height: 11)
         .animation(ServiceCabinMotion.lampClick, value: on)
@@ -357,9 +400,8 @@ private struct PortalShelfBead: View {
 }
 
 private enum PortalChamberMotion {
-    static let rise = Animation.spring(response: 0.58, dampingFraction: 0.78)
+    static let ignite = Animation.easeOut(duration: 0.10)
     static let wash = Animation.easeInOut(duration: 0.22)
-    static let bloom = Animation.easeOut(duration: 0.26)
-    static let seat = Animation.spring(response: 0.40, dampingFraction: 0.84)
-    static let charge = Animation.easeInOut(duration: 0.07)
+    static let seat = Animation.spring(response: 0.32, dampingFraction: 0.84)
+    static let charge = Animation.easeOut(duration: 0.06)
 }

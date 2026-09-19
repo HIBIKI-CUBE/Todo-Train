@@ -60,6 +60,7 @@ enum HubPreviewSeed {
                 .environment(AppSettings.shared)
                 .environment(DeletionUndoCenter())
                 .environment(TicketMotionBridge())
+                .environment(ServicePortalPresentation())
                 .modelContainer(container)
         }
     }

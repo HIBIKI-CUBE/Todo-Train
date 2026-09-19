@@ -46,11 +46,11 @@ struct ServicePortalSequenceTests {
         let just = ServicePortalSequence.reveal(elapsed: 0, context: richContext)
         #expect(pre.horizon > 0.5)
         #expect(pre.wake > 0.1)
-        #expect(just.wake > pre.wake)
-        #expect(just.wake >= 0.35)
+        #expect(just.wake - pre.wake >= 0.35)
+        #expect(just.wake >= 0.65)
         #expect(just.horizon == 1)
-        #expect(just.shelfRise > 0.15)
-        #expect(just.volumeGlow > 0.2)
+        #expect(just.shelfRise >= 0.55)
+        #expect(just.volumeGlow >= 0.50)
         #expect(just.beadCount >= 1)
         #expect(!just.serviceLit)
         #expect(!just.canPrime)
@@ -62,12 +62,14 @@ struct ServicePortalSequenceTests {
         let surged = ServicePortalSequence.reveal(elapsed: 0.48, context: richContext)
         #expect(ServicePortalSequence.pace(elapsed: 0.12, context: richContext) == .quiet)
         #expect(ServicePortalSequence.pace(elapsed: 0.48, context: richContext) == .surge)
-        #expect(surged.shelfRise > quiet.shelfRise + 0.12)
-        #expect(surged.shelfPitch > quiet.shelfPitch)
         #expect(surged.washTravel > quiet.washTravel + 0.12)
         #expect(surged.volumeGlow > quiet.volumeGlow)
-        #expect(surged.wake > quiet.wake)
         #expect(surged.beadCount > quiet.beadCount)
+        #expect(!quiet.serviceLit)
+        #expect(surged.serviceLit)
+        #expect(surged.dateLit)
+        #expect(quiet.occupancyLive == 0)
+        #expect(quiet.consistLive == 0)
 
         let beforePeak = ServicePortalSequence.reveal(elapsed: 0.70, context: richContext)
         #expect(ServicePortalSequence.pace(elapsed: 0.70, context: richContext) == .surge)
@@ -89,6 +91,7 @@ struct ServicePortalSequenceTests {
         #expect(ServicePortalSequence.pace(elapsed: 1.22, context: richContext) == .still)
         #expect(still.fullLit)
         #expect(still.volumeGlow > peak.volumeGlow)
+        #expect(still.consistLive == 3)
         #expect(!still.canPrime)
 
         let primed = ServicePortalSequence.reveal(elapsed: 1.80, context: richContext)
@@ -157,9 +160,19 @@ struct ServicePortalSequenceTests {
     @Test func primeHold_isAShortPressNotATap() {
         #expect(ServicePortalSequence.primeHoldSeconds >= 0.4)
         #expect(ServicePortalSequence.primeHoldSeconds <= 0.7)
+        #expect(ServicePortalSequence.primeRoomTighten >= 0.12)
+        #expect(ServicePortalSequence.primeRoomCharge(progress: 0) == 0)
+        #expect(ServicePortalSequence.primeRoomCharge(progress: 0.02) >= ServicePortalSequence.primeChargeFloor)
+        #expect(ServicePortalSequence.primeRoomCharge(progress: 1) == 1)
+        #expect(ServicePortalSequence.roomCharge(isPriming: false, progress: 1) == 0)
+        #expect(
+            ServicePortalSequence.roomCharge(isPriming: true, progress: 0)
+                == ServicePortalSequence.primeChargeFloor
+        )
+        #expect(ServicePortalSequence.roomCharge(isPriming: true, progress: 1) == 1)
     }
 
-    @Test func depart_hasTwoBeatsAndMinimumDuration() {
+    @Test func depart_opensTowardThePlatformInsteadOfSinking() {
         #expect(ServicePortalSequence.departHoldSeconds >= 0.45)
         #expect(ServicePortalSequence.reduceMotionDepartHoldSeconds >= 0.20)
         #expect(ServicePortalSequence.departBeat(elapsed: 0.05, reduceMotion: false) == .slit)
@@ -169,6 +182,17 @@ struct ServicePortalSequenceTests {
                 reduceMotion: false
             ) == .flood
         )
+        let slit = ServicePortalSequence.departStaging(elapsed: 0.05, reduceMotion: false)
+        #expect(slit.aperture >= 0.30)
+        #expect(slit.cabinScale > 1)
+        #expect(slit.cabinOpacity > 0.4)
+        let flood = ServicePortalSequence.departStaging(
+            elapsed: ServicePortalSequence.departSlitSeconds,
+            reduceMotion: false
+        )
+        #expect(flood.aperture == 1)
+        #expect(flood.cabinScale > slit.cabinScale)
+        #expect(flood.cabinOpacity == 0)
         #expect(ServicePortalSequence.departBeat(elapsed: 0.05, reduceMotion: true) == .slit)
         #expect(
             ServicePortalSequence.departBeat(

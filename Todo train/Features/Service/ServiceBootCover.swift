@@ -11,9 +11,31 @@ import SwiftUI
 import UIKit
 #endif
 
+/// Presents the start gate over the TabView so the tab bar never leaks into the cabin.
+@Observable
+final class ServicePortalPresentation {
+    var isBootCoverPresented = false
+
+    func presentBootCover() {
+        setBootCoverPresented(true)
+    }
+
+    func dismissBootCover() {
+        setBootCoverPresented(false)
+    }
+
+    private func setBootCoverPresented(_ presented: Bool) {
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            isBootCoverPresented = presented
+        }
+    }
+}
+
 struct ServiceBootCover: View {
     @Environment(SessionManager.self) private var sessionManager
-    @Environment(\.dismiss) private var dismiss
+    @Environment(ServicePortalPresentation.self) private var servicePortal
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Ticket.sortOrder) private var allTickets: [Ticket]
@@ -62,6 +84,14 @@ struct ServiceBootCover: View {
         }
     }
 
+    private var roomCharge: Double {
+        ServicePortalSequence.roomCharge(isPriming: phase == .priming, progress: primeProgress)
+    }
+
+    private var departStaging: ServicePortalSequence.DepartStaging {
+        ServicePortalSequence.departStaging(elapsed: departElapsed, reduceMotion: reduceMotion)
+    }
+
     var body: some View {
         GeometryReader { geo in
             TimelineView(.periodic(from: .now, by: timelineStep)) { context in
@@ -69,8 +99,7 @@ struct ServiceBootCover: View {
             }
         }
         .environment(\.colorScheme, .dark)
-        .presentationBackground(Color.black)
-        .interactiveDismissDisabled(phase != .done)
+        .persistentSystemOverlays(.hidden)
         .task {
             await sessionManager.refreshCalendarBoardIfAuthorized()
             await runEnter()
@@ -108,7 +137,7 @@ struct ServiceBootCover: View {
     private var timelineStep: TimeInterval {
         if reduceMotion { return 0.2 }
         switch phase {
-        case .awaitingIgnition, .illuminating, .priming, .departing:
+        case .entering, .awaitingIgnition, .illuminating, .priming, .departing:
             return 0.04
         default:
             return 0.2
@@ -130,9 +159,7 @@ struct ServiceBootCover: View {
 
     private func presence(now: Date, breath: Double) -> ServicePortalSequence.Presence {
         switch phase {
-        case .entering:
-            return ServicePortalSequence.sealedPlace()
-        case .awaitingIgnition:
+        case .entering, .awaitingIgnition:
             return ServicePortalSequence.premonition(breath: breath)
         case .illuminating:
             return ServicePortalSequence.reveal(elapsed: illuminateElapsed, context: portalContext)
@@ -145,17 +172,16 @@ struct ServiceBootCover: View {
     }
 
     private func walls(size: CGSize) -> some View {
-        let tighten = phase == .priming ? primeProgress : 0
-        return Rectangle()
+        Rectangle()
             .fill(
                 RadialGradient(
                     colors: [
                         Color.clear,
-                        Color.black.opacity(0.35 + 0.40 * tighten)
+                        Color.black.opacity(0.32 + 0.58 * roomCharge)
                     ],
                     center: .center,
-                    startRadius: size.width * (0.18 - 0.06 * tighten),
-                    endRadius: size.width * (0.78 - 0.12 * tighten)
+                    startRadius: size.width * (0.22 - 0.14 * roomCharge),
+                    endRadius: size.width * (0.82 - 0.22 * roomCharge)
                 )
             )
             .ignoresSafeArea()
@@ -167,9 +193,10 @@ struct ServiceBootCover: View {
     private func chamber(now: Date, presence: ServicePortalSequence.Presence) -> some View {
         let occupancy = occupancyInstrument(now: now)
         let extras = extraNotices(now: now, occupancyRows: occupancy.rows)
+        let staging = departStaging
         ServicePortalChamber(
             presence: presence,
-            primeProgress: phase == .priming ? primeProgress : 0,
+            roomCharge: roomCharge,
             dayText: dayText,
             now: now,
             occupancyRows: occupancy.rows,
@@ -192,9 +219,9 @@ struct ServiceBootCover: View {
                 Task { await requestCalendar() }
             }
         )
-        .opacity(chamberOpacity)
-        .offset(y: chamberSink)
-        .animation(reduceMotion ? .easeOut(duration: 0.12) : PortalCoverMotion.depart, value: departBeat)
+        .scaleEffect(departBeat == .sealed ? 1 : staging.cabinScale)
+        .opacity(departBeat == .sealed ? 1 : staging.cabinOpacity)
+        .animation(reduceMotion ? .easeOut(duration: 0.10) : PortalCoverMotion.depart, value: departBeat)
     }
 
     @ViewBuilder
@@ -208,13 +235,13 @@ struct ServiceBootCover: View {
                     breath: breath,
                     handoff: ignitionHandoff,
                     reduceMotion: reduceMotion,
-                    onTap: { ignite(skip: false) },
-                    onSkip: { ignite(skip: true) }
+                    onIgnite: { ignite(skip: reduceMotion) },
+                    onHoldSkip: skipAssemble
                 )
                 .frame(width: width)
                 .padding(.bottom, 118)
             }
-            .allowsHitTesting(phase == .awaitingIgnition)
+            .allowsHitTesting(canHitIgnition)
         }
     }
 
@@ -230,6 +257,7 @@ struct ServiceBootCover: View {
                     enabled: phase == .readyToPrime || phase == .priming,
                     reduceMotion: reduceMotion,
                     onBegan: {
+                        ServicePortalHaptics.primeBegan()
                         phase = ServicePortalSequence.advance(phase, .primeBegan)
                     },
                     onCancelled: {
@@ -247,29 +275,24 @@ struct ServiceBootCover: View {
     }
 
     private func platformAperture(size: CGSize) -> some View {
-        let open: CGFloat = {
-            switch departBeat {
-            case .sealed:
-                return 0
-            case .slit:
-                return reduceMotion ? 0.18 : 0.14
-            case .flood:
-                return 1
+        let aperture = departBeat == .sealed ? 0 : departStaging.aperture
+        return ZStack {
+            RoundedRectangle(cornerRadius: aperture >= 0.95 ? 0 : 26, style: .continuous)
+                .fill(MarsTicketSpec.paper)
+                .frame(
+                    width: max(12, size.width * aperture),
+                    height: max(12, size.height * aperture)
+                )
+                .shadow(color: Color.white.opacity(aperture > 0 && aperture < 1 ? 0.35 : 0), radius: 28)
+            if aperture > 0.55 {
+                ticketDeckSilhouettes
+                    .padding(.horizontal, 32)
+                    .opacity((aperture - 0.55) / 0.45)
+                    .scaleEffect(0.90 + 0.10 * aperture)
             }
-        }()
-        return VStack(spacing: 0) {
-            ZStack(alignment: .bottom) {
-                MarsTicketSpec.paper
-                if departBeat == .flood {
-                    ticketDeckSilhouettes
-                        .padding(.bottom, 36)
-                }
-            }
-            .frame(height: max(0, size.height * open))
-            Spacer(minLength: 0)
         }
-        .ignoresSafeArea()
-        .animation(reduceMotion ? .easeOut(duration: 0.12) : PortalCoverMotion.aperture, value: departBeat)
+        .frame(width: size.width, height: size.height)
+        .animation(reduceMotion ? .easeOut(duration: 0.10) : PortalCoverMotion.aperture, value: departBeat)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
@@ -284,7 +307,7 @@ struct ServiceBootCover: View {
                             .strokeBorder(Color.black.opacity(0.12), lineWidth: 0.6)
                     }
                     .aspectRatio(MarsTicketSpec.aspectRatio, contentMode: .fit)
-                    .padding(.horizontal, 36 + CGFloat(index) * 8)
+                    .padding(.horizontal, CGFloat(index) * 8)
                     .rotationEffect(.degrees(Double(index - 1) * 2.2))
                     .shadow(color: Color.black.opacity(0.12), radius: 8, y: 4)
             }
@@ -296,47 +319,36 @@ struct ServiceBootCover: View {
         case .entering, .awaitingIgnition:
             return true
         case .illuminating:
-            return illuminateElapsed < ServicePortalSequence.ignitionHandoffSeconds
+            return illuminateElapsed < 0.70
         default:
             return false
         }
     }
 
+    private var canHitIgnition: Bool {
+        phase == .awaitingIgnition || (phase == .illuminating && illuminateElapsed < 0.70)
+    }
+
     private var ignitionHandoff: Double {
-        guard phase == .illuminating else { return phase == .entering ? 0.55 : 0 }
+        guard phase == .illuminating else { return 0 }
         return min(1, illuminateElapsed / ServicePortalSequence.ignitionHandoffSeconds)
-    }
-
-    private var chamberOpacity: Double {
-        switch departBeat {
-        case .sealed:
-            return 1
-        case .slit:
-            return reduceMotion ? 0.62 : 0.78
-        case .flood:
-            return 0
-        }
-    }
-
-    private var chamberSink: CGFloat {
-        switch departBeat {
-        case .sealed:
-            return 0
-        case .slit:
-            return reduceMotion ? 10 : 22
-        case .flood:
-            return 56
-        }
     }
 
     private func ignite(skip: Bool) {
         guard phase == .awaitingIgnition else { return }
-        skipIlluminate = skip || reduceMotion
+        skipIlluminate = skip
         ServicePortalHaptics.ignite()
         phase = ServicePortalSequence.advance(phase, .ignited(skipIlluminate: skipIlluminate))
         if skipIlluminate {
             illuminateElapsed = ServicePortalSequence.illuminateDuration(context: portalContext)
         }
+    }
+
+    private func skipAssemble() {
+        guard phase == .illuminating else { return }
+        skipIlluminate = true
+        illuminateElapsed = ServicePortalSequence.illuminateDuration(context: portalContext)
+        phase = ServicePortalSequence.advance(phase, .illuminateElapsed)
     }
 
     private func runEnter() async {
@@ -382,7 +394,7 @@ struct ServiceBootCover: View {
             departElapsed = elapsed
         }
         phase = ServicePortalSequence.advance(phase, .departElapsed)
-        dismiss()
+        servicePortal.dismissBootCover()
     }
 
     private func makeLead(_ id: UUID) {
@@ -468,6 +480,6 @@ struct ServiceBootCover: View {
 }
 
 private enum PortalCoverMotion {
-    static let depart = Animation.easeIn(duration: ServicePortalSequence.departSlitSeconds)
+    static let depart = Animation.easeOut(duration: ServicePortalSequence.departSlitSeconds)
     static let aperture = Animation.easeOut(duration: ServicePortalSequence.departFloodSeconds)
 }

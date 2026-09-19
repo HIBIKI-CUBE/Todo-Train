@@ -46,10 +46,13 @@ nonisolated enum ServicePortalPace: Equatable, Sendable {
 }
 
 nonisolated enum ServicePortalSequence {
-    static let enterHoldSeconds: TimeInterval = 0.36
+    static let enterHoldSeconds: TimeInterval = 0.12
     static let primeHoldSeconds: TimeInterval = 0.52
     static let departSlitSeconds: TimeInterval = 0.24
     static let departFloodSeconds: TimeInterval = 0.38
+    static let primeChargeFloor: Double = 0.34
+    /// How hard the cabin tightens while priming. Must be big enough to read as the room, not the button.
+    static let primeRoomTighten: Double = 0.16
     static let departHoldSeconds: TimeInterval = departSlitSeconds + departFloodSeconds
     static let reduceMotionDepartSlitSeconds: TimeInterval = 0.10
     static let reduceMotionDepartFloodSeconds: TimeInterval = 0.16
@@ -72,6 +75,12 @@ nonisolated enum ServicePortalSequence {
         var isEmptyMorning: Bool {
             occupancyCount == 0 && consistCount == 0
         }
+    }
+
+    struct DepartStaging: Equatable, Sendable {
+        var aperture: Double
+        var cabinScale: Double
+        var cabinOpacity: Double
     }
 
     struct Presence: Equatable, Sendable {
@@ -136,6 +145,39 @@ nonisolated enum ServicePortalSequence {
     static func departBeat(elapsed: TimeInterval, reduceMotion: Bool) -> ServicePortalDepartBeat {
         if elapsed < 0 { return .sealed }
         return elapsed < departSlitDuration(reduceMotion: reduceMotion) ? .slit : .flood
+    }
+
+    /// Hold starts with a visible floor so the room jumps on the same beat, then fills.
+    static func primeRoomCharge(progress: Double) -> Double {
+        let p = min(max(progress, 0), 1)
+        if p <= 0 { return 0 }
+        return primeChargeFloor + (1 - primeChargeFloor) * p
+    }
+
+    /// Cover charge. Priming at progress 0 still jumps; the lip fill may stay at 0.
+    static func roomCharge(isPriming: Bool, progress: Double) -> Double {
+        guard isPriming else { return 0 }
+        return max(primeChargeFloor, primeRoomCharge(progress))
+    }
+
+    /// Opens toward the platform. Scale > 1 is the box opening, not a sheet sinking.
+    static func departStaging(elapsed: TimeInterval, reduceMotion: Bool) -> DepartStaging {
+        switch departBeat(elapsed: elapsed, reduceMotion: reduceMotion) {
+        case .sealed:
+            return DepartStaging(aperture: 0, cabinScale: 1, cabinOpacity: 1)
+        case .slit:
+            return DepartStaging(
+                aperture: reduceMotion ? 0.32 : 0.36,
+                cabinScale: reduceMotion ? 1.05 : 1.10,
+                cabinOpacity: reduceMotion ? 0.52 : 0.56
+            )
+        case .flood:
+            return DepartStaging(
+                aperture: 1,
+                cabinScale: reduceMotion ? 1.10 : 1.22,
+                cabinOpacity: 0
+            )
+        }
     }
 
     static func pace(elapsed: TimeInterval, context: Context) -> ServicePortalPace {
@@ -278,10 +320,10 @@ nonisolated enum ServicePortalSequence {
         }
 
         let consistLive: Int
-        if consistCap == 0 || t < 0.86 {
+        if consistCap == 0 || t < 0.62 {
             consistLive = 0
         } else {
-            consistLive = cascadedCount(elapsed: t, start: 0.86, stagger: 0.09, total: consistCap)
+            consistLive = cascadedCount(elapsed: t, start: 0.62, stagger: 0.08, total: consistCap)
         }
 
         let clockProgress: Double
@@ -304,7 +346,7 @@ nonisolated enum ServicePortalSequence {
             plaque = "運行"
         } else if t >= 0.58, t < 0.78, occupancyCap > 0 {
             plaque = "占有"
-        } else if t >= 0.86, t < 1.04, consistCap > 0 {
+        } else if t >= 0.62, t < 0.80, consistCap > 0 {
             plaque = "編成"
         } else {
             plaque = nil
@@ -348,11 +390,11 @@ nonisolated enum ServicePortalSequence {
         let plaque: String? = (t >= 0.18 && t < 0.40) ? "運行" : nil
         return Presence(
             horizon: 1,
-            wake: min(1, 0.48 + t * 0.55),
-            shelfRise: min(1, 0.24 + t / 0.70),
-            shelfPitch: min(1, 0.18 + t / 0.62),
-            washTravel: min(1, 0.12 + t / 0.55),
-            volumeGlow: min(1, 0.36 + t / 0.70),
+            wake: min(1, 0.70 + t * 0.35),
+            shelfRise: min(1, 0.62 + t / 0.90),
+            shelfPitch: min(1, 0.58 + t / 0.80),
+            washTravel: min(1, 0.18 + t / 0.55),
+            volumeGlow: min(1, 0.58 + t / 0.80),
             beadCount: t < 0.10 ? 3 : (t < 0.22 ? 5 : beadLimit),
             plaque: plaque,
             serviceLit: serviceLit,
@@ -368,35 +410,35 @@ nonisolated enum ServicePortalSequence {
         )
     }
 
-    /// Ignition already floods the volume. Quiet is lit, not a dead gap.
+    /// Same beat as the press: the room is already up. Quiet is lit, not a climb from a sheet.
     private static func richWake(_ t: TimeInterval) -> Double {
-        if t < 0.20 { return 0.42 + t * 1.1 }
-        if t < 0.95 { return 0.64 + (t - 0.20) / 0.75 * 0.24 }
-        return min(1, 0.88 + (t - 0.95) / 0.80 * 0.12)
+        if t < 0.20 { return 0.72 + t * 0.35 }
+        if t < 0.95 { return 0.79 + (t - 0.20) / 0.75 * 0.12 }
+        return min(1, 0.91 + (t - 0.95) / 0.80 * 0.09)
     }
 
     private static func richRise(_ t: TimeInterval) -> Double {
-        if t < 0.20 { return 0.22 + t * 1.05 }
-        if t < 0.95 { return 0.43 + (t - 0.20) / 0.75 * 0.46 }
-        return min(1, 0.89 + (t - 0.95) / 0.70 * 0.11)
+        if t < 0.20 { return 0.70 + t * 0.40 }
+        if t < 0.95 { return 0.78 + (t - 0.20) / 0.75 * 0.14 }
+        return min(1, 0.92 + (t - 0.95) / 0.70 * 0.08)
     }
 
     private static func richPitch(_ t: TimeInterval) -> Double {
-        if t < 0.20 { return 0.12 + t * 1.2 }
-        if t < 0.95 { return 0.36 + (t - 0.20) / 0.75 * 0.50 }
-        return min(1, 0.86 + (t - 0.95) / 0.55 * 0.14)
+        if t < 0.20 { return 0.64 + t * 0.50 }
+        if t < 0.95 { return 0.74 + (t - 0.20) / 0.75 * 0.16 }
+        return min(1, 0.90 + (t - 0.95) / 0.55 * 0.10)
     }
 
     private static func richWash(_ t: TimeInterval) -> Double {
-        if t < 0.20 { return 0.08 + t * 0.9 }
-        if t < 0.95 { return 0.26 + (t - 0.20) / 0.75 * 0.62 }
+        if t < 0.20 { return 0.12 + t * 1.1 }
+        if t < 0.95 { return 0.34 + (t - 0.20) / 0.75 * 0.58 }
         return 1
     }
 
     private static func richVolume(_ t: TimeInterval) -> Double {
-        if t < 0.20 { return 0.32 + t * 0.9 }
-        if t < 0.95 { return 0.50 + (t - 0.20) / 0.75 * 0.32 }
-        return min(1, 0.82 + (t - 0.95) / 0.70 * 0.18)
+        if t < 0.20 { return 0.58 + t * 0.55 }
+        if t < 0.95 { return 0.69 + (t - 0.20) / 0.75 * 0.18 }
+        return min(1, 0.87 + (t - 0.95) / 0.70 * 0.13)
     }
 
     private static func richBeads(_ t: TimeInterval) -> Int {

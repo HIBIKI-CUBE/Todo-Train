@@ -2,7 +2,7 @@
 //  ServicePortalControls.swift
 //  Todo train
 //
-//  起動は地平の生きもの。発車用意は棚の縁。押し続けで部屋が締まる。
+//  起動は触れた拍で部屋を起こす。発車用意は押し始めから部屋が主。
 //
 
 import SwiftUI
@@ -13,33 +13,34 @@ struct PortalIgnitionBar: View {
     var breath: Double
     var handoff: Double
     var reduceMotion: Bool
-    var onTap: () -> Void
-    var onSkip: () -> Void
+    var onIgnite: () -> Void
+    var onHoldSkip: () -> Void
 
     @State private var pressStarted: Date?
     @State private var pressed = false
+    @State private var didSkip = false
 
     var body: some View {
         let glow = pressed ? 1.0 : 0.52 + 0.48 * breath
         ZStack {
             Capsule(style: .continuous)
-                .fill(Color.white.opacity(0.10 + 0.16 * glow))
-                .blur(radius: reduceMotion ? 0 : 18)
-                .scaleEffect(x: 1.08, y: 2.4)
+                .fill(Color.white.opacity(0.12 + 0.22 * glow))
+                .blur(radius: reduceMotion ? 0 : 22)
+                .scaleEffect(x: 1.16, y: 2.8)
             Capsule(style: .continuous)
-                .fill(Color.white.opacity(0.14 + 0.22 * glow))
+                .fill(Color.white.opacity(0.16 + 0.28 * glow))
                 .overlay {
                     Capsule(style: .continuous)
                         .strokeBorder(Color.white.opacity(0.55 + 0.40 * glow), lineWidth: 1.4)
                 }
-                .shadow(color: Color.white.opacity(0.28 + 0.50 * glow), radius: 22 * glow)
+                .shadow(color: Color.white.opacity(0.32 + 0.55 * glow), radius: 26 * glow)
             Text(title)
                 .font(.system(size: 28, weight: .bold, design: .default))
                 .foregroundStyle(Color.white)
                 .shadow(color: Color.white.opacity(0.7), radius: 10)
         }
         .frame(height: 64)
-        .scaleEffect(pressed ? 0.985 : 0.97 + 0.03 * breath)
+        .scaleEffect(pressed ? 0.97 : 0.97 + 0.03 * breath)
         .opacity(max(0, 1 - handoff))
         .contentShape(Rectangle())
         .gesture(pressGesture)
@@ -47,7 +48,7 @@ struct PortalIgnitionBar: View {
         .accessibilityLabel(title)
         .accessibilityHint("今日の運行の内側を起こす。長押しで揃えを短くする")
         .accessibilityAction {
-            onTap()
+            onIgnite()
         }
     }
 
@@ -57,17 +58,17 @@ struct PortalIgnitionBar: View {
                 if pressStarted == nil {
                     pressStarted = .now
                     pressed = true
+                    onIgnite()
+                } else if !didSkip, let pressStarted,
+                          Date.now.timeIntervalSince(pressStarted) >= skipAfter {
+                    didSkip = true
+                    onHoldSkip()
                 }
             }
             .onEnded { _ in
-                let duration = Date.now.timeIntervalSince(pressStarted ?? .now)
                 pressStarted = nil
                 pressed = false
-                if duration >= skipAfter {
-                    onSkip()
-                } else {
-                    onTap()
-                }
+                didSkip = false
             }
     }
 }
@@ -104,31 +105,32 @@ struct PortalPrimeLip: View {
     }
 
     private func lipFace(progress current: Double) -> some View {
-        GeometryReader { geo in
+        let charge = ServicePortalSequence.primeRoomCharge(progress: current)
+        return GeometryReader { geo in
             let spread = max(12, geo.size.width * current)
             ZStack {
                 Rectangle()
-                    .fill(Color.white.opacity(0.06 + 0.10 * current))
+                    .fill(Color.white.opacity(0.06 + 0.14 * charge))
                 Rectangle()
-                    .fill(Color.white.opacity(0.16 + 0.52 * current))
+                    .fill(Color.white.opacity(0.18 + 0.50 * current))
                     .frame(width: spread)
                     .shadow(color: Color.white.opacity(0.55 * current), radius: 18 * current)
-                if !reduceMotion, current > 0.04 {
+                if !reduceMotion, charge > 0.04 {
                     Rectangle()
-                        .fill(Color.white.opacity(0.16 * current))
-                        .blur(radius: 14)
-                        .frame(width: spread * 1.15, height: geo.size.height * 1.8)
+                        .fill(Color.white.opacity(0.22 * charge))
+                        .blur(radius: 16)
+                        .frame(width: max(spread * 1.2, geo.size.width * 0.4 * charge), height: geo.size.height * 2.4)
                 }
                 Text(title)
                     .font(.system(size: 24, weight: .bold, design: .default))
                     .foregroundStyle(Color.white)
-                    .shadow(color: Color.white.opacity(0.35 + 0.45 * current), radius: 8)
+                    .shadow(color: Color.white.opacity(0.35 + 0.50 * charge), radius: 8)
             }
             .overlay(alignment: .top) {
                 Rectangle()
-                    .fill(Color.white.opacity(0.35 + 0.50 * current))
+                    .fill(Color.white.opacity(0.40 + 0.55 * charge))
                     .frame(height: 2)
-                    .shadow(color: Color.white.opacity(0.6 * current), radius: 8)
+                    .shadow(color: Color.white.opacity(0.7 * charge), radius: 10)
             }
         }
     }

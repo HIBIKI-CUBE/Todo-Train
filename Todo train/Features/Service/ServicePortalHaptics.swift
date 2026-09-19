@@ -16,7 +16,7 @@ enum ServicePortalHaptics {
     }
 
     static func ignite() {
-        impact(.medium, intensity: 0.74)
+        impact(.heavy, intensity: 0.94)
     }
 
     static func occupancyLanded() {
@@ -25,6 +25,10 @@ enum ServicePortalHaptics {
 
     static func readyToPrime() {
         impact(.medium, intensity: 0.80)
+    }
+
+    static func primeBegan() {
+        impact(.rigid, intensity: 0.78)
     }
 
     static func primeTick(progress: Double) {
