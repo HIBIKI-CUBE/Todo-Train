@@ -28,7 +28,7 @@ struct FocusView: View {
     @State private var extendReason: String?
     @State private var didConsumePendingAction = false
 
-    private let extendReasons = ["仕事が膨らんだ", "割り込みが入った", "まだかかる", "その他"]
+    private let extendReasons = ServiceCabinSequence.extendReasons
 
     /// Portrait: controls take ~38% of height. Compact: right pane ~40% of width.
     private let portraitControlFraction: CGFloat = 0.38

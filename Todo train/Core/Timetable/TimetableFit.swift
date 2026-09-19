@@ -532,6 +532,47 @@ nonisolated enum TimetableFit {
         return "\(prefix) \(clock) \(title)"
     }
 
+    static func occupancyRow(
+        kind: TimetableOccupancyKind,
+        id: UUID,
+        title: String,
+        at date: Date,
+        now: Date,
+        calendar: Calendar = .autoupdatingCurrent
+    ) -> TimetableOccupancyRow {
+        let minutes = remainingMinutes(until: date, now: now)
+        return TimetableOccupancyRow(
+            id: id,
+            kind: kind,
+            clock: clockTime(date, calendar: calendar),
+            remainingMinutes: minutes,
+            title: title,
+            spokenLine: occupancyLine(
+                prefix: kind.prefix,
+                title: title,
+                at: date,
+                now: now,
+                calendar: calendar
+            )
+        )
+    }
+
+    static func occupancyRow(
+        for occurrence: CalendarOccurrence,
+        now: Date,
+        calendar: Calendar = .autoupdatingCurrent
+    ) -> TimetableOccupancyRow {
+        let occupying = occurrence.startsAt <= now
+        return occupancyRow(
+            kind: occupying ? .notice : .next,
+            id: noticeBlockID(occurrence.id),
+            title: occurrence.title,
+            at: occupying ? occurrence.endsAt : occurrence.startsAt,
+            now: now,
+            calendar: calendar
+        )
+    }
+
     private static func occupancyRow(
         kind: TimetableOccupancyKind,
         occupancy: TimetableOccupancy,
@@ -539,20 +580,13 @@ nonisolated enum TimetableFit {
         now: Date,
         calendar: Calendar
     ) -> TimetableOccupancyRow {
-        let minutes = remainingMinutes(until: date, now: now)
-        return TimetableOccupancyRow(
-            id: occupancy.id,
+        occupancyRow(
             kind: kind,
-            clock: clockTime(date, calendar: calendar),
-            remainingMinutes: minutes,
+            id: occupancy.id,
             title: occupancy.title,
-            spokenLine: occupancyLine(
-                prefix: kind.prefix,
-                title: occupancy.title,
-                at: date,
-                now: now,
-                calendar: calendar
-            )
+            at: date,
+            now: now,
+            calendar: calendar
         )
     }
 

@@ -86,9 +86,14 @@ extension SessionManager {
 
     func currentUnadoptedNotice(at now: Date? = nil) -> CalendarOccurrence? {
         let now = now ?? clock.now
-        return unadoptedNotices(at: now).first { occurrence in
+        return remainingUnadoptedNotices(at: now).first { occurrence in
             occurrence.startsAt <= now && now < occurrence.endsAt
         }
+    }
+
+    /// 起動中の回路。通過のままなら網は掛けない。
+    func remainingUnadoptedNotices(at now: Date? = nil) -> [CalendarOccurrence] {
+        unadoptedNotices(at: now ?? clock.now)
     }
 
     private func unadoptedNotices(at now: Date) -> [CalendarOccurrence] {
