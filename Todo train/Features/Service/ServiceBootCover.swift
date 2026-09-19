@@ -165,38 +165,36 @@ struct ServiceBootCover: View {
 
     @ViewBuilder
     private func chamber(now: Date, presence: ServicePortalSequence.Presence) -> some View {
-        if phase != .entering {
-            let occupancy = occupancyInstrument(now: now)
-            let extras = extraNotices(now: now, occupancyRows: occupancy.rows)
-            ServicePortalChamber(
-                presence: presence,
-                primeProgress: phase == .priming ? primeProgress : 0,
-                dayText: dayText,
-                now: now,
-                occupancyRows: occupancy.rows,
-                occupancyMarks: occupancy.marks,
-                occupancyActionTitle: occupancy.actionTitle,
-                occupancyAction: occupancy.action,
-                additionalOccupancyRows: extras.map(\.row),
-                additionalActionTitle: TimetableCopy.adopt,
-                additionalAction: { rowID in
-                    guard let occurrence = extras.first(where: { $0.row.id == rowID })?.occurrence else {
-                        return
-                    }
-                    sessionManager.adoptOccurrence(occurrence, scope: .occurrence)
-                },
-                consistItems: consistItems,
-                leadTicketID: leadTicketID ?? consistItems.first?.id,
-                calendarAuthorization: sessionManager.calendarBoard.authorizationStatus(),
-                onMakeLead: makeLead,
-                onRequestCalendar: {
-                    Task { await requestCalendar() }
+        let occupancy = occupancyInstrument(now: now)
+        let extras = extraNotices(now: now, occupancyRows: occupancy.rows)
+        ServicePortalChamber(
+            presence: presence,
+            primeProgress: phase == .priming ? primeProgress : 0,
+            dayText: dayText,
+            now: now,
+            occupancyRows: occupancy.rows,
+            occupancyMarks: occupancy.marks,
+            occupancyActionTitle: occupancy.actionTitle,
+            occupancyAction: occupancy.action,
+            additionalOccupancyRows: extras.map(\.row),
+            additionalActionTitle: TimetableCopy.adopt,
+            additionalAction: { rowID in
+                guard let occurrence = extras.first(where: { $0.row.id == rowID })?.occurrence else {
+                    return
                 }
-            )
-            .opacity(chamberOpacity)
-            .offset(y: chamberSink)
-            .animation(reduceMotion ? .easeOut(duration: 0.12) : PortalCoverMotion.depart, value: departBeat)
-        }
+                sessionManager.adoptOccurrence(occurrence, scope: .occurrence)
+            },
+            consistItems: consistItems,
+            leadTicketID: leadTicketID ?? consistItems.first?.id,
+            calendarAuthorization: sessionManager.calendarBoard.authorizationStatus(),
+            onMakeLead: makeLead,
+            onRequestCalendar: {
+                Task { await requestCalendar() }
+            }
+        )
+        .opacity(chamberOpacity)
+        .offset(y: chamberSink)
+        .animation(reduceMotion ? .easeOut(duration: 0.12) : PortalCoverMotion.depart, value: departBeat)
     }
 
     @ViewBuilder
