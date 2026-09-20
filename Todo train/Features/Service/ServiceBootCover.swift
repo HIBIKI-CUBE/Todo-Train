@@ -11,7 +11,9 @@ import SwiftUI
 import UIKit
 #endif
 
-/// Presents the start gate over the TabView so the tab bar never leaks into the cabin.
+/// Presents the start gate. The black veil lives on the TabView; the cover
+/// itself is a fullScreenCover from Hub so SwiftData Query keeps its context.
+@MainActor
 @Observable
 final class ServicePortalPresentation {
     var isBootCoverPresented = false
@@ -35,7 +37,7 @@ final class ServicePortalPresentation {
 
 struct ServiceBootCover: View {
     @Environment(SessionManager.self) private var sessionManager
-    @Environment(ServicePortalPresentation.self) private var servicePortal
+    @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Ticket.sortOrder) private var allTickets: [Ticket]
@@ -99,7 +101,9 @@ struct ServiceBootCover: View {
             }
         }
         .environment(\.colorScheme, .dark)
+        .presentationBackground(Color.black)
         .persistentSystemOverlays(.hidden)
+        .interactiveDismissDisabled(phase != .done)
         .task {
             await sessionManager.refreshCalendarBoardIfAuthorized()
             await runEnter()
@@ -394,7 +398,11 @@ struct ServiceBootCover: View {
             departElapsed = elapsed
         }
         phase = ServicePortalSequence.advance(phase, .departElapsed)
-        servicePortal.dismissBootCover()
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            dismiss()
+        }
     }
 
     private func makeLead(_ id: UUID) {

@@ -112,6 +112,7 @@ struct HubView: View {
     /// Focus cover is the mode cut — no extra black wait on Hub.
 
     var body: some View {
+        @Bindable var servicePortal = servicePortal
         GeometryReader { geo in
             let split = TrainLayout.shouldSplitHub(
                 availableWidth: geo.size.width,
@@ -210,6 +211,11 @@ struct HubView: View {
                 }
             }
         }
+        .fullScreenCover(isPresented: $servicePortal.isBootCoverPresented) {
+            ServiceBootCover()
+                .environment(sessionManager)
+        }
+        .toolbar(servicePortal.isBootCoverPresented ? .hidden : .automatic, for: .tabBar)
         .fullScreenCover(isPresented: $showServiceShutdownCover) {
             ServiceShutdownCover { message in
                 errorMessage = message

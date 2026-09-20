@@ -2,8 +2,8 @@
 //  ContentView.swift
 //  Todo train
 //
-//  Tab host + Focus fullScreenCover. The start gate sits over the TabView
-//  so the tab bar never leaks into the cabin.
+//  Tab host + Focus fullScreenCover. 運行開始の黒い幕は TabView の上。
+//  門そのものは Hub の fullScreenCover（Query の context を保つ）。
 //
 
 import SwiftUI
@@ -61,6 +61,11 @@ struct ContentView: View {
         .environment(ArrivalForecastStore.shared)
         .environment(\.focusZoomNamespace, focusZoom)
         .environment(\.isFocusCoverPresented, isFocusPresented)
+        .overlay {
+            if servicePortal.isBootCoverPresented {
+                Color.black.ignoresSafeArea()
+            }
+        }
         .overlay {
             if let event = ticketMotion.interruptEject {
                 TicketIssueEjectOverlay(event: event, finish: .zoomIntoFocus) {
@@ -194,16 +199,6 @@ struct ContentView: View {
         }
         // Arrival haptic is driven by the invalidate gesture; service moment keeps a light success.
         .sensoryFeedback(.success, trigger: sessionManager.punctualityHapticTick)
-        .overlay {
-            ZStack {
-                if servicePortal.isBootCoverPresented {
-                    ServiceBootCover()
-                        .environment(sessionManager)
-                }
-            }
-            .ignoresSafeArea()
-            .animation(nil, value: servicePortal.isBootCoverPresented)
-        }
     }
 
     private func promoteTransferCanvasAfterFocusDismiss() {
