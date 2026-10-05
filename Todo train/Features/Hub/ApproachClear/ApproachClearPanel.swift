@@ -2,10 +2,10 @@
 //  ApproachClearPanel.swift
 //  Todo train
 //
-//  Compact Hub instrument on the grouped surface. Lamps stay flat fills.
-//  The pass across the track is the glow. Signal colors stay on the real
-//  service strip. The needle is a layer on the display link, drawn for the
-//  frame's presentation time. Judgement is the press, not the release.
+//  Shown only after a long absence. One play, then it goes away.
+//  Lamps stay flat fills. The pass across the track is the glow. Signal
+//  colors stay on the real service strip. The needle is a layer on the
+//  display link. Judgement is the press, not the release.
 //
 
 import SwiftUI
@@ -14,11 +14,14 @@ import UIKit
 struct ApproachClearPanel: View {
     var world: ApproachClearWorld
     var interactionsFrozen: Bool
+    var onPlayStarted: () -> Void = {}
+    var onFinished: () -> Void = {}
 
     @State private var runtime = ApproachClearRuntime()
     @State private var chrome = ApproachClearChrome()
     @State private var expanded = false
     @State private var haptics = ApproachClearHaptics()
+    @State private var finished = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -66,22 +69,30 @@ struct ApproachClearPanel: View {
             }
             publishIfNeeded()
         }
+        .onChange(of: chrome.calm) { _, calm in
+            if calm != nil { finish() }
+        }
         .onDisappear { haptics.stop() }
         .accessibilityElement(children: .contain)
+        .accessibilityLabel("接近クリアランス")
     }
 
     private var collapsedBody: some View {
         Button {
+            guard !finished else { return }
             haptics.prepare()
             withAnimation(TrainTheme.Motion.soft) {
                 expanded = true
             }
         } label: {
-            collapsedTrack
+            Capsule()
+                .fill(Color(uiColor: .tertiarySystemFill))
+                .frame(height: 18)
                 .padding(.vertical, 8)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .disabled(finished)
         .accessibilityLabel("接近クリアランス")
         .accessibilityHint("開く")
     }
@@ -93,7 +104,7 @@ struct ApproachClearPanel: View {
                 Spacer(minLength: 4)
                 pips
                 Button {
-                    collapse()
+                    finish()
                 } label: {
                     Image(systemName: "xmark")
                         .font(.caption.weight(.semibold))
@@ -126,11 +137,7 @@ struct ApproachClearPanel: View {
                 .frame(maxWidth: .infinity, minHeight: 16, alignment: .leading)
                 .accessibilityHidden(chrome.label.isEmpty)
 
-            if let calm = chrome.calm {
-                calmBlock(calm)
-            } else {
-                clearanceButton
-            }
+            clearanceButton
 
             sessionBar
 
@@ -145,17 +152,10 @@ struct ApproachClearPanel: View {
 
     private var ticking: Bool {
         expanded
+            && !finished
             && !interactionsFrozen
             && chrome.phase != .dormant
             && chrome.phase != .calm
-    }
-
-    private var collapsedTrack: some View {
-        Capsule()
-            .fill(Color(uiColor: .tertiarySystemFill))
-            .frame(height: 18)
-            .padding(.vertical, 8)
-            .accessibilityHidden(true)
     }
 
     private var serviceStrip: some View {
@@ -277,25 +277,6 @@ struct ApproachClearPanel: View {
         .opacity(chrome.controlEnabled ? 1 : 0.45)
     }
 
-    private func calmBlock(_ calm: ApproachClearCalm) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(calm == .full ? "満線" : "閑散")
-                .font(.subheadline.weight(.semibold))
-            Text(calm == .full ? "回送は満ちた · また近づくとき" : "回送おわり · また近づくとき")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-            Button("再開") {
-                runtime.engine.world = world
-                runtime.engine.restart(at: Self.milliseconds())
-                publishIfNeeded()
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-            .padding(.top, 2)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
     private var sessionBar: some View {
         GeometryReader { geo in
             Capsule()
@@ -343,7 +324,11 @@ struct ApproachClearPanel: View {
 
     private func handleDown(at milliseconds: Double) {
         runtime.engine.world = world
+        let wasDormant = runtime.engine.snapshot.phase == .dormant
         let cues = runtime.engine.touchDown(at: milliseconds)
+        if wasDormant, runtime.engine.snapshot.phase != .dormant {
+            onPlayStarted()
+        }
         var perfect = false
         var cleared = false
         for cue in cues {
@@ -400,13 +385,16 @@ struct ApproachClearPanel: View {
         }
     }
 
-    private func collapse() {
+    private func finish() {
+        guard !finished else { return }
+        finished = true
         haptics.stop()
-        runtime.reset()
-        runtime.engine.world = world
-        publishIfNeeded()
         withAnimation(TrainTheme.Motion.soft) {
             expanded = false
+        }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(280))
+            onFinished()
         }
     }
 

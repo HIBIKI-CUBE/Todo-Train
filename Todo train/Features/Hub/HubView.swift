@@ -329,7 +329,7 @@ struct HubView: View {
                 }
             )
             .padding(.horizontal, TrainTheme.Space.md)
-            ApproachClearPanel(
+            ApproachClearOfferGate(
                 world: ApproachClearWorld(
                     inService: sessionManager.isInService,
                     dayEndPrompt: sessionManager.needsServiceDayEndPrompt,
