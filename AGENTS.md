@@ -16,6 +16,7 @@
 - 同期のなぜ → [docs/13-sync-mac-companion.md](docs/13-sync-mac-companion.md)
 - Mac の役割 → [docs/14-mac-companion-ux.md](docs/14-mac-companion-ux.md)
 - カレンダーの体験摩擦 → [docs/17-calendar-experience.md](docs/17-calendar-experience.md)
+- Hub 接近クリアランス → [docs/approach-clear/](docs/approach-clear/) + Issue #61
 
 ## 作業時の原則
 
