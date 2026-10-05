@@ -19,6 +19,8 @@ struct ApproachClearPanel: View {
     @State private var haptics = ApproachClearHaptics()
     @State private var passFlight = 0
     @State private var bandPulse = false
+    /// When the next frame will appear. The needle is drawn for this instant.
+    @State private var presentationMs = 0.0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -165,11 +167,10 @@ struct ApproachClearPanel: View {
                 .fixedSize(horizontal: false, vertical: true)
             #endif
         }
-        .task(id: ticking) {
-            guard ticking else { return }
-            while !Task.isCancelled {
+        .background {
+            ApproachClearDisplayLink(active: ticking) { presentation in
+                presentationMs = presentation
                 step()
-                try? await Task.sleep(for: .milliseconds(16))
             }
         }
     }
@@ -288,7 +289,8 @@ struct ApproachClearPanel: View {
                             .offset(x: press * width - 3)
                     }
                     if engine.snapshot.needleVisible {
-                        let x = engine.snapshot.needle * width
+                        let needleU = shownNeedle
+                        let x = needleU * width
                         if engine.snapshot.tier >= 2 {
                             Capsule()
                                 .fill(needleColor.opacity(engine.snapshot.accent == .blaze ? 0.55 : 0.32))
@@ -300,7 +302,7 @@ struct ApproachClearPanel: View {
                                 .fill(needleColor.opacity(0.55))
                                 .frame(width: 7, height: 7)
                                 .shadow(color: needleColor.opacity(0.45), radius: 3)
-                                .offset(x: max(0, engine.snapshot.needle - bands.ghostOffset) * width - 3.5)
+                                .offset(x: max(0, needleU - bands.ghostOffset) * width - 3.5)
                         }
                         NeedleChevron()
                             .fill(engine.snapshot.needleRejected ? Ink.red : needleColor)
@@ -331,6 +333,7 @@ struct ApproachClearPanel: View {
                 }
             }
             .scaleEffect(x: engine.snapshot.shrinking ? 0.92 : 1, y: 1, anchor: .center)
+            .animation(nil, value: shownNeedle)
             .frame(width: width, height: live ? 48 : 18)
         }
         .frame(height: live ? 48 : 18)
@@ -432,8 +435,8 @@ struct ApproachClearPanel: View {
                 .offset(y: sunk ? 4 : 0)
             ApproachClearTouchPad(
                 enabled: engine.snapshot.controlEnabled && !interactionsFrozen,
-                onDown: { handleDown() },
-                onUp: { handleUp() },
+                onDown: { handleDown(at: $0) },
+                onUp: { handleUp(at: $0) },
                 onCancel: { engine.touchCancel() }
             )
         }
@@ -513,7 +516,7 @@ struct ApproachClearPanel: View {
     }
 
     private var armedGlow: Color {
-        switch engine.snapshot.armed {
+        switch displayedArm {
         case .perfect: Ink.gold.opacity(0.7)
         case .good: Ink.green.opacity(0.5)
         case .none: .clear
@@ -521,7 +524,7 @@ struct ApproachClearPanel: View {
     }
 
     private var armedRadius: CGFloat {
-        switch engine.snapshot.armed {
+        switch displayedArm {
         case .perfect: 12
         case .good: 8
         case .none: 0
@@ -546,17 +549,35 @@ struct ApproachClearPanel: View {
     }
 
     private var buttonFill: Color {
-        switch engine.snapshot.armed {
+        switch displayedArm {
         case .perfect: Ink.gold.opacity(0.28)
         case .good: Ink.green.opacity(0.22)
         case .none: Color.white.opacity(engine.snapshot.contactDown ? 0.1 : 0.05)
         }
     }
 
-    private func handleDown() {
-        haptics.prepare()
+    /// Needle position at the upcoming frame. Logic keeps its own clock.
+    private var shownNeedle: Double {
+        let snap = engine.snapshot
+        guard snap.phase == .approach, presentationMs > 0, snap.bands.approachMs > 0 else {
+            return snap.needle
+        }
+        let u = (presentationMs - snap.approachStart) / snap.bands.approachMs
+        return min(1, max(0, u))
+    }
+
+    private var displayedArm: ApproachClearArm {
+        guard engine.snapshot.phase == .approach else { return .none }
+        return switch engine.snapshot.bands.zone(at: shownNeedle) {
+        case .perfect: .perfect
+        case .good: .good
+        case .out: .none
+        }
+    }
+
+    private func handleDown(at milliseconds: Double) {
         engine.world = world
-        let cues = engine.touchDown(at: Self.milliseconds())
+        let cues = engine.touchDown(at: milliseconds)
         if cues.contains(where: { cue in
             switch cue {
             case .perfect, .good: true
@@ -565,12 +586,13 @@ struct ApproachClearPanel: View {
         }) {
             passFlight += 1
         }
+        haptics.prepare()
         haptics.play(cues)
     }
 
-    private func handleUp() {
+    private func handleUp(at milliseconds: Double) {
         engine.world = world
-        haptics.play(engine.touchUp(at: Self.milliseconds()))
+        haptics.play(engine.touchUp(at: milliseconds))
     }
 
     private func step() {
@@ -589,6 +611,55 @@ struct ApproachClearPanel: View {
 
     private static func milliseconds() -> Double {
         CACurrentMediaTime() * 1_000
+    }
+}
+
+private struct ApproachClearDisplayLink: UIViewRepresentable {
+    var active: Bool
+    var onFrame: (Double) -> Void
+
+    func makeUIView(context: Context) -> ApproachClearDisplayLinkView {
+        let view = ApproachClearDisplayLinkView()
+        view.onFrame = onFrame
+        view.active = active
+        return view
+    }
+
+    func updateUIView(_ uiView: ApproachClearDisplayLinkView, context: Context) {
+        uiView.onFrame = onFrame
+        uiView.active = active
+    }
+
+    static func dismantleUIView(_ uiView: ApproachClearDisplayLinkView, coordinator: ()) {
+        uiView.active = false
+    }
+}
+
+private final class ApproachClearDisplayLinkView: UIView {
+    var onFrame: (Double) -> Void = { _ in }
+    var active = false {
+        didSet {
+            guard active != oldValue else { return }
+            if active {
+                guard link == nil else { return }
+                let link = CADisplayLink(target: self, selector: #selector(fire(_:)))
+                link.add(to: .main, forMode: .common)
+                self.link = link
+            } else {
+                link?.invalidate()
+                link = nil
+            }
+        }
+    }
+
+    private var link: CADisplayLink?
+
+    @objc private func fire(_ link: CADisplayLink) {
+        onFrame(link.targetTimestamp * 1_000)
+    }
+
+    deinit {
+        link?.invalidate()
     }
 }
 
@@ -628,8 +699,8 @@ private enum Ink {
 
 private struct ApproachClearTouchPad: UIViewRepresentable {
     var enabled: Bool
-    var onDown: () -> Void
-    var onUp: () -> Void
+    var onDown: (Double) -> Void
+    var onUp: (Double) -> Void
     var onCancel: () -> Void
 
     func makeUIView(context: Context) -> ApproachClearTouchView {
@@ -650,8 +721,8 @@ private struct ApproachClearTouchPad: UIViewRepresentable {
 }
 
 private final class ApproachClearTouchView: UIView {
-    var onDown: () -> Void = {}
-    var onUp: () -> Void = {}
+    var onDown: (Double) -> Void = { _ in }
+    var onUp: (Double) -> Void = { _ in }
     var onCancel: () -> Void = {}
     private var tracked: UITouch?
 
@@ -671,13 +742,13 @@ private final class ApproachClearTouchView: UIView {
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard isUserInteractionEnabled, tracked == nil, let touch = touches.first else { return }
         tracked = touch
-        onDown()
+        onDown(touch.timestamp * 1_000)
     }
 
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard let touch = touches.first, touch === tracked else { return }
         tracked = nil
-        onUp()
+        onUp(touch.timestamp * 1_000)
     }
 
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
