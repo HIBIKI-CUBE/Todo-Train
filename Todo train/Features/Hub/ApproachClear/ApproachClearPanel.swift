@@ -14,11 +14,17 @@ struct ApproachClearPanel: View {
     var world: ApproachClearWorld
     var interactionsFrozen: Bool
 
-    @State private var engine = ApproachClearEngine()
+    @State private var engine = ApproachClearPanel.liveEngine()
     @State private var expanded = false
     @State private var haptics = ApproachClearHaptics()
-    @State private var passFlight = 0
     @State private var bandPulse = false
+    @State private var sweepStartMs = 0.0
+    @State private var sweepPerfect = false
+    @State private var sweepTier = 0
+    @State private var ghostGoodL = 0.0
+    @State private var ghostGoodR = 0.0
+    @State private var ghostUntilMs = 0.0
+    @State private var barrierStartMs = 0.0
     /// When the next frame will appear. The needle is drawn for this instant.
     @State private var presentationMs = 0.0
 
@@ -51,21 +57,29 @@ struct ApproachClearPanel: View {
                 .allowsHitTesting(false)
         }
         .overlay {
-            if engine.snapshot.flash == .miss {
+            if let bloom = hitBloom {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(bloom)
+                    .opacity(engine.snapshot.flash == .miss ? missBlink : 1)
+                    .allowsHitTesting(false)
+            }
+        }
+        .overlay {
+            if engine.snapshot.easing {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .fill(
                         RadialGradient(
-                            colors: [Ink.red.opacity(0.28), Ink.red.opacity(0.05), .clear],
-                            center: .center,
-                            startRadius: 8,
-                            endRadius: 180
+                            colors: [Ink.cyan.opacity(0.16), .clear],
+                            center: UnitPoint(x: 0.5, y: 0.4),
+                            startRadius: 4,
+                            endRadius: 160
                         )
                     )
                     .allowsHitTesting(false)
-                    .transition(.opacity)
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .shadow(color: heatAura, radius: engine.snapshot.tier >= 2 ? 14 : 8)
         .modifier(ClearanceShake(active: engine.snapshot.shake || engine.snapshot.jammed))
         .animation(TrainTheme.Motion.soft, value: expanded)
         .animation(.easeOut(duration: 0.06), value: engine.snapshot.flash)
@@ -73,6 +87,15 @@ struct ApproachClearPanel: View {
         .onChange(of: world) { _, newWorld in
             engine.world = newWorld
             step()
+        }
+        .onChange(of: engine.snapshot.bands) { old, _ in
+            guard old.goodR > old.goodL else { return }
+            ghostGoodL = old.goodL
+            ghostGoodR = old.goodR
+            ghostUntilMs = Self.milliseconds() + 400
+        }
+        .onChange(of: engine.snapshot.barrierOn) { _, on in
+            if on { barrierStartMs = Self.milliseconds() }
         }
         .onChange(of: engine.snapshot.idleBreath) { _, breathing in
             if breathing {
@@ -145,6 +168,8 @@ struct ApproachClearPanel: View {
                 }
             }
             .frame(height: 52)
+
+            shimmerRow
 
             Text(engine.snapshot.label)
                 .font(.caption.weight(.semibold).monospaced())
@@ -226,24 +251,33 @@ struct ApproachClearPanel: View {
     }
 
     private var lampRow: some View {
-        HStack(spacing: 6) {
-            toyLamp("接近", on: engine.snapshot.lamps.approach, color: Ink.cyan)
-            toyLamp("良", on: engine.snapshot.lamps.perfect, color: Ink.gold)
-            toyLamp("可", on: engine.snapshot.lamps.good, color: Ink.green)
-            toyLamp("通", on: engine.snapshot.lamps.clear, color: Ink.green)
-            toyLamp("否", on: engine.snapshot.lamps.reject, color: Ink.red)
-            toyLamp("連", on: engine.snapshot.lamps.interlock, color: TrainTheme.signalAmber)
+        let lamps = engine.snapshot.lamps
+        let row: [(String, Bool, Color)] = [
+            ("接近", lamps.approach, Ink.cyan),
+            ("良", lamps.perfect, Ink.gold),
+            ("可", lamps.good, Ink.green),
+            ("通", lamps.clear, Ink.green),
+            ("否", lamps.reject, Ink.red),
+            ("連", lamps.interlock, TrainTheme.signalAmber),
+        ]
+        return HStack(spacing: 6) {
+            ForEach(Array(row.enumerated()), id: \.offset) { index, lamp in
+                toyLamp(lamp.0, on: lamp.1, color: lamp.2, index: index)
+            }
         }
     }
 
-    private func toyLamp(_ title: String, on: Bool, color: Color) -> some View {
-        VStack(spacing: 2) {
+    private func toyLamp(_ title: String, on: Bool, color: Color, index: Int) -> some View {
+        let hot = cascadeHot(index)
+        return VStack(spacing: 2) {
             Circle()
-                .fill(on ? color : Color.white.opacity(0.1))
+                .fill(on || hot ? color : Color.white.opacity(0.1))
                 .frame(width: 7, height: 7)
+                .scaleEffect(hot ? 1.45 : 1)
+                .shadow(color: hot ? color.opacity(0.9) : .clear, radius: 4)
             Text(title)
                 .font(.system(size: 8, weight: .medium))
-                .foregroundStyle(Color.white.opacity(on ? 0.7 : 0.28))
+                .foregroundStyle(Color.white.opacity(on || hot ? 0.7 : 0.28))
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(title)
@@ -265,125 +299,243 @@ struct ApproachClearPanel: View {
             let width = geo.size.width
             let bands = engine.snapshot.bands
             let breath = engine.snapshot.idleBreath ? (bandPulse ? 1.0 : 0.62) : 1.0
+            let rejected = engine.snapshot.flash == .miss || engine.snapshot.needleRejected
             ZStack(alignment: .leading) {
                 Capsule()
                     .fill(Color.white.opacity(0.06))
+                if live {
+                    flowMarks(width: width)
+                }
                 Capsule()
                     .fill(Color.white.opacity(0.05))
                     .frame(height: 2)
                     .padding(.horizontal, 10)
                 if live {
-                    span(bands.goodL, bands.goodR, width: width, color: Ink.green.opacity(0.34 * breath), height: 36)
-                    span(bands.perfL, bands.perfR, width: width, color: Ink.gold.opacity(0.9 * breath), height: 36)
-                    Rectangle()
-                        .fill(Color.white.opacity(0.9))
-                        .frame(width: 1, height: 40)
-                        .offset(x: bands.center * width)
-                    if engine.snapshot.easing {
-                        span(bands.goodL, bands.goodR, width: width, color: Ink.cyan.opacity(0.22), height: 40)
+                    if presentationMs < ghostUntilMs, ghostGoodR > ghostGoodL {
+                        let fade = max(0, (ghostUntilMs - presentationMs) / 400)
+                        window(
+                            ghostGoodL,
+                            ghostGoodR,
+                            width: width,
+                            fill: Color.white.opacity(0.02),
+                            stroke: Ink.cyan.opacity(0.55 * fade),
+                            height: 40,
+                            dashed: true
+                        )
+                        .opacity(fade)
                     }
+                    Group {
+                        window(
+                            bands.goodL,
+                            bands.goodR,
+                            width: width,
+                            fill: (rejected ? Ink.red : Ink.green).opacity((rejected ? 0.28 : 0.22) * breath),
+                            stroke: (rejected ? Ink.red : Ink.green).opacity(rejected ? 0.9 : 0.55),
+                            height: 36,
+                            dashed: false
+                        )
+                        window(
+                            bands.perfL,
+                            bands.perfR,
+                            width: width,
+                            fill: (rejected ? Ink.red : Ink.gold).opacity(rejected ? 0.34 : 0.42),
+                            stroke: (rejected ? Ink.red : Ink.gold).opacity(0.9),
+                            height: 36,
+                            dashed: false
+                        )
+                        Rectangle()
+                            .fill(Color.white.opacity(0.92))
+                            .frame(width: 2, height: 44)
+                            .shadow(color: .white.opacity(0.85), radius: 3)
+                            .offset(x: bands.center * width - 1)
+                    }
+                    .animation(.timingCurve(0.3, 0, 0.2, 1, duration: 0.22), value: bands)
                     if let press = engine.snapshot.pressU {
-                        Circle()
+                        Rectangle()
                             .fill(markColor)
-                            .frame(width: 6, height: 6)
-                            .offset(x: press * width - 3)
+                            .frame(width: 2, height: 46)
+                            .shadow(color: markColor.opacity(0.9), radius: 4)
+                            .offset(x: press * width - 1)
                     }
-                    if engine.snapshot.needleVisible {
-                        let needleU = shownNeedle
-                        let x = needleU * width
-                        if engine.snapshot.tier >= 2 {
+                    Group {
+                        if engine.snapshot.needleVisible {
+                            let needleU = shownNeedle
+                            let x = needleU * width
+                            if engine.snapshot.tier >= 2 {
+                                Capsule()
+                                    .fill(needleColor.opacity(engine.snapshot.accent == .blaze ? 0.7 : 0.4))
+                                    .frame(width: max(18, width * 0.1), height: 4)
+                                    .offset(x: max(0, x - width * 0.1))
+                            }
+                            if bands.doubleBlip {
+                                Circle()
+                                    .fill(needleColor.opacity(0.55))
+                                    .frame(width: 7, height: 7)
+                                    .shadow(color: needleColor.opacity(0.45), radius: 3)
+                                    .offset(x: max(0, needleU - bands.ghostOffset) * width - 3.5)
+                            }
+                            NeedleChevron()
+                                .fill(engine.snapshot.needleRejected ? Ink.red : needleColor)
+                                .frame(width: 10, height: 7)
+                                .shadow(color: needleColor.opacity(0.9), radius: 3)
+                                .offset(x: x - 5, y: -20)
                             Capsule()
-                                .fill(needleColor.opacity(engine.snapshot.accent == .blaze ? 0.55 : 0.32))
-                                .frame(width: max(14, width * 0.08), height: 3)
-                                .offset(x: max(0, x - width * 0.08))
-                        }
-                        if bands.doubleBlip {
+                                .fill(engine.snapshot.needleRejected ? Ink.red : needleColor)
+                                .frame(width: 3, height: 44)
+                                .shadow(color: (engine.snapshot.needleRejected ? Ink.red : needleColor).opacity(0.85), radius: 4)
+                                .offset(x: x - 1.5)
                             Circle()
-                                .fill(needleColor.opacity(0.55))
-                                .frame(width: 7, height: 7)
-                                .shadow(color: needleColor.opacity(0.45), radius: 3)
-                                .offset(x: max(0, needleU - bands.ghostOffset) * width - 3.5)
-                        }
-                        NeedleChevron()
-                            .fill(engine.snapshot.needleRejected ? Ink.red : needleColor)
-                            .frame(width: 10, height: 7)
-                            .shadow(color: needleColor.opacity(0.9), radius: 3)
-                            .offset(x: x - 5, y: -20)
-                        Capsule()
-                            .fill(engine.snapshot.needleRejected ? Ink.red : needleColor)
-                            .frame(width: 3, height: 44)
-                            .shadow(color: (engine.snapshot.needleRejected ? Ink.red : needleColor).opacity(0.85), radius: 4)
-                            .offset(x: x - 1.5)
-                        Circle()
-                            .fill(
-                                RadialGradient(
-                                    colors: [.white, needleColor, needleColor.opacity(0.2)],
-                                    center: UnitPoint(x: 0.4, y: 0.35),
-                                    startRadius: 0,
-                                    endRadius: 6
+                                .fill(
+                                    RadialGradient(
+                                        colors: [.white, needleColor, needleColor.opacity(0.2)],
+                                        center: UnitPoint(x: 0.4, y: 0.35),
+                                        startRadius: 0,
+                                        endRadius: 6
+                                    )
                                 )
-                            )
-                            .frame(width: 10, height: 10)
-                            .shadow(color: needleColor.opacity(0.9), radius: 4)
-                            .offset(x: x - 5)
+                                .frame(width: 10, height: 10)
+                                .shadow(color: needleColor.opacity(0.9), radius: 4)
+                                .offset(x: x - 5)
+                        }
                     }
-                    if engine.snapshot.passing != nil {
-                        passingTrain(width: width)
+                    .animation(nil, value: shownNeedle)
+                    if let progress = sweepProgress {
+                        rushingLight(width: width, progress: progress)
                     }
+                    barrierFlash(width: width)
                 }
             }
             .scaleEffect(x: engine.snapshot.shrinking ? 0.92 : 1, y: 1, anchor: .center)
-            .animation(nil, value: shownNeedle)
             .frame(width: width, height: live ? 48 : 18)
         }
         .frame(height: live ? 48 : 18)
         .accessibilityHidden(true)
     }
 
-    private func passingTrain(width: CGFloat) -> some View {
-        let perfect = engine.snapshot.passing == .perfect
-        return UnevenRoundedRectangle(
-            topLeadingRadius: 2,
-            bottomLeadingRadius: 2,
-            bottomTrailingRadius: 5,
-            topTrailingRadius: 5
-        )
-        .fill(
-            LinearGradient(
-                colors: perfect
-                    ? [Color(red: 0.22, green: 0.2, blue: 0.08), Ink.gold]
-                    : [Color(red: 0.14, green: 0.19, blue: 0.22), Ink.cyan],
-                startPoint: .leading,
-                endPoint: .trailing
+    private func flowMarks(width: CGFloat) -> some View {
+        let period = engine.snapshot.tier >= 2 ? 700.0 : 1_400.0
+        let shift = presentationMs > 0 ? (presentationMs / period).truncatingRemainder(dividingBy: 1) : 0
+        let tint = engine.snapshot.tier >= 2 ? Ink.gold : Ink.cyan
+        return ZStack(alignment: .leading) {
+            ForEach(0..<8, id: \.self) { index in
+                let place = (Double(index) / 8 + shift).truncatingRemainder(dividingBy: 1)
+                Rectangle()
+                    .fill(tint.opacity(engine.snapshot.tier >= 1 ? 0.16 : 0.06))
+                    .frame(width: 2, height: 48)
+                    .offset(x: place * width)
+            }
+        }
+        .allowsHitTesting(false)
+    }
+
+    private func rushingLight(width: CGFloat, progress: Double) -> some View {
+        let travel = 0.06 + 0.78 * (1 - pow(1 - min(1, progress), 2.4))
+        let fade = progress < 0.55 ? 1.0 : max(0, 1 - (progress - 0.55) / 0.45)
+        let color = sweepTier >= 3 ? Ink.gold : (sweepPerfect ? Ink.gold : Ink.green)
+        let trail: CGFloat = sweepTier >= 3 ? 128 : (sweepTier >= 2 ? 92 : 64)
+        let head = travel * width
+        return ZStack(alignment: .leading) {
+            Capsule()
+                .fill(
+                    LinearGradient(
+                        colors: [.clear, color.opacity(0.05), color.opacity(0.55), .white.opacity(0.85)],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .frame(width: trail, height: sweepTier >= 3 ? 10 : 6)
+                .offset(x: head - trail + 30)
+            UnevenRoundedRectangle(
+                topLeadingRadius: 2,
+                bottomLeadingRadius: 2,
+                bottomTrailingRadius: 5,
+                topTrailingRadius: 5
             )
-        )
-        .frame(width: 36, height: 12)
-        .shadow(color: (perfect ? Ink.gold : Ink.green).opacity(0.7), radius: 5)
-        .phaseAnimator([0, 1, 2], trigger: passFlight) { train, step in
-            let fraction: CGFloat = step == 0 ? 0.08 : (step == 1 ? 0.48 : 0.82)
-            train
-                .offset(x: fraction * width)
-                .opacity(step == 2 ? 0 : 1)
-        } animation: { step in
-            step == 0
-                ? .linear(duration: 0.01)
-                : .timingCurve(0.12, 0.82, 0.22, 1, duration: 0.14)
+            .fill(
+                LinearGradient(
+                    colors: [color.opacity(0.35), .white],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
+            .frame(width: 36, height: 12)
+            .shadow(color: color.opacity(0.9), radius: sweepTier >= 2 ? 8 : 5)
+            .offset(x: head)
+            Circle()
+                .fill(.white)
+                .frame(width: 4, height: 4)
+                .shadow(color: color, radius: 5)
+                .offset(x: head + 26)
+        }
+        .opacity(fade)
+        .allowsHitTesting(false)
+    }
+
+    private func barrierFlash(width: CGFloat) -> some View {
+        let elapsed = presentationMs - barrierStartMs
+        let t = elapsed / 220
+        return Group {
+            if barrierStartMs > 0, t >= 0, t < 1 {
+                LinearGradient(
+                    colors: [.clear, TrainTheme.signalAmber.opacity(0.15), TrainTheme.signalAmber.opacity(0.7), .clear],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+                .frame(width: width * 0.42, height: 48)
+                .offset(x: (t * 1.35 - 0.35) * width)
+                .opacity(t < 0.25 ? t / 0.25 : 1 - t)
+                .allowsHitTesting(false)
+            }
         }
     }
 
-    private func span(_ start: Double, _ end: Double, width: CGFloat, color: Color, height: CGFloat) -> some View {
-        Rectangle()
-            .fill(color)
-            .frame(width: max(0, (end - start) * width), height: height)
+    private func window(
+        _ start: Double,
+        _ end: Double,
+        width: CGFloat,
+        fill: Color,
+        stroke: Color,
+        height: CGFloat,
+        dashed: Bool
+    ) -> some View {
+        let span = max(0, (end - start) * width)
+        return RoundedRectangle(cornerRadius: 3, style: .continuous)
+            .fill(fill)
+            .overlay {
+                RoundedRectangle(cornerRadius: 3, style: .continuous)
+                    .strokeBorder(
+                        stroke,
+                        style: StrokeStyle(lineWidth: 1, dash: dashed ? [3, 2] : [])
+                    )
+            }
+            .frame(width: span, height: height)
+            .shadow(color: stroke.opacity(dashed ? 0 : 0.45), radius: 4)
             .offset(x: start * width)
+    }
+
+    private var shimmerRow: some View {
+        HStack(spacing: 4) {
+            ForEach(0..<12, id: \.self) { index in
+                let on = shimmerOn(index)
+                RoundedRectangle(cornerRadius: 1, style: .continuous)
+                    .fill(on ? shimmerColor : Color.white.opacity(0.08))
+                    .frame(width: 6, height: on && sweepTier >= 2 ? 8 : 6)
+                    .shadow(color: on ? shimmerColor.opacity(0.8) : .clear, radius: 3)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 8)
+        .accessibilityHidden(true)
     }
 
     private var interlockDots: some View {
         HStack(spacing: 6) {
             ForEach(0..<ApproachClearTuning.interlockLamps, id: \.self) { index in
-                Circle()
-                    .fill(index < engine.snapshot.interlockLit ? TrainTheme.signalAmber : Color.white.opacity(0.2))
-                    .frame(width: 6, height: 6)
+                let lit = index < engine.snapshot.interlockLit
+                RoundedRectangle(cornerRadius: 2, style: .continuous)
+                    .fill(lit ? TrainTheme.signalAmber : Color.white.opacity(0.16))
+                    .frame(width: 8, height: lit ? 14 : 8)
+                    .shadow(color: lit ? TrainTheme.signalAmber.opacity(0.8) : .clear, radius: 4)
             }
         }
         .frame(maxWidth: .infinity)
@@ -556,6 +708,96 @@ struct ApproachClearPanel: View {
         }
     }
 
+    private var hitBloom: RadialGradient? {
+        switch engine.snapshot.flash {
+        case .perfect:
+            RadialGradient(
+                colors: [Ink.gold.opacity(0.42), Ink.gold.opacity(0.08), .clear],
+                center: .center,
+                startRadius: 6,
+                endRadius: 180
+            )
+        case .good:
+            RadialGradient(
+                colors: [Ink.green.opacity(0.32), Ink.green.opacity(0.06), .clear],
+                center: .center,
+                startRadius: 6,
+                endRadius: 170
+            )
+        case .miss:
+            RadialGradient(
+                colors: [Ink.red.opacity(0.5), Ink.red.opacity(0.12), .clear],
+                center: .center,
+                startRadius: 4,
+                endRadius: 180
+            )
+        case .none:
+            nil
+        }
+    }
+
+    private var missBlink: Double {
+        guard presentationMs > 0 else { return 1 }
+        let phase = (presentationMs / 46).truncatingRemainder(dividingBy: 1)
+        return phase < 0.42 ? 1 : 0.16
+    }
+
+    private var heatAura: Color {
+        switch engine.snapshot.flash {
+        case .perfect: return Ink.gold.opacity(0.55)
+        case .good: return Ink.green.opacity(0.4)
+        case .miss: return Ink.red.opacity(0.45)
+        case .none: break
+        }
+        switch engine.snapshot.accent {
+        case .blaze: return Ink.gold.opacity(0.45)
+        case .hot: return Ink.gold.opacity(0.22)
+        case .warm: return Ink.cyan.opacity(0.18)
+        case .cyan: return .clear
+        }
+    }
+
+    private var sweepProgress: Double? {
+        guard sweepStartMs > 0, presentationMs >= sweepStartMs else { return nil }
+        let elapsed = presentationMs - sweepStartMs
+        guard elapsed < 300 else { return nil }
+        return elapsed / 280
+    }
+
+    private var shimmerColor: Color {
+        sweepTier >= 3 || sweepPerfect ? Ink.gold : Ink.green
+    }
+
+    private func shimmerOn(_ index: Int) -> Bool {
+        guard sweepStartMs > 0, presentationMs >= sweepStartMs else { return false }
+        let elapsed = presentationMs - sweepStartMs
+        guard elapsed < 520 else { return false }
+        let count = (sweepPerfect || sweepTier >= 2) ? 12 : max(4, Int((12 * (0.55 + Double(sweepTier) * 0.2)).rounded()))
+        guard index < count else { return false }
+        let step = sweepPerfect ? 14.0 : 18.0
+        let clearAt = Double(count - 1) * step + (sweepPerfect ? 140 : 90)
+        if elapsed >= Double(index) * step, elapsed < clearAt { return true }
+        if sweepTier >= 2 {
+            let on = 190 + Double(11 - index) * 10
+            if elapsed >= on, elapsed < 190 + 110 + 110 { return true }
+        }
+        return false
+    }
+
+    private func cascadeHot(_ index: Int) -> Bool {
+        guard sweepTier >= 1, sweepStartMs > 0, presentationMs >= sweepStartMs else { return false }
+        let elapsed = presentationMs - sweepStartMs
+        guard elapsed < 520 else { return false }
+        let step = sweepTier >= 3 ? 18.0 : 24.0
+        let on = 30 + Double(index) * step
+        if elapsed >= on, elapsed < on + 280 { return true }
+        if sweepTier >= 2 {
+            let back = 30 + Double(6 + (5 - index)) * step
+            if elapsed >= back, elapsed < back + 280 { return true }
+        }
+        return false
+    }
+
     /// Needle position at the upcoming frame. Logic keeps its own clock.
     private var shownNeedle: Double {
         let snap = engine.snapshot
@@ -578,13 +820,26 @@ struct ApproachClearPanel: View {
     private func handleDown(at milliseconds: Double) {
         engine.world = world
         let cues = engine.touchDown(at: milliseconds)
-        if cues.contains(where: { cue in
+        var perfect = false
+        var tier = 0
+        var cleared = false
+        for cue in cues {
             switch cue {
-            case .perfect, .good: true
-            default: false
+            case .perfect(let value):
+                perfect = true
+                tier = value
+                cleared = true
+            case .good(let value):
+                tier = value
+                cleared = true
+            default:
+                break
             }
-        }) {
-            passFlight += 1
+        }
+        if cleared {
+            sweepStartMs = Self.milliseconds()
+            sweepPerfect = perfect
+            sweepTier = tier
         }
         haptics.prepare()
         haptics.play(cues)
@@ -603,10 +858,17 @@ struct ApproachClearPanel: View {
 
     private func collapse() {
         haptics.stop()
-        engine = ApproachClearEngine()
+        engine = Self.liveEngine()
+        sweepStartMs = 0
         withAnimation(TrainTheme.Motion.soft) {
             expanded = false
         }
+    }
+
+    private static func liveEngine() -> ApproachClearEngine {
+        var engine = ApproachClearEngine()
+        engine.liveRandom = true
+        return engine
     }
 
     private static func milliseconds() -> Double {

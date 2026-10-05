@@ -154,8 +154,10 @@ nonisolated enum ApproachClearCue: Equatable, Sendable {
 
 nonisolated struct ApproachClearEngine: Sendable {
     var world = ApproachClearWorld.outOfService
-    /// Scripted 0..<1 draws. Past the end, draws stay at 0.5.
+    /// Scripted 0..<1 draws. Past the end, tests stay at 0.5.
     var randomUnits: [Double] = []
+    /// The panel turns this on so each approach rolls a new window.
+    var liveRandom = false
 
     private(set) var snapshot = ApproachClearSnapshot()
 
@@ -304,10 +306,12 @@ nonisolated struct ApproachClearEngine: Sendable {
         let keptWorld = world
         let keptUnits = randomUnits
         let keptCursor = randomCursor
+        let keptLive = liveRandom
         self = ApproachClearEngine()
         world = keptWorld
         randomUnits = keptUnits
         randomCursor = keptCursor
+        liveRandom = keptLive
         startClock(at: now)
         lastNow = now
         publish(now)
@@ -663,8 +667,15 @@ nonisolated struct ApproachClearEngine: Sendable {
         easePendingUp = false
         guard wasTier >= 1 else { return [] }
         easeUntil = now + 240
-        let widened = ApproachClearBands.roll(tier: 0, unit: { 0.5 })
-        bands = widened
+        let easy = ApproachClearBands.roll(tier: 0, unit: { 0.5 })
+        bands = ApproachClearBands.laidOut(
+            center: bands.center,
+            goodHalfW: max(bands.goodHalfW, easy.goodHalfW),
+            perfectHalfW: max(bands.perfectHalfW, easy.perfectHalfW),
+            approachMs: easy.approachMs,
+            doubleBlip: bands.doubleBlip,
+            ghostOffset: bands.ghostOffset
+        )
         return [.easeDown]
     }
 
@@ -690,7 +701,9 @@ nonisolated struct ApproachClearEngine: Sendable {
     // MARK: - Random
 
     private mutating func nextUnit() -> Double {
-        guard randomCursor < randomUnits.count else { return 0.5 }
+        guard randomCursor < randomUnits.count else {
+            return liveRandom ? Double.random(in: 0..<1) : 0.5
+        }
         let value = randomUnits[randomCursor]
         randomCursor += 1
         return value
