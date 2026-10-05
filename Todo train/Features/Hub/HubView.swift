@@ -329,6 +329,16 @@ struct HubView: View {
                 }
             )
             .padding(.horizontal, TrainTheme.Space.md)
+            ApproachClearPanel(
+                world: ApproachClearWorld(
+                    inService: sessionManager.isInService,
+                    dayEndPrompt: sessionManager.needsServiceDayEndPrompt,
+                    paused: !sessionManager.pausedSessions.isEmpty
+                        || sessionManager.pausedCountTowardLimit >= 1
+                ),
+                interactionsFrozen: isPresentingOnDeck || isFocusCoverPresented
+            )
+            .padding(.horizontal, TrainTheme.Space.md)
         }
         .padding(.top, TrainTheme.Space.sm)
     }
