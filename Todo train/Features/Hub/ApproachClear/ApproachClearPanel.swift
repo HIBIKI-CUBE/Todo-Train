@@ -193,9 +193,9 @@ struct ApproachClearPanel: View {
             #endif
         }
         .background {
-            ApproachClearDisplayLink(active: ticking) { presentation in
-                presentationMs = presentation
-                step()
+            ApproachClearDisplayLink(active: ticking) { now in
+                presentationMs = now
+                step(at: now)
             }
         }
     }
@@ -399,6 +399,7 @@ struct ApproachClearPanel: View {
                         }
                     }
                     .animation(nil, value: shownNeedle)
+                    .transaction { $0.disablesAnimations = true }
                     if let progress = sweepProgress {
                         rushingLight(width: width, progress: progress)
                     }
@@ -798,7 +799,9 @@ struct ApproachClearPanel: View {
         return false
     }
 
-    /// Needle position at the upcoming frame. Logic keeps its own clock.
+    /// Needle position at the same media time as the finger. Predicting the
+    /// next frame put the needle ahead of the press, and the lead jumped
+    /// whenever a frame was missed.
     private var shownNeedle: Double {
         let snap = engine.snapshot
         guard snap.phase == .approach, presentationMs > 0, snap.bands.approachMs > 0 else {
@@ -850,10 +853,10 @@ struct ApproachClearPanel: View {
         haptics.play(engine.touchUp(at: milliseconds))
     }
 
-    private func step() {
+    private func step(at now: Double = Self.milliseconds()) {
         guard ticking else { return }
         engine.world = world
-        haptics.play(engine.tick(at: Self.milliseconds()))
+        haptics.play(engine.tick(at: now))
     }
 
     private func collapse() {
@@ -917,7 +920,10 @@ private final class ApproachClearDisplayLinkView: UIView {
     private var link: CADisplayLink?
 
     @objc private func fire(_ link: CADisplayLink) {
-        onFrame(link.targetTimestamp * 1_000)
+        // targetTimestamp sits a full vsync ahead and leaps when a frame is
+        // dropped, so the needle met the window before the finger.
+        _ = link
+        onFrame(CACurrentMediaTime() * 1_000)
     }
 
     deinit {
