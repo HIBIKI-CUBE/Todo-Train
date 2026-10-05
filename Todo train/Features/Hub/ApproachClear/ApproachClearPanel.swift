@@ -4,8 +4,8 @@
 //
 //  Compact Hub instrument on the grouped surface. Lamps stay flat fills.
 //  The pass across the track is the glow. Signal colors stay on the real
-//  service strip. The needle stays still until the player expands the
-//  panel and presses 開通. Judgement is the press, not the release.
+//  service strip. The needle is a layer on the display link, drawn for the
+//  frame's presentation time. Judgement is the press, not the release.
 //
 
 import SwiftUI
@@ -15,18 +15,10 @@ struct ApproachClearPanel: View {
     var world: ApproachClearWorld
     var interactionsFrozen: Bool
 
-    @State private var engine = ApproachClearPanel.liveEngine()
+    @State private var runtime = ApproachClearRuntime()
+    @State private var chrome = ApproachClearChrome()
     @State private var expanded = false
     @State private var haptics = ApproachClearHaptics()
-    @State private var bandPulse = false
-    @State private var sweepStartMs = 0.0
-    @State private var sweepPerfect = false
-    @State private var ghostGoodL = 0.0
-    @State private var ghostGoodR = 0.0
-    @State private var ghostUntilMs = 0.0
-    @State private var barrierStartMs = 0.0
-    /// Media time shared with the finger. The needle is drawn for this instant.
-    @State private var presentationMs = 0.0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -56,43 +48,23 @@ struct ApproachClearPanel: View {
                 .allowsHitTesting(false)
         }
         .clipShape(RoundedRectangle(cornerRadius: TrainTheme.Radius.control, style: .continuous))
-        .modifier(ClearanceShake(active: engine.snapshot.shake || engine.snapshot.jammed))
+        .modifier(ClearanceShake(active: chrome.shake || chrome.jammed))
         .animation(TrainTheme.Motion.soft, value: expanded)
-        .animation(.easeOut(duration: 0.06), value: engine.snapshot.flash)
+        .animation(.easeOut(duration: 0.06), value: chrome.flash)
         .allowsHitTesting(!interactionsFrozen)
         .onChange(of: world) { _, newWorld in
-            engine.world = newWorld
+            runtime.engine.world = newWorld
             step()
-        }
-        .onChange(of: engine.snapshot.bands) { old, _ in
-            guard old.goodR > old.goodL else { return }
-            ghostGoodL = old.goodL
-            ghostGoodR = old.goodR
-            ghostUntilMs = Self.milliseconds() + 400
-        }
-        .onChange(of: engine.snapshot.barrierOn) { _, on in
-            if on { barrierStartMs = Self.milliseconds() }
-        }
-        .onChange(of: engine.snapshot.idleBreath) { _, breathing in
-            if breathing {
-                bandPulse = false
-                withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
-                    bandPulse = true
-                }
-            } else {
-                withAnimation(.easeOut(duration: 0.12)) {
-                    bandPulse = false
-                }
-            }
         }
         .onChange(of: interactionsFrozen) { _, frozen in
             let now = Self.milliseconds()
             if frozen {
-                engine.freeze(at: now)
+                runtime.engine.freeze(at: now)
                 haptics.stop()
             } else {
-                engine.thaw(at: now)
+                runtime.engine.thaw(at: now)
             }
+            publishIfNeeded()
         }
         .onDisappear { haptics.stop() }
         .accessibilityElement(children: .contain)
@@ -105,7 +77,7 @@ struct ApproachClearPanel: View {
                 expanded = true
             }
         } label: {
-            track(live: false)
+            collapsedTrack
                 .padding(.vertical, 8)
                 .contentShape(Rectangle())
         }
@@ -133,11 +105,14 @@ struct ApproachClearPanel: View {
             }
 
             ZStack {
-                track(live: true)
-                if engine.snapshot.phase == .interlock {
+                ApproachClearTrackHost(runtime: runtime, active: ticking) { now in
+                    step(at: now)
+                }
+                .frame(height: 48)
+                if chrome.phase == .interlock {
                     interlockDots
                 }
-                if engine.snapshot.barrierOn {
+                if chrome.barrierOn {
                     RoundedRectangle(cornerRadius: 4, style: .continuous)
                         .fill(Color.primary.opacity(0.06))
                         .allowsHitTesting(false)
@@ -145,13 +120,13 @@ struct ApproachClearPanel: View {
             }
             .frame(height: 52)
 
-            Text(engine.snapshot.label)
+            Text(chrome.label)
                 .font(.caption.weight(.semibold).monospaced())
                 .foregroundStyle(labelColor)
                 .frame(maxWidth: .infinity, minHeight: 16, alignment: .leading)
-                .accessibilityHidden(engine.snapshot.label.isEmpty)
+                .accessibilityHidden(chrome.label.isEmpty)
 
-            if let calm = engine.snapshot.calm {
+            if let calm = chrome.calm {
                 calmBlock(calm)
             } else {
                 clearanceButton
@@ -160,25 +135,27 @@ struct ApproachClearPanel: View {
             sessionBar
 
             #if DEBUG
-            Text(engine.snapshot.debug.line)
+            Text(chrome.debugLine)
                 .font(.system(size: 9, design: .monospaced))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             #endif
-        }
-        .background {
-            ApproachClearDisplayLink(active: ticking) { now in
-                presentationMs = now
-                step(at: now)
-            }
         }
     }
 
     private var ticking: Bool {
         expanded
             && !interactionsFrozen
-            && engine.snapshot.phase != .dormant
-            && engine.snapshot.phase != .calm
+            && chrome.phase != .dormant
+            && chrome.phase != .calm
+    }
+
+    private var collapsedTrack: some View {
+        Capsule()
+            .fill(Color(uiColor: .tertiarySystemFill))
+            .frame(height: 18)
+            .padding(.vertical, 8)
+            .accessibilityHidden(true)
     }
 
     private var serviceStrip: some View {
@@ -221,7 +198,7 @@ struct ApproachClearPanel: View {
     }
 
     private var lampRow: some View {
-        let lamps = engine.snapshot.lamps
+        let lamps = chrome.lamps
         let row: [(String, Bool)] = [
             ("接近", lamps.approach),
             ("良", lamps.perfect),
@@ -254,200 +231,17 @@ struct ApproachClearPanel: View {
         HStack(spacing: 3) {
             ForEach(0..<3, id: \.self) { index in
                 Circle()
-                    .fill(index < engine.snapshot.pipsLit ? TrainTheme.rail : Color(uiColor: .quaternarySystemFill))
+                    .fill(index < chrome.pipsLit ? TrainTheme.rail : Color(uiColor: .quaternarySystemFill))
                     .frame(width: 6, height: 6)
             }
         }
         .accessibilityHidden(true)
     }
 
-    private func track(live: Bool) -> some View {
-        GeometryReader { geo in
-            let width = geo.size.width
-            let bands = engine.snapshot.bands
-            let breath = engine.snapshot.idleBreath ? (bandPulse ? 1.0 : 0.62) : 1.0
-            let rejected = engine.snapshot.flash == .miss || engine.snapshot.needleRejected
-            ZStack(alignment: .leading) {
-                Capsule()
-                    .fill(Color(uiColor: .tertiarySystemFill))
-                Capsule()
-                    .fill(TrainTheme.track)
-                    .frame(height: 1)
-                    .padding(.horizontal, 10)
-                if live {
-                    let ink = rejected ? Color.primary : TrainTheme.rail
-                    if presentationMs < ghostUntilMs, ghostGoodR > ghostGoodL {
-                        let fade = max(0, (ghostUntilMs - presentationMs) / 400)
-                        window(
-                            ghostGoodL,
-                            ghostGoodR,
-                            width: width,
-                            fill: Color.clear,
-                            stroke: TrainTheme.track.opacity(fade),
-                            height: 40,
-                            dashed: true
-                        )
-                        .opacity(fade)
-                    }
-                    Group {
-                        window(
-                            bands.goodL,
-                            bands.goodR,
-                            width: width,
-                            fill: ink.opacity(0.16 * breath),
-                            stroke: ink.opacity(rejected ? 0.7 : 0.4),
-                            height: 36,
-                            dashed: false
-                        )
-                        window(
-                            bands.perfL,
-                            bands.perfR,
-                            width: width,
-                            fill: ink.opacity(0.38),
-                            stroke: ink,
-                            height: 36,
-                            dashed: false
-                        )
-                        Rectangle()
-                            .fill(Color.primary.opacity(0.85))
-                            .frame(width: 1, height: 44)
-                            .offset(x: bands.center * width)
-                    }
-                    .animation(.timingCurve(0.3, 0, 0.2, 1, duration: 0.22), value: bands)
-                    if let press = engine.snapshot.pressU {
-                        Rectangle()
-                            .fill(markColor)
-                            .frame(width: 1, height: 46)
-                            .offset(x: press * width)
-                    }
-                    Group {
-                        if engine.snapshot.needleVisible {
-                            let needleU = shownNeedle
-                            let x = needleU * width
-                            let mark = engine.snapshot.needleRejected ? Color.primary : TrainTheme.rail
-                            if bands.doubleBlip {
-                                Circle()
-                                    .fill(mark.opacity(0.35))
-                                    .frame(width: 7, height: 7)
-                                    .offset(x: max(0, needleU - bands.ghostOffset) * width - 3.5)
-                            }
-                            NeedleChevron()
-                                .fill(mark)
-                                .frame(width: 8, height: 5)
-                                .offset(x: x - 4, y: -18)
-                            Capsule()
-                                .fill(mark)
-                                .frame(width: 2, height: 40)
-                                .offset(x: x - 1)
-                            Circle()
-                                .fill(mark)
-                                .frame(width: 8, height: 8)
-                                .offset(x: x - 4)
-                        }
-                    }
-                    .animation(nil, value: shownNeedle)
-                    .transaction { $0.disablesAnimations = true }
-                    if engine.snapshot.flash == .perfect || engine.snapshot.flash == .good {
-                        let perfect = engine.snapshot.flash == .perfect
-                        Capsule()
-                            .fill(TrainTheme.rail.opacity(perfect ? 0.34 : 0.2))
-                            .frame(height: perfect ? 10 : 6)
-                            .shadow(color: TrainTheme.rail.opacity(perfect ? 0.55 : 0.32), radius: 7)
-                            .allowsHitTesting(false)
-                    }
-                    if let progress = sweepProgress {
-                        rushingLight(width: width, progress: progress)
-                    }
-                    barrierFlash(width: width)
-                }
-            }
-            .scaleEffect(x: engine.snapshot.shrinking ? 0.92 : 1, y: 1, anchor: .center)
-            .frame(width: width, height: live ? 48 : 18)
-        }
-        .frame(height: live ? 48 : 18)
-        .accessibilityHidden(true)
-    }
-
-    private func rushingLight(width: CGFloat, progress: Double) -> some View {
-        let travelT = min(1, max(0, progress))
-        let travel = 0.02 + 0.90 * (1 - pow(1 - travelT, 2.4))
-        let fade = travelT < 0.58 ? 1.0 : max(0, 1 - (progress - 0.58) / 0.78)
-        let head = travel * width
-        let strength = sweepPerfect ? 1.0 : 0.72
-        return ZStack(alignment: .leading) {
-            Capsule()
-                .fill(TrainTheme.rail.opacity(0.28 * strength))
-                .frame(width: 92, height: 5)
-                .offset(x: head - 84)
-            Capsule()
-                .fill(TrainTheme.rail.opacity(0.8 * strength))
-                .frame(width: 40, height: 3)
-                .offset(x: head - 34)
-            HStack(spacing: 2) {
-                RoundedRectangle(cornerRadius: 1.5, style: .continuous)
-                    .frame(width: 12, height: 6)
-                RoundedRectangle(cornerRadius: 1.5, style: .continuous)
-                    .frame(width: 14, height: 7)
-                UnevenRoundedRectangle(
-                    topLeadingRadius: 1.5,
-                    bottomLeadingRadius: 1.5,
-                    bottomTrailingRadius: 3,
-                    topTrailingRadius: 3
-                )
-                .frame(width: 16, height: 8)
-            }
-            .foregroundStyle(TrainTheme.rail)
-            .opacity(strength)
-            .offset(x: head)
-        }
-        .shadow(color: TrainTheme.rail.opacity(0.5 * strength), radius: sweepPerfect ? 8 : 5)
-        .opacity(fade)
-        .allowsHitTesting(false)
-    }
-
-    private func barrierFlash(width: CGFloat) -> some View {
-        let elapsed = presentationMs - barrierStartMs
-        let t = elapsed / 220
-        return Group {
-            if barrierStartMs > 0, t >= 0, t < 1 {
-                RoundedRectangle(cornerRadius: 1.5, style: .continuous)
-                    .fill(TrainTheme.rail)
-                    .frame(width: 5, height: 44)
-                    .shadow(color: TrainTheme.rail.opacity(0.45), radius: 5)
-                    .offset(x: (t * 1.15 - 0.08) * width)
-                    .opacity(t < 0.15 ? t / 0.15 : 1 - t)
-                    .allowsHitTesting(false)
-            }
-        }
-    }
-
-    private func window(
-        _ start: Double,
-        _ end: Double,
-        width: CGFloat,
-        fill: Color,
-        stroke: Color,
-        height: CGFloat,
-        dashed: Bool
-    ) -> some View {
-        let span = max(0, (end - start) * width)
-        return RoundedRectangle(cornerRadius: 3, style: .continuous)
-            .fill(fill)
-            .overlay {
-                RoundedRectangle(cornerRadius: 3, style: .continuous)
-                    .strokeBorder(
-                        stroke,
-                        style: StrokeStyle(lineWidth: 1, dash: dashed ? [3, 2] : [])
-                    )
-            }
-            .frame(width: span, height: height)
-            .offset(x: start * width)
-    }
-
     private var interlockDots: some View {
         HStack(spacing: 6) {
             ForEach(0..<ApproachClearTuning.interlockLamps, id: \.self) { index in
-                let lit = index < engine.snapshot.interlockLit
+                let lit = index < chrome.interlockLit
                 RoundedRectangle(cornerRadius: 2, style: .continuous)
                     .fill(lit ? TrainTheme.rail : Color(uiColor: .quaternarySystemFill))
                     .frame(width: 8, height: lit ? 14 : 8)
@@ -468,33 +262,19 @@ struct ApproachClearPanel: View {
     }
 
     private var lever: some View {
-        let sunk = engine.snapshot.contactDown
-        return ZStack {
-            RoundedRectangle(cornerRadius: TrainTheme.Radius.control, style: .continuous)
-                .fill(Color(uiColor: .tertiarySystemFill))
-                .frame(height: 68)
-                .offset(y: 4)
-            RoundedRectangle(cornerRadius: TrainTheme.Radius.control, style: .continuous)
-                .fill(buttonFill)
-                .frame(height: 68)
-                .overlay {
-                    RoundedRectangle(cornerRadius: TrainTheme.Radius.control, style: .continuous)
-                        .strokeBorder(TrainTheme.track, lineWidth: 1)
-                }
-                .offset(y: sunk ? 4 : 0)
-            Text("開通")
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(engine.snapshot.controlEnabled ? Color.primary : Color.secondary)
-                .offset(y: sunk ? 4 : 0)
-            ApproachClearTouchPad(
-                enabled: engine.snapshot.controlEnabled && !interactionsFrozen,
-                onDown: { handleDown(at: $0) },
-                onUp: { handleUp(at: $0) },
-                onCancel: { engine.touchCancel() }
-            )
-        }
-        .opacity(engine.snapshot.controlEnabled ? 1 : 0.45)
-        .animation(.easeOut(duration: 0.04), value: sunk)
+        ApproachClearTouchPad(
+            enabled: chrome.controlEnabled && !interactionsFrozen,
+            sunk: chrome.contactDown,
+            fill: plateFill,
+            titleColor: chrome.controlEnabled ? .label : .secondaryLabel,
+            onDown: { handleDown(at: $0) },
+            onUp: { handleUp(at: $0) },
+            onCancel: {
+                runtime.engine.touchCancel()
+                publishIfNeeded()
+            }
+        )
+        .opacity(chrome.controlEnabled ? 1 : 0.45)
     }
 
     private func calmBlock(_ calm: ApproachClearCalm) -> some View {
@@ -505,8 +285,9 @@ struct ApproachClearPanel: View {
                 .font(.caption2)
                 .foregroundStyle(.secondary)
             Button("再開") {
-                engine.world = world
-                engine.restart(at: Self.milliseconds())
+                runtime.engine.world = world
+                runtime.engine.restart(at: Self.milliseconds())
+                publishIfNeeded()
             }
             .buttonStyle(.bordered)
             .controlSize(.small)
@@ -521,7 +302,7 @@ struct ApproachClearPanel: View {
                 .fill(Color(uiColor: .quaternarySystemFill))
             Capsule()
                 .fill(accentColor.opacity(0.85))
-                .frame(width: max(0, geo.size.width * engine.snapshot.sessionProgress))
+                .frame(width: max(0, geo.size.width * (Double(chrome.sessionBucket) / 240)))
         }
         .frame(height: 3)
         .accessibilityHidden(true)
@@ -536,7 +317,7 @@ struct ApproachClearPanel: View {
     }
 
     private var rimColor: Color {
-        switch engine.snapshot.flash {
+        switch chrome.flash {
         case .perfect, .good: TrainTheme.rail
         case .miss: Color.primary.opacity(0.45)
         case .none: TrainTheme.track
@@ -544,60 +325,25 @@ struct ApproachClearPanel: View {
     }
 
     private var labelColor: Color {
-        switch engine.snapshot.label {
+        switch chrome.label {
         case "良", "可": TrainTheme.rail
         case "早", "遅", "見送り": Color.primary
         default: Color.secondary
         }
     }
 
-    private var markColor: Color {
-        switch engine.snapshot.label {
-        case "良", "可": TrainTheme.rail
-        default: Color.primary
-        }
-    }
-
-    private var buttonFill: Color {
-        switch displayedArm {
+    private var plateFill: UIColor {
+        switch chrome.armed {
         case .perfect, .good:
-            TrainTheme.rail.opacity(engine.snapshot.contactDown ? 0.22 : 0.14)
+            (UIColor(named: "AccentColor") ?? .tintColor).withAlphaComponent(chrome.contactDown ? 0.22 : 0.14)
         case .none:
-            Color(uiColor: .tertiarySystemGroupedBackground)
-        }
-    }
-
-    private var sweepProgress: Double? {
-        guard sweepStartMs > 0, presentationMs >= sweepStartMs else { return nil }
-        let elapsed = presentationMs - sweepStartMs
-        guard elapsed < 380 else { return nil }
-        return elapsed / 280
-    }
-
-    /// Needle position at the same media time as the finger. Predicting the
-    /// next frame put the needle ahead of the press, and the lead jumped
-    /// whenever a frame was missed.
-    private var shownNeedle: Double {
-        let snap = engine.snapshot
-        guard snap.phase == .approach, presentationMs > 0, snap.bands.approachMs > 0 else {
-            return snap.needle
-        }
-        let u = (presentationMs - snap.approachStart) / snap.bands.approachMs
-        return min(1, max(0, u))
-    }
-
-    private var displayedArm: ApproachClearArm {
-        guard engine.snapshot.phase == .approach else { return .none }
-        return switch engine.snapshot.bands.zone(at: shownNeedle) {
-        case .perfect: .perfect
-        case .good: .good
-        case .out: .none
+            .tertiarySystemGroupedBackground
         }
     }
 
     private func handleDown(at milliseconds: Double) {
-        engine.world = world
-        let cues = engine.touchDown(at: milliseconds)
+        runtime.engine.world = world
+        let cues = runtime.engine.touchDown(at: milliseconds)
         var perfect = false
         var cleared = false
         for cue in cues {
@@ -612,104 +358,60 @@ struct ApproachClearPanel: View {
             }
         }
         if cleared {
-            sweepStartMs = Self.milliseconds()
-            sweepPerfect = perfect
+            runtime.sweepStartMs = milliseconds
+            runtime.sweepPerfect = perfect
         }
-        haptics.prepare()
         haptics.play(cues)
+        publishIfNeeded()
     }
 
     private func handleUp(at milliseconds: Double) {
-        engine.world = world
-        haptics.play(engine.touchUp(at: milliseconds))
+        runtime.engine.world = world
+        haptics.play(runtime.engine.touchUp(at: milliseconds))
+        publishIfNeeded()
     }
 
     private func step(at now: Double = Self.milliseconds()) {
         guard ticking else { return }
-        engine.world = world
-        haptics.play(engine.tick(at: now))
+        let previous = runtime.engine.snapshot
+        runtime.engine.world = world
+        let cues = runtime.engine.tick(at: now)
+        let next = runtime.engine.snapshot
+        if next.phase == .idle && previous.phase != .idle
+            || next.phase == .approach && previous.phase != .approach {
+            haptics.prepare()
+        }
+        if previous.bands != next.bands, previous.bands.goodR > previous.bands.goodL {
+            runtime.ghostGoodL = previous.bands.goodL
+            runtime.ghostGoodR = previous.bands.goodR
+            runtime.ghostUntilMs = now + 400
+        }
+        if next.barrierOn, !previous.barrierOn {
+            runtime.barrierStartMs = now
+        }
+        haptics.play(cues)
+        publishIfNeeded()
+    }
+
+    private func publishIfNeeded() {
+        let next = ApproachClearChrome(runtime.engine.snapshot)
+        if next != chrome {
+            chrome = next
+        }
     }
 
     private func collapse() {
         haptics.stop()
-        engine = Self.liveEngine()
-        sweepStartMs = 0
+        runtime.reset()
+        runtime.engine.world = world
+        publishIfNeeded()
         withAnimation(TrainTheme.Motion.soft) {
             expanded = false
         }
     }
 
-    private static func liveEngine() -> ApproachClearEngine {
-        var engine = ApproachClearEngine()
-        engine.liveRandom = true
-        return engine
-    }
-
     private static func milliseconds() -> Double {
         CACurrentMediaTime() * 1_000
-    }
-}
-
-private struct ApproachClearDisplayLink: UIViewRepresentable {
-    var active: Bool
-    var onFrame: (Double) -> Void
-
-    func makeUIView(context: Context) -> ApproachClearDisplayLinkView {
-        let view = ApproachClearDisplayLinkView()
-        view.onFrame = onFrame
-        view.active = active
-        return view
-    }
-
-    func updateUIView(_ uiView: ApproachClearDisplayLinkView, context: Context) {
-        uiView.onFrame = onFrame
-        uiView.active = active
-    }
-
-    static func dismantleUIView(_ uiView: ApproachClearDisplayLinkView, coordinator: ()) {
-        uiView.active = false
-    }
-}
-
-private final class ApproachClearDisplayLinkView: UIView {
-    var onFrame: (Double) -> Void = { _ in }
-    var active = false {
-        didSet {
-            guard active != oldValue else { return }
-            if active {
-                guard link == nil else { return }
-                let link = CADisplayLink(target: self, selector: #selector(fire(_:)))
-                link.add(to: .main, forMode: .common)
-                self.link = link
-            } else {
-                link?.invalidate()
-                link = nil
-            }
-        }
-    }
-
-    private var link: CADisplayLink?
-
-    @objc private func fire(_ link: CADisplayLink) {
-        // targetTimestamp sits a full vsync ahead and leaps when a frame is
-        // dropped, so the needle met the window before the finger.
-        _ = link
-        onFrame(CACurrentMediaTime() * 1_000)
-    }
-
-    deinit {
-        link?.invalidate()
-    }
-}
-
-private struct NeedleChevron: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        path.move(to: CGPoint(x: rect.midX, y: rect.maxY))
-        path.addLine(to: CGPoint(x: rect.minX, y: rect.minY))
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
-        path.closeSubpath()
-        return path
     }
 }
 
@@ -730,6 +432,9 @@ private struct ClearanceShake: ViewModifier {
 
 private struct ApproachClearTouchPad: UIViewRepresentable {
     var enabled: Bool
+    var sunk: Bool
+    var fill: UIColor
+    var titleColor: UIColor
     var onDown: (Double) -> Void
     var onUp: (Double) -> Void
     var onCancel: () -> Void
@@ -739,7 +444,7 @@ private struct ApproachClearTouchPad: UIViewRepresentable {
         view.onDown = onDown
         view.onUp = onUp
         view.onCancel = onCancel
-        view.isUserInteractionEnabled = enabled
+        view.apply(enabled: enabled, sunk: sunk, fill: fill, titleColor: titleColor)
         return view
     }
 
@@ -747,7 +452,7 @@ private struct ApproachClearTouchPad: UIViewRepresentable {
         uiView.onDown = onDown
         uiView.onUp = onUp
         uiView.onCancel = onCancel
-        uiView.isUserInteractionEnabled = enabled
+        uiView.apply(enabled: enabled, sunk: sunk, fill: fill, titleColor: titleColor)
     }
 }
 
@@ -755,7 +460,12 @@ private final class ApproachClearTouchView: UIView {
     var onDown: (Double) -> Void = { _ in }
     var onUp: (Double) -> Void = { _ in }
     var onCancel: () -> Void = {}
+
+    private let well = UIView()
+    private let plate = UIView()
+    private let title = UILabel()
     private var tracked: UITouch?
+    private var sunk = false
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -764,27 +474,77 @@ private final class ApproachClearTouchView: UIView {
         isAccessibilityElement = true
         accessibilityLabel = "開通"
         accessibilityTraits = .button
+
+        well.backgroundColor = .tertiarySystemFill
+        well.isUserInteractionEnabled = false
+        plate.isUserInteractionEnabled = false
+        plate.layer.cornerRadius = TrainTheme.Radius.control
+        plate.layer.borderWidth = 1
+        well.layer.cornerRadius = TrainTheme.Radius.control
+        let font = UIFont.preferredFont(forTextStyle: .title3)
+        title.font = UIFont.systemFont(ofSize: font.pointSize, weight: .semibold)
+        title.textAlignment = .center
+        title.text = "開通"
+        title.isUserInteractionEnabled = false
+        addSubview(well)
+        addSubview(plate)
+        plate.addSubview(title)
+        registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (view: Self, _: UITraitCollection) in
+            view.plate.layer.borderColor = UIColor.separator.resolvedColor(with: view.traitCollection).cgColor
+        }
     }
 
     required init?(coder: NSCoder) {
         nil
     }
 
+    func apply(enabled: Bool, sunk: Bool, fill: UIColor, titleColor: UIColor) {
+        isUserInteractionEnabled = enabled
+        plate.backgroundColor = fill
+        title.textColor = titleColor
+        plate.layer.borderColor = UIColor.separator.resolvedColor(with: traitCollection).cgColor
+        if tracked == nil {
+            self.sunk = sunk
+        }
+        applySink()
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        let width = bounds.width
+        well.frame = CGRect(x: 0, y: 4, width: width, height: 68)
+        plate.frame = CGRect(x: 0, y: 0, width: width, height: 68)
+        title.frame = plate.bounds
+        applySink()
+    }
+
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard isUserInteractionEnabled, tracked == nil, let touch = touches.first else { return }
         tracked = touch
-        onDown(touch.timestamp * 1_000)
+        let stamp = touch.timestamp * 1_000
+        sunk = true
+        applySink()
+        onDown(stamp)
     }
 
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard let touch = touches.first, touch === tracked else { return }
         tracked = nil
+        sunk = false
+        applySink()
         onUp(touch.timestamp * 1_000)
     }
 
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard tracked != nil else { return }
         tracked = nil
+        sunk = false
+        applySink()
         onCancel()
+    }
+
+    private func applySink() {
+        let shift = CGAffineTransform(translationX: 0, y: sunk ? 4 : 0)
+        plate.transform = shift
     }
 }
