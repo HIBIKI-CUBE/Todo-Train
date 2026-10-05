@@ -336,7 +336,11 @@ struct HubView: View {
                     paused: !sessionManager.pausedSessions.isEmpty
                         || sessionManager.pausedCountTowardLimit >= 1
                 ),
-                interactionsFrozen: isPresentingOnDeck || isFocusCoverPresented
+                interactionsFrozen: isPresentingOnDeck || isFocusCoverPresented,
+                taskRunning: {
+                    guard let session = sessionManager.activeSession else { return false }
+                    return session.isOpen && !session.isPaused
+                }()
             )
             .padding(.horizontal, TrainTheme.Space.md)
         }

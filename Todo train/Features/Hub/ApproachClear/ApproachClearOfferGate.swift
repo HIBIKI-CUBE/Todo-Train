@@ -2,7 +2,7 @@
 //  ApproachClearOfferGate.swift
 //  Todo train
 //
-//  Mounts the clearance only for a return after a long background.
+//  Mounts the clearance after five minutes away, except a mid-ride departure.
 //
 
 import SwiftUI
@@ -10,6 +10,8 @@ import SwiftUI
 struct ApproachClearOfferGate: View {
     var world: ApproachClearWorld
     var interactionsFrozen: Bool
+    /// An open ride that is not paused. Leaving then does not earn the reward.
+    var taskRunning: Bool
 
     @Environment(\.scenePhase) private var scenePhase
     @State private var offer = ApproachClearOfferStore.load()
@@ -41,7 +43,7 @@ struct ApproachClearOfferGate: View {
         .onChange(of: scenePhase) { _, phase in
             switch phase {
             case .background:
-                offer.noteBackground(at: .now)
+                offer.noteBackground(at: .now, taskRunning: taskRunning)
                 ApproachClearOfferStore.save(offer)
             case .active:
                 noteActive()

@@ -76,12 +76,26 @@ struct ApproachClearOfferTests {
         #expect(offer.spent)
     }
 
+    @Test func leavingDuringATaskDoesNotCount() {
+        var offer = ApproachClearOffer()
+        let start = Date(timeIntervalSince1970: 40_000)
+        offer.noteBackground(at: start, taskRunning: true)
+        offer.noteActive(at: start.addingTimeInterval(ApproachClearOffer.absence))
+        #expect(!offer.showing)
+
+        let back = start.addingTimeInterval(ApproachClearOffer.absence)
+        offer.noteBackground(at: back)
+        offer.noteActive(at: back.addingTimeInterval(ApproachClearOffer.absence))
+        #expect(offer.showing)
+        #expect(!offer.spent)
+    }
+
     @Test func storeRoundTrip() {
         let name = "ApproachClearOfferTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: name)!
         defaults.removePersistentDomain(forName: name)
         var offer = ApproachClearOffer()
-        offer.noteBackground(at: Date(timeIntervalSince1970: 50))
+        offer.noteBackground(at: Date(timeIntervalSince1970: 50), taskRunning: true)
         offer.showing = true
         offer.spent = true
         ApproachClearOfferStore.save(offer, defaults)
