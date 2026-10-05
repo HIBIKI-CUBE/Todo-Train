@@ -11,7 +11,9 @@ struct SettingsView: View {
     @Environment(AppSettings.self) private var settings
     @Environment(SessionManager.self) private var sessionManager
     @Environment(CompanionSyncRuntime.self) private var runtime
+    @Environment(\.modelContext) private var modelContext
     @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @State private var diagnosticExportError: String?
 
     var body: some View {
         Form {
@@ -81,6 +83,23 @@ struct SettingsView: View {
                 }
             } header: {
                 Text("データ")
+            }
+
+            Section {
+                Button {
+                    exportDiagnosticData()
+                } label: {
+                    Label("診断データを書き出す", systemImage: "square.and.arrow.up")
+                }
+                if let diagnosticExportError {
+                    Text(diagnosticExportError)
+                        .font(.footnote)
+                        .foregroundStyle(.red)
+                }
+            } header: {
+                Text("診断")
+            } footer: {
+                Text("題名などの中身は含まれません。")
             }
 
             Section {
@@ -158,6 +177,45 @@ struct SettingsView: View {
                 }
                 .accessibilityHidden(true)
         }
+    }
+
+    private func exportDiagnosticData() {
+        do {
+            let data = try PDCAExport.jsonData(in: modelContext)
+            let directory = FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString, isDirectory: true)
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            let url = directory.appendingPathComponent("todotrain-pdca.json")
+            try data.write(to: url, options: .atomic)
+            guard let presenter = Self.topViewController() else {
+                diagnosticExportError = "書き出せませんでした"
+                return
+            }
+            let activity = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+            if let popover = activity.popoverPresentationController {
+                popover.sourceView = presenter.view
+                let bounds = presenter.view.bounds
+                popover.sourceRect = CGRect(x: bounds.midX, y: bounds.midY, width: 1, height: 1)
+                popover.permittedArrowDirections = []
+            }
+            diagnosticExportError = nil
+            presenter.present(activity, animated: true)
+        } catch {
+            diagnosticExportError = "書き出せませんでした"
+        }
+    }
+
+    private static func topViewController() -> UIViewController? {
+        let root = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .first { $0.isKeyWindow }?
+            .rootViewController
+        var top = root
+        while let presented = top?.presentedViewController {
+            top = presented
+        }
+        return top
     }
 }
 
