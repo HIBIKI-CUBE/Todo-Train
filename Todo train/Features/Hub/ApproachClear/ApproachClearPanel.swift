@@ -2,10 +2,10 @@
 //  ApproachClearPanel.swift
 //  Todo train
 //
-//  Compact Hub instrument on the grouped surface. The toy uses the rail;
-//  signal colors stay on the real service strip. The needle stays still
-//  until the player expands the panel and presses 開通. Judgement is the
-//  press, not the release.
+//  Compact Hub instrument on the grouped surface. Lamps stay flat fills.
+//  The pass across the track is the glow. Signal colors stay on the real
+//  service strip. The needle stays still until the player expands the
+//  panel and presses 開通. Judgement is the press, not the release.
 //
 
 import SwiftUI
@@ -347,6 +347,14 @@ struct ApproachClearPanel: View {
                     }
                     .animation(nil, value: shownNeedle)
                     .transaction { $0.disablesAnimations = true }
+                    if engine.snapshot.flash == .perfect || engine.snapshot.flash == .good {
+                        let perfect = engine.snapshot.flash == .perfect
+                        Capsule()
+                            .fill(TrainTheme.rail.opacity(perfect ? 0.34 : 0.2))
+                            .frame(height: perfect ? 10 : 6)
+                            .shadow(color: TrainTheme.rail.opacity(perfect ? 0.55 : 0.32), radius: 7)
+                            .allowsHitTesting(false)
+                    }
                     if let progress = sweepProgress {
                         rushingLight(width: width, progress: progress)
                     }
@@ -361,24 +369,38 @@ struct ApproachClearPanel: View {
     }
 
     private func rushingLight(width: CGFloat, progress: Double) -> some View {
-        let travel = 0.06 + 0.78 * (1 - pow(1 - min(1, progress), 2.4))
-        let fade = progress < 0.55 ? 1.0 : max(0, 1 - (progress - 0.55) / 0.45)
+        let travelT = min(1, max(0, progress))
+        let travel = 0.02 + 0.90 * (1 - pow(1 - travelT, 2.4))
+        let fade = travelT < 0.58 ? 1.0 : max(0, 1 - (progress - 0.58) / 0.78)
         let head = travel * width
+        let strength = sweepPerfect ? 1.0 : 0.72
         return ZStack(alignment: .leading) {
             Capsule()
-                .fill(TrainTheme.rail.opacity(0.28))
-                .frame(width: 28, height: 4)
-                .offset(x: head - 22)
-            UnevenRoundedRectangle(
-                topLeadingRadius: 2,
-                bottomLeadingRadius: 2,
-                bottomTrailingRadius: 4,
-                topTrailingRadius: 4
-            )
-            .fill(TrainTheme.rail.opacity(sweepPerfect ? 1 : 0.72))
-            .frame(width: 28, height: 8)
+                .fill(TrainTheme.rail.opacity(0.28 * strength))
+                .frame(width: 92, height: 5)
+                .offset(x: head - 84)
+            Capsule()
+                .fill(TrainTheme.rail.opacity(0.8 * strength))
+                .frame(width: 40, height: 3)
+                .offset(x: head - 34)
+            HStack(spacing: 2) {
+                RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                    .frame(width: 12, height: 6)
+                RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                    .frame(width: 14, height: 7)
+                UnevenRoundedRectangle(
+                    topLeadingRadius: 1.5,
+                    bottomLeadingRadius: 1.5,
+                    bottomTrailingRadius: 3,
+                    topTrailingRadius: 3
+                )
+                .frame(width: 16, height: 8)
+            }
+            .foregroundStyle(TrainTheme.rail)
+            .opacity(strength)
             .offset(x: head)
         }
+        .shadow(color: TrainTheme.rail.opacity(0.5 * strength), radius: sweepPerfect ? 8 : 5)
         .opacity(fade)
         .allowsHitTesting(false)
     }
@@ -388,11 +410,12 @@ struct ApproachClearPanel: View {
         let t = elapsed / 220
         return Group {
             if barrierStartMs > 0, t >= 0, t < 1 {
-                Rectangle()
-                    .fill(Color.primary.opacity(0.18))
-                    .frame(width: width * 0.18, height: 48)
-                    .offset(x: (t * 1.2 - 0.2) * width)
-                    .opacity(t < 0.2 ? t / 0.2 : 1 - t)
+                RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                    .fill(TrainTheme.rail)
+                    .frame(width: 5, height: 44)
+                    .shadow(color: TrainTheme.rail.opacity(0.45), radius: 5)
+                    .offset(x: (t * 1.15 - 0.08) * width)
+                    .opacity(t < 0.15 ? t / 0.15 : 1 - t)
                     .allowsHitTesting(false)
             }
         }
@@ -547,7 +570,7 @@ struct ApproachClearPanel: View {
     private var sweepProgress: Double? {
         guard sweepStartMs > 0, presentationMs >= sweepStartMs else { return nil }
         let elapsed = presentationMs - sweepStartMs
-        guard elapsed < 300 else { return nil }
+        guard elapsed < 380 else { return nil }
         return elapsed / 280
     }
 
