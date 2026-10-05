@@ -2,9 +2,9 @@
 //  ApproachClearEngine.swift
 //  Todo train
 //
-//  Timing state for the Hub clearance toy. Judgement uses the release
-//  timestamp, never the frame needle. The engine does not start service,
-//  read ticket titles, or record arrivals.
+//  Timing state for the Hub clearance toy. Judgement uses the press
+//  timestamp, never the frame needle or the release. The engine does not
+//  start service, read ticket titles, or record arrivals.
 //
 
 import Foundation
@@ -180,8 +180,6 @@ nonisolated struct ApproachClearEngine: Sendable {
     private var pressU: Double?
     private var label = ""
     private var contact = false
-    private var forgiveOpeningRelease = false
-    private var hasArmedApproach = false
     private var lastApproachCueAt = 0.0
     private var interlockLampsLit = 0
     private var interlockDoneSent = false
@@ -256,32 +254,20 @@ nonisolated struct ApproachClearEngine: Sendable {
             publish(now)
             return []
         }
+        // A finger already down is not a new press. Approach does not judge
+        // a hold that began before the needle started moving.
+        if contact {
+            publish(now)
+            return []
+        }
         if phase == .dormant {
             startClock(at: now)
             contact = true
-            forgiveOpeningRelease = true
             publish(now)
             return []
         }
         contact = true
-        publish(now)
-        return []
-    }
-
-    mutating func touchUp(at now: Double) -> [ApproachClearCue] {
-        lastNow = now
-        guard contact else {
-            publish(now)
-            return []
-        }
-        contact = false
-        let forgive = forgiveOpeningRelease
-        forgiveOpeningRelease = false
-        guard !frozen, phase != .calm else {
-            publish(now)
-            return []
-        }
-        if now < pressLockedUntil {
+        guard now >= pressLockedUntil else {
             publish(now)
             return []
         }
@@ -289,13 +275,11 @@ nonisolated struct ApproachClearEngine: Sendable {
         let cues: [ApproachClearCue]
         switch phase {
         case .approach:
-            cues = judgeRelease(at: now)
+            cues = judgePress(at: now)
         case .interlock:
             label = "連動"
             cues = [.interlockReject]
         case .easedown, .dormant, .calm:
-            cues = []
-        case .idle where forgive && !hasArmedApproach:
             cues = []
         case .idle, .barrier, .resolved:
             cues = jam(at: now)
@@ -304,9 +288,15 @@ nonisolated struct ApproachClearEngine: Sendable {
         return cues
     }
 
+    mutating func touchUp(at now: Double) -> [ApproachClearCue] {
+        lastNow = now
+        contact = false
+        publish(now)
+        return []
+    }
+
     mutating func touchCancel() {
         contact = false
-        forgiveOpeningRelease = false
         publish(lastNow)
     }
 
@@ -349,7 +339,6 @@ nonisolated struct ApproachClearEngine: Sendable {
         gapUntil = now + ApproachClearTuning.bootGapMs
         scheduledStandbyMs = ApproachClearTuning.bootGapMs
         idleBreath = false
-        hasArmedApproach = false
         endPending = false
         easePendingUp = false
         heat = 0
@@ -454,7 +443,6 @@ nonisolated struct ApproachClearEngine: Sendable {
     private mutating func armApproach(at now: Double) -> [ApproachClearCue] {
         phase = .approach
         approachStart = now
-        hasArmedApproach = true
         lastApproachCueAt = now
         needle = 0
         needleVisible = true
@@ -558,7 +546,7 @@ nonisolated struct ApproachClearEngine: Sendable {
 
     // MARK: - Judgement
 
-    private mutating func judgeRelease(at now: Double) -> [ApproachClearCue] {
+    private mutating func judgePress(at now: Double) -> [ApproachClearCue] {
         let duration = max(bands.approachMs, 1)
         let u = min(1, max(0, (now - approachStart) / duration))
         pressU = u

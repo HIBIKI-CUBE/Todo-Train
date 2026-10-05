@@ -38,23 +38,37 @@ struct ApproachClearEngineTests {
         }
     }
 
-    @Test func releaseTimeJudgesNotTheDownOrTheNeedle() {
+    @Test func pressTimeJudgesNotTheNeedle() {
         var engine = makeEngine()
-        var now = 0.0
-        _ = engine.touchDown(at: now)
+        _ = engine.touchDown(at: 0)
         #expect(engine.snapshot.phase == .idle)
-        now = engine.snapshot.gapUntil
-        _ = engine.tick(at: now)
+        _ = engine.touchUp(at: 40)
+        _ = engine.tick(at: engine.snapshot.gapUntil)
         #expect(engine.snapshot.phase == .approach)
         let late = engine.snapshot.approachStart + engine.snapshot.bands.approachMs * 0.72
         _ = engine.tick(at: late)
         #expect(engine.snapshot.needle > engine.snapshot.bands.goodR)
         #expect(engine.snapshot.phase == .approach)
-        let release = engine.snapshot.approachStart + engine.snapshot.bands.center * engine.snapshot.bands.approachMs
-        let cues = engine.touchUp(at: release)
+        let press = engine.snapshot.approachStart + engine.snapshot.bands.center * engine.snapshot.bands.approachMs
+        let cues = engine.touchDown(at: press)
         #expect(engine.snapshot.label == "良")
         #expect(cues.contains(.perfect(tier: 0)))
         #expect(engine.snapshot.phase == .resolved)
+        #expect(engine.touchUp(at: press + 30).isEmpty)
+        #expect(engine.snapshot.phase == .resolved)
+    }
+
+    @Test func heldFingerDoesNotJudgeWhenApproachArms() {
+        var engine = makeEngine()
+        _ = engine.touchDown(at: 0)
+        _ = engine.tick(at: engine.snapshot.gapUntil)
+        let center = engine.snapshot.approachStart
+            + engine.snapshot.bands.center * engine.snapshot.bands.approachMs
+        _ = engine.tick(at: center)
+        #expect(engine.snapshot.phase == .approach)
+        #expect(engine.snapshot.label.isEmpty)
+        #expect(engine.touchUp(at: center + 10).isEmpty)
+        #expect(engine.snapshot.phase == .approach)
     }
 
     @Test func touchCancelDoesNotJudgeOrJam() {
@@ -62,28 +76,39 @@ struct ApproachClearEngineTests {
         _ = engine.touchDown(at: 0)
         _ = engine.tick(at: engine.snapshot.gapUntil)
         engine.touchCancel()
-        let release = engine.snapshot.approachStart + engine.snapshot.bands.center * engine.snapshot.bands.approachMs
-        let ignored = engine.touchUp(at: release)
-        #expect(ignored.isEmpty)
+        let center = engine.snapshot.approachStart + engine.snapshot.bands.center * engine.snapshot.bands.approachMs
+        #expect(engine.touchUp(at: center).isEmpty)
         #expect(engine.snapshot.phase == .approach)
         #expect(engine.snapshot.pressLockedUntil == 0)
+        #expect(engine.snapshot.label.isEmpty)
         _ = engine.tick(at: engine.snapshot.approachStart + engine.snapshot.bands.approachMs)
         #expect(engine.snapshot.label == "見送り")
     }
 
-    @Test func openingReleaseDuringBootDoesNotJam() {
+    @Test func openingPressStartsTheClockWithoutJam() {
         var engine = makeEngine()
-        _ = engine.touchDown(at: 0)
-        let cues = engine.touchUp(at: 100)
+        let cues = engine.touchDown(at: 0)
         #expect(cues.isEmpty)
         #expect(engine.snapshot.phase == .idle)
         #expect(engine.snapshot.label != "早")
         #expect(engine.snapshot.pressLockedUntil == 0)
+        #expect(engine.touchUp(at: 100).isEmpty)
+        #expect(engine.snapshot.phase == .idle)
         _ = engine.tick(at: 260)
         #expect(engine.snapshot.phase == .approach)
     }
 
-    @Test func laterIdleReleaseJamsAndLocksInput() {
+    @Test func secondPressDuringBootJams() {
+        var engine = makeEngine()
+        _ = engine.touchDown(at: 0)
+        _ = engine.touchUp(at: 40)
+        let cues = engine.touchDown(at: 80)
+        #expect(cues.contains(.jam))
+        #expect(engine.snapshot.label == "早")
+        #expect(engine.snapshot.pressLockedUntil == 80 + ApproachClearTuning.earlyJamMs)
+    }
+
+    @Test func laterIdlePressJamsAndLocksInput() {
         var engine = makeEngine()
         _ = engine.touchDown(at: 0)
         _ = engine.touchUp(at: 100)
@@ -93,23 +118,22 @@ struct ApproachClearEngineTests {
         #expect(engine.snapshot.phase == .resolved)
         _ = engine.tick(at: engine.snapshot.pendingUntil)
         #expect(engine.snapshot.phase == .idle)
-        _ = engine.touchDown(at: engine.snapshot.gapUntil - 40)
-        let cues = engine.touchUp(at: engine.snapshot.gapUntil - 20)
+        let when = engine.snapshot.gapUntil - 20
+        let cues = engine.touchDown(at: when)
         #expect(cues.contains(.jam))
         #expect(engine.snapshot.label == "早")
-        #expect(engine.snapshot.pressLockedUntil == engine.snapshot.gapUntil - 20 + ApproachClearTuning.earlyJamMs)
+        #expect(engine.snapshot.pressLockedUntil == when + ApproachClearTuning.earlyJamMs)
     }
 
-    @Test func pressLockIgnoresTheNextRelease() {
+    @Test func pressLockIgnoresTheNextPress() {
         var engine = makeEngine()
-        let release = clearPerfect(&engine, now: 0)
-        _ = engine.touchDown(at: release + 10)
-        let ignored = engine.touchUp(at: release + 20)
+        let press = clearPerfect(&engine, now: 0)
+        let ignored = engine.touchDown(at: press + 20)
         #expect(ignored.isEmpty)
         #expect(engine.snapshot.phase == .resolved)
         #expect(engine.snapshot.label == "良")
-        _ = engine.touchDown(at: release + 60)
-        let jammed = engine.touchUp(at: release + 70)
+        _ = engine.touchUp(at: press + 30)
+        let jammed = engine.touchDown(at: press + 60)
         #expect(jammed.contains(.jam))
     }
 
@@ -123,9 +147,10 @@ struct ApproachClearEngineTests {
 
         var miss = makeEngine()
         _ = miss.touchDown(at: 0)
+        _ = miss.touchUp(at: 40)
         _ = miss.tick(at: 260)
         let early = miss.snapshot.approachStart + miss.snapshot.bands.goodL * 0.5 * miss.snapshot.bands.approachMs
-        _ = miss.touchUp(at: early)
+        _ = miss.touchDown(at: early)
         #expect(miss.snapshot.label == "早")
         _ = miss.tick(at: early + ApproachClearTuning.lingerMissMs)
         #expect(miss.snapshot.scheduledStandbyMs == ApproachClearTuning.nextAfterMissMs)
@@ -141,14 +166,15 @@ struct ApproachClearEngineTests {
         #expect(timeout.snapshot.scheduledStandbyMs == ApproachClearTuning.nextAfterTimeoutMs)
     }
 
-    @Test func goodReleaseIsInsideTheWideBandOnly() {
+    @Test func goodPressIsInsideTheWideBandOnly() {
         var engine = makeEngine()
         _ = engine.touchDown(at: 0)
+        _ = engine.touchUp(at: 40)
         _ = engine.tick(at: 260)
         let bands = engine.snapshot.bands
         let goodU = (bands.goodL + bands.perfL) / 2
-        let release = engine.snapshot.approachStart + goodU * bands.approachMs
-        let cues = engine.touchUp(at: release)
+        let press = engine.snapshot.approachStart + goodU * bands.approachMs
+        let cues = engine.touchDown(at: press)
         #expect(engine.snapshot.label == "可")
         #expect(cues.contains(.good(tier: 0)))
         #expect(engine.snapshot.heat == ApproachClearTuning.heatPerGood)
@@ -157,9 +183,10 @@ struct ApproachClearEngineTests {
     @Test func missContinuesTheLoop() {
         var engine = makeEngine()
         _ = engine.touchDown(at: 0)
+        _ = engine.touchUp(at: 40)
         _ = engine.tick(at: 260)
         let early = engine.snapshot.approachStart
-        _ = engine.touchUp(at: early + 1)
+        _ = engine.touchDown(at: early + 1)
         #expect(engine.snapshot.phase == .resolved)
         #expect(engine.snapshot.calm == nil)
         _ = engine.tick(at: engine.snapshot.pendingUntil)
@@ -201,8 +228,7 @@ struct ApproachClearEngineTests {
         _ = engine.tick(at: engine.snapshot.gapUntil)
         #expect(engine.snapshot.phase == .interlock)
         let heat = engine.snapshot.heat
-        _ = engine.touchDown(at: engine.snapshot.gapUntil + 10)
-        let cues = engine.touchUp(at: engine.snapshot.gapUntil + 20)
+        let cues = engine.touchDown(at: engine.snapshot.gapUntil + 10)
         #expect(cues == [.interlockReject])
         #expect(engine.snapshot.heat == heat)
         #expect(engine.snapshot.phase == .interlock)
@@ -212,8 +238,7 @@ struct ApproachClearEngineTests {
         _ = barrier.touchUp(at: 40)
         _ = barrier.tick(at: 260)
         #expect(barrier.snapshot.phase == .barrier)
-        _ = barrier.touchDown(at: 280)
-        let jammed = barrier.touchUp(at: 300)
+        let jammed = barrier.touchDown(at: 280)
         #expect(jammed.contains(.jam))
         _ = barrier.tick(at: barrier.snapshot.pendingUntil)
         #expect(barrier.snapshot.phase == .approach)
@@ -235,8 +260,7 @@ struct ApproachClearEngineTests {
         _ = tighten.tick(at: second + ApproachClearTuning.lingerPerfectMs)
         _ = tighten.tick(at: tighten.snapshot.gapUntil)
         #expect(tighten.snapshot.phase == .easedown)
-        _ = tighten.touchDown(at: tighten.snapshot.pendingUntil - 40)
-        let ignored = tighten.touchUp(at: tighten.snapshot.pendingUntil - 20)
+        let ignored = tighten.touchDown(at: tighten.snapshot.pendingUntil - 20)
         #expect(ignored.isEmpty)
         #expect(tighten.snapshot.phase == .easedown)
         #expect(tighten.snapshot.tier == 1)
@@ -313,8 +337,7 @@ struct ApproachClearEngineTests {
             _ = engine.tick(at: engine.snapshot.pendingUntil)
         }
         #expect(engine.snapshot.phase == .approach)
-        _ = engine.touchDown(at: engine.snapshot.approachStart)
-        _ = engine.touchUp(at: engine.snapshot.approachStart + 1)
+        _ = engine.touchDown(at: engine.snapshot.approachStart + 1)
         #expect(engine.snapshot.label == "早")
         #expect(engine.snapshot.tier == 0)
         _ = engine.tick(at: engine.snapshot.pendingUntil)
@@ -370,9 +393,10 @@ private func clearPerfect(_ engine: inout ApproachClearEngine, now: Double) -> D
     }
     let release = engine.snapshot.approachStart
         + engine.snapshot.bands.center * engine.snapshot.bands.approachMs
-    if !engine.snapshot.contactDown {
-        _ = engine.touchDown(at: engine.snapshot.approachStart)
+    if engine.snapshot.contactDown {
+        _ = engine.touchUp(at: cursor)
     }
+    _ = engine.touchDown(at: release)
     _ = engine.touchUp(at: release)
     return release
 }
