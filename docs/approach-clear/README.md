@@ -1,6 +1,6 @@
 # 接近クリアランス（参照）
 
-Hub 上部の「接近クリアランス」盤の設計・受け入れ・感触プロトの参照置き場。**挙動の正本は [GitHub Issue #61](https://github.com/hibiki-cube/todo-train/issues/61)**。本文と衝突したら Issue のロック表を優先する。
+Hub 上部の「接近クリアランス」盤の設計・受け入れ・感触プロトの参照置き場。**挙動の正本は [GitHub Issue #61](https://github.com/HIBIKI-CUBE/Todo-Train/issues/61)**。本文と衝突したら Issue のロック表を優先する。
 
 | ファイル | 内容 |
 |----------|------|
