@@ -13,7 +13,10 @@
 | [13-sync-mac-companion.md](13-sync-mac-companion.md) | 同期をこの形にした理由 |
 | [14-mac-companion-ux.md](14-mac-companion-ux.md) | Mac に何を載せ、何を載せないか |
 | [17-calendar-experience.md](17-calendar-experience.md) | カレンダーは占有の計器。契約と日常が擦れていない点。直す順 |
-| [references/](references/) | マルス券の原画 |
+| [18-passenger-cabin-direction.md](18-passenger-cabin-direction.md) | 乗客モードの方向（駅間・乗る・非常用ドアコック）。実装ではない |
+| [19-passenger-interval-design.md](19-passenger-interval-design.md) | 乗客モードの状態・ロック・受け入れ（Issue #66 の設計） |
+| [20-passenger-lcd-quality-refs.md](20-passenger-lcd-quality-refs.md) | 車内案内の視覚の下限。引用してよい範囲 |
+| [references/](references/) | マルス券の原画。車内案内の引用は [passenger-lcd/](references/passenger-lcd/) |
 | [approach-clear/](approach-clear/) | Hub 接近クリアランス（挙動は Issue #61） |
 
 入口は [AGENTS.md](../AGENTS.md)。ワイヤの正本は [`sync/contract/`](../sync/contract/README.md)。
