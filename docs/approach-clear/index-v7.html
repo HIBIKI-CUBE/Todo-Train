@@ -1,0 +1,1733 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#07090b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>接近クリアランス · 盤 MVP v7（サクサク）</title>
+<!-- 判定: pointerdown（touch down）。出荷・Issue #61 と同じ。touch end では判定しない。 -->
+<style>
+:root{
+  --bg:#050709; --panel:#0e1317; --panel2:#12191e; --edge:#1f2a31; --edge2:#2b3943;
+  --ink:#b9c7cf; --dim:#5d6f7a; --muted:#3a4a54;
+  --cyan:#34e0ff; --cyan-d:#0f5b6a;
+  --green:#3dff8a; --green-d:#0a5c34; --green-band:rgba(61,255,138,.18);
+  --perfect:#ffe566; --perfect-d:#8a6e00; --perfect-band:rgba(255,229,102,.28);
+  --red:#ff3b3b; --red-d:#6a1010; --amber:#ffb000; --amber-d:#6a4800;
+  --white:#eef6fa;
+  --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
+  font-family:-apple-system,"Hiragino Sans","Noto Sans JP","Segoe UI",sans-serif;
+  -webkit-font-smoothing:antialiased; touch-action:manipulation; overflow:hidden;}
+body{display:flex;align-items:center;justify-content:center;
+  padding:max(10px,env(safe-area-inset-top)) 10px max(10px,env(safe-area-inset-bottom));}
+
+.panel{position:relative;width:min(520px,100%);background:
+  linear-gradient(180deg,#121a1f 0%,#0b1014 100%);
+  border:1px solid var(--edge2);border-radius:14px;padding:14px 14px 12px;
+  box-shadow:0 0 0 4px #090d10, 0 0 0 5px #1a2329, 0 20px 60px #000c, inset 0 1px 0 #ffffff10;
+  transition:box-shadow .12s, filter .45s ease, opacity .45s ease;}
+.panel.flash-perfect{box-shadow:0 0 0 4px #090d10, 0 0 0 5px #3a3210, 0 0 40px #ffe56655, 0 20px 60px #000c, inset 0 0 30px #ffe56622;}
+.panel.flash-good{box-shadow:0 0 0 4px #090d10, 0 0 0 5px #143528, 0 0 28px #3dff8a33, 0 20px 60px #000c, inset 0 0 18px #3dff8a15;}
+.panel.flash-miss{box-shadow:0 0 0 4px #090d10, 0 0 0 5px #3a1515, 0 0 22px #ff3b3b44, 0 20px 60px #000c;}
+.panel.calm{filter:brightness(.72) saturate(.7); transition:filter 2.5s ease;}
+/* 運休: board dims — real service status readable at the edge */
+.panel.svc-out{filter:brightness(.42) saturate(.35); opacity:.92;}
+.panel.svc-out .svc-strip{filter:none; opacity:1;}
+.panel.svc-paused{/* 停車: amber wash at edges, play still sharp */}
+.panel.svc-paused::after{content:"";position:absolute;inset:0;border-radius:14px;pointer-events:none;
+  box-shadow:inset 0 0 40px #ffb00018, inset 0 0 0 1px #ffb00022;}
+
+.rivet{position:absolute;width:7px;height:7px;border-radius:50%;
+  background:radial-gradient(circle at 35% 35%,#55636c,#1d2529 70%);box-shadow:0 0 0 1px #05080a;z-index:2}
+.rivet.tl{left:7px;top:7px}.rivet.tr{right:7px;top:7px}
+.rivet.bl{left:7px;bottom:7px}.rivet.br{right:7px;bottom:7px}
+
+.hdr{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:2px 4px 8px}
+.title{font-family:var(--mono);font-size:11px;letter-spacing:.16em;color:var(--dim);line-height:1.45}
+.title b{display:block;color:var(--ink);font-weight:600;letter-spacing:.1em;font-size:13px;margin-top:2px}
+.note{font-size:10px;color:var(--muted);line-height:1.55;max-width:230px;text-align:right}
+
+/* ═══ SERVICE STRIP — always visible world bridge (OBVIOUS) ═══ */
+.svc-strip{
+  display:flex;align-items:stretch;gap:0;margin:0 0 12px;padding:0;
+  background:#06090c;border:1px solid var(--edge2);border-radius:10px;
+  box-shadow:inset 0 2px 6px #000a, 0 0 0 1px #ffffff06;
+  cursor:pointer;user-select:none;overflow:hidden;
+  transition:border-color .25s, box-shadow .25s;
+}
+.svc-strip:active{transform:scale(.995)}
+.svc-strip:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+.svc-cell{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:5px;padding:10px 6px 9px;position:relative;min-width:0;
+  border-right:1px solid #1a2329;transition:background .3s, opacity .3s}
+.svc-cell:last-child{border-right:none}
+.svc-cell .svc-lamp{width:14px;height:14px;border-radius:50%;background:#151c22;
+  box-shadow:inset 0 1px 3px #000, 0 0 0 1px #0a0e11; transition:background .2s, box-shadow .2s, transform .2s}
+.svc-cell .svc-label{font-family:var(--mono);font-size:10px;letter-spacing:.14em;color:var(--muted);
+  transition:color .25s}
+.svc-cell .svc-sub{font-family:var(--mono);font-size:7px;letter-spacing:.1em;color:#2a3840;
+  transition:color .25s}
+.svc-hint{position:absolute;bottom:3px;right:8px;font-family:var(--mono);font-size:7px;
+  letter-spacing:.08em;color:#2a3840;pointer-events:none}
+
+/* active states — visually distinct: cyan=toy running / amber=real 停車 / dim=運休 */
+.svc-cell.active-run .svc-lamp{
+  background:radial-gradient(circle at 40% 35%,#b8f4ff,var(--cyan) 50%,#0a4a5a);
+  box-shadow:0 0 0 1px #0a2a30, 0 0 14px #34e0ffcc, 0 0 4px #fff4; transform:scale(1.08)}
+.svc-cell.active-run .svc-label{color:var(--cyan)}
+.svc-cell.active-run .svc-sub{color:#4a8a98}
+.svc-cell.active-run{background:linear-gradient(180deg,#0c1820,#080e12)}
+
+.svc-cell.active-out .svc-lamp{
+  background:radial-gradient(circle at 40% 35%,#4a5560,#1a2228 70%);
+  box-shadow:inset 0 1px 2px #000, 0 0 0 1px #0a0e11; opacity:.7}
+.svc-cell.active-out .svc-label{color:#6a7880}
+.svc-cell.active-out .svc-sub{color:#3a4a54}
+.svc-cell.active-out{background:linear-gradient(180deg,#0a0c0e,#060708)}
+
+.svc-cell.active-pause .svc-lamp{
+  background:radial-gradient(circle at 40% 35%,#ffe0a0,var(--amber) 50%,#6a4800);
+  box-shadow:0 0 0 1px #3a2800, 0 0 16px #ffb000cc, 0 0 4px #ffb00066; transform:scale(1.08);
+  animation:amberBreath 2.4s ease-in-out infinite}
+.svc-cell.active-pause .svc-label{color:var(--amber)}
+.svc-cell.active-pause .svc-sub{color:#a87820}
+.svc-cell.active-pause{background:linear-gradient(180deg,#1a1408,#0e0c06)}
+@keyframes amberBreath{
+  0%,100%{box-shadow:0 0 0 1px #3a2800, 0 0 12px #ffb00088}
+  50%{box-shadow:0 0 0 1px #3a2800, 0 0 20px #ffb000dd, 0 0 6px #ffb00044}
+}
+
+.svc-strip.mode-run{border-color:#2a4a55;box-shadow:inset 0 2px 6px #000a, 0 0 12px #34e0ff18}
+.svc-strip.mode-out{border-color:#2a3035}
+.svc-strip.mode-pause{border-color:#5a4010;box-shadow:inset 0 2px 6px #000a, 0 0 14px #ffb00022}
+
+/* world note under strip */
+.world-note{font-size:9px;color:var(--muted);line-height:1.5;padding:0 4px 10px;
+  letter-spacing:.04em;text-align:center}
+
+/* instrument strip */
+.inst{display:flex;align-items:center;gap:8px;padding:0 2px 10px;flex-wrap:wrap}
+.leds{display:flex;gap:10px;align-items:center;padding:6px 10px;background:#080b0d;
+  border:1px solid var(--edge);border-radius:7px;box-shadow:inset 0 1px 3px #000;flex:1}
+.led{display:flex;flex-direction:column;align-items:center;gap:3px;
+  font-family:var(--mono);font-size:8px;color:var(--dim);letter-spacing:.08em}
+.lamp{width:12px;height:12px;border-radius:50%;background:#1a2228;
+  box-shadow:inset 0 1px 2px #000, 0 0 0 1px #0a0e11; transition:background .12s, box-shadow .12s}
+.lamp.on-g{background:radial-gradient(circle at 40% 35%,#b8ffd4,var(--green) 50%,#0a4a2a);
+  box-shadow:0 0 0 1px #0a2a18, 0 0 10px #3dff8aaa}
+.lamp.on-y{background:radial-gradient(circle at 40% 35%,#fff3b0,var(--perfect) 50%,#6a5500);
+  box-shadow:0 0 0 1px #3a2e00, 0 0 12px #ffe566cc}
+.lamp.on-r{background:radial-gradient(circle at 40% 35%,#ffb0b0,var(--red) 50%,#5a1010);
+  box-shadow:0 0 0 1px #3a1010, 0 0 10px #ff3b3baa}
+.lamp.on-c{background:radial-gradient(circle at 40% 35%,#b8f4ff,var(--cyan) 50%,#0a4a5a);
+  box-shadow:0 0 0 1px #0a2a30, 0 0 8px #34e0ff88}
+.lamp.on-a{background:radial-gradient(circle at 40% 35%,#ffe0a0,var(--amber) 50%,#6a4800);
+  box-shadow:0 0 0 1px #3a2800, 0 0 10px #ffb000aa}
+.lamp.pulse{animation:lampPulse .18s ease-out}
+.lamp.breath{animation:idleBreath 1.6s ease-in-out infinite}
+@keyframes lampPulse{0%{transform:scale(1.35)}100%{transform:scale(1)}}
+@keyframes idleBreath{
+  0%,100%{opacity:.35; box-shadow:inset 0 1px 2px #000, 0 0 0 1px #0a0e11}
+  50%{opacity:1; background:radial-gradient(circle at 40% 35%,#6a8a98,#2a4a55 60%,#0a1a20);
+      box-shadow:0 0 0 1px #0a2a30, 0 0 8px #34e0ff44}
+}
+
+.hap{display:flex;align-items:center;gap:6px;padding:6px 10px;background:#080b0d;
+  border:1px solid var(--edge);border-radius:7px;font-family:var(--mono);font-size:9px;color:var(--dim)}
+.hap .dot{width:8px;height:8px;border-radius:2px;background:#1a2228;transition:background .08s,box-shadow .08s}
+.hap .dot.hot{background:var(--cyan);box-shadow:0 0 8px var(--cyan)}
+
+/* approach track */
+.track-wrap{position:relative;margin:4px 2px 14px;padding:18px 14px 22px;
+  background:linear-gradient(180deg,#0a0e11,#06090c);
+  border:1px solid var(--edge);border-radius:10px;
+  box-shadow:inset 0 2px 8px #000a, inset 0 0 0 1px #ffffff06;
+  transition:border-color .2s, box-shadow .2s}
+.track-wrap.interlock-active{border-color:#5a4010;
+  box-shadow:inset 0 2px 8px #000a, inset 0 0 20px #ffb00015, 0 0 12px #ffb00022}
+.track-label{position:absolute;top:6px;left:12px;font-family:var(--mono);font-size:8px;
+  letter-spacing:.14em;color:var(--muted)}
+.track-state{position:absolute;top:6px;right:12px;font-family:var(--mono);font-size:8px;
+  letter-spacing:.1em;color:var(--dim);transition:color .2s}
+.track-state.ok{color:var(--green)}.track-state.perf{color:var(--perfect)}.track-state.bad{color:var(--red)}
+.track-state.ilk{color:var(--amber)}
+
+.track{position:relative;height:48px;margin-top:14px;
+  background:repeating-linear-gradient(90deg,#0d1216 0 2px,#11171c 2px 8px);
+  border-radius:4px;border:1px solid #1a2329;overflow:visible;}
+
+.band{position:absolute;top:4px;bottom:4px;border-radius:3px;pointer-events:none;
+  transition:left .15s ease, width .15s ease, opacity .2s;}
+.band-good{background:var(--green-band);border:1px solid rgba(61,255,138,.45);
+  box-shadow:inset 0 0 12px rgba(61,255,138,.12), 0 0 8px rgba(61,255,138,.08)}
+.band-perfect{background:var(--perfect-band);border:1px solid rgba(255,229,102,.65);
+  box-shadow:inset 0 0 10px rgba(255,229,102,.2), 0 0 10px rgba(255,229,102,.15);
+  z-index:1}
+.track-wrap.idle-fidget .band-good{animation:none}
+.track-wrap.idle-fidget .band-perfect{animation:none}
+@keyframes bandBreathe{
+  0%,100%{opacity:.85} 50%{opacity:1; box-shadow:inset 0 0 14px rgba(61,255,138,.2), 0 0 12px rgba(61,255,138,.12)}
+}
+@keyframes bandBreathePerf{
+  0%,100%{opacity:.9} 50%{opacity:1; box-shadow:inset 0 0 14px rgba(255,229,102,.35), 0 0 14px rgba(255,229,102,.25)}
+}
+.track-wrap.idle-fidget .path-line{animation:none}
+@keyframes pathPulse{0%,100%{opacity:.35} 50%{opacity:.6}}
+
+.needle{position:absolute;top:-4px;bottom:-4px;width:3px;margin-left:-1.5px;
+  background:linear-gradient(180deg,#eef6fa,#34e0ff 40%,#0a6a7a);
+  border-radius:2px;box-shadow:0 0 8px #34e0ffaa, 0 0 2px #fff;z-index:3;
+  left:0; transition:opacity .15s}
+.needle::before{content:"";position:absolute;top:-6px;left:50%;transform:translateX(-50%);
+  width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;
+  border-top:7px solid var(--cyan);filter:drop-shadow(0 0 4px #34e0ff)}
+.needle.hidden{opacity:0}
+.blip{position:absolute;top:50%;width:10px;height:10px;margin:-5px 0 0 -5px;border-radius:50%;
+  background:radial-gradient(circle at 40% 35%,#fff,var(--cyan) 55%,#0a4a5a);
+  box-shadow:0 0 10px #34e0ffcc;z-index:4;left:0;pointer-events:none;transition:opacity .12s}
+.blip.hidden{opacity:0}
+.blip.ghost{opacity:.45; width:7px;height:7px;margin:-3.5px 0 0 -3.5px;
+  box-shadow:0 0 6px #34e0ff66}
+
+.path-line{position:absolute;left:8%;right:8%;top:50%;height:2px;margin-top:-1px;
+  background:linear-gradient(90deg,transparent,#1a2a32 20%,#1a2a32 80%,transparent);
+  opacity:.5;z-index:0}
+.train{position:absolute;top:50%;width:36px;height:12px;margin-top:-6px;left:8%;
+  background:linear-gradient(90deg,#243038,#3a4e58 60%,#5ad0e0);border-radius:2px 5px 5px 2px;
+  opacity:0;z-index:2;box-shadow:0 0 0 1px #0a1014; pointer-events:none;
+  transition:opacity .2s}
+.train::after{content:"";position:absolute;right:4px;top:3px;width:4px;height:4px;border-radius:1px;
+  background:var(--cyan);box-shadow:0 0 6px var(--cyan)}
+.train.on{opacity:1}
+.train.perfect-pass{box-shadow:0 0 12px #ffe56688, 0 0 0 1px #3a3210}
+.train.good-pass{box-shadow:0 0 8px #3dff8a66, 0 0 0 1px #0a2a18}
+.track .train.on{animation:trainPassTrack .28s cubic-bezier(.12,.82,.22,1) forwards}
+@keyframes trainPassTrack{
+  0%{left:10%;opacity:1}
+  55%{opacity:1}
+  100%{left:90%;opacity:0}
+}
+
+.reject-fx{position:absolute;inset:0;border-radius:10px;pointer-events:none;opacity:0;
+  background:radial-gradient(ellipse at center,rgba(255,59,59,.22),transparent 70%);
+  transition:opacity .1s}
+.reject-fx.show{animation:rejectBlink .26s ease-out}
+@keyframes rejectBlink{
+  0%,35%{opacity:1} 18%{opacity:.25} 55%{opacity:.7} 100%{opacity:0}
+}
+
+/* interlock / barrier-beat overlay */
+.interlock-fx{position:absolute;inset:0;border-radius:10px;pointer-events:none;opacity:0;
+  display:flex;align-items:center;justify-content:center;z-index:6;
+  background:radial-gradient(ellipse at center,rgba(255,176,0,.12),transparent 65%)}
+.interlock-fx.show{opacity:1}
+.ilk-chain{display:flex;gap:8px;align-items:center}
+.ilk-chain i{display:block;width:10px;height:10px;border-radius:2px;background:#2a2010;
+  border:1px solid #3a3010;box-shadow:inset 0 1px 2px #000;transition:background .08s,box-shadow .08s,transform .1s}
+.ilk-chain i.lit{background:var(--amber);box-shadow:0 0 10px #ffb000aa;transform:scaleY(1.5)}
+.ilk-chain i.done{background:var(--cyan);box-shadow:0 0 8px #34e0ff88}
+.barrier-flash{position:absolute;inset:0;border-radius:10px;pointer-events:none;opacity:0;
+  background:linear-gradient(90deg,transparent 0%,#ffb00033 45%,#ffb00055 50%,#ffb00033 55%,transparent 100%);
+  z-index:5}
+.barrier-flash.show{animation:barrierSweep .22s ease-out}
+@keyframes barrierSweep{
+  0%{opacity:0; transform:translateX(-30%)}
+  30%{opacity:1}
+  100%{opacity:0; transform:translateX(30%)}
+}
+
+.shimmer{display:flex;gap:4px;justify-content:center;margin-top:12px;height:8px}
+.shimmer i{display:block;width:6px;height:6px;border-radius:1px;background:#1a2228;
+  transition:background .1s, box-shadow .1s, transform .15s}
+.shimmer.good i{background:var(--green-d)}
+.shimmer.good i.lit{background:var(--green);box-shadow:0 0 6px #3dff8a88}
+.shimmer.perfect i{background:var(--perfect-d)}
+.shimmer.perfect i.lit{background:var(--perfect);box-shadow:0 0 8px #ffe566aa;transform:scaleY(1.4)}
+
+.btn-wrap{display:flex;flex-direction:column;align-items:center;gap:8px;padding:4px 0 8px}
+.clear-btn{position:relative;width:min(220px,70%);aspect-ratio:1.55;border:none;cursor:pointer;
+  border-radius:12px;background:
+    linear-gradient(160deg,#2a353c 0%,#151c22 45%,#0e1418 100%);
+  box-shadow:
+    0 0 0 1px #3a4850,
+    0 0 0 3px #0a0e11,
+    0 6px 0 #05080a,
+    0 8px 20px #000a,
+    inset 0 1px 0 #ffffff18,
+    inset 0 -2px 6px #0006;
+  color:var(--ink);font-family:var(--mono);font-size:14px;letter-spacing:.2em;
+  transition:transform .04s, box-shadow .04s, filter .1s, opacity .25s; user-select:none;
+  -webkit-user-select:none; touch-action:manipulation;}
+.clear-btn:active, .clear-btn.pressed{
+  transform:translateY(4px);
+  box-shadow:
+    0 0 0 1px #3a4850,
+    0 0 0 3px #0a0e11,
+    0 2px 0 #05080a,
+    0 3px 10px #0008,
+    inset 0 2px 8px #000a;}
+.clear-btn .glyph{display:block;font-size:22px;letter-spacing:.08em;font-weight:600;color:var(--white);
+  text-shadow:0 0 12px #34e0ff44}
+.clear-btn .sub{display:block;margin-top:4px;font-size:9px;color:var(--dim);letter-spacing:.14em}
+.clear-btn.armed-good{filter:drop-shadow(0 0 8px #3dff8a44)}
+.clear-btn.armed-perfect{filter:drop-shadow(0 0 14px #ffe56666)}
+.clear-btn:disabled{opacity:.45;cursor:default;transform:none}
+.clear-btn.locked-ilk{opacity:.55;filter:grayscale(.3);cursor:default}
+
+.hint{font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:.06em;text-align:center;
+  min-height:1.4em;transition:color .2s}
+.hint.good{color:var(--green)}.hint.perfect{color:var(--perfect)}.hint.miss{color:var(--red)}
+.hint.ilk{color:var(--amber)}
+
+.foot{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 2px 2px;flex-wrap:wrap}
+.toggles{display:flex;gap:6px}
+.tog{font-family:var(--mono);font-size:9px;letter-spacing:.1em;padding:6px 10px;border-radius:6px;
+  background:#080b0d;border:1px solid var(--edge);color:var(--dim);cursor:pointer;user-select:none}
+.tog.on{color:var(--cyan);border-color:#2a4a55;box-shadow:inset 0 0 8px #34e0ff18}
+.session{font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:.08em}
+.session .bar{display:inline-block;width:64px;height:4px;margin-left:6px;vertical-align:middle;
+  background:#1a2228;border-radius:2px;overflow:hidden}
+.session .bar i{display:block;height:100%;width:100%;background:linear-gradient(90deg,var(--cyan-d),var(--cyan));
+  transform-origin:left;transform:scaleX(1);transition:transform .3s linear}
+
+.debug{position:absolute;left:10px;top:10px;font-family:var(--mono);font-size:9px;color:#6a8;
+  background:#000a;padding:4px 6px;border-radius:4px;pointer-events:none;display:none;z-index:20;line-height:1.5}
+.debug.show{display:block}
+
+.calm-msg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  background:#050709cc;border-radius:14px;opacity:0;pointer-events:none;transition:opacity 1.2s;z-index:15;
+  font-family:var(--mono);font-size:12px;letter-spacing:.18em;color:var(--dim);text-align:center;line-height:1.8}
+.calm-msg.show{opacity:1;pointer-events:auto}
+.calm-msg button{margin-top:14px;font-family:var(--mono);font-size:10px;letter-spacing:.12em;
+  padding:8px 16px;background:#12191e;border:1px solid var(--edge2);color:var(--ink);
+  border-radius:6px;cursor:pointer}
+
+/* ═══ v4 · combo heat (juice only — no number) ═══ */
+.panel[data-heat="1"]{box-shadow:0 0 0 4px #090d10, 0 0 0 5px #1d3a44, 0 0 18px #34e0ff22, 0 20px 60px #000c, inset 0 1px 0 #ffffff10;}
+.panel[data-heat="2"]{box-shadow:0 0 0 4px #090d10, 0 0 0 5px #3a3a1a, 0 0 26px #ffe56626, 0 0 10px #34e0ff22, 0 20px 60px #000c, inset 0 0 18px #ffe5660c;}
+.panel[data-heat="3"]{box-shadow:0 0 0 4px #090d10, 0 0 0 5px #5a4a12, 0 0 36px #ffe56640, 0 0 14px #34e0ff33, 0 20px 60px #000c, inset 0 0 26px #ffe56614;}
+.panel{transition:box-shadow .5s ease, filter .45s ease, opacity .45s ease;}
+.panel.flash-perfect,.panel.flash-good,.panel.flash-miss,.panel.flash-sharp{transition:box-shadow .06s}
+.panel.flash-sharp,.panel[data-heat].flash-sharp{box-shadow:0 0 0 4px #090d10, 0 0 0 6px #fff6c0, 0 0 60px #fff3b088, 0 0 22px #ffe566aa, 0 20px 60px #000c, inset 0 0 40px #fff3b033;}
+.panel[data-heat="3"] .rivet{background:radial-gradient(circle at 35% 35%,#fff3b0,#8a6e00 70%);box-shadow:0 0 0 1px #05080a, 0 0 6px #ffe56699;transition:background .4s, box-shadow .4s}
+.panel[data-heat="2"] .clear-btn .glyph{text-shadow:0 0 14px #34e0ff88}
+.panel[data-heat="3"] .clear-btn .glyph{text-shadow:0 0 16px #ffe566aa, 0 0 4px #fff8}
+.panel[data-heat="3"] .needle{background:linear-gradient(180deg,#fffbe0,#ffe566 40%,#8a6e00);box-shadow:0 0 10px #ffe566cc, 0 0 2px #fff}
+.panel[data-heat="3"] .needle::before{border-top-color:var(--perfect);filter:drop-shadow(0 0 4px #ffe566)}
+/* hit flashes must beat the persistent heat rim */
+.panel[data-heat].flash-perfect{box-shadow:0 0 0 4px #090d10, 0 0 0 5px #3a3210, 0 0 40px #ffe56655, 0 20px 60px #000c, inset 0 0 30px #ffe56622;}
+.panel[data-heat].flash-good{box-shadow:0 0 0 4px #090d10, 0 0 0 5px #143528, 0 0 28px #3dff8a33, 0 20px 60px #000c, inset 0 0 18px #3dff8a15;}
+.panel[data-heat].flash-miss{box-shadow:0 0 0 4px #090d10, 0 0 0 5px #3a1515, 0 0 22px #ff3b3b44, 0 20px 60px #000c;}
+/* combo break: glow drains quietly (no guilt) */
+.panel.cool{transition:box-shadow .35s ease}
+
+/* lamp cascade — CSS animation overrides lamp colour for a beat */
+.lamp.casc-c{animation:cascC .2s ease-out}
+.lamp.casc-g{animation:cascG .2s ease-out}
+.lamp.casc-y{animation:cascY .24s ease-out}
+.lamp.casc-w{animation:cascW .28s ease-out}
+@keyframes cascC{0%{background:radial-gradient(circle at 40% 35%,#e0faff,var(--cyan) 50%,#0a4a5a);box-shadow:0 0 0 1px #0a2a30,0 0 12px #34e0ffcc;transform:scale(1.3)}100%{transform:scale(1)}}
+@keyframes cascG{0%{background:radial-gradient(circle at 40% 35%,#d8ffe6,var(--green) 50%,#0a4a2a);box-shadow:0 0 0 1px #0a2a18,0 0 12px #3dff8acc;transform:scale(1.3)}100%{transform:scale(1)}}
+@keyframes cascY{0%{background:radial-gradient(circle at 40% 35%,#fffbe0,var(--perfect) 50%,#6a5500);box-shadow:0 0 0 1px #3a2e00,0 0 16px #ffe566ee;transform:scale(1.45)}100%{transform:scale(1)}}
+@keyframes cascW{0%{background:radial-gradient(circle at 40% 35%,#fff,#fff3b0 45%,#8a6e00);box-shadow:0 0 0 1px #3a2e00,0 0 20px #fff3b0,0 0 6px #fff;transform:scale(1.6)}100%{transform:scale(1)}}
+.svc-cell .svc-lamp.casc-c{animation:cascC .26s ease-out}
+.svc-cell .svc-lamp.casc-y{animation:cascY .3s ease-out}
+
+/* train trail at higher heat */
+.train.heat2{box-shadow:-14px 0 10px -4px #34e0ff66, -28px 0 14px -8px #34e0ff33, 0 0 0 1px #0a1014}
+.train.heat3{box-shadow:-14px 0 10px -4px #ffe56699, -30px 0 16px -6px #ffe56655, -48px 0 20px -10px #34e0ff33, 0 0 0 1px #3a3210}
+.shimmer.sweep2 i.lit{transform:scaleY(1.8)}
+
+/* ═══ v4 · 鋭 spike window (brief, then back to comfy) ═══ */
+.band-perfect.sharp{background:rgba(255,248,200,.42);border:1px solid #fff6c0;
+  box-shadow:inset 0 0 8px rgba(255,255,255,.5), 0 0 14px rgba(255,229,102,.55);
+  animation:sharpPulse .5s ease-in-out infinite}
+@keyframes sharpPulse{0%,100%{opacity:.8}50%{opacity:1;box-shadow:inset 0 0 10px rgba(255,255,255,.7),0 0 20px rgba(255,229,102,.8)}}
+.track-wrap.sharp{border-color:#6a5a20;box-shadow:inset 0 2px 8px #000a, inset 0 0 18px #ffe5660f, 0 0 12px #ffe56622}
+.track-state.sharp{color:#fff3b0;text-shadow:0 0 6px #ffe56688}
+.sharp-tick{position:absolute;top:-10px;width:0;height:0;margin-left:-4px;
+  border-left:4px solid transparent;border-right:4px solid transparent;border-top:6px solid #fff3b0;
+  filter:drop-shadow(0 0 3px #ffe566);opacity:0;transition:opacity .15s;z-index:2;pointer-events:none}
+.track-wrap.sharp .sharp-tick{opacity:1}
+.sharp-in{position:absolute;inset:0;border-radius:10px;pointer-events:none;opacity:0;z-index:5;
+  background:radial-gradient(ellipse at 58% 55%,rgba(255,243,176,.22),transparent 60%)}
+.sharp-in.show{animation:sharpIn .2s ease-out}
+@keyframes sharpIn{0%{opacity:0}25%{opacity:1}100%{opacity:0}}
+.hint.sharp{color:#fff3b0}
+
+/* ═══ v7 · saku + heat difficulty (段 display = combo heat label) ═══ */
+.panel{--sc:#5d6f7a}
+.panel[data-heat="0"]{--sc:#5d6f7a}
+.panel[data-heat="1"]{--sc:#34e0ff}
+.panel[data-heat="2"]{--sc:#ffb000}
+.panel[data-heat="3"]{--sc:#ff5a3b}
+.stage{display:flex;align-items:center;gap:7px;padding:6px 10px;background:#080b0d;
+  border:1px solid var(--edge);border-color:color-mix(in srgb, var(--sc) 40%, #1f2a31);border-radius:7px;
+  font-family:var(--mono);font-size:9px;color:var(--dim);transition:border-color .35s, box-shadow .35s}
+.stage .stg-name{min-width:2.4em;color:var(--sc);letter-spacing:.06em;font-size:11px;font-weight:600;
+  text-shadow:0 0 6px color-mix(in srgb, var(--sc) 50%, transparent);transition:color .35s}
+.stage .pips{display:flex;gap:3px;align-items:flex-end}
+.stage .pips i{display:block;width:5px;border-radius:1px;background:#1a2228;box-shadow:inset 0 1px 1px #000;transition:background .3s, box-shadow .3s}
+.stage .pips i:nth-child(1){height:6px}.stage .pips i:nth-child(2){height:9px}
+.stage .pips i:nth-child(3){height:12px}.stage .pips i:nth-child(4){height:15px}
+.stage .pips i.on{background:var(--sc);box-shadow:0 0 6px var(--sc)}
+.stage .spd{color:var(--sc);min-width:2.6em;letter-spacing:-.05em;font-size:11px;opacity:.9;transition:color .35s}
+.stage.up{animation:stageUp .32s ease-out}
+.stage.down{animation:stageDown .4s ease-out}
+@keyframes stageUp{0%{box-shadow:0 0 0 2px var(--sc),0 0 24px var(--sc);transform:scale(1.12)}100%{box-shadow:none;transform:scale(1)}}
+@keyframes stageDown{0%{box-shadow:0 0 0 2px #5d6f7a,0 0 18px #34e0ff44;transform:scale(.94);filter:brightness(1.15)}
+  40%{filter:brightness(.85)}100%{box-shadow:none;transform:scale(1);filter:none}}
+.panel[data-heat] .track-wrap{border-color:color-mix(in srgb, var(--sc) 22%, #1f2a31);transition:border-color .45s}
+.track.flow{animation:trackFlow var(--flow,1.5s) linear infinite}
+@keyframes trackFlow{from{background-position:0 0}to{background-position:-64px 0}}
+.panel[data-heat="2"] .needle{box-shadow:0 0 8px #34e0ffaa,-8px 0 8px -3px #ffb00088}
+.panel[data-heat="3"] .needle{box-shadow:0 0 8px #34e0ffaa,-10px 0 10px -3px #ff5a3baa,-22px 0 14px -6px #ff5a3b55}
+.track-state.heat,.hint.heat{color:var(--sc);text-shadow:0 0 6px color-mix(in srgb, var(--sc) 50%, transparent)}
+.beat-line{position:absolute;top:1px;bottom:1px;width:2px;margin-left:-1px;background:#ffffffcc;
+  box-shadow:0 0 5px #fff9;z-index:2;pointer-events:none;transition:left .15s}
+.band-ghost{position:absolute;top:1px;bottom:1px;border:1px dashed var(--sc);border-radius:3px;pointer-events:none;opacity:0;z-index:1}
+.band-ghost.show{animation:ghostFade .4s ease-out forwards}
+.band-ghost.widen{border-style:dashed;border-color:#5d6f7a;animation:ghostWiden .45s ease-out forwards}
+@keyframes ghostFade{0%{opacity:1}100%{opacity:0}}
+@keyframes ghostWiden{0%{opacity:.9;border-color:var(--sc)}100%{opacity:0;border-color:#5d6f7a}}
+.track.shrinking .band,.track.widening .band{transition:left .22s cubic-bezier(.3,0,.2,1), width .22s cubic-bezier(.3,0,.2,1)}
+.stage-banner{position:absolute;left:0;right:0;top:54%;transform:translateY(-50%);text-align:center;
+  font-family:var(--mono);font-size:20px;font-weight:700;letter-spacing:.3em;color:var(--sc);
+  text-shadow:0 0 14px var(--sc),0 0 2px #fff;opacity:0;pointer-events:none;z-index:7}
+.stage-banner.show{animation:bannerIn .35s ease-out}
+.stage-banner.ochi{color:#8aa0aa;letter-spacing:.4em;font-size:18px;font-weight:600;
+  text-shadow:0 0 12px #34e0ff44,0 0 2px #5d6f7a;animation:ochiIn .45s ease-out}
+@keyframes bannerIn{0%{opacity:0;transform:translateY(-50%) scale(1.5)}20%{opacity:1;transform:translateY(-50%) scale(1)}75%{opacity:1}100%{opacity:0}}
+@keyframes ochiIn{0%{opacity:0;transform:translateY(-42%) scale(1.1);filter:blur(2px)}
+  18%{opacity:.95;transform:translateY(-50%) scale(1);filter:none}
+  70%{opacity:.7}100%{opacity:0;transform:translateY(-58%) scale(.96)}}
+/* soft ease-down wash — regrettable cool-off, not red punishment */
+.panel.ease-down{filter:brightness(.88) saturate(.75);transition:filter .28s ease}
+.ease-fx{position:absolute;inset:0;border-radius:14px;pointer-events:none;opacity:0;z-index:12;
+  background:radial-gradient(ellipse at 50% 40%,rgba(52,224,255,.12),transparent 55%),
+             linear-gradient(180deg,rgba(8,14,18,.15),rgba(5,7,9,.35));
+  box-shadow:inset 0 0 40px #34e0ff18}
+.ease-fx.show{animation:easeFx .42s ease-out forwards}
+@keyframes easeFx{0%{opacity:1}40%{opacity:.55}100%{opacity:0}}
+
+/* press marker — where you actually hit */
+.press-mark{position:absolute;top:-8px;bottom:-8px;width:2px;margin-left:-1px;border-radius:1px;opacity:0;z-index:5;pointer-events:none}
+.press-mark.show{opacity:1}
+.press-mark.p{background:#fff3b0;box-shadow:0 0 8px #ffe566}
+.press-mark.g{background:var(--green);box-shadow:0 0 6px #3dff8a}
+.press-mark.m{background:var(--red);box-shadow:0 0 10px #ff3b3b;width:3px}
+.press-mark.m::after{content:"×";position:absolute;top:-17px;left:50%;transform:translateX(-50%);
+  color:var(--red);font:700 14px var(--mono);text-shadow:0 0 6px #ff3b3b}
+
+/* ═══ v5 · 不可 stings ═══ */
+.panel.flash-miss,.panel[data-heat].flash-miss{box-shadow:0 0 0 4px #090d10,0 0 0 6px #ff3b3b,0 0 44px #ff3b3b88,0 20px 60px #000c,inset 0 0 40px #ff3b3b33}
+.panel.shake{animation:shake .22s cubic-bezier(.36,.07,.19,.97)}
+.panel.shake.drop{animation:shake .22s cubic-bezier(.36,.07,.19,.97), dropDip .36s ease-out}
+@keyframes shake{10%,90%{transform:translateX(-2px)}20%,80%{transform:translateX(4px)}30%,50%,70%{transform:translateX(-7px)}40%,60%{transform:translateX(7px)}}
+@keyframes dropDip{0%{filter:brightness(1.7) saturate(1.5)}14%{filter:brightness(.4) saturate(.25)}100%{filter:none}}
+.reject-fx{background:radial-gradient(ellipse at center,rgba(255,59,59,.55),rgba(255,59,59,.14) 60%,transparent 82%)}
+.reject-fx.show{animation:rejectBlink5 .28s ease-out}
+@keyframes rejectBlink5{0%{opacity:1}12%{opacity:.15}24%{opacity:1}36%{opacity:.2}50%{opacity:.85}100%{opacity:0}}
+.track-wrap.rej{border-color:#ff3b3b !important;box-shadow:inset 0 2px 8px #000a, inset 0 0 26px #ff3b3b33, 0 0 16px #ff3b3b55}
+.track-wrap.rej .band-good,.track-wrap.rej .band-perfect{background:rgba(255,59,59,.28);border-color:#ff3b3b;box-shadow:0 0 10px #ff3b3b66}
+.needle.rej{background:linear-gradient(180deg,#fff,#ff3b3b 40%,#6a1010) !important;box-shadow:0 0 12px #ff3b3bcc !important}
+.needle.rej::before{border-top-color:var(--red) !important;filter:drop-shadow(0 0 4px #ff3b3b) !important}
+.blip.rej{background:radial-gradient(circle at 40% 35%,#fff,var(--red) 55%,#5a1010);box-shadow:0 0 12px #ff3b3bcc}
+.clear-btn.jam{animation:jam .3s ease-out;filter:drop-shadow(0 0 12px #ff3b3b66)}
+.clear-btn.jam .glyph{color:#ffb0b0;text-shadow:0 0 10px #ff3b3b}
+.clear-btn.jam .sub{color:#a04040}
+@keyframes jam{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}50%{transform:translateX(6px)}75%{transform:translateX(-3px)}}
+.lamp.strobe-r{animation:strobeR .44s steps(1)}
+@keyframes strobeR{0%,33%,66%{background:radial-gradient(circle at 40% 35%,#ffd0d0,var(--red) 50%,#5a1010);box-shadow:0 0 0 1px #3a1010,0 0 18px #ff3b3b;transform:scale(1.3)}16%,50%,83%{background:#1a2228;box-shadow:none;transform:scale(1)}}
+/* v5 hot miss shake kept; v6 combo-break ease-down is separate (.ease-fx / 落ち) */
+.drop-fx{position:absolute;inset:0;border-radius:14px;pointer-events:none;opacity:0;z-index:12;
+  box-shadow:inset 0 0 90px #ff3b3b, inset 0 0 0 3px #ff3b3b}
+.drop-fx.show{animation:dropFx .36s ease-out}
+@keyframes dropFx{0%{opacity:1}30%{opacity:.65}100%{opacity:0}}
+.lamp.fall{animation:lampFall .5s ease-in forwards}
+@keyframes lampFall{0%{background:radial-gradient(circle at 40% 35%,#ffd0d0,var(--red) 50%,#5a1010);box-shadow:0 0 14px #ff3b3b;transform:translateY(0)}100%{background:#1a2228;box-shadow:none;transform:translateY(6px);opacity:.25}}
+.shimmer.drop i{background:var(--red);box-shadow:0 0 6px #ff3b3b;animation:shimFall .5s ease-in forwards}
+@keyframes shimFall{to{transform:translateY(12px);opacity:0}}
+</style>
+</head>
+<body>
+<div class="panel" id="panel">
+  <span class="rivet tl"></span><span class="rivet tr"></span>
+  <span class="rivet bl"></span><span class="rivet br"></span>
+
+  <div class="hdr">
+    <div class="title">TODO-TRAIN HUB · 盤
+      <b>接近クリアランス</b>
+    </div>
+    <div class="note">v7 · サクサク · 熱いほど細い<br>コンボが難易度 · 落ちでイージーに戻る<br>回送玩具 · 切符に触れない · 点数なし</div>
+  </div>
+
+  <!-- ALWAYS-VISIBLE SERVICE STRIP — world bridge -->
+  <div class="svc-strip mode-run" id="svcStrip" role="button" tabindex="0"
+       aria-label="運行状態を切り替える（ダミー）" title="タップで運行状態を切替">
+    <div class="svc-cell active-run" id="svcRun" data-mode="run">
+      <div class="svc-lamp" id="lampSvcRun"></div>
+      <div class="svc-label">運行中</div>
+      <div class="svc-sub">SERVICE</div>
+    </div>
+    <div class="svc-cell" id="svcOut" data-mode="out">
+      <div class="svc-lamp" id="lampSvcOut"></div>
+      <div class="svc-label">運休</div>
+      <div class="svc-sub">SUSPEND</div>
+    </div>
+    <div class="svc-cell" id="svcPause" data-mode="pause">
+      <div class="svc-lamp" id="lampSvcPause"></div>
+      <div class="svc-label">停車</div>
+      <div class="svc-sub">HOLD</div>
+    </div>
+    <span class="svc-hint">TAP · DUMMY</span>
+  </div>
+  <div class="world-note">回送玩具／本物の運休・停車は端で読める／切符に触れない</div>
+
+  <div class="inst">
+    <div class="leds" id="leds">
+      <div class="led"><div class="lamp" id="lampAppr"></div>APPR</div>
+      <div class="led"><div class="lamp" id="lampPerf"></div>良</div>
+      <div class="led"><div class="lamp" id="lampGood"></div>可</div>
+      <div class="led"><div class="lamp" id="lampClr"></div>CLR</div>
+      <div class="led"><div class="lamp" id="lampRej"></div>REJ</div>
+      <div class="led"><div class="lamp" id="lampIlk"></div>ILK</div>
+    </div>
+    <div class="hap" title="vibrate stand-in">HAP <span class="dot" id="hapDot"></span></div>
+    <div class="stage" id="stageBox" title="熱 — コンボの熱さが難易度（切れるとイージーに戻る）">
+      <span class="stg-name" id="stageName">閑</span>
+      <span class="pips" id="stagePips"><i class="on"></i><i></i><i></i><i></i></span>
+      <span class="spd" id="stageSpd">›</span>
+    </div>
+  </div>
+
+  <div class="track-wrap" id="trackWrap">
+    <span class="track-label">APPROACH · CLEARANCE WINDOW</span>
+    <span class="track-state" id="trackState">— STANDBY</span>
+    <div class="track flow" id="track">
+      <div class="path-line"></div>
+      <div class="band-ghost" id="bandGhost"></div>
+      <div class="band band-good" id="bandGood"></div>
+      <div class="band band-perfect" id="bandPerfect"></div>
+      <div class="beat-line" id="beatLine"></div>
+      <div class="press-mark" id="pressMark"></div>
+      <div class="sharp-tick" id="sharpTick"></div>
+      <div class="needle" id="needle"></div>
+      <div class="blip" id="blip"></div>
+      <div class="blip ghost hidden" id="blipGhost"></div>
+      <div class="train" id="train"></div>
+    </div>
+    <div class="reject-fx" id="rejectFx"></div>
+    <div class="barrier-flash" id="barrierFx"></div>
+    <div class="sharp-in" id="sharpIn"></div>
+    <div class="stage-banner" id="stageBanner"></div>
+    <div class="interlock-fx" id="interlockFx">
+      <div class="ilk-chain" id="ilkChain"><i></i><i></i><i></i></div>
+    </div>
+    <div class="shimmer" id="shimmer">
+      <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+    </div>
+  </div>
+
+  <div class="btn-wrap">
+    <button type="button" class="clear-btn" id="clearBtn" aria-label="開通">
+      <span class="glyph">開 通</span>
+      <span class="sub">PRESS IN WINDOW</span>
+    </button>
+    <div class="hint" id="hint">白線に合わせて押せ</div>
+  </div>
+
+  <div class="foot">
+    <div class="toggles">
+      <button type="button" class="tog" id="togSound">SOUND</button>
+      <button type="button" class="tog on" id="togVibe">VIBE</button>
+      <button type="button" class="tog" id="togReset">RESET</button>
+    </div>
+    <div class="session">SESSION <span class="bar"><i id="sessBar"></i></span></div>
+  </div>
+
+  <div class="drop-fx" id="dropFx"></div>
+  <div class="ease-fx" id="easeFx"></div>
+  <div class="calm-msg" id="calmMsg">
+    <div>
+      <span id="calmTitle">閑散</span><br><span id="calmSub" style="font-size:10px;letter-spacing:.08em;color:#3a4a54">回送おわり · また近づくとき</span><br>
+      <button type="button" id="restartBtn">再開</button>
+    </div>
+  </div>
+</div>
+<div class="debug" id="debug"></div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════
+   Approach Clear v7 — snappy (サクサク) on top of v6 combo-heat difficulty
+   - Kill dead frames: linger / nextAfter / gaps / pressLock / bootGap / heat-tighten hold
+   - Rare inserts shortened (interlock 3×45ms, barrier 120ms); idle breath only on long gaps
+   - KEEP: 閑温熱灼 heat=difficulty, drop/ease-down on break, Taiko bands, world strip,
+     no score, short session, jam/見送り bite, combo juice
+   - judgement uses press timestamp, not frame-quantised needle
+   ═══════════════════════════════════════════════════════════ */
+const P = {
+  // ── v7 base (= heat tier 0 / 閑). Snappy gaps; HEAT_DIFF still tightens with combo. ──
+  approachMs:        1180,   // v6 1320 — slight trim; keep ため
+  gapStepsMs:        [100, 140, 180, 220],  // v6 200…400 — cut free air
+  gapMinMs:           100,
+  gapMaxMs:           220,
+  goodCenter:         0.50,
+  goodHalfW:          0.066,
+  perfectHalfW0:      0.013,
+  perfectTightenPer:  0,
+  earlyGoodMul:       0.72,
+  earlyPerfMul:       0.85,
+  minPerfHalfMs:      12,
+  sessionMs:         40000,
+  pressLockMs:          50,  // v6 120 — empty frames after hit
+  earlyJamMs:          260,  // v6 420 — jam still stings, less stun dead
+  vibeApproachNear:    0.28,
+  lingerPerfectMs:      80,  // v6 190
+  lingerGoodMs:         55,  // v6 130
+  lingerMissMs:        150,  // v6 380 — sting stays in FX, not wait
+  lingerTimeoutMs:     120,  // v6 280
+  nextAfterPerfectMs:   90,  // v6 220
+  nextAfterGoodMs:      80,  // v6 200
+  nextAfterMissMs:     140,  // v6 340
+  nextAfterTimeoutMs:  110,  // v6 260
+  bootGapMs:           260,  // v6 520
+  // ── rare inserts: keep flavour, slash duration ──
+  interlockChance:     0.04, // v6 0.08
+  interlockStepMs:      45,  // v6 80
+  interlockLamps:        3,  // v6 5 → ~175ms total vs ~510
+  barrierChance:       0.03, // v6 0.05
+  barrierHoldMs:       120,  // v6 hardcoded 280
+  doubleBlipChance:    0.18,
+  approachMsJitter:   [0.95, 1.0, 1.0, 1.04],
+  goodHalfWJitter:    [0.92, 0.97, 1.0, 1.04],
+  perfectHalfWJitter: [0.92, 1.0, 1.0, 1.06],
+  goodCenterJitter:   [-0.03, -0.015, 0, 0.015, 0.03],
+  // ── combo juice + 鋭 (kept) ──
+  comboIdleMs:        2400,
+  heatPerPerfect:     1.0,
+  heatPerGood:        0.5,
+  heatTiers:          [1.5, 3, 5],
+  spikeAfterPerfect:  2,
+  spikeApproaches:    2,
+  spikeHalfWMul:      0.70,
+  sharpRandomChance:  0.06,
+  sharpRandomAfter:   3,
+  sessionFullClears:  14,
+  dropTier:           2,
+  // v7: heat-tighten beat (was hardcoded 620)
+  heatTightenMs:       180,
+  idleBreathMinGapMs:  280,  // skip breath/fidget on short standby
+};
+
+// v7 · heat tier → difficulty (same as v6). Tier rises with combo, drops to 閑 on break.
+// No time/clear-count climb. Display label = heat, not session ladder.
+const HEAT_DIFF = [
+  { name: '閑', approachMul: 1.00, goodMul: 1.00, perfMul: 1.00, flow: '1.5s', spd: '›' },    // easy
+  { name: '温', approachMul: 0.92, goodMul: 0.90, perfMul: 0.92, flow: '1.05s', spd: '››' }, // warm
+  { name: '熱', approachMul: 0.85, goodMul: 0.80, perfMul: 0.86, flow: '.70s', spd: '›››' }, // hot
+  { name: '灼', approachMul: 0.80, goodMul: 0.72, perfMul: 0.80, flow: '.42s', spd: '››››' },// blaze
+];
+
+const DEBUG = /[?&]debug\b/.test(location.search);
+const SVC_ORDER = /** @type {const} */ (['run', 'out', 'pause']);
+
+/** @typedef {'idle'|'approach'|'interlock'|'barrier'|'easedown'|'resolved'|'calm'} Phase */
+/** @typedef {'run'|'out'|'pause'} SvcMode */
+
+const state = {
+  phase: /** @type {Phase} */ ('idle'),
+  t0: 0,
+  approachStart: 0,
+  needle: 0,
+  goodL: 0, goodR: 0,
+  perfL: 0, perfR: 0,
+  perfectHalfW: P.perfectHalfW0,
+  consecPerfect: 0,
+  lastResult: /** @type {null|'perfect'|'good'|'miss'} */ (null),
+  pressLockedUntil: 0,
+  sessionStart: 0,
+  gapUntil: 0,
+  approaching: false,
+  lastVibeApproachAt: 0,
+  soundOn: false,
+  vibeOn: true,
+  calm: false,
+  audio: /** @type {AudioContext|null} */ (null),
+  // v3
+  svc: /** @type {SvcMode} */ ('run'),
+  curApproachMs: P.approachMs,
+  curGoodHalfW: P.goodHalfW,
+  curGoodCenter: P.goodCenter,
+  doubleBlip: false,
+  ghostOffset: 0.14,
+  interlockPending: false,
+  interlockDone: false,
+  breathOn: false,
+  // v4 (internal only — never rendered as numbers)
+  heat: 0,
+  tier: 0,
+  comboDeadline: 0,
+  spikeLeft: 0,
+  sharp: false,
+  sharpFromSpike: false,
+  spikeAnnounce: false,
+  clears: 0,
+  approaches: 0,
+  endPending: false,
+  // v6: difficulty = heat tier (no session stage ladder)
+  prevTier: 0,
+  easePending: false,
+};
+
+// ── DOM ──
+const $ = (id) => /** @type {HTMLElement} */ (document.getElementById(id));
+const panel = $('panel');
+const needleEl = $('needle');
+const blipEl = $('blip');
+const blipGhost = $('blipGhost');
+const bandGood = $('bandGood');
+const bandPerfect = $('bandPerfect');
+const trackState = $('trackState');
+const clearBtn = /** @type {HTMLButtonElement} */ ($('clearBtn'));
+const hint = $('hint');
+const train = $('train');
+const rejectFx = $('rejectFx');
+const barrierFx = $('barrierFx');
+const interlockFx = $('interlockFx');
+const ilkChain = $('ilkChain');
+const shimmer = $('shimmer');
+const sessBar = $('sessBar');
+const calmMsg = $('calmMsg');
+const hapDot = $('hapDot');
+const debugEl = $('debug');
+const svcStrip = $('svcStrip');
+const trackWrap = $('trackWrap');
+const sharpTick = $('sharpTick');
+const sharpIn = $('sharpIn');
+const trackEl = $('track');
+const beatLine = $('beatLine');
+const bandGhost = $('bandGhost');
+const pressMark = $('pressMark');
+const stageBox = $('stageBox');
+const stageName = $('stageName');
+const stageSpd = $('stageSpd');
+const stageBanner = $('stageBanner');
+const dropFxEl = $('dropFx');
+const easeFxEl = $('easeFx');
+const stagePips = Array.from(document.querySelectorAll('#stagePips i'));
+const LAMP_ORDER = ['appr', 'perf', 'good', 'clr', 'rej', 'ilk'];
+const lamps = {
+  appr: $('lampAppr'),
+  good: $('lampGood'),
+  perf: $('lampPerf'),
+  clr: $('lampClr'),
+  rej: $('lampRej'),
+  ilk: $('lampIlk'),
+};
+
+if (DEBUG) debugEl.classList.add('show');
+
+function now() { return performance.now(); }
+function pick(arr) { return arr[(Math.random() * arr.length) | 0]; }
+function restartAnim(el, cls) { el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); }
+
+function layoutBands() {
+  const c = state.curGoodCenter;
+  const gh = state.curGoodHalfW;
+  const ph = state.perfectHalfW;
+  // v5: early side shorter than late side (早押しは許されにくい)
+  state.goodL = Math.max(0.08, c - gh * P.earlyGoodMul);
+  state.goodR = Math.min(0.92, c + gh);
+  state.perfL = Math.max(state.goodL + 0.003, c - ph * P.earlyPerfMul);
+  state.perfR = Math.min(state.goodR - 0.003, c + ph);
+  const pct = (v) => (v * 100).toFixed(2) + '%';
+  beatLine.style.left = pct(c);
+  bandGood.style.left = pct(state.goodL);
+  bandGood.style.width = pct(state.goodR - state.goodL);
+  bandPerfect.style.left = pct(state.perfL);
+  bandPerfect.style.width = pct(state.perfR - state.perfL);
+  sharpTick.style.left = pct(c);
+  bandPerfect.classList.toggle('sharp', !!state.sharp);
+}
+
+function setNeedle(x) {
+  state.needle = x;
+  const pct = (x * 100).toFixed(3) + '%';
+  needleEl.style.left = pct;
+  blipEl.style.left = pct;
+  if (state.doubleBlip) {
+    const gx = Math.max(0, x - state.ghostOffset);
+    blipGhost.style.left = (gx * 100).toFixed(3) + '%';
+  }
+}
+
+function zoneAt(x) {
+  if (x >= state.perfL && x <= state.perfR) return 'perfect';
+  if (x >= state.goodL && x <= state.goodR) return 'good';
+  return 'out';
+}
+
+function flashPanel(kind) {
+  panel.classList.remove('flash-perfect', 'flash-good', 'flash-miss', 'flash-sharp');
+  void panel.offsetWidth;
+  panel.classList.add('flash-' + kind);
+  setTimeout(() => panel.classList.remove('flash-' + kind),
+    kind === 'sharp' ? 160 : kind === 'perfect' ? 140 : 90);
+}
+
+// ═══ v4 combo heat — juice only ═══
+function tierFor(h) {
+  const T = P.heatTiers;
+  return h >= T[2] ? 3 : h >= T[1] ? 2 : h >= T[0] ? 1 : 0;
+}
+function setHeat(h, opts) {
+  opts = opts || {};
+  const prev = state.tier;
+  state.heat = h;
+  state.tier = tierFor(h);
+  panel.dataset.heat = String(state.tier);
+  // 段 display = heat label; difficulty follows tier
+  setHeatUI(state.tier, { up: !!opts.up, down: !!opts.down });
+  if (opts.up && state.tier > prev) {
+    // brief tighten cue — next approach will already be harder via rollApproachVariant
+    restartAnim(stageBox, 'up');
+    vibe(TAP.heatUp);
+  }
+  state.prevTier = state.tier;
+}
+function breakCombo(reason) {
+  if (state.heat <= 0 && state.consecPerfect === 0) return;
+  const wasTier = state.tier;
+  state.consecPerfect = 0;
+  if (state.spikeLeft > 0 || state.sharp) endSpike();
+  setHeat(0, { down: wasTier >= 1 });
+  if (wasTier >= 1) {
+    // visible ease-down: bands widen, glow fades, soft「落ち」— regrettable, not a lecture
+    easeDownFx(wasTier, reason);
+  }
+}
+function endSpike() {
+  state.spikeLeft = 0;
+  state.sharp = false;
+  state.sharpFromSpike = false;
+  trackWrap.classList.remove('sharp');
+  bandPerfect.classList.remove('sharp');
+}
+
+// lamp cascade: tier 1 cyan sweep / 2 gold ping-pong / 3 gold+white + strip lamps
+function cascadeLamps(kind, tier, sharpHit) {
+  if (tier <= 0 && !sharpHit) return;
+  const cls = sharpHit ? 'casc-w' : tier >= 2 ? (kind === 'perfect' ? 'casc-y' : 'casc-g') : 'casc-c';
+  const step = tier >= 3 ? 18 : 24;
+  const seq = LAMP_ORDER.map((k) => lamps[k]);
+  const order = (tier >= 2 || sharpHit) ? seq.concat(seq.slice(0, -1).reverse()) : seq;
+  order.forEach((el, i) => setTimeout(() => {
+    el.classList.remove('casc-c', 'casc-g', 'casc-y', 'casc-w');
+    void el.offsetWidth;
+    el.classList.add(cls);
+    setTimeout(() => el.classList.remove(cls), 300);
+  }, 30 + i * step));
+  if (tier >= 3 || sharpHit) {
+    // only the toy's own 運行中 lamp — never flash 運休/停車 (real status stays readable)
+    const el = $('lampSvcRun');
+    setTimeout(() => {
+      el.classList.add(sharpHit ? 'casc-y' : 'casc-c');
+      setTimeout(() => el.classList.remove('casc-c', 'casc-y'), 320);
+    }, 90);
+  }
+}
+
+// Taptic by tier (vibrate stand-in). Tier 0 = v2/v3 patterns.
+const TAP = {
+  perfect: [[48, 16, 78], [54, 14, 88], [58, 12, 34, 12, 92], [62, 10, 40, 10, 104]],
+  good:    [[22, 18, 32], [26, 16, 38], [30, 14, 44], [32, 12, 20, 12, 50]],
+  sharp:   [70, 10, 46, 10, 120],
+  // v5: misses are HEAVIER than 可 — the sting is the point
+  miss:    [42, 24, 42, 24, 70],          // v4 [12,40,12]
+  pass:    [26, 30, 26],
+  jam:     [50, 20, 50],
+  drop:    [95, 28, 40, 28, 40, 28, 160],
+  heatUp:  [10, 36, 14, 36, 22],
+  ease:    [18, 40, 28, 50, 40],   // soft descending — 落ち, not punish
+};
+
+// ═══ v6 heat UI (= 段 display) ═══
+function setHeatUI(tier, opts) {
+  opts = opts || {};
+  const H = HEAT_DIFF[tier] || HEAT_DIFF[0];
+  stageName.textContent = H.name;
+  stageSpd.textContent = H.spd;
+  stagePips.forEach((p, i) => p.classList.toggle('on', i <= tier));
+  trackEl.style.setProperty('--flow', H.flow);
+  if (opts.down) {
+    stageBox.classList.remove('up');
+    restartAnim(stageBox, 'down');
+  }
+}
+
+// Soft ease-down when combo heat (and thus difficulty) falls back to 閑
+function easeDownFx(wasTier, reason) {
+  // snapshot current (narrow) band as ghost, then widen toward easy widths
+  bandGhost.style.left = bandGood.style.left;
+  bandGhost.style.width = bandGood.style.width;
+  bandGhost.classList.remove('show', 'widen');
+  void bandGhost.offsetWidth;
+  bandGhost.classList.add('widen');
+
+  // apply easy (tier 0) band widths now so the widen reads on the track
+  const oldGh = state.curGoodHalfW;
+  const easy = HEAT_DIFF[0];
+  state.curApproachMs = Math.round(P.approachMs * easy.approachMul);
+  state.curGoodHalfW = Math.max(oldGh, P.goodHalfW * easy.goodMul);
+  const floorPh = P.minPerfHalfMs / Math.max(1, state.curApproachMs);
+  state.perfectHalfW = Math.max(floorPh, P.perfectHalfW0 * easy.perfMul);
+  trackEl.classList.add('widening');
+  layoutBands();
+  setTimeout(() => trackEl.classList.remove('widening'), 240);
+
+  // soft「落ち」banner — no score/guilt copy
+  stageBanner.textContent = '落ち';
+  stageBanner.classList.remove('show', 'ochi');
+  void stageBanner.offsetWidth;
+  stageBanner.classList.add('ochi');
+  setTimeout(() => stageBanner.classList.remove('ochi'), 480);
+
+  // glow fades + soft wash
+  panel.classList.add('cool', 'ease-down');
+  setTimeout(() => panel.classList.remove('cool', 'ease-down'), 420);
+  restartAnim(easeFxEl, 'show');
+
+  // lamps soft cyan fall (not red punish) — right→left cooled
+  LAMP_ORDER.slice().reverse().forEach((k, i) => setTimeout(() => {
+    lamps[k].classList.remove('casc-c', 'casc-g', 'casc-y', 'casc-w');
+    void lamps[k].offsetWidth;
+    lamps[k].classList.add('casc-c');
+    setTimeout(() => lamps[k].classList.remove('casc-c'), 220);
+  }, i * 28));
+
+  vibe(TAP.ease);
+  playClick('ease');
+  state.easePending = false;
+
+  if (reason === 'idle' && (state.phase === 'idle' || state.phase === 'resolved')) {
+    hint.textContent = '熱が冷めた — 帯が戻る';
+    hint.className = 'hint heat';
+  }
+}
+
+// ═══ v5 不可 FX ═══
+function missFx(opts) {
+  const hot = !!opts.hot, soft = !!opts.soft;
+  flashPanel('miss');
+  panel.classList.remove('shake', 'drop');
+  void panel.offsetWidth;
+  if (!soft || hot) panel.classList.add('shake');
+  if (hot) panel.classList.add('drop');
+  setTimeout(() => panel.classList.remove('shake', 'drop'), 380);
+  restartAnim(rejectFx, 'show');
+  trackWrap.classList.add('rej');
+  setTimeout(() => trackWrap.classList.remove('rej'), soft ? 140 : 240);
+  lamps.rej.className = 'lamp strobe-r';
+  setTimeout(() => { if (state.phase !== 'approach') lamps.rej.className = 'lamp on-r'; }, 260);
+  if (hot) {
+    // combo drop: rim goes red, board dips, lit lamps fall right→left, shimmer drops
+    restartAnim(dropFxEl, 'show');
+    LAMP_ORDER.filter((k) => k !== 'rej').reverse().forEach((k, i) => setTimeout(() => {
+      lamps[k].className = 'lamp fall';
+    }, i * 40));
+    const ns = /** @type {NodeListOf<HTMLElement>} */ (shimmer.querySelectorAll('i'));
+    ns.forEach((n, i) => { n.classList.remove('lit'); n.style.animationDelay = ((ns.length - 1 - i) * 18) + 'ms'; });
+    shimmer.className = 'shimmer drop';
+    setTimeout(() => { shimmer.className = 'shimmer'; ns.forEach((n) => { n.style.animationDelay = ''; }); }, 400);
+  }
+  vibe(hot ? TAP.drop : soft ? TAP.pass : (opts.jam ? TAP.jam : TAP.miss));
+  playClick(hot ? 'drop' : 'miss');
+}
+function showPressMark(u, z) {
+  pressMark.style.left = (u * 100).toFixed(3) + '%';
+  pressMark.className = 'press-mark show ' + (z === 'perfect' ? 'p' : z === 'good' ? 'g' : 'm');
+}
+
+
+function setLamps(map) {
+  const cls = { g: 'on-g', y: 'on-y', r: 'on-r', c: 'on-c', a: 'on-a' };
+  for (const [k, el] of Object.entries(lamps)) {
+    el.className = 'lamp';
+    const v = map[k];
+    if (v && cls[v]) el.classList.add(cls[v], 'pulse');
+  }
+  state.breathOn = false;
+}
+
+function startIdleBreath() {
+  // soft cyan breath on APPR + ILK between approaches — anti-monotony, visible
+  state.breathOn = true;
+  lamps.appr.className = 'lamp breath';
+  lamps.ilk.className = 'lamp';
+  // stagger second breath on CLR faintly
+  lamps.clr.className = 'lamp';
+  setTimeout(() => {
+    if (state.breathOn && state.phase === 'idle') {
+      lamps.clr.className = 'lamp breath';
+    }
+  }, 900);
+}
+
+function runShimmer(kind, tier) {
+  tier = tier || 0;
+  shimmer.className = 'shimmer ' + kind + (tier >= 2 ? ' sweep2' : '');
+  if (tier >= 2) {
+    // second sweep (reverse) — denser juice at heat
+    setTimeout(() => {
+      const ns = /** @type {NodeListOf<HTMLElement>} */ (shimmer.querySelectorAll('i'));
+      const n2 = ns.length;
+      for (let i = 0; i < n2; i++) {
+        setTimeout(() => {
+          ns[n2 - 1 - i].classList.add('lit');
+          if (i === n2 - 1) setTimeout(() => ns.forEach((x) => x.classList.remove('lit')), 110);
+        }, i * 10);
+      }
+    }, 190);
+  }
+  const nodes = /** @type {NodeListOf<HTMLElement>} */ (shimmer.querySelectorAll('i'));
+  nodes.forEach((n) => n.classList.remove('lit'));
+  const n = (kind === 'perfect' || tier >= 2) ? nodes.length
+    : Math.max(4, Math.floor(nodes.length * (0.55 + tier * 0.2)));
+  const delay = kind === 'perfect' ? 14 : 18;
+  for (let i = 0; i < n; i++) {
+    setTimeout(() => {
+      nodes[i].classList.add('lit');
+      if ((kind === 'perfect' || kind === 'good') && i === n - 1) {
+        setTimeout(() => nodes.forEach((x) => x.classList.remove('lit')), kind === 'perfect' ? 140 : 90);
+      }
+    }, i * delay);
+  }
+}
+
+function hapBlink(ms) {
+  hapDot.classList.add('hot');
+  setTimeout(() => hapDot.classList.remove('hot'), ms || 80);
+}
+
+function vibe(pattern) {
+  if (!state.vibeOn) return;
+  hapBlink(Array.isArray(pattern) ? pattern.reduce((a, b) => a + b, 0) : pattern);
+  try {
+    if (navigator.vibrate) navigator.vibrate(pattern);
+  } catch (_) { /* ignore */ }
+}
+
+function ensureAudio() {
+  if (!state.audio) {
+    try { state.audio = new (window.AudioContext || window.webkitAudioContext)(); } catch (_) {}
+  }
+  if (state.audio && state.audio.state === 'suspended') state.audio.resume();
+  return state.audio;
+}
+
+function playClick(kind, tier) {
+  if (!state.soundOn) return;
+  const ctx = ensureAudio();
+  if (!ctx) return;
+  const t = ctx.currentTime;
+  tier = tier || 0;
+  if ((kind === 'perfect' || kind === 'good') && tier >= 2) {
+    // heat chime — short high tick layered on top
+    const oc = ctx.createOscillator(); const gc = ctx.createGain();
+    oc.type = 'triangle'; oc.frequency.value = 900 + tier * 140;
+    oc.connect(gc); gc.connect(ctx.destination);
+    gc.gain.setValueAtTime(0.0001, t + 0.03);
+    gc.gain.exponentialRampToValueAtTime(0.05, t + 0.035);
+    gc.gain.exponentialRampToValueAtTime(0.001, t + 0.09);
+    oc.start(t + 0.03); oc.stop(t + 0.1);
+  }
+  const o = ctx.createOscillator();
+  const g = ctx.createGain();
+  o.connect(g); g.connect(ctx.destination);
+  if (kind === 'perfect') {
+    o.type = 'square'; o.frequency.setValueAtTime(210 + tier * 22, t);
+    o.frequency.exponentialRampToValueAtTime(95, t + 0.055);
+    g.gain.setValueAtTime(0.14, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.09);
+    o.start(t); o.stop(t + 0.095);
+    const o2 = ctx.createOscillator(); const g2 = ctx.createGain();
+    o2.type = 'triangle'; o2.frequency.value = 480;
+    o2.connect(g2); g2.connect(ctx.destination);
+    g2.gain.setValueAtTime(0.07, t);
+    g2.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+    o2.start(t); o2.stop(t + 0.065);
+  } else if (kind === 'good') {
+    o.type = 'square'; o.frequency.value = 280 + tier * 20;
+    g.gain.setValueAtTime(0.07, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.035);
+    o.start(t); o.stop(t + 0.04);
+  } else if (kind === 'ilk') {
+    o.type = 'square'; o.frequency.value = 160;
+    g.gain.setValueAtTime(0.05, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.03);
+    o.start(t); o.stop(t + 0.035);
+  } else if (kind === 'heatup') {
+    // rising two-step — heat tier up (combo, not time-段)
+    o.disconnect();
+    [560, 820].forEach((f, i) => {
+      const os = ctx.createOscillator(); const gs = ctx.createGain();
+      os.type = 'triangle'; os.frequency.value = f;
+      os.connect(gs); gs.connect(ctx.destination);
+      const st = t + i * 0.07;
+      gs.gain.setValueAtTime(0.0001, st);
+      gs.gain.exponentialRampToValueAtTime(0.065, st + 0.005);
+      gs.gain.exponentialRampToValueAtTime(0.001, st + 0.065);
+      os.start(st); os.stop(st + 0.075);
+    });
+  } else if (kind === 'ease') {
+    // soft descending — 「落ち」to easy (regrettable cool-off)
+    o.type = 'sine'; o.frequency.setValueAtTime(380, t);
+    o.frequency.exponentialRampToValueAtTime(120, t + 0.32);
+    g.gain.setValueAtTime(0.055, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.34);
+    o.start(t); o.stop(t + 0.35);
+    const o2 = ctx.createOscillator(); const g2 = ctx.createGain();
+    o2.type = 'triangle'; o2.frequency.setValueAtTime(240, t + 0.05);
+    o2.frequency.exponentialRampToValueAtTime(90, t + 0.28);
+    o2.connect(g2); g2.connect(ctx.destination);
+    g2.gain.setValueAtTime(0.03, t + 0.05);
+    g2.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+    o2.start(t + 0.05); o2.stop(t + 0.31);
+  } else if (kind === 'drop') {
+    // legacy red drop buzz (kept; v6 prefers ease on combo break)
+    o.type = 'sawtooth'; o.frequency.setValueAtTime(420, t);
+    o.frequency.exponentialRampToValueAtTime(48, t + 0.42);
+    g.gain.setValueAtTime(0.09, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.45);
+    o.start(t); o.stop(t + 0.46);
+    const o2 = ctx.createOscillator(); const g2 = ctx.createGain();
+    o2.type = 'square'; o2.frequency.value = 62;
+    o2.connect(g2); g2.connect(ctx.destination);
+    g2.gain.setValueAtTime(0.08, t);
+    g2.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
+    o2.start(t); o2.stop(t + 0.23);
+  } else {
+    // v5 不可: harsh detuned buzzer (v4 was a soft sine blip)
+    o.type = 'square'; o.frequency.setValueAtTime(150, t);
+    o.frequency.exponentialRampToValueAtTime(72, t + 0.17);
+    g.gain.setValueAtTime(0.09, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.19);
+    o.start(t); o.stop(t + 0.2);
+    const o2 = ctx.createOscillator(); const g2 = ctx.createGain();
+    o2.type = 'sawtooth'; o2.frequency.setValueAtTime(158, t);
+    o2.frequency.exponentialRampToValueAtTime(76, t + 0.17);
+    o2.connect(g2); g2.connect(ctx.destination);
+    g2.gain.setValueAtTime(0.05, t);
+    g2.gain.exponentialRampToValueAtTime(0.001, t + 0.19);
+    o2.start(t); o2.stop(t + 0.2);
+  }
+}
+
+// ── service strip (world bridge) ──
+function applySvcMode(mode) {
+  state.svc = mode;
+  svcStrip.className = 'svc-strip mode-' + mode;
+  panel.classList.remove('svc-out', 'svc-paused');
+  $('svcRun').className = 'svc-cell' + (mode === 'run' ? ' active-run' : '');
+  $('svcOut').className = 'svc-cell' + (mode === 'out' ? ' active-out' : '');
+  $('svcPause').className = 'svc-cell' + (mode === 'pause' ? ' active-pause' : '');
+
+  if (mode === 'out') {
+    panel.classList.add('svc-out');
+    // 運休 dims board — toy still idle-breaths faintly but approaches pause feel
+    hint.textContent = '運休 — 盤は暗い（切符には触れない）';
+    hint.className = 'hint';
+  } else if (mode === 'pause') {
+    panel.classList.add('svc-paused');
+    if (state.phase === 'idle') {
+      hint.textContent = '停車ランプ点灯 — 端で読める';
+      hint.className = 'hint';
+    }
+  } else {
+    if (state.phase === 'idle') {
+      hint.textContent = '白線に合わせて押せ';
+      hint.className = 'hint';
+    }
+  }
+  vibe(mode === 'pause' ? [18, 30, 18] : mode === 'out' ? [30] : [12]);
+}
+
+function cycleSvc() {
+  const i = SVC_ORDER.indexOf(state.svc);
+  applySvcMode(SVC_ORDER[(i + 1) % SVC_ORDER.length]);
+}
+
+svcStrip.addEventListener('click', (e) => {
+  e.preventDefault();
+  cycleSvc();
+});
+svcStrip.addEventListener('keydown', (e) => {
+  if (e.code === 'Enter' || e.code === 'Space') {
+    e.preventDefault();
+    cycleSvc();
+  }
+});
+
+// ── rare interlock chain (visibly changes the loop) ──
+function runInterlockThen(armFn) {
+  state.phase = 'interlock';
+  state.interlockPending = true;
+  state.interlockDone = false;
+  clearBtn.classList.add('locked-ilk');
+  clearBtn.disabled = true;
+  trackWrap.classList.add('interlock-active');
+  interlockFx.classList.add('show');
+  trackState.textContent = '⛓ INTERLOCK';
+  trackState.className = 'track-state ilk';
+  hint.textContent = '連動確認…';
+  hint.className = 'hint ilk';
+  setLamps({ ilk: 'a', appr: 'c' });
+
+  const nodes = /** @type {NodeListOf<HTMLElement>} */ (ilkChain.querySelectorAll('i'));
+  nodes.forEach((n) => n.className = '');
+  let step = 0;
+  const tickIlk = () => {
+    if (state.calm || state.svc === 'out') {
+      // abort cleanly
+      finishInterlock(false);
+      return;
+    }
+    if (step < nodes.length) {
+      nodes[step].classList.add('lit');
+      vibe(8);
+      playClick('ilk');
+      step++;
+      setTimeout(tickIlk, P.interlockStepMs);
+    } else {
+      nodes.forEach((n) => { n.classList.remove('lit'); n.classList.add('done'); });
+      vibe([10, 20, 24]);
+      setTimeout(() => {
+        finishInterlock(true);
+        armFn();
+      }, 70);
+    }
+  };
+  setTimeout(tickIlk, 40);
+}
+
+function finishInterlock(ok) {
+  state.interlockPending = false;
+  state.interlockDone = ok;
+  clearBtn.classList.remove('locked-ilk');
+  clearBtn.disabled = state.calm;
+  trackWrap.classList.remove('interlock-active');
+  interlockFx.classList.remove('show');
+  const nodes = /** @type {NodeListOf<HTMLElement>} */ (ilkChain.querySelectorAll('i'));
+  nodes.forEach((n) => n.className = '');
+  lamps.ilk.className = ok ? 'lamp on-c' : 'lamp';
+}
+
+function flashBarrier() {
+  barrierFx.classList.remove('show');
+  void barrierFx.offsetWidth;
+  barrierFx.classList.add('show');
+  vibe([14, 20, 14]);
+  playClick('ilk');
+  trackState.textContent = '🚧 BARRIER';
+  trackState.className = 'track-state ilk';
+}
+
+// ── cycle control ──
+function rollApproachVariant() {
+  const S = HEAT_DIFF[state.tier] || HEAT_DIFF[0];
+  state.curApproachMs = Math.round(P.approachMs * S.approachMul * pick(P.approachMsJitter));
+  state.curGoodHalfW = P.goodHalfW * S.goodMul * pick(P.goodHalfWJitter);
+  state.curGoodCenter = Math.max(0.44, Math.min(0.58, P.goodCenter + pick(P.goodCenterJitter)));
+  const floorPh = P.minPerfHalfMs / state.curApproachMs;
+  state.perfectHalfW = Math.max(floorPh, P.perfectHalfW0 * S.perfMul * pick(P.perfectHalfWJitter));
+  state.doubleBlip = Math.random() < P.doubleBlipChance;
+  state.ghostOffset = 0.10 + Math.random() * 0.08;
+  // v4 鋭: spike (from 良 run) or rare lone sharp — brief, never cumulative
+  state.approaches++;
+  state.sharpFromSpike = state.spikeLeft > 0;
+  state.sharp = state.sharpFromSpike ||
+    (state.approaches > P.sharpRandomAfter && Math.random() < P.sharpRandomChance);
+  if (state.sharp) {
+    state.perfectHalfW = Math.max(floorPh, P.perfectHalfW0 * S.perfMul * P.spikeHalfWMul);
+  }
+}
+
+function scheduleNextApproach(delay) {
+  state.phase = 'idle';
+  state.approaching = false;
+  needleEl.classList.add('hidden');
+  blipEl.classList.add('hidden');
+  blipGhost.classList.add('hidden');
+  needleEl.classList.remove('rej');
+  blipEl.classList.remove('rej');
+  pressMark.className = 'press-mark';
+  clearBtn.classList.remove('armed-good', 'armed-perfect', 'locked-ilk');
+  trackState.textContent = '— STANDBY';
+  trackState.className = 'track-state';
+  trackWrap.classList.remove('interlock-active');
+  setLamps({});
+  let d = delay;
+  if (d == null) {
+    const steps = P.gapStepsMs || [P.gapMinMs, P.gapMaxMs];
+    d = steps[(Math.random() * steps.length) | 0];
+  }
+  // 運休: stretch idle a bit — still snappy vs v6's 900
+  if (state.svc === 'out') d = Math.max(d, 520);
+  // idle breath / band fidget only when standby is long enough to notice
+  if (d >= (P.idleBreathMinGapMs || 280)) {
+    trackWrap.classList.add('idle-fidget');
+    startIdleBreath();
+  } else {
+    trackWrap.classList.remove('idle-fidget');
+    state.breathOn = false;
+  }
+  state.gapUntil = now() + d;
+}
+
+function approachLabel() {
+  const st = (HEAT_DIFF[state.tier] || HEAT_DIFF[0]).name;
+  if (state.sharp) return (state.doubleBlip ? '◇ 鋭 · 双 · ' : '◇ 鋭 · SHARP · ') + st;
+  return (state.doubleBlip ? '▶ APPROACH · 双 · ' : '▶ APPROACH · ') + st;
+}
+
+function armApproach() {
+  state.phase = 'approach';
+  state.approaching = true;
+  state.approachStart = now();
+  state.lastResult = null;
+  trackWrap.classList.remove('idle-fidget');
+  needleEl.classList.remove('hidden', 'rej');
+  blipEl.classList.remove('hidden', 'rej');
+  pressMark.className = 'press-mark';
+  if (state.doubleBlip) blipGhost.classList.remove('hidden');
+  else blipGhost.classList.add('hidden');
+  setNeedle(0);
+  trackState.textContent = approachLabel();
+  trackState.className = 'track-state' + (state.sharp ? ' sharp' : '');
+  trackWrap.classList.toggle('sharp', state.sharp);
+  setLamps({ appr: 'c' });
+  if (state.sharp) {
+    restartAnim(sharpIn, 'show');
+    vibe([8, 24, 8]);
+    hint.textContent = '鋭 — 良帯が細い';
+    hint.className = 'hint sharp';
+  } else {
+    hint.textContent = state.svc === 'out' ? '運休中の回送接近…' :
+      state.svc === 'pause' ? '停車気配あり · 接近中…' : '接近中…';
+    hint.className = 'hint';
+  }
+  train.className = 'train';
+  state.lastVibeApproachAt = 0;
+}
+
+// v6: on heat-tier UP, briefly show band shrink before arming (difficulty climb = combo only)
+function heatTightenThen(armFn) {
+  state.phase = 'easedown'; // brief hold so tick doesn't double-arm
+  const oldGh = state.curGoodHalfW;
+  bandGhost.style.left = bandGood.style.left;
+  bandGhost.style.width = bandGood.style.width;
+  restartAnim(bandGhost, 'show');
+  const H = HEAT_DIFF[state.tier];
+  stageBanner.textContent = '▲ ' + H.name;
+  restartAnim(stageBanner, 'show');
+  trackState.textContent = '▲ ' + H.name + ' · 締まる';
+  trackState.className = 'track-state heat';
+  hint.textContent = H.name + ' — 帯が締まり、接近が速い';
+  hint.className = 'hint heat';
+  trackEl.classList.add('shrinking');
+  rollApproachVariant();
+  state.curGoodHalfW = Math.min(state.curGoodHalfW, oldGh * 0.92);
+  layoutBands();
+  cascadeLamps('good', Math.max(1, state.tier), false);
+  playClick('heatup');
+  state.comboDeadline += P.heatTightenMs;
+  setTimeout(() => {
+    trackEl.classList.remove('shrinking');
+    if (state.calm) return;
+    armFn();
+  }, P.heatTightenMs);
+}
+
+function beginApproach() {
+  if (state.calm) return;
+  // If heat tier rose on the last clear, show a one-beat tighten (not time-based 段)
+  if (state.easePending === 'up') {
+    state.easePending = false;
+    heatTightenThen(armApproach);
+    return;
+  }
+  rollApproachVariant();
+  layoutBands();
+  const r = Math.random();
+  if (r < P.interlockChance) {
+    runInterlockThen(armApproach);
+  } else if (r < P.interlockChance + P.barrierChance) {
+    flashBarrier();
+    state.phase = 'barrier';
+    state.comboDeadline += P.barrierHoldMs;
+    setTimeout(() => { if (!state.calm) armApproach(); }, P.barrierHoldMs);
+  } else {
+    armApproach();
+  }
+}
+
+const PRAISE = {
+  perfect: ['良 — 芯を捉えた', '良 — 噛み合ってきた', '良 — 連なる', '良 — 冴えてる'],
+  good:    ['可 — 窓内クリア', '可 — 流れは切れない', '可 — まだ繋がる', '可 — 線が温かい'],
+};
+
+function resolveApproach(result, side) {
+  state.phase = 'resolved';
+  state.approaching = false;
+  state.pressLockedUntil = now() + P.pressLockMs;
+  clearBtn.classList.remove('armed-good', 'armed-perfect');
+  blipGhost.classList.add('hidden');
+  const wasSharp = state.sharp;
+  const wasSpike = state.sharpFromSpike;
+  trackWrap.classList.remove('sharp');
+
+  if (result === 'perfect' || result === 'good') {
+    const t = now();
+    state.clears++;
+    state.comboDeadline = t + P.comboIdleMs;
+    const prevTier = state.tier;
+    setHeat(state.heat + (result === 'perfect' ? P.heatPerPerfect : P.heatPerGood));
+    if (state.tier > prevTier) {
+      state.easePending = 'up'; // next approach shows band tighten
+      restartAnim(stageBox, 'up');
+      vibe(TAP.heatUp);
+    }
+    const tier = state.tier;
+    const sharpHit = wasSharp && result === 'perfect';
+    const heatCls = tier >= 3 ? ' heat3' : tier >= 2 ? ' heat2' : '';
+
+    if (result === 'perfect') {
+      state.lastResult = 'perfect';
+      state.consecPerfect++;
+      trackState.textContent = sharpHit ? '◆ 鋭良 · SHARP PERFECT' : '◆ PERFECT · 良';
+      trackState.className = 'track-state ' + (sharpHit ? 'sharp' : 'perf');
+      hint.textContent = sharpHit ? '良 — 鋭く刺さった' : PRAISE.perfect[tier];
+      hint.className = 'hint ' + (sharpHit ? 'sharp' : 'perfect');
+      setLamps({ perf: 'y', clr: 'g', appr: 'c' });
+      flashPanel(sharpHit ? 'sharp' : 'perfect');
+      runShimmer('perfect', sharpHit ? 3 : tier);
+      vibe(sharpHit ? TAP.sharp : TAP.perfect[tier]);
+      playClick('perfect', sharpHit ? 3 : tier);
+      train.className = 'train on perfect-pass' + (sharpHit ? ' heat3' : heatCls);
+    } else {
+      state.lastResult = 'good';
+      state.consecPerfect = 0;       // 可 keeps combo heat, but not the 良 run that arms 鋭
+      trackState.textContent = '○ GOOD · 可';
+      trackState.className = 'track-state ok';
+      hint.textContent = PRAISE.good[tier];
+      hint.className = 'hint good';
+      setLamps({ good: 'g', clr: 'g' });
+      flashPanel('good');
+      runShimmer('good', tier);
+      vibe(TAP.good[tier]);
+      playClick('good', tier);
+      train.className = 'train on good-pass' + heatCls;
+    }
+    cascadeLamps(result, tier, sharpHit);
+
+    // 鋭 spike bookkeeping — spike, not climb
+    if (wasSpike) {
+      state.spikeLeft = Math.max(0, state.spikeLeft - 1);
+      if (state.spikeLeft === 0) { endSpike(); state.consecPerfect = 0; }
+    } else if (state.spikeLeft === 0 && state.consecPerfect >= P.spikeAfterPerfect) {
+      state.spikeLeft = P.spikeApproaches;
+      state.consecPerfect = 0;
+    }
+    state.sharp = false;
+    state.perfectHalfW = P.perfectHalfW0;
+    if (state.spikeLeft === 0) bandPerfect.classList.remove('sharp');
+
+    if (state.clears >= P.sessionFullClears) state.endPending = true;
+  } else if (result === 'miss') {
+    // breakCombo → easeDownFx when heat was up (落ち to easy). Miss still stings; no red-drop lecture.
+    state.lastResult = 'miss';
+    breakCombo('miss');
+    endSpike();
+    state.perfectHalfW = P.perfectHalfW0;
+    trackState.textContent = side === 'early' ? '× 早 · 不可' : side === 'late' ? '× 遅 · 不可' : '× REJECT · 不可';
+    trackState.className = 'track-state bad';
+    hint.textContent = side === 'early' ? '不可 — 早い' : side === 'late' ? '不可 — 遅い' : '不可 — 進路は開かない';
+    hint.className = 'hint miss';
+    setLamps({ rej: 'r' });
+    needleEl.classList.add('rej');
+    blipEl.classList.add('rej');
+    missFx({ hot: false });
+  } else {
+    // 見送り = light 不可; combo break still ease-downs if heat was up
+    state.lastResult = 'miss';
+    breakCombo('pass');
+    endSpike();
+    state.sharp = false;
+    state.perfectHalfW = P.perfectHalfW0;
+    trackState.textContent = '× 見送り · 不可';
+    trackState.className = 'track-state bad';
+    hint.textContent = '見送り — 進路は開かない';
+    hint.className = 'hint miss';
+    setLamps({ rej: 'r' });
+    missFx({ hot: false, soft: true });
+  }
+
+  // success: needle vanishes into the pass; 不可: needle stays frozen red until next approach
+  if (result === 'perfect' || result === 'good') {
+    setTimeout(() => { needleEl.classList.add('hidden'); blipEl.classList.add('hidden'); }, 40);
+  } else if (result !== 'miss') {
+    setTimeout(() => { needleEl.classList.add('hidden'); blipEl.classList.add('hidden'); }, 160);
+  }
+
+  const linger =
+    result === 'perfect' ? P.lingerPerfectMs :
+    result === 'good'    ? P.lingerGoodMs :
+    result === 'miss'    ? P.lingerMissMs :
+                           P.lingerTimeoutMs;
+  const nextDelay =
+    result === 'perfect' ? P.nextAfterPerfectMs :
+    result === 'good'    ? P.nextAfterGoodMs :
+    result === 'miss'    ? P.nextAfterMissMs :
+                           P.nextAfterTimeoutMs;
+  setTimeout(() => {
+    if (state.calm) return;
+    if (state.endPending) { enterCalm('full'); return; }
+    scheduleNextApproach(nextDelay);
+    if (state.spikeLeft > 0) {
+      // announce upcoming 鋭 during standby — a beat of anticipation
+      trackState.textContent = '◇ 次 · 鋭';
+      trackState.className = 'track-state sharp';
+    }
+  }, result === 'perfect' && state.endPending ? linger + 120 : linger);
+}
+
+function onPress() {
+  if (state.calm) return;
+  if (state.phase === 'interlock') {
+    // soft reject during interlock — don't arm early
+    vibe([12, 40, 12]);
+    playClick('miss');
+    hint.textContent = '連動中 — まだ早い';
+    hint.className = 'hint miss';
+    return;
+  }
+  if (state.phase === 'easedown') {
+    hint.textContent = (HEAT_DIFF[state.tier] || HEAT_DIFF[0]).name + ' — 構えて';
+    return;
+  }
+  const t = now();
+  if (t < state.pressLockedUntil) return;
+
+  clearBtn.classList.add('pressed');
+  setTimeout(() => clearBtn.classList.remove('pressed'), 55);
+
+  if (state.phase !== 'approach' || !state.approaching) {
+    // v5: pressing with nothing approaching jams the lever (stun) — 早押しは高くつく
+    state.pressLockedUntil = t + P.earlyJamMs;
+    restartAnim(clearBtn, 'jam');
+    setTimeout(() => clearBtn.classList.remove('jam'), P.earlyJamMs);
+    trackState.textContent = '× 早 · 不可';
+    trackState.className = 'track-state bad';
+    hint.textContent = '不可 — 早すぎ（てこが噛んだ）';
+    hint.className = 'hint miss';
+    setLamps({ rej: 'r' });
+    breakCombo('miss');
+    missFx({ hot: false, jam: true });
+    return;
+  }
+
+  // judge on the press timestamp (not frame-quantised needle) — tight windows need it
+  const u = Math.min(1, Math.max(0, (t - state.approachStart) / state.curApproachMs));
+  setNeedle(u);
+  const z = zoneAt(u);
+  showPressMark(u, z);
+  if (z === 'perfect') resolveApproach('perfect');
+  else if (z === 'good') resolveApproach('good');
+  else resolveApproach('miss', u < state.curGoodCenter ? 'early' : 'late');
+}
+
+function enterCalm(reason) {
+  const full = reason === 'full';
+  $('calmTitle').textContent = full ? '満線' : '閑散';
+  $('calmSub').textContent = full ? '回送は満ちた · また近づくとき' : '回送おわり · また近づくとき';
+  if (full) {
+    // soft final flourish — gentle, not a fanfare
+    cascadeLamps('perfect', 2, false);
+    vibe([24, 60, 24]);
+  }
+  setHeat(0);
+  endSpike();
+  state.calm = true;
+  state.phase = 'calm';
+  state.approaching = false;
+  trackWrap.classList.remove('idle-fidget', 'interlock-active');
+  needleEl.classList.add('hidden');
+  blipEl.classList.add('hidden');
+  blipGhost.classList.add('hidden');
+  panel.classList.add('calm');
+  calmMsg.classList.add('show');
+  clearBtn.disabled = true;
+  hint.textContent = '閑散';
+  hint.className = 'hint';
+  trackState.textContent = '— IDLE';
+  setLamps({});
+}
+
+function restartSession() {
+  state.calm = false;
+  panel.classList.remove('calm');
+  calmMsg.classList.remove('show');
+  clearBtn.disabled = false;
+  state.sessionStart = now();
+  state.consecPerfect = 0;
+  state.perfectHalfW = P.perfectHalfW0;
+  endSpike();
+  state.clears = 0;
+  state.approaches = 0;
+  state.endPending = false;
+  state.prevTier = 0;
+  state.easePending = false;
+  setHeat(0);
+  state.curGoodHalfW = P.goodHalfW;
+  state.curGoodCenter = P.goodCenter;
+  state.curApproachMs = P.approachMs;
+  layoutBands();
+  sessBar.style.transform = 'scaleX(1)';
+  applySvcMode(state.svc); // keep current dummy status
+  hint.textContent = '白線に合わせて押せ';
+  hint.className = 'hint';
+  scheduleNextApproach(P.bootGapMs || 400);
+}
+
+function tick(t) {
+  if (!state.sessionStart) state.sessionStart = t;
+
+  const elapsed = t - state.sessionStart;
+  const remain = Math.max(0, 1 - elapsed / P.sessionMs);
+  sessBar.style.transform = 'scaleX(' + remain.toFixed(4) + ')';
+  if (!state.calm && elapsed >= P.sessionMs) enterCalm();
+
+  if (!state.calm) {
+    // v4 combo idle drain (interlock pauses the clock)
+    if (state.heat > 0) {
+      if (state.phase === 'interlock' || state.phase === 'easedown') state.comboDeadline = Math.max(state.comboDeadline, t + 500);
+      else if (t > state.comboDeadline) breakCombo('idle');
+    }
+    if (state.phase === 'idle' && t >= state.gapUntil) {
+      beginApproach();
+    }
+
+    if (state.phase === 'approach' && state.approaching) {
+      const u = (t - state.approachStart) / state.curApproachMs;
+      if (u >= 1) {
+        setNeedle(1);
+        resolveApproach('timeout');
+      } else {
+        setNeedle(u);
+        const z = zoneAt(u);
+        if (z === 'perfect') {
+          clearBtn.classList.add('armed-perfect');
+          clearBtn.classList.remove('armed-good');
+          trackState.textContent = '◆ WINDOW · 良帯';
+          trackState.className = 'track-state perf';
+          lamps.perf.className = 'lamp on-y';
+          lamps.good.className = 'lamp on-g';
+        } else if (z === 'good') {
+          clearBtn.classList.add('armed-good');
+          clearBtn.classList.remove('armed-perfect');
+          trackState.textContent = '○ WINDOW · 可帯';
+          trackState.className = 'track-state ok';
+          lamps.good.className = 'lamp on-g';
+          lamps.perf.className = 'lamp';
+        } else {
+          clearBtn.classList.remove('armed-good', 'armed-perfect');
+          lamps.good.className = 'lamp';
+          lamps.perf.className = 'lamp';
+          if (u > 0.05) {
+            trackState.textContent = approachLabel();
+            trackState.className = 'track-state' + (state.sharp ? ' sharp' : '');
+          }
+        }
+
+        if (u >= P.vibeApproachNear && u < state.goodL) {
+          const dist = state.goodL - u;
+          const interval = 70 + dist * 280;
+          if (t - state.lastVibeApproachAt >= interval) {
+            state.lastVibeApproachAt = t;
+            vibe(10);
+          }
+        }
+      }
+    }
+  }
+
+  if (DEBUG) {
+    debugEl.textContent =
+      'phase=' + state.phase +
+      ' svc=' + state.svc +
+      ' n=' + state.needle.toFixed(3) +
+      ' z=' + zoneAt(state.needle) +
+      '\nheatLbl=' + (HEAT_DIFF[state.tier] || HEAT_DIFF[0]).name +
+      ' 可=-' + ((state.curGoodCenter - state.goodL) * state.curApproachMs).toFixed(0) + '/+' + ((state.goodR - state.curGoodCenter) * state.curApproachMs).toFixed(0) + 'ms' +
+      ' 良=-' + ((state.curGoodCenter - state.perfL) * state.curApproachMs).toFixed(0) + '/+' + ((state.perfR - state.curGoodCenter) * state.curApproachMs).toFixed(0) + 'ms' +
+      '\nms=' + state.curApproachMs +
+      ' phW=' + state.perfectHalfW.toFixed(3) +
+      ' dbl=' + (state.doubleBlip ? 1 : 0) +
+      ' remain=' + (remain * P.sessionMs / 1000).toFixed(1) + 's' +
+      '\nheat=' + state.heat.toFixed(1) + ' tier=' + state.tier +
+      ' run良=' + state.consecPerfect + ' spike=' + state.spikeLeft +
+      ' sharp=' + (state.sharp ? 1 : 0) + ' clr=' + state.clears + '/' + P.sessionFullClears +
+      ' idle=' + Math.max(0, state.comboDeadline - t).toFixed(0);
+  }
+
+  requestAnimationFrame(tick);
+}
+
+function bindPress(el) {
+  const fire = (e) => {
+    e.preventDefault();
+    onPress();
+  };
+  el.addEventListener('pointerdown', fire);
+  window.addEventListener('keydown', (e) => {
+    if (e.repeat) return;
+    if (e.target === svcStrip || (e.target && /** @type {HTMLElement} */ (e.target).closest && /** @type {HTMLElement} */ (e.target).closest('.svc-strip'))) return;
+    if (e.code === 'Space' || e.code === 'Enter') {
+      e.preventDefault();
+      onPress();
+    }
+  });
+}
+bindPress(clearBtn);
+
+$('togSound').addEventListener('click', () => {
+  state.soundOn = !state.soundOn;
+  $('togSound').classList.toggle('on', state.soundOn);
+  if (state.soundOn) ensureAudio();
+});
+$('togVibe').addEventListener('click', () => {
+  state.vibeOn = !state.vibeOn;
+  $('togVibe').classList.toggle('on', state.vibeOn);
+  if (state.vibeOn) vibe(15);
+});
+$('togReset').addEventListener('click', () => restartSession());
+$('restartBtn').addEventListener('click', () => restartSession());
+
+// boot
+layoutBands();
+needleEl.classList.add('hidden');
+blipEl.classList.add('hidden');
+blipGhost.classList.add('hidden');
+applySvcMode('run');
+setHeat(0);
+state.sessionStart = now();
+scheduleNextApproach(P.bootGapMs || 480);
+requestAnimationFrame(tick);
+</script>
+</body>
+</html>
