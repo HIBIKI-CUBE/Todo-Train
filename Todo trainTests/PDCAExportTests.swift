@@ -41,6 +41,8 @@ struct PDCAExportTests {
         let checkIns = try rows(object, "checkIns")
         let blocks = try rows(object, "timetableBlocks")
         let guards = try rows(object, "timetableGuards")
+        let passengerRides = try rows(object, "passengerRides")
+        let passengerSummary = try #require(object["passengerSummary"] as? [String: Any])
 
         expectExactKeys(serviceDays, PDCAContract.serviceDayKeys)
         expectExactKeys(tickets, PDCAContract.ticketKeys)
@@ -53,6 +55,8 @@ struct PDCAExportTests {
         for ride in rides {
             expectRideKeys(ride)
         }
+        expectExactKeys(passengerRides, PDCAContract.passengerRideKeys)
+        #expect(Set(passengerSummary.keys) == PDCAContract.passengerSummaryKeys)
 
         let day = try #require(row(serviceDays, id: fixture.serviceDayID))
         #expect(day["calendarDayKey"] as? String == "1999-01-01")
@@ -131,6 +135,31 @@ struct PDCAExportTests {
         #expect(guardRow["blockId"] as? String == fixture.blockID.uuidString)
         #expect(date(guardRow, "resolvedAt") == PDCAFixture.dayStart.addingTimeInterval(1_500))
         #expect(isNull(guardRow["invalidatedAt"]))
+
+        #expect(passengerRides.count == 3)
+        let arrivedPassenger = try #require(row(passengerRides, id: fixture.passengerArrivedRideID))
+        #expect(arrivedPassenger["endReason"] as? String == "arrived")
+        #expect(arrivedPassenger["source"] as? String == "manualInterval")
+        #expect(number(passengerSummary, "aboardCount") == 3)
+        #expect(number(passengerSummary, "openAboardCount") == 1)
+        #expect(number(passengerSummary, "endReasonArrived") == 1)
+        #expect(number(passengerSummary, "endReasonEmergency") == 1)
+        #expect(number(passengerSummary, "endReasonCancelled") == 0)
+        #expect(number(passengerSummary, "totalAboardSeconds") == 2_000)
+        #expect(number(passengerSummary, "minAboardSeconds") == 500)
+        #expect(number(passengerSummary, "maxAboardSeconds") == 1_500)
+    }
+
+    @Test func exportJSON_passengerSummaryEmptyWhenNoRides() throws {
+        let container = try AppModelContainer.make(inMemory: true)
+        let context = ModelContext(container)
+        let object = try jsonObject(
+            try PDCAExport.jsonData(in: context, exportedAt: PDCAFixture.exportedAt)
+        )
+        let summary = try #require(object["passengerSummary"] as? [String: Any])
+        #expect(number(summary, "aboardCount") == 0)
+        #expect(number(summary, "openAboardCount") == 0)
+        #expect((object["passengerRides"] as? [Any])?.isEmpty == true)
     }
 
     @Test func exportJSON_countsIssuedTicketsAndArrivedClosures() throws {
@@ -221,6 +250,9 @@ struct PDCAExportTests {
             let list = try #require(object[key] as? [Any])
             #expect(list.isEmpty)
         }
+        let summary = try #require(object["passengerSummary"] as? [String: Any])
+        #expect(Set(summary.keys) == PDCAContract.passengerSummaryKeys)
+        #expect(number(summary, "aboardCount") == 0)
     }
 }
 
@@ -238,6 +270,7 @@ private struct PDCAFixture {
         "SECRET_DEVICE_IDFV_ZX9",
         "SECRET_SERIES_TITLE_ZX9",
         "SECRET_SERIES_RECUR_ZX9",
+        "SECRET_PASSENGER_TITLE_ZX9",
         "not-a-closure",
         "not-an-outcome",
         "#SECRETTAG",
@@ -253,6 +286,8 @@ private struct PDCAFixture {
         "calendarRecurrenceIdentifier",
         "recurrenceIdentifier",
         "prompt",
+        "deviceId",
+        "intervalId",
     ]
 
     static let exportedAt = Date(timeIntervalSince1970: 1_700_100_000)
@@ -273,6 +308,9 @@ private struct PDCAFixture {
     var lineageID: UUID
     var blockID: UUID
     var guardID: UUID
+    var passengerArrivedRideID: UUID
+    var passengerEmergencyRideID: UUID
+    var passengerOpenRideID: UUID
 
     func jsonData() throws -> Data {
         try PDCAExport.jsonData(in: context, exportedAt: Self.exportedAt)
@@ -296,6 +334,9 @@ private struct PDCAFixture {
         let lineageID = UUID()
         let blockID = UUID()
         let guardID = UUID()
+        let passengerArrivedRideID = UUID()
+        let passengerEmergencyRideID = UUID()
+        let passengerOpenRideID = UUID()
 
         let day = ServiceDay(id: serviceDayID, startedAt: dayStart, calendarDayKey: "1999-01-01")
         day.endedAt = dayEnd
@@ -451,6 +492,46 @@ private struct PDCAFixture {
             )
         )
 
+        let passengerArrived = PassengerRide(
+            id: passengerArrivedRideID,
+            intervalId: "passenger-interval-arrived",
+            title: "SECRET_PASSENGER_TITLE_ZX9",
+            intervalStart: dayStart,
+            intervalEnd: dayStart.addingTimeInterval(3_600),
+            boardedAt: dayStart.addingTimeInterval(100),
+            source: .manualInterval,
+            deviceId: "SECRET_DEVICE_IDFV_ZX9"
+        )
+        passengerArrived.endedAt = dayStart.addingTimeInterval(1_600)
+        passengerArrived.endReason = .arrived
+        context.insert(passengerArrived)
+
+        let passengerEmergency = PassengerRide(
+            id: passengerEmergencyRideID,
+            intervalId: "passenger-interval-emergency",
+            title: "SECRET_PASSENGER_TITLE_ZX9",
+            intervalStart: dayStart.addingTimeInterval(3_600),
+            intervalEnd: dayStart.addingTimeInterval(7_200),
+            boardedAt: dayStart.addingTimeInterval(3_700),
+            source: .adoptedBlock,
+            deviceId: "SECRET_DEVICE_IDFV_ZX9"
+        )
+        passengerEmergency.endedAt = dayStart.addingTimeInterval(4_200)
+        passengerEmergency.endReason = .emergency
+        context.insert(passengerEmergency)
+
+        let passengerOpen = PassengerRide(
+            id: passengerOpenRideID,
+            intervalId: "passenger-interval-open",
+            title: "SECRET_PASSENGER_TITLE_ZX9",
+            intervalStart: dayStart.addingTimeInterval(8_000),
+            intervalEnd: dayStart.addingTimeInterval(10_000),
+            boardedAt: dayStart.addingTimeInterval(8_100),
+            source: .manualInterval,
+            deviceId: "SECRET_DEVICE_IDFV_ZX9"
+        )
+        context.insert(passengerOpen)
+
         try context.save()
         return PDCAFixture(
             context: context,
@@ -466,7 +547,10 @@ private struct PDCAFixture {
             extensionID: extensionID,
             lineageID: lineageID,
             blockID: blockID,
-            guardID: guardID
+            guardID: guardID,
+            passengerArrivedRideID: passengerArrivedRideID,
+            passengerEmergencyRideID: passengerEmergencyRideID,
+            passengerOpenRideID: passengerOpenRideID
         )
     }
 }
@@ -484,6 +568,8 @@ private enum PDCAContract {
         "checkIns",
         "timetableBlocks",
         "timetableGuards",
+        "passengerRides",
+        "passengerSummary",
     ]
 
     static let arrayKeys: [String] = [
@@ -496,6 +582,7 @@ private enum PDCAContract {
         "checkIns",
         "timetableBlocks",
         "timetableGuards",
+        "passengerRides",
     ]
 
     static let serviceDayKeys: Set<String> = ["id", "startedAt", "endedAt", "calendarDayKey"]
@@ -519,6 +606,14 @@ private enum PDCAContract {
     ]
     static let guardKeys: Set<String> = [
         "id", "rideId", "blockId", "notifiedAt", "protectionBoundary", "resolvedAt", "invalidatedAt",
+    ]
+    static let passengerRideKeys: Set<String> = [
+        "id", "boardedAt", "endedAt", "endReason", "source",
+        "intervalStart", "intervalEnd", "aboardSeconds",
+    ]
+    static let passengerSummaryKeys: Set<String> = [
+        "aboardCount", "openAboardCount", "endReasonArrived", "endReasonEmergency",
+        "endReasonCancelled", "totalAboardSeconds", "minAboardSeconds", "maxAboardSeconds",
     ]
 }
 

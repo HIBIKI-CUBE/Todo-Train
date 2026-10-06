@@ -3,6 +3,7 @@
 //  Todo train
 //
 //  診断用の件数と時刻だけ。題名・理由・プロンプトは出さない。
+//  乗客レーンも同契約: 題名・本文・deviceId は出さない。無視した offer は記録しないので件数も出さない。
 //
 
 import Foundation
@@ -23,6 +24,8 @@ nonisolated enum PDCAExport {
         var checkIns: [CheckInRow]
         var timetableBlocks: [TimetableBlockRow]
         var timetableGuards: [TimetableGuardRow]
+        var passengerRides: [PassengerRideRow]
+        var passengerSummary: PassengerSummaryRow
     }
 
     struct ServiceDayRow: Encodable {
@@ -110,6 +113,32 @@ nonisolated enum PDCAExport {
         var invalidatedAt: PDCANull<Date>
     }
 
+    struct PassengerRideRow: Encodable {
+        var id: UUID
+        var boardedAt: Date
+        var endedAt: PDCANull<Date>
+        var endReason: PDCANull<String>
+        var source: String
+        var intervalStart: Date
+        var intervalEnd: Date
+        /// `endedAt` があるときだけ `endedAt - boardedAt`。
+        var aboardSeconds: PDCANull<TimeInterval>
+    }
+
+    struct PassengerSummaryRow: Encodable {
+        /// 乗車記録の件数（`PassengerRide` の総数）。
+        var aboardCount: Int
+        /// まだ `endedAt` がない乗車。
+        var openAboardCount: Int
+        var endReasonArrived: Int
+        var endReasonEmergency: Int
+        var endReasonCancelled: Int
+        /// 終了済み乗車の aboard 秒の合計。
+        var totalAboardSeconds: TimeInterval
+        var minAboardSeconds: PDCANull<Int>
+        var maxAboardSeconds: PDCANull<Int>
+    }
+
     @MainActor
     static func jsonData(in context: ModelContext, exportedAt: Date = .now) throws -> Data {
         try encode(make(in: context, exportedAt: exportedAt))
@@ -124,7 +153,8 @@ nonisolated enum PDCAExport {
             sessions: try context.fetch(FetchDescriptor<WorkSession>()),
             lineages: try context.fetch(FetchDescriptor<TaskLineage>()),
             timetableBlocks: try context.fetch(FetchDescriptor<TimetableBlock>()),
-            timetableGuards: try context.fetch(FetchDescriptor<TimetableGuard>())
+            timetableGuards: try context.fetch(FetchDescriptor<TimetableGuard>()),
+            passengerRides: try context.fetch(FetchDescriptor<PassengerRide>())
         )
     }
 
@@ -136,7 +166,8 @@ nonisolated enum PDCAExport {
         sessions: [WorkSession],
         lineages: [TaskLineage],
         timetableBlocks: [TimetableBlock],
-        timetableGuards: [TimetableGuard]
+        timetableGuards: [TimetableGuard],
+        passengerRides: [PassengerRide]
     ) -> Document {
         var rideCountByTicket: [UUID: Int] = [:]
         for session in sessions {
@@ -262,6 +293,11 @@ nonisolated enum PDCAExport {
                 )
             }
 
+        let passengerRideRows = passengerRides
+            .sorted { byDateThenID($0.boardedAt, $0.id, $1.boardedAt, $1.id) }
+            .map(passengerRideRow)
+        let passengerSummary = passengerSummary(from: passengerRides)
+
         return Document(
             schema: schema,
             exportedAt: exportedAt,
@@ -273,7 +309,64 @@ nonisolated enum PDCAExport {
             lineages: lineageRows,
             checkIns: checkInRows,
             timetableBlocks: blockRows,
-            timetableGuards: guardRows
+            timetableGuards: guardRows,
+            passengerRides: passengerRideRows,
+            passengerSummary: passengerSummary
+        )
+    }
+
+    private static func passengerRideRow(_ ride: PassengerRide) -> PassengerRideRow {
+        let aboardSeconds: TimeInterval? = {
+            guard let endedAt = ride.endedAt else { return nil }
+            return max(0, endedAt.timeIntervalSince(ride.boardedAt))
+        }()
+        return PassengerRideRow(
+            id: ride.id,
+            boardedAt: ride.boardedAt,
+            endedAt: PDCANull(ride.endedAt),
+            endReason: PDCANull(ride.endReason?.rawValue),
+            source: ride.source.rawValue,
+            intervalStart: ride.intervalStart,
+            intervalEnd: ride.intervalEnd,
+            aboardSeconds: PDCANull(aboardSeconds)
+        )
+    }
+
+    private static func passengerSummary(from rides: [PassengerRide]) -> PassengerSummaryRow {
+        var arrived = 0
+        var emergency = 0
+        var cancelled = 0
+        var open = 0
+        var totalSeconds: TimeInterval = 0
+        var completedDurations: [Int] = []
+
+        for ride in rides {
+            guard let endedAt = ride.endedAt else {
+                open += 1
+                continue
+            }
+            let seconds = max(0, Int(endedAt.timeIntervalSince(ride.boardedAt).rounded()))
+            totalSeconds += TimeInterval(seconds)
+            completedDurations.append(seconds)
+            switch ride.endReason {
+            case .arrived: arrived += 1
+            case .emergency: emergency += 1
+            case .cancelled: cancelled += 1
+            case nil: break
+            }
+        }
+
+        let minSeconds = completedDurations.min()
+        let maxSeconds = completedDurations.max()
+        return PassengerSummaryRow(
+            aboardCount: rides.count,
+            openAboardCount: open,
+            endReasonArrived: arrived,
+            endReasonEmergency: emergency,
+            endReasonCancelled: cancelled,
+            totalAboardSeconds: totalSeconds,
+            minAboardSeconds: PDCANull(minSeconds),
+            maxAboardSeconds: PDCANull(maxSeconds)
         )
     }
 

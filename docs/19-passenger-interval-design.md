@@ -190,7 +190,7 @@ PassengerRide
 
 - 無視した offer はレコードを作らない。  
 - emergency 後に同じ枠へ再乗車したら **別** `PassengerRide` でよい。  
-- PDCA export に載せるなら題名・本文は出さない（既存の診断契約に合わせる）。slice 1 必須ではない。
+- PDCA export の乗客ブロックは件数・時刻・endReason・aboard 秒だけ。題名・本文・deviceId は出さない。無視した offer は記録しないので export にも出さない。
 
 ---
 
