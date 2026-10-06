@@ -77,6 +77,30 @@ struct PassengerLaneTests {
         #expect(shown.map(\.id) == ["cal", "hand"])
     }
 
+    @Test func noIntervalsMeansNoHubOfferChrome() {
+        let effect = resolve([], at: 0)
+        #expect(effect.chrome == .none)
+        #expect(!effect.chrome.showsHubOffer)
+    }
+
+    @Test func showsHubOfferOnlyForSoonOrOffer() {
+        let meeting = interval()
+        let offer = resolve([meeting], at: 0)
+        guard case .offer = offer.chrome else {
+            Issue.record("expected offer")
+            return
+        }
+        #expect(offer.chrome.showsHubOffer)
+
+        let soon = resolve([interval(startOffset: 120)], at: 0)
+        guard case .soon = soon.chrome else {
+            Issue.record("expected soon")
+            return
+        }
+        #expect(soon.chrome.showsHubOffer)
+        #expect(!PassengerChrome.none.showsHubOffer)
+    }
+
     @Test func oneOfferAtStartAndNoAutomaticAboard() {
         #expect(!PassengerLane.boardsAutomatically)
         let effect = resolve([interval()], at: 0)

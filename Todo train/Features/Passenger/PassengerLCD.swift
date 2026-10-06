@@ -124,23 +124,23 @@ private struct PassengerClock: ViewModifier {
 }
 
 /// タブバー付属の一行。内容を押し上げる大きなバナーにはしない。
+/// `ContentView` が `showsHubOffer` のときだけタブ accessory に載せる。
 struct PassengerOfferInset: View {
     @Environment(SessionManager.self) private var sessionManager
 
     var body: some View {
-        Group {
-            switch sessionManager.passengerChrome {
-            case .soon(let interval):
-                PassengerHubSoon(interval: interval)
-            case .offer(let interval, let collapsed):
-                PassengerHubOffer(interval: interval, collapsed: collapsed) {
-                    sessionManager.boardPassenger()
-                }
-            default:
-                EmptyView()
+        switch sessionManager.passengerChrome {
+        case .soon(let interval):
+            PassengerHubSoon(interval: interval)
+                .modifier(PassengerClock())
+        case .offer(let interval, let collapsed):
+            PassengerHubOffer(interval: interval, collapsed: collapsed) {
+                sessionManager.boardPassenger()
             }
+            .modifier(PassengerClock())
+        default:
+            EmptyView()
         }
-        .modifier(PassengerClock())
     }
 }
 

@@ -26,38 +26,7 @@ struct ContentView: View {
     var body: some View {
         @Bindable var transferCanvas = transferCanvas
         @Bindable var ticketMotion = ticketMotion
-        TabView {
-            Tab("切符", systemImage: "tram.fill") {
-                NavigationStack {
-                    HubView()
-                }
-            }
-
-            Tab(TimetableCopy.board, systemImage: "calendar") {
-                NavigationStack {
-                    TimetableDayView()
-                }
-            }
-
-            Tab("履歴", systemImage: "clock") {
-                NavigationStack {
-                    HistoryView()
-                }
-            }
-
-            Tab("設定", systemImage: "gearshape") {
-                NavigationStack {
-                    SettingsView()
-                }
-            }
-        }
-        .tint(TrainTheme.rail)
-        .tabViewBottomAccessory {
-            if sessionManager.passengerChrome.showsHubOffer && !isFocusPresented {
-                PassengerOfferInset()
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-        }
+        tabViewWithOptionalPassengerAccessory
         .environment(transferCanvas)
         .environment(ticketMotion)
         .environment(ArrivalForecastTraceLog.shared)
@@ -213,6 +182,50 @@ struct ContentView: View {
         }
         // Arrival haptic is driven by the invalidate gesture; service moment keeps a light success.
         .sensoryFeedback(.success, trigger: sessionManager.punctualityHapticTick)
+    }
+
+    /// まもなく／申し出のときだけ付ける。空の `tabViewBottomAccessory` はタブ上に帯が残る。
+    private var showsPassengerTabAccessory: Bool {
+        !isFocusPresented && sessionManager.passengerChrome.showsHubOffer
+    }
+
+    @ViewBuilder
+    private var tabViewWithOptionalPassengerAccessory: some View {
+        let tabs = TabView {
+            Tab("切符", systemImage: "tram.fill") {
+                NavigationStack {
+                    HubView()
+                }
+            }
+
+            Tab(TimetableCopy.board, systemImage: "calendar") {
+                NavigationStack {
+                    TimetableDayView()
+                }
+            }
+
+            Tab("履歴", systemImage: "clock") {
+                NavigationStack {
+                    HistoryView()
+                }
+            }
+
+            Tab("設定", systemImage: "gearshape") {
+                NavigationStack {
+                    SettingsView()
+                }
+            }
+        }
+        .tint(TrainTheme.rail)
+
+        if showsPassengerTabAccessory {
+            tabs.tabViewBottomAccessory {
+                PassengerOfferInset()
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        } else {
+            tabs
+        }
     }
 
     /// 申し出の出現・縮約・消滅だけ。乗車中の進捗更新では動かさない。
