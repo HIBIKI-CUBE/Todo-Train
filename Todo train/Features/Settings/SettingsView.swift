@@ -144,6 +144,10 @@ struct SettingsView: View {
 
             if settings.developerToolsUnlocked {
                 Section {
+                    Toggle("接近を常に出す", isOn: Binding(
+                        get: { settings.forceApproachClearVisible },
+                        set: { settings.forceApproachClearVisible = $0 }
+                    ))
                     NavigationLink {
                         DeveloperForecastLogView()
                     } label: {
@@ -156,7 +160,7 @@ struct SettingsView: View {
                 } header: {
                     Text("開発者")
                 } footer: {
-                    Text("Hub で切符を持ち上げたときのオンデバイス予測の入力・生応答・クランプです。日常の設定ではありません。")
+                    Text("接近を常に出すは、このメニューを開いているあいだだけ盤を出します。遊んでも、戻ってきたときの報酬は減りません。予測の内部は、切符を持ち上げたときのオンデバイス予測です。日常の設定ではありません。")
                 }
             }
         }

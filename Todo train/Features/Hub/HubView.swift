@@ -329,6 +329,20 @@ struct HubView: View {
                 }
             )
             .padding(.horizontal, TrainTheme.Space.md)
+            ApproachClearOfferGate(
+                world: ApproachClearWorld(
+                    inService: sessionManager.isInService,
+                    dayEndPrompt: sessionManager.needsServiceDayEndPrompt,
+                    paused: !sessionManager.pausedSessions.isEmpty
+                        || sessionManager.pausedCountTowardLimit >= 1
+                ),
+                interactionsFrozen: isPresentingOnDeck || isFocusCoverPresented,
+                taskRunning: {
+                    guard let session = sessionManager.activeSession else { return false }
+                    return session.isOpen && !session.isPaused
+                }()
+            )
+            .padding(.horizontal, TrainTheme.Space.md)
         }
         .padding(.top, TrainTheme.Space.sm)
     }

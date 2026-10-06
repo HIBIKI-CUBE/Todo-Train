@@ -12,6 +12,8 @@
 	<string>画面を Mac に向けたとき、机の QR を読むために前面カメラを使います。</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>この Mac との連携を、画面を自分に戻してから確定するために使います。</string>
+	<key>CADisableMinimumFrameDurationOnPhone</key>
+	<true/>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
