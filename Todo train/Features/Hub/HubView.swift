@@ -86,9 +86,13 @@ struct HubView: View {
         sessionManager.isInService
             && sessionManager.phase != .running
             && sessionManager.phase != .overtime
+            && !sessionManager.passengerChrome.locksDriving
     }
 
     private var boardDisabledReason: String {
+        if sessionManager.passengerChrome.locksDriving {
+            return PassengerCopy.drivingLocked
+        }
         if sessionManager.needsServiceDayEndPrompt {
             return "昨日の運行を終了してください"
         }
@@ -340,7 +344,8 @@ struct HubView: View {
                 taskRunning: {
                     guard let session = sessionManager.activeSession else { return false }
                     return session.isOpen && !session.isPaused
-                }()
+                }(),
+                passengerClaimsScreen: sessionManager.passengerChrome.blocksApproachClear
             )
             .padding(.horizontal, TrainTheme.Space.md)
         }

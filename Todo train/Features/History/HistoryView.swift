@@ -16,6 +16,8 @@ struct HistoryView: View {
     private var sessions: [WorkSession]
     @Query(sort: \TimetableBlock.startsAt)
     private var timetableBlocks: [TimetableBlock]
+    @Query(sort: \PassengerRide.endedAt, order: .reverse)
+    private var passengerRides: [PassengerRide]
 
     @State private var searchText = ""
     @State private var errorMessage = ""
@@ -59,7 +61,19 @@ struct HistoryView: View {
     }
 
     private var daysWithRides: Set<String> {
-        Set(HistoryStats.groupByDay(sessions: endedSessions, calendar: calendar).map(\.dayKey))
+        var days = Set(HistoryStats.groupByDay(sessions: endedSessions, calendar: calendar).map(\.dayKey))
+        for ride in passengerRides {
+            guard let endedAt = ride.endedAt else { continue }
+            days.insert(HistoryStats.dayKey(for: endedAt, calendar: calendar))
+        }
+        return days
+    }
+
+    private var selectedDayPassengerRides: [PassengerRide] {
+        passengerRides.filter { ride in
+            guard let endedAt = ride.endedAt, ride.endReason != nil else { return false }
+            return calendar.isDate(endedAt, inSameDayAs: selectedDay)
+        }
     }
 
     private var sessionsByDay: [String: [WorkSession]] {
@@ -251,6 +265,25 @@ struct HistoryView: View {
                     aggregate: HistoryStats.aggregate(sessions: selectedDaySessions),
                     showsDay: false
                 )
+                .padding(.horizontal, TrainTheme.Space.md)
+                .padding(.bottom, TrainTheme.Space.sm)
+            }
+
+            if !selectedDayPassengerRides.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(selectedDayPassengerRides, id: \.id) { ride in
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            Text(ride.title)
+                                .lineLimit(1)
+                            Spacer(minLength: 8)
+                            if let reason = ride.endReason {
+                                Text(PassengerCopy.history(reason))
+                            }
+                        }
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    }
+                }
                 .padding(.horizontal, TrainTheme.Space.md)
                 .padding(.bottom, TrainTheme.Space.sm)
             }

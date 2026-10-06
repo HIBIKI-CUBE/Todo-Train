@@ -17,6 +17,7 @@ struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
 
     @State private var isFocusPresented = false
+    @State private var passengerCoverPresented = false
     @State private var didRecoverOnLaunch = false
     @State private var transferCanvas = TransferCanvasPresenter()
     @State private var ticketMotion = TicketMotionBridge()
@@ -65,14 +66,24 @@ struct ContentView: View {
             }
         }
         .safeAreaInset(edge: .bottom, spacing: 8) {
-            if let message = undoCenter.bannerMessage {
-                DeletionUndoBanner(message: message) {
-                    undoCenter.undo()
+            let showsOffer = sessionManager.passengerChrome.showsHubOffer && !isFocusPresented
+            if showsOffer || undoCenter.bannerMessage != nil {
+                VStack(spacing: TrainTheme.Space.sm) {
+                    if showsOffer {
+                        PassengerOfferInset()
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
+                    if let message = undoCenter.bannerMessage {
+                        DeletionUndoBanner(message: message) {
+                            undoCenter.undo()
+                        }
+                        .padding(.horizontal, TrainTheme.Space.lg)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
                 }
-                .padding(.horizontal, TrainTheme.Space.lg)
-                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
+        .animation(TrainTheme.Motion.soft, value: passengerOfferMotion)
         .animation(.easeInOut(duration: 0.25), value: undoCenter.bannerMessage)
         .onAppear {
             if !didRecoverOnLaunch {
@@ -82,6 +93,7 @@ struct ContentView: View {
                 sessionManager.reconcile()
             }
             syncFocusPresentation()
+            syncPassengerCover()
             companion.handleScenePhase(.active, sessionManager: sessionManager)
             sessionManager.suppressProgressLocalNotifications = companion.isPaired
         }
@@ -100,6 +112,7 @@ struct ContentView: View {
                 sessionManager.endAwayWatch()
                 applyPendingFocusAction()
                 syncFocusPresentation()
+                syncPassengerCover()
             } else if newPhase == .background {
                 sessionManager.beginAwayWatch()
             }
@@ -118,6 +131,11 @@ struct ContentView: View {
         .onChange(of: sessionManager.phase) { _, _ in
             syncFocusPresentation()
         }
+        .onChange(of: sessionManager.passengerChrome) { _, _ in
+            if !isFocusPresented {
+                syncPassengerCover()
+            }
+        }
         .onChange(of: ticketMotion.suppressFocusCover) { _, suppress in
             var transaction = Transaction()
             if suppress {
@@ -131,6 +149,11 @@ struct ContentView: View {
             guard url.scheme == "todotrain" else { return }
             sessionManager.reconcile()
             syncFocusPresentation()
+        }
+        .fullScreenCover(isPresented: $passengerCoverPresented) {
+            PassengerCabinCover()
+                .environment(sessionManager)
+                .interactiveDismissDisabled()
         }
         .fullScreenCover(isPresented: $isFocusPresented, onDismiss: {
             // Focus teardown races sheet presentation if launched from FocusView.
@@ -157,12 +180,15 @@ struct ContentView: View {
                 promoteTransferCanvasAfterFocusDismiss()
             }
             if presented {
+                passengerCoverPresented = false
                 Task { @MainActor in
                     try? await Task.sleep(for: .milliseconds(500))
                     if !ticketMotion.suppressFocusCover {
                         ticketMotion.interruptEject = nil
                     }
                 }
+            } else {
+                syncPassengerCover()
             }
         }
         .sheet(item: $transferCanvas.active) { launch in
@@ -192,6 +218,19 @@ struct ContentView: View {
         .sensoryFeedback(.success, trigger: sessionManager.punctualityHapticTick)
     }
 
+    /// 申し出の出現・縮約・消滅だけ。乗車中の進捗更新では動かさない。
+    private var passengerOfferMotion: String {
+        guard !isFocusPresented else { return "hidden" }
+        switch sessionManager.passengerChrome {
+        case .soon(let interval):
+            return "soon-\(interval.id)"
+        case .offer(let interval, let collapsed):
+            return "offer-\(interval.id)-\(collapsed)"
+        default:
+            return "hidden"
+        }
+    }
+
     private func promoteTransferCanvasAfterFocusDismiss() {
         guard transferCanvas.pending != nil else { return }
         Task { @MainActor in
@@ -205,6 +244,13 @@ struct ContentView: View {
             && !ticketMotion.suppressFocusCover
         if isFocusPresented != shouldShow {
             isFocusPresented = shouldShow
+        }
+    }
+
+    private func syncPassengerCover() {
+        let wants = sessionManager.passengerChrome.isFullScreen && !isFocusPresented
+        if passengerCoverPresented != wants {
+            passengerCoverPresented = wants
         }
     }
 

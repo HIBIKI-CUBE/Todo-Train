@@ -29,8 +29,20 @@ struct AppModelContainerMigrationTests {
             )
         )
         try container.mainContext.save()
+        container.mainContext.insert(
+            PassengerRide(
+                intervalId: block.id.uuidString,
+                title: "1on1",
+                intervalStart: starts,
+                intervalEnd: starts.addingTimeInterval(1800),
+                boardedAt: starts,
+                source: .manualInterval
+            )
+        )
+        try container.mainContext.save()
         #expect(try container.mainContext.fetch(FetchDescriptor<TimetableBlock>()).count == 1)
         #expect(try container.mainContext.fetch(FetchDescriptor<TimetableGuard>()).count == 1)
+        #expect(try container.mainContext.fetch(FetchDescriptor<PassengerRide>()).count == 1)
     }
 
     @Test func make_migratesUnversionedStoreWithoutLosingTickets() throws {

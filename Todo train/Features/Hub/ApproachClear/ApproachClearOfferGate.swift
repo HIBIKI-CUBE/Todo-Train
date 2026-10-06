@@ -13,6 +13,8 @@ struct ApproachClearOfferGate: View {
     var interactionsFrozen: Bool
     /// An open ride that is not paused. Leaving then does not earn the reward.
     var taskRunning: Bool
+    /// 乗客の申し出か乗車中。盤より先に出す。
+    var passengerClaimsScreen: Bool = false
 
     @Environment(\.scenePhase) private var scenePhase
     @Environment(AppSettings.self) private var settings
@@ -27,7 +29,8 @@ struct ApproachClearOfferGate: View {
         ApproachClearVisibility.presented(
             offerShowing: offer.showing,
             developerToolsUnlocked: settings.developerToolsUnlocked,
-            forceVisible: settings.forceApproachClearVisible
+            forceVisible: settings.forceApproachClearVisible,
+            passengerClaimsScreen: passengerClaimsScreen
         )
     }
 

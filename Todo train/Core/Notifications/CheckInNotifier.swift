@@ -23,6 +23,8 @@ protocol CheckInNotifying: AnyObject {
     func scheduleAway(sessionID: UUID, ticketTitle: String, body: String, fireAt: Date)
     func scheduleIdle(serviceDayID: UUID, body: String, fireAt: Date)
     func scheduleTimetablePause(sessionID: UUID, guardID: UUID, title: String, fireAt: Date)
+    func schedulePassengerBoard(intervalID: String, title: String, fireAt: Date)
+    func cancelPassengerBoard()
     func cancel(sessionID: UUID)
     func cancelProgress(sessionID: UUID)
     func cancelIdle(serviceDayID: UUID)
@@ -43,6 +45,8 @@ final class NoOpCheckInNotifier: CheckInNotifying {
     func scheduleAway(sessionID: UUID, ticketTitle: String, body: String, fireAt: Date) {}
     func scheduleIdle(serviceDayID: UUID, body: String, fireAt: Date) {}
     func scheduleTimetablePause(sessionID: UUID, guardID: UUID, title: String, fireAt: Date) {}
+    func schedulePassengerBoard(intervalID: String, title: String, fireAt: Date) {}
+    func cancelPassengerBoard() {}
     func cancel(sessionID: UUID) {}
     func cancelProgress(sessionID: UUID) {}
     func cancelIdle(serviceDayID: UUID) {}
@@ -56,6 +60,7 @@ final class InMemoryCheckInNotifier: CheckInNotifying {
     private(set) var away: [(sessionID: UUID, fireAt: Date, body: String)] = []
     private(set) var idle: [(serviceDayID: UUID, fireAt: Date, body: String)] = []
     private(set) var timetable: [(sessionID: UUID, guardID: UUID, fireAt: Date, title: String)] = []
+    private(set) var passenger: [(intervalID: String, fireAt: Date, title: String)] = []
 
     func requestAuthorizationIfNeeded() {}
 
@@ -85,6 +90,14 @@ final class InMemoryCheckInNotifier: CheckInNotifying {
         timetable.append((sessionID, guardID, fireAt, title))
     }
 
+    func schedulePassengerBoard(intervalID: String, title: String, fireAt: Date) {
+        passenger = [(intervalID, fireAt, title)]
+    }
+
+    func cancelPassengerBoard() {
+        passenger.removeAll()
+    }
+
     func cancel(sessionID: UUID) {
         progress.removeAll { $0.sessionID == sessionID }
         away.removeAll { $0.sessionID == sessionID }
@@ -108,6 +121,7 @@ final class InMemoryCheckInNotifier: CheckInNotifying {
         away.removeAll()
         idle.removeAll()
         timetable.removeAll()
+        passenger.removeAll()
     }
 }
 
@@ -164,6 +178,20 @@ nonisolated enum TimetableNotification {
     }
 }
 
+nonisolated enum PassengerNotification {
+    static let categoryIdentifier = "todotrain.passenger"
+    static let boardAction = "todotrain.passenger.board"
+    static let identifierPrefix = "passenger.board."
+
+    static func identifier(intervalID: String) -> String {
+        identifierPrefix + intervalID
+    }
+
+    static func isPassenger(_ identifier: String) -> Bool {
+        identifier.hasPrefix(identifierPrefix)
+    }
+}
+
 @MainActor
 final class CheckInNotifier: CheckInNotifying {
     static let shared = CheckInNotifier()
@@ -208,13 +236,24 @@ final class CheckInNotifier: CheckInNotifying {
             title: TimetableCopy.pause,
             options: []
         )
+        let board = UNNotificationAction(
+            identifier: PassengerNotification.boardAction,
+            title: PassengerCopy.board,
+            options: [.foreground]
+        )
         let timetable = UNNotificationCategory(
             identifier: TimetableNotification.categoryIdentifier,
-            actions: [timetablePause],
+            actions: [timetablePause, board],
             intentIdentifiers: [],
             options: []
         )
-        center.setNotificationCategories([progress, away, idle, timetable])
+        let passenger = UNNotificationCategory(
+            identifier: PassengerNotification.categoryIdentifier,
+            actions: [board],
+            intentIdentifiers: [],
+            options: []
+        )
+        center.setNotificationCategories([progress, away, idle, timetable, passenger])
     }
 
     func requestAuthorizationIfNeeded() {
@@ -276,6 +315,27 @@ final class CheckInNotifier: CheckInNotifying {
         )
     }
 
+    func schedulePassengerBoard(intervalID: String, title: String, fireAt: Date) {
+        cancelPassengerBoard()
+        enqueue(
+            identifier: PassengerNotification.identifier(intervalID: intervalID),
+            title: PassengerCopy.now,
+            body: PassengerCopy.notificationBody(title: title),
+            fireAt: fireAt,
+            categoryIdentifier: PassengerNotification.categoryIdentifier
+        )
+    }
+
+    func cancelPassengerBoard() {
+        let prefix = PassengerNotification.identifierPrefix
+        center.getPendingNotificationRequests { requests in
+            let ids = requests.map(\.identifier).filter { $0.hasPrefix(prefix) }
+            guard !ids.isEmpty else { return }
+            self.center.removePendingNotificationRequests(withIdentifiers: ids)
+            self.center.removeDeliveredNotifications(withIdentifiers: ids)
+        }
+    }
+
     func cancel(sessionID: UUID) {
         var identifiers = [CheckInNotification.awayIdentifier(sessionID: sessionID)]
         for index in 0..<4 {
@@ -315,7 +375,11 @@ final class CheckInNotifier: CheckInNotifying {
         Task {
             let ids = await center.pendingNotificationRequests()
                 .map(\.identifier)
-                .filter { CheckInNotification.isCheckIn($0) || TimetableNotification.isTimetable($0) }
+                .filter {
+                    CheckInNotification.isCheckIn($0)
+                        || TimetableNotification.isTimetable($0)
+                        || PassengerNotification.isPassenger($0)
+                }
             center.removePendingNotificationRequests(withIdentifiers: ids)
         }
     }

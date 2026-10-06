@@ -236,6 +236,7 @@ struct SessionManagerTimetableTests {
         manager.reconcile()
         #expect(manager.timetableQuietMessage == TimetableCopy.quiet)
 
+        try manager.resume()
         #expect(manager.timetableQuietMessage == nil)
         #expect(manager.activeSession?.timetableHeld == false)
     }

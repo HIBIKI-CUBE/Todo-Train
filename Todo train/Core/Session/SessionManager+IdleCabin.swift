@@ -77,7 +77,7 @@ extension SessionManager {
             idleLocalNotificationArmed = false
             return
         }
-        if hasOpenRide() {
+        if hasOpenRide() || fetchOpenPassengerRide() != nil {
             if day.pendingCabin == .idle {
                 day.pendingCabin = nil
                 try? save()

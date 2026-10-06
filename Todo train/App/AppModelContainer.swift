@@ -7,7 +7,7 @@ import Foundation
 import SwiftData
 
 enum AppModelContainer {
-    static let schema = Schema(versionedSchema: AppSchemaV2.self)
+    static let schema = Schema(versionedSchema: AppSchemaV3.self)
 
     static func make(inMemory: Bool = false, storeURL: URL? = nil) throws -> ModelContainer {
         let configuration = configuration(schema: schema, inMemory: inMemory, storeURL: storeURL)
@@ -43,7 +43,7 @@ enum AppModelContainer {
         return CloudKitSync.configuration(schema: schema, inMemory: false)
     }
 
-    /// 未バージョンの既存 store は V1 として開ける。中身を移して V2 で開き直す。
+    /// 未バージョンの既存 store は V1 として開ける。中身を移して現行スキーマで開き直す。
     private static func rebuildPreservingData(after _: Error, storeURL: URL) throws -> ModelContainer {
         let snapshot: AppStoreSnapshot = try autoreleasepool {
             let v1Schema = Schema(versionedSchema: AppSchemaV1.self)

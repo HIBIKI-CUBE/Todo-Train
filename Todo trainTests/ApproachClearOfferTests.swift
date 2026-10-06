@@ -111,6 +111,12 @@ struct ApproachClearOfferTests {
             developerToolsUnlocked: false,
             forceVisible: false
         ))
+        #expect(!ApproachClearVisibility.presented(
+            offerShowing: true,
+            developerToolsUnlocked: true,
+            forceVisible: true,
+            passengerClaimsScreen: true
+        ))
     }
 
     @Test func storeRoundTrip() {

@@ -54,9 +54,11 @@ nonisolated enum ApproachClearVisibility {
     static func presented(
         offerShowing: Bool,
         developerToolsUnlocked: Bool,
-        forceVisible: Bool
+        forceVisible: Bool,
+        passengerClaimsScreen: Bool = false
     ) -> Bool {
-        offerShowing || (developerToolsUnlocked && forceVisible)
+        if passengerClaimsScreen { return false }
+        return offerShowing || (developerToolsUnlocked && forceVisible)
     }
 }
 

@@ -16,7 +16,10 @@ extension SessionManager {
 
     func reconcile(now: Date? = nil) {
         let now = now ?? clock.now
-        defer { publishWidgetSnapshot(at: now) }
+        defer {
+            applyPassengerEffects(now: now)
+            publishWidgetSnapshot(at: now)
+        }
 
         if let day = activeServiceDay ?? fetchOpenServiceDay() {
             activeServiceDay = day

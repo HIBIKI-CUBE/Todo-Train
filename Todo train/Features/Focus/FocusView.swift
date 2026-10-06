@@ -99,6 +99,7 @@ struct FocusView: View {
     private func portraitDashboard(size: CGSize) -> some View {
         let controlHeight = size.height * portraitControlFraction
         return VStack(spacing: 0) {
+            PassengerFocusBand()
             headerStrip
             FocusControlDivider()
             timerPanel
@@ -116,6 +117,7 @@ struct FocusView: View {
         let controlWidth = size.width * compactControlFraction
         return HStack(spacing: 0) {
             VStack(spacing: 0) {
+                PassengerFocusBand()
                 headerStrip
                 FocusControlDivider()
                 timerPanel

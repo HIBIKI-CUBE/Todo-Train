@@ -61,6 +61,9 @@ final class SessionManager {
     var timetableQuietMessage: String?
     /// Last AlarmKit / end-bell fire we scheduled, so reconcile does not hammer AlarmKit.
     var lastScheduledEndBellFireAt: Date?
+    /// 乗客レーン。SessionPhase には混ぜない。
+    var passengerChrome: PassengerChrome = .none
+    var passengerMemory = PassengerLaneMemory.empty
 
     var punctualityMoment: PunctualityMoment? { punctualityQueue.first }
 

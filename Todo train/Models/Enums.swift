@@ -68,6 +68,7 @@ enum SessionError: Error, Equatable, LocalizedError {
     case unresolvedPausedTickets
     case ticketAlreadyClosed
     case cannotDeleteOpenSession
+    case passengerAboard
 
     var errorDescription: String? {
         switch self {
@@ -95,6 +96,8 @@ enum SessionError: Error, Equatable, LocalizedError {
             "この切符はすでに閉じられています"
         case .cannotDeleteOpenSession:
             "終了していないセッションは履歴から削除できません"
+        case .passengerAboard:
+            PassengerCopy.drivingLocked
         }
     }
 }

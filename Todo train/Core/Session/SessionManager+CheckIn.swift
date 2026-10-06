@@ -80,6 +80,11 @@ extension SessionManager {
     }
 
     func handleNotification(identifier: String, action: String) {
+        if PassengerNotification.isPassenger(identifier)
+            || (TimetableNotification.isTimetable(identifier) && action == PassengerNotification.boardAction) {
+            boardPassenger()
+            return
+        }
         if TimetableNotification.isTimetable(identifier) {
             handleTimetableNotification(identifier: identifier, action: action)
             return
@@ -101,6 +106,7 @@ extension SessionManager {
         guard session.remainingSeconds(at: now) > 0 else { return }
         guard session.pendingCheckIn == nil else { return }
         guard session.awayDueAt == nil else { return }
+        guard fetchOpenPassengerRide() == nil else { return }
         guard !timetableFit(at: now).shouldSuppressAway else { return }
 
         let delay = CheckInScheduling.awayDelay(
@@ -297,6 +303,16 @@ extension SessionManager {
 
     func refreshPendingCheckIn(_ session: WorkSession, now: Date) {
         guard ownsDeviceSideEffects(session) else { return }
+        if fetchOpenPassengerRide() != nil {
+            if session.pendingCheckIn != nil || session.awayDueAt != nil {
+                session.pendingCheckIn = nil
+                session.awayDueAt = nil
+                cancelAwayFireTask()
+                checkInNotifier.cancel(sessionID: session.id)
+                try? save()
+            }
+            return
+        }
         guard settings.cabinAnnouncementsEnabled else {
             if session.pendingCheckIn != nil || session.awayDueAt != nil {
                 session.pendingCheckIn = nil

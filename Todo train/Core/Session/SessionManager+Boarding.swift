@@ -16,6 +16,7 @@ extension SessionManager {
 
     func board(ticket: Ticket, now: Date? = nil) throws {
         let now = now ?? clock.now
+        try refusePassengerDriving()
         try ensureServiceAllowsBoarding(at: now)
 
         guard ticket.isOpen else {
@@ -48,6 +49,7 @@ extension SessionManager {
     /// Focus stays up (`ContentView` only covers `.running` / `.overtime`).
     func switchBoard(ticket: Ticket, now: Date? = nil) throws {
         let now = now ?? clock.now
+        try refusePassengerDriving()
         try ensureServiceAllowsBoarding(at: now)
 
         guard ticket.isOpen else {
@@ -85,6 +87,7 @@ extension SessionManager {
     }
 
     func startNewSession(ticket: Ticket, now: Date) throws {
+        try refusePassengerDriving()
         let estimate = min(max(ticket.estimatedSeconds, 1), Ticket.maxEstimatedSeconds)
         let session = WorkSession(
             startedAt: now,
@@ -109,6 +112,7 @@ extension SessionManager {
 
     func pause(now: Date? = nil, timetableHeld: Bool = false) throws {
         let now = now ?? clock.now
+        try refusePassengerDriving()
         guard let session = activeSession, session.isOpen else {
             throw SessionError.noActiveSession
         }
@@ -193,6 +197,7 @@ extension SessionManager {
 
     func resume(now: Date? = nil) throws {
         let now = now ?? clock.now
+        try refusePassengerDriving()
         guard let session = activeSession, session.isOpen else {
             throw SessionError.noActiveSession
         }
@@ -211,6 +216,7 @@ extension SessionManager {
     /// StandBy / system AlarmKit resume → mirror into the open session (no AlarmKit echo).
     func resumeFromAlarmKit(now: Date? = nil) throws {
         let now = now ?? clock.now
+        if passengerChrome.locksDriving || fetchOpenPassengerRide() != nil { return }
         guard let session = activeSession, session.isOpen, session.isPaused else { return }
         reopenPausedSession(session, now: now)
         try save()
@@ -231,6 +237,7 @@ extension SessionManager {
 
     func extend(by seconds: TimeInterval, reason: String? = nil, now: Date? = nil) throws {
         let now = now ?? clock.now
+        try refusePassengerDriving()
         guard let session = activeSession, session.isOpen else {
             throw SessionError.noActiveSession
         }
@@ -258,6 +265,7 @@ extension SessionManager {
 
     func arrive(resolution: OvertimeResolution? = nil, now: Date? = nil) throws {
         let now = now ?? clock.now
+        try refusePassengerDriving()
         guard let session = activeSession, session.isOpen else {
             throw SessionError.noActiveSession
         }
@@ -270,6 +278,7 @@ extension SessionManager {
 
     func partialDisembark(now: Date? = nil) throws {
         let now = now ?? clock.now
+        try refusePassengerDriving()
         guard let session = activeSession, session.isOpen else {
             throw SessionError.noActiveSession
         }
@@ -278,6 +287,7 @@ extension SessionManager {
 
     func abandon(now: Date? = nil) throws {
         let now = now ?? clock.now
+        try refusePassengerDriving()
         guard let session = activeSession, session.isOpen else {
             throw SessionError.noActiveSession
         }
@@ -286,6 +296,7 @@ extension SessionManager {
 
     func partialDisembark(session: WorkSession, now: Date? = nil) throws {
         let now = now ?? clock.now
+        try refusePassengerDriving()
         guard session.isOpen else {
             throw SessionError.noActiveSession
         }
