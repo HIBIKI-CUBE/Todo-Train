@@ -2,9 +2,8 @@
 //  PassengerLCD.swift
 //  Todo train
 //
-//  ドア上の車内案内。状態帯は白い行先・縦の区切り・右上の時計。
-//  下段の弧は自作。残り時間と予定時刻は運転中の計器と同じ桁。
-//  乗る前の申し出は日常面なので、下部のシステムバナーに置く。
+//  ドア上の車内案内。上帯＝状態・行先・時計、下帯＝残り・予定・横進捗。
+//  殻は案内文法、桁は運転中の計器と同系。乗る前は下部バナー。
 //
 
 import SwiftUI
@@ -42,79 +41,59 @@ enum PassengerTimeRange {
     }
 }
 
-/// 次は画面の弧。駅名も号車も描かず、通過済みとこれからの位置だけを自作の曲線にする。
-struct PassengerRouteArc: View {
+/// 区間の横一列進捗。通過済みグレー／これから路線色。
+struct PassengerProgressStrip: View {
     var progress: Double
-    var showsDoor: Bool
 
     var body: some View {
-        Canvas { context, size in
-            let clamped = CGFloat(min(1, max(0, progress)))
-            let width = max(9, min(14, size.shortestSide * 0.038))
-            let path = Self.path(in: size, lineWidth: width)
-            let style = StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round)
-            context.stroke(path, with: .color(PassengerLCDPalette.strip), style: style)
-            let traveled = path.trimmedPath(from: 0, to: max(clamped, 0.001))
-            if clamped > 0.004 {
-                context.stroke(traveled, with: .color(PassengerLCDPalette.passed), style: style)
-            }
-            if let here = traveled.currentPoint {
-                let radius = width * 0.85
-                let dot = CGRect(x: here.x - radius, y: here.y - radius, width: radius * 2, height: radius * 2)
-                context.fill(Path(ellipseIn: dot), with: .color(PassengerLCDPalette.face))
-                context.stroke(
-                    Path(ellipseIn: dot),
-                    with: .color(PassengerLCDPalette.ink),
-                    lineWidth: max(2, width * 0.18)
-                )
-            }
-            if showsDoor, let end = path.currentPoint {
-                context.stroke(
-                    Self.doorChevron(at: end, scale: width),
-                    with: .color(PassengerLCDPalette.ink),
-                    style: StrokeStyle(lineWidth: max(3, width * 0.34), lineCap: .round, lineJoin: .round)
-                )
+        GeometryReader { geo in
+            let width = geo.size.width
+            let clamped = min(1, max(0, progress))
+            let markX = min(max(width * clamped - 2, 0), max(width - 4, 0))
+            ZStack(alignment: .leading) {
+                HStack(spacing: 0) {
+                    Rectangle()
+                        .fill(PassengerLCDPalette.passed)
+                        .frame(width: width * clamped)
+                    Rectangle()
+                        .fill(PassengerLCDPalette.strip)
+                        .frame(width: width * (1 - clamped))
+                }
+                Rectangle()
+                    .fill(PassengerLCDPalette.ink)
+                    .frame(width: 4, height: geo.size.height)
+                    .offset(x: markX)
             }
         }
+        .frame(height: 12)
         .accessibilityLabel("区間の進み")
-    }
-
-    private static func path(in size: CGSize, lineWidth: CGFloat) -> Path {
-        let pad = lineWidth
-        let start = CGPoint(x: size.width - pad, y: pad)
-        let end = CGPoint(x: pad, y: size.height - pad)
-        let control = CGPoint(x: size.width - pad, y: size.height - pad)
-        var path = Path()
-        path.move(to: start)
-        path.addQuadCurve(to: end, control: control)
-        return path
-    }
-
-    private static func doorChevron(at end: CGPoint, scale: CGFloat) -> Path {
-        let s = scale * 1.35
-        var path = Path()
-        path.move(to: CGPoint(x: end.x - s * 0.15, y: end.y - s))
-        path.addLine(to: CGPoint(x: end.x + s * 0.95, y: end.y))
-        path.addLine(to: CGPoint(x: end.x - s * 0.15, y: end.y + s))
-        return path
     }
 }
 
-private extension CGSize {
-    var shortestSide: CGFloat { min(width, height) }
+struct PassengerDoorArrow: View {
+    var body: some View {
+        HStack(spacing: 4) {
+            Text("開")
+                .font(.system(size: 15, weight: .bold))
+            Image(systemName: "arrowtriangle.right.fill")
+                .font(.system(size: 13, weight: .bold))
+        }
+        .foregroundStyle(PassengerLCDPalette.strip)
+        .accessibilityLabel("開扉")
+    }
 }
 
 struct PassengerDoorCock: View {
     var onOpen: () -> Void
 
     var body: some View {
-        VStack(alignment: .trailing, spacing: 1) {
+        VStack(alignment: .trailing, spacing: 2) {
             Text(PassengerCopy.doorCock)
-                .font(.system(size: 12, weight: .medium))
+                .font(.system(size: 12, weight: .semibold))
             Text(PassengerCopy.doorCockHint)
                 .font(.system(size: 10, weight: .regular))
         }
-        .foregroundStyle(PassengerLCDPalette.ink.opacity(0.42))
+        .foregroundStyle(PassengerLCDPalette.ink.opacity(0.72))
         .multilineTextAlignment(.trailing)
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
@@ -237,7 +216,7 @@ struct PassengerCabinCover: View {
     }
 }
 
-/// ドア上液晶の画面割り。状態帯に白い行先と時計、下段に弧と残り時間。
+/// ドア上液晶。上帯＝状態・行先・時計、下帯＝残り・予定・横進捗（円弧は使わない）。
 struct PassengerCabinScreen: View {
     @Environment(\.verticalSizeClass) private var verticalSizeClass
 
@@ -254,154 +233,185 @@ struct PassengerCabinScreen: View {
     private var compact: Bool { verticalSizeClass == .compact }
 
     var body: some View {
-        NavigationStack {
-            TimelineView(.periodic(from: .now, by: 1)) { context in
-                GeometryReader { geo in
-                    cabin(now: context.date, size: geo.size)
-                }
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            GeometryReader { geo in
+                lcdShell(now: context.date, size: geo.size)
             }
-            .toolbar(.hidden, for: .navigationBar)
-            .toolbarBackground(.hidden, for: .navigationBar)
-            .toolbarColorScheme(.dark, for: .navigationBar)
         }
-    }
-
-    private func cabin(now: Date, size: CGSize) -> some View {
-        let headerHeight = min(
-            max(size.height * (compact ? 0.34 : 0.26), compact ? 96 : 128),
-            compact ? 150 : 188
-        )
-        return VStack(spacing: 0) {
-            header(now: now, width: size.width, height: headerHeight)
-            bodyField(now: now, size: CGSize(width: size.width, height: max(size.height - headerHeight, 1)))
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-        .frame(width: size.width, height: size.height)
         .background(PassengerLCDPalette.bezel.ignoresSafeArea())
         .animation(.easeOut(duration: 0.22), value: status)
     }
 
-    private func header(now: Date, width: CGFloat, height: CGFloat) -> some View {
-        let barWidth: CGFloat = 8
-        let metaWidth = min(max(width * 0.20, 84), 104)
-        let clockSize = min(height * 0.18, compact ? 22 : 32)
-        let statusSize = min(height * 0.16, compact ? 16 : 22)
-        let nameWidth = max(width - metaWidth - barWidth - clockSize * 2.4 - 28, 40)
-        let name = fittedName(width: nameWidth, height: height)
+    private func lcdShell(now: Date, size: CGSize) -> some View {
+        let verticalInset: CGFloat = compact ? 8 : 12
+        let panelWidth = size.width
+        let panelHeight = size.height - verticalInset * 2
+        let upperHeight = min(max(panelHeight * 0.32, compact ? 68 : 84), compact ? 112 : 136)
+
+        return VStack(spacing: 0) {
+            Spacer(minLength: verticalInset)
+            VStack(spacing: 0) {
+                upperBand(now: now, width: panelWidth, height: upperHeight)
+                Rectangle()
+                    .fill(PassengerLCDPalette.ink.opacity(0.14))
+                    .frame(height: 1)
+                lowerBand(now: now, width: panelWidth, height: max(panelHeight - upperHeight - 1, 1))
+            }
+            .frame(width: panelWidth, height: panelHeight)
+            .overlay {
+                Rectangle()
+                    .strokeBorder(Color.black.opacity(0.35), lineWidth: 2)
+            }
+            Spacer(minLength: verticalInset)
+        }
+        .frame(width: size.width, height: size.height)
+    }
+
+    private func upperBand(now: Date, width: CGFloat, height: CGFloat) -> some View {
+        let statusWidth = min(max(height * 1.05, 72), 108)
+        let clockSize = min(height * 0.22, compact ? 20 : 28)
+        let statusSize = min(height * 0.2, compact ? 15 : 22)
+        let titleSlot = max(width - statusWidth - 6 - clockSize * 2.8 - 36, 80)
+        let name = fittedName(width: titleSlot, height: height)
 
         return HStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: 0) {
                 Text(status)
                     .font(.system(size: statusSize, weight: .bold))
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.6)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.55)
                 if let english {
                     Text(english)
-                        .font(.system(size: max(10, statusSize * 0.48), weight: .medium))
+                        .font(.system(size: max(9, statusSize * 0.45), weight: .medium))
                         .foregroundStyle(PassengerLCDPalette.headerMuted)
                 }
             }
-            .padding(.leading, 16)
-            .frame(width: metaWidth, alignment: .leading)
+            .frame(width: statusWidth, alignment: .leading)
+            .padding(.leading, 12)
 
             Rectangle()
-                .fill(PassengerLCDPalette.separator)
-                .frame(width: barWidth)
+                .fill(PassengerLCDPalette.separator.opacity(0.55))
+                .frame(width: 6)
 
             Text(title)
                 .font(.system(size: name.size, weight: .black))
                 .tracking(name.tracking)
                 .lineLimit(1)
-                .minimumScaleFactor(0.45)
+                .minimumScaleFactor(0.4)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .accessibilityAddTraits(.isHeader)
 
             Text(PassengerTimeRange.clock(now))
-                .font(.system(size: clockSize, weight: .medium))
+                .font(.system(size: clockSize, weight: .semibold))
                 .monospacedDigit()
-                .padding(.trailing, 16)
+                .padding(.trailing, 12)
                 .accessibilityLabel("現在時刻")
         }
         .foregroundStyle(PassengerLCDPalette.headerInk)
         .frame(width: width, height: height)
-        .background(PassengerLCDPalette.bezel.ignoresSafeArea(edges: [.top, .horizontal]))
-        .clipped()
+        .background(PassengerLCDPalette.bezel)
         .accessibilityElement(children: .combine)
     }
 
-    private func bodyField(now: Date, size: CGSize) -> some View {
-        let arcSide = min(size.width * 0.52, size.height * 0.86)
-        return VStack(spacing: 0) {
-            ZStack(alignment: .topLeading) {
-                if let progress {
-                    PassengerRouteArc(progress: progress, showsDoor: showsDoorArrow)
-                        .frame(width: arcSide, height: arcSide)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-                        .padding(.trailing, 18)
-                        .padding(.bottom, 6)
-                }
-                if showsCountdown, let intervalEnd {
-                    countdown(until: intervalEnd, now: now, columnWidth: size.width * 0.52)
-                }
-                if showsDoorArrow {
-                    Text("開")
-                        .font(.system(size: compact ? 16 : 20, weight: .bold))
-                        .foregroundStyle(PassengerLCDPalette.ink.opacity(0.8))
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
-                        .padding(.leading, 18)
-                        .padding(.bottom, 12)
-                        .accessibilityLabel("開扉")
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+    private func lowerBand(now: Date, width: CGFloat, height: CGFloat) -> some View {
+        let face = showsCountdown ? PassengerLCDPalette.face : PassengerLCDPalette.lower
+        let footer: CGFloat = compact ? 52 : 58
+        let stripBlock: CGFloat = progress == nil ? 0 : (compact ? 34 : 40)
 
-            if showsCountdown {
-                HStack {
-                    Spacer(minLength: 0)
-                    PassengerDoorCock(onOpen: onOpenDoor)
-                }
-                .padding(.trailing, 12)
-                .padding(.bottom, 6)
+        return VStack(spacing: 0) {
+            if showsCountdown, let intervalEnd {
+                countdownBlock(
+                    until: intervalEnd,
+                    now: now,
+                    bandHeight: max(height - footer - stripBlock, 72)
+                )
+            } else {
+                greetingBlock(bandHeight: max(height - footer, 72))
             }
+            if let progress {
+                progressRow(progress: progress)
+                    .padding(.horizontal, 14)
+                    .padding(.bottom, 6)
+            }
+            HStack {
+                Spacer(minLength: 0)
+                PassengerDoorCock(onOpen: onOpenDoor)
+            }
+            .padding(.horizontal, 10)
+            .padding(.bottom, 6)
+            .frame(height: footer)
         }
-        .background(
-            (showsCountdown ? PassengerLCDPalette.face : PassengerLCDPalette.lower)
-                .ignoresSafeArea(edges: .bottom)
-        )
+        .frame(width: width, height: height)
+        .background(face)
     }
 
-    private func countdown(until end: Date, now: Date, columnWidth: CGFloat) -> some View {
+    private func countdownBlock(until end: Date, now: Date, bandHeight: CGFloat) -> some View {
         let remaining = end.timeIntervalSince(now)
         let digits = CockpitFormat.timerLabel(remaining: max(remaining, 0))
-        let fontSize = min(columnWidth * 0.62, compact ? 72 : 108)
-        return VStack(alignment: .leading, spacing: 2) {
-            Text(digits)
-                .font(.system(size: fontSize, weight: .semibold, design: .default))
-                .monospacedDigit()
-                .foregroundStyle(showsDoorArrow ? PassengerLCDPalette.soonDigits : PassengerLCDPalette.ink)
-                .minimumScaleFactor(0.35)
-                .lineLimit(1)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityLabel("残り時間")
-                .accessibilityValue(CockpitFormat.accessibilityTimerValue(
-                    remaining: remaining,
-                    isStale: false,
-                    isOvertime: false
-                ))
+        let timerHeight = max(bandHeight - 28, 64)
+
+        return VStack(alignment: .leading, spacing: 6) {
+            GeometryReader { geo in
+                Text(digits)
+                    .font(.system(size: timerFontSize(in: geo.size), weight: .semibold, design: .default))
+                    .monospacedDigit()
+                    .foregroundStyle(showsDoorArrow ? PassengerLCDPalette.soonDigits : PassengerLCDPalette.ink)
+                    .minimumScaleFactor(0.35)
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            }
+            .frame(height: timerHeight)
+            .accessibilityLabel("残り時間")
+            .accessibilityValue(CockpitFormat.accessibilityTimerValue(
+                remaining: remaining,
+                isStale: false,
+                isOvertime: false
+            ))
+
             Text(CockpitFormat.deadlineLabel(remaining: max(remaining, 1), deadline: end))
-                .font(.system(size: compact ? 13 : 15, weight: .semibold, design: .default))
+                .font(.system(size: 15, weight: .semibold, design: .default))
                 .monospacedDigit()
                 .foregroundStyle(PassengerLCDPalette.ink)
         }
-        .padding(.leading, 16)
-        .padding(.top, compact ? 12 : 24)
-        .frame(width: columnWidth, alignment: .leading)
+        .padding(.horizontal, 14)
+        .padding(.top, compact ? 10 : 16)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// 一行に収まる範囲でだけ字間を開く。はみ出す字間は付けない。
+    private func greetingBlock(bandHeight: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let intervalStart, let intervalEnd {
+                Text(PassengerTimeRange.string(start: intervalStart, end: intervalEnd))
+                    .font(.system(size: 15, weight: .medium))
+                    .monospacedDigit()
+                    .foregroundStyle(PassengerLCDPalette.ink.opacity(0.72))
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 14)
+        .padding(.top, compact ? 12 : 18)
+        .frame(maxWidth: .infinity, minHeight: bandHeight * 0.5, alignment: .topLeading)
+    }
+
+    private func progressRow(progress: Double) -> some View {
+        HStack(alignment: .center, spacing: 12) {
+            PassengerProgressStrip(progress: progress)
+            if showsDoorArrow {
+                PassengerDoorArrow()
+            }
+        }
+    }
+
+    private func timerFontSize(in size: CGSize) -> CGFloat {
+        let byWidth = size.width * 0.48
+        let byHeight = size.height * 0.72
+        let capped: CGFloat = compact ? 140 : 220
+        return min(byWidth, byHeight, capped)
+    }
+
     private func fittedName(width: CGFloat, height: CGFloat) -> (size: CGFloat, tracking: CGFloat) {
-        let maxSize = min(height * 0.46, compact ? 48 : 76)
-        let minSize: CGFloat = compact ? 22 : 28
+        let maxSize = min(height * 0.42, compact ? 40 : 58)
+        let minSize: CGFloat = compact ? 20 : 26
         var size = maxSize
         while size > minSize {
             let tracking = trackingThatFits(size: size, width: width)
@@ -418,7 +428,7 @@ struct PassengerCabinScreen: View {
         guard count > 1 else { return 0 }
         let base = StationSignMetrics.nameTracking(title, compact: false)
         guard base > 0 else { return 0 }
-        let wanted = min(base * (size / 32), size * 0.22)
+        let wanted = min(base * (size / 32), size * 0.2)
         let gaps = CGFloat(count - 1)
         let room = width - CGFloat(count) * size
         guard room > 8 else { return 0 }
