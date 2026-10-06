@@ -22,6 +22,7 @@ final class AppSettings {
         static let companionRelayURL = "settings.companionRelayURL"
         static let timetableCalendarIDs = "settings.timetableCalendarIDs"
         static let developerToolsUnlocked = "settings.developerToolsUnlocked"
+        static let forceApproachClearVisible = "settings.forceApproachClearVisible"
     }
 
     var pauseLimit: Int {
@@ -127,6 +128,13 @@ final class AppSettings {
         }
     }
 
+    /// Debug: keep the clearance on the Hub. Ignored unless the developer menu is open.
+    var forceApproachClearVisible: Bool {
+        didSet {
+            UserDefaults.standard.set(forceApproachClearVisible, forKey: Keys.forceApproachClearVisible)
+        }
+    }
+
     static func makeForTesting(
         pauseLimit: Int = PauseLimitGuard.defaultLimit,
         overtimeSoundEnabled: Bool = true,
@@ -136,7 +144,8 @@ final class AppSettings {
         lastIssuedEstimateMinutes: Int? = nil,
         companionRelayURLString: String = "",
         timetableVisibleCalendarIDs: [String]? = nil,
-        developerToolsUnlocked: Bool = false
+        developerToolsUnlocked: Bool = false,
+        forceApproachClearVisible: Bool = false
     ) -> AppSettings {
         let settings = AppSettings()
         settings.pauseLimit = Self.clampPauseLimit(pauseLimit)
@@ -148,6 +157,7 @@ final class AppSettings {
         settings.companionRelayURLString = companionRelayURLString
         settings.timetableVisibleCalendarIDs = timetableVisibleCalendarIDs
         settings.developerToolsUnlocked = developerToolsUnlocked
+        settings.forceApproachClearVisible = forceApproachClearVisible
         return settings
     }
 
@@ -188,6 +198,7 @@ final class AppSettings {
         }
 
         developerToolsUnlocked = UserDefaults.standard.bool(forKey: Keys.developerToolsUnlocked)
+        forceApproachClearVisible = UserDefaults.standard.bool(forKey: Keys.forceApproachClearVisible)
 
         companionRelayURLString = RelayEndpoint.coalesceStored(
             UserDefaults.standard.string(forKey: Keys.companionRelayURL)

@@ -49,6 +49,17 @@ nonisolated struct ApproachClearOffer: Equatable, Sendable {
     }
 }
 
+/// When the Hub mounts the clearance. Force is a developer-menu override.
+nonisolated enum ApproachClearVisibility {
+    static func presented(
+        offerShowing: Bool,
+        developerToolsUnlocked: Bool,
+        forceVisible: Bool
+    ) -> Bool {
+        offerShowing || (developerToolsUnlocked && forceVisible)
+    }
+}
+
 nonisolated enum ApproachClearOfferStore {
     private static let inactiveKey = "approachClear.offer.inactiveAt"
     private static let leftDuringTaskKey = "approachClear.offer.leftDuringTask"

@@ -90,6 +90,29 @@ struct ApproachClearOfferTests {
         #expect(!offer.spent)
     }
 
+    @Test func forceVisibleNeedsTheDeveloperMenu() {
+        #expect(!ApproachClearVisibility.presented(
+            offerShowing: false,
+            developerToolsUnlocked: false,
+            forceVisible: true
+        ))
+        #expect(!ApproachClearVisibility.presented(
+            offerShowing: false,
+            developerToolsUnlocked: true,
+            forceVisible: false
+        ))
+        #expect(ApproachClearVisibility.presented(
+            offerShowing: false,
+            developerToolsUnlocked: true,
+            forceVisible: true
+        ))
+        #expect(ApproachClearVisibility.presented(
+            offerShowing: true,
+            developerToolsUnlocked: false,
+            forceVisible: false
+        ))
+    }
+
     @Test func storeRoundTrip() {
         let name = "ApproachClearOfferTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: name)!

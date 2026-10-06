@@ -3,6 +3,7 @@
 //  Todo train
 //
 //  Mounts the clearance after five minutes away, except a mid-ride departure.
+//  The developer menu can force it on without spending that reward.
 //
 
 import SwiftUI
@@ -14,27 +15,47 @@ struct ApproachClearOfferGate: View {
     var taskRunning: Bool
 
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(AppSettings.self) private var settings
     @State private var offer = ApproachClearOfferStore.load()
+    @State private var debugReplay = 0
+
+    private var forced: Bool {
+        settings.developerToolsUnlocked && settings.forceApproachClearVisible
+    }
+
+    private var presented: Bool {
+        ApproachClearVisibility.presented(
+            offerShowing: offer.showing,
+            developerToolsUnlocked: settings.developerToolsUnlocked,
+            forceVisible: settings.forceApproachClearVisible
+        )
+    }
 
     var body: some View {
         Group {
-            if offer.showing {
+            if presented {
                 ApproachClearPanel(
                     world: world,
                     interactionsFrozen: interactionsFrozen,
                     onPlayStarted: {
+                        guard !forced else { return }
                         offer.notePlayStarted()
                         ApproachClearOfferStore.save(offer)
                     },
                     onFinished: {
-                        offer.dismiss()
-                        ApproachClearOfferStore.save(offer)
+                        if forced {
+                            debugReplay += 1
+                        } else {
+                            offer.dismiss()
+                            ApproachClearOfferStore.save(offer)
+                        }
                     }
                 )
+                .id(debugReplay)
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .animation(TrainTheme.Motion.soft, value: offer.showing)
+        .animation(TrainTheme.Motion.soft, value: presented)
         .onAppear {
             if scenePhase == .active {
                 noteActive()

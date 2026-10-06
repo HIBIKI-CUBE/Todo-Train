@@ -64,7 +64,12 @@ struct AppSettingsTests {
         #expect(AppSettings.developerUnlockTapCount == 7)
         let settings = AppSettings.makeForTesting()
         #expect(settings.developerToolsUnlocked == false)
-        let unlocked = AppSettings.makeForTesting(developerToolsUnlocked: true)
+        #expect(settings.forceApproachClearVisible == false)
+        let unlocked = AppSettings.makeForTesting(
+            developerToolsUnlocked: true,
+            forceApproachClearVisible: true
+        )
         #expect(unlocked.developerToolsUnlocked == true)
+        #expect(unlocked.forceApproachClearVisible == true)
     }
 }
