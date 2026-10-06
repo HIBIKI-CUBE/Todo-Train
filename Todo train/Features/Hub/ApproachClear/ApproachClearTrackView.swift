@@ -4,9 +4,9 @@
 //
 //  The needle is a layer committed inside the display link, at
 //  targetTimestamp — the time that commit is shown. Logic ticks at
-//  CACurrentMediaTime. Judgement stays on UITouch.timestamp. All three
-//  share the media clock. SwiftUI is not on this path: a state update
-//  misses the frame, so the line the eye tracks is already late.
+//  CACurrentMediaTime. Judgement starts from UITouch.timestamp on that
+//  same media clock, then subtracts the learned input latency once.
+//  SwiftUI is not on the needle path: a state update misses the frame.
 //
 
 import SwiftUI
@@ -21,6 +21,9 @@ final class ApproachClearRuntime {
     var ghostGoodR = 0.0
     var ghostUntilMs = 0.0
     var barrierStartMs = 0.0
+    /// Display time of the needle currently committed. Touches compare against this.
+    var lastPresentationMs = 0.0
+    var latency = ApproachClearLatencyStore.load()
 
     init() {
         var engine = ApproachClearEngine()
@@ -38,6 +41,7 @@ final class ApproachClearRuntime {
         ghostGoodR = 0
         ghostUntilMs = 0
         barrierStartMs = 0
+        lastPresentationMs = 0
     }
 }
 
@@ -240,6 +244,7 @@ final class ApproachClearTrackUIView: UIView {
 
     private func render(presentationMs: Double) {
         guard let runtime, bounds.width > 1 else { return }
+        runtime.lastPresentationMs = presentationMs
         let snap = runtime.engine.snapshot
         let rail = paint(UIColor(named: "AccentColor") ?? .tintColor)
         let rejected = snap.flash == .miss || snap.needleRejected
@@ -250,7 +255,14 @@ final class ApproachClearTrackUIView: UIView {
         let bandsChanged = placedBands != snap.bands
         let sizeChanged = placedSize != bounds.size
         if bandsChanged || sizeChanged {
-            placeWindows(snap, ink: ink, borderAlpha: rejected ? 0.7 : 0.4, animate: bandsChanged && placedBands != nil)
+            // Once the needle is moving, the logical window is already final.
+            // Sliding it would show a band the press is not judged against.
+            placeWindows(
+                snap,
+                ink: ink,
+                borderAlpha: rejected ? 0.7 : 0.4,
+                animate: bandsChanged && placedBands != nil && snap.phase != .approach
+            )
             placedBands = snap.bands
             placedSize = bounds.size
         } else {
@@ -466,7 +478,10 @@ final class ApproachClearTrackUIView: UIView {
         guard snap.phase == .approach, presentationMs > 0, snap.bands.approachMs > 0 else {
             return snap.needle
         }
-        let u = (presentationMs - snap.approachStart) / snap.bands.approachMs
-        return min(1, max(0, u))
+        return ApproachClearLatency.unit(
+            timeMs: presentationMs,
+            approachStart: snap.approachStart,
+            approachMs: snap.bands.approachMs
+        )
     }
 }

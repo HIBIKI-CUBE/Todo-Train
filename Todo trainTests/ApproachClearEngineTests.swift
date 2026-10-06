@@ -347,11 +347,37 @@ struct ApproachClearEngineTests {
         _ = early
     }
 
+    @Test func theSamePressLandsLeftWhenLatencyIsRemoved() {
+        var raw = makeEngine()
+        var compensated = makeEngine()
+        armApproach(&raw)
+        armApproach(&compensated)
+        #expect(raw.snapshot.phase == .approach)
+        #expect(compensated.snapshot.approachStart == raw.snapshot.approachStart)
+        let duration = raw.snapshot.bands.approachMs
+        let physical = raw.snapshot.approachStart + duration * raw.snapshot.bands.center
+        _ = raw.touchDown(at: ApproachClearLatency.judgementMs(touchMs: physical, inputLatencyMs: 0))
+        _ = compensated.touchDown(
+            at: ApproachClearLatency.judgementMs(touchMs: physical, inputLatencyMs: 40)
+        )
+        let rawU = raw.snapshot.pressU ?? 1
+        let shiftedU = compensated.snapshot.pressU ?? 1
+        #expect(shiftedU < rawU)
+        #expect(abs((rawU - shiftedU) * duration - 40) < 0.01)
+        #expect(raw.snapshot.label == "良")
+    }
+
     @Test func upWithoutDownIsIgnored() {
         var engine = makeEngine()
         #expect(engine.touchUp(at: 500).isEmpty)
         #expect(engine.snapshot.phase == .dormant)
     }
+}
+
+private func armApproach(_ engine: inout ApproachClearEngine) {
+    _ = engine.touchDown(at: 0)
+    _ = engine.touchUp(at: 40)
+    _ = engine.tick(at: engine.snapshot.gapUntil)
 }
 
 private func makeEngine(units: [Double] = []) -> ApproachClearEngine {

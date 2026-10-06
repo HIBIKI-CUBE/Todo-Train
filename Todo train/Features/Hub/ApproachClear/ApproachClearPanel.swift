@@ -22,6 +22,7 @@ struct ApproachClearPanel: View {
     @State private var expanded = false
     @State private var haptics = ApproachClearHaptics()
     @State private var finished = false
+    @State private var latencyNote = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -146,6 +147,12 @@ struct ApproachClearPanel: View {
                 .font(.system(size: 9, design: .monospaced))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+            if !latencyNote.isEmpty {
+                Text(latencyNote)
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             #endif
         }
     }
@@ -322,10 +329,15 @@ struct ApproachClearPanel: View {
         }
     }
 
-    private func handleDown(at milliseconds: Double) {
+    private func handleDown(at touchMs: Double) {
         runtime.engine.world = world
-        let wasDormant = runtime.engine.snapshot.phase == .dormant
-        let cues = runtime.engine.touchDown(at: milliseconds)
+        let before = runtime.engine.snapshot
+        let judgedMs = ApproachClearLatency.judgementMs(
+            touchMs: touchMs,
+            inputLatencyMs: runtime.latency.latencyMs
+        )
+        let wasDormant = before.phase == .dormant
+        let cues = runtime.engine.touchDown(at: judgedMs)
         if wasDormant, runtime.engine.snapshot.phase != .dormant {
             onPlayStarted()
         }
@@ -343,11 +355,50 @@ struct ApproachClearPanel: View {
             }
         }
         if cleared {
-            runtime.sweepStartMs = milliseconds
+            runtime.sweepStartMs = touchMs
             runtime.sweepPerfect = perfect
         }
+        noteLatency(before: before, touchMs: touchMs)
         haptics.play(cues)
         publishIfNeeded()
+    }
+
+    /// Samples the raw touch-to-frame gap. The press itself already used the stored latency.
+    private func noteLatency(before: ApproachClearSnapshot, touchMs: Double) {
+        guard before.phase == .approach,
+              runtime.engine.snapshot.phase == .resolved,
+              runtime.engine.snapshot.pressU != nil,
+              before.bands.approachMs > 0
+        else { return }
+        let presentation = runtime.lastPresentationMs
+        guard presentation > 0 else { return }
+        let approachMs = before.bands.approachMs
+        let rawU = (touchMs - before.approachStart) / approachMs
+        let visibleU = (presentation - before.approachStart) / approachMs
+        let rawDelta = ApproachClearLatency.deltaMs(
+            pressU: rawU,
+            visibleNeedleU: visibleU,
+            approachMs: approachMs
+        )
+        runtime.latency.record(rawDeltaMs: rawDelta)
+        ApproachClearLatencyStore.save(runtime.latency)
+        #if DEBUG
+        let pressU = runtime.engine.snapshot.pressU ?? 0
+        let visibleDrawn = ApproachClearTrackUIView.needleUnit(presentationMs: presentation, snap: before)
+        let residual = ApproachClearLatency.deltaMs(
+            pressU: pressU,
+            visibleNeedleU: visibleDrawn,
+            approachMs: approachMs
+        )
+        latencyNote = String(
+            format: "pressU=%.3f visibleNeedleU=%.3f deltaMs=%.1f latencyMs=%.1f",
+            pressU,
+            visibleDrawn,
+            residual,
+            runtime.latency.latencyMs
+        )
+        print("approachClear \(latencyNote)")
+        #endif
     }
 
     private func handleUp(at milliseconds: Double) {

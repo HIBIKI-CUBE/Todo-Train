@@ -2,8 +2,9 @@
 //  ApproachClearEngine.swift
 //  Todo train
 //
-//  Timing state for the Hub clearance toy. Judgement uses the press
-//  timestamp, never the frame needle or the release. The engine does not
+//  Timing state for the Hub clearance toy. Judgement uses the time passed
+//  into touchDown, never the frame needle or the release. The panel
+//  subtracts a learned input latency before that call. The engine does not
 //  start service, read ticket titles, or record arrivals.
 //
 
@@ -551,6 +552,9 @@ nonisolated struct ApproachClearEngine: Sendable {
     // MARK: - Judgement
 
     private mutating func judgePress(at now: Double) -> [ApproachClearCue] {
+        // `now` is the caller's press time. The panel has already subtracted
+        // input latency. The unit uses this approach's start and length,
+        // the same pair the needle is drawn from.
         let duration = max(bands.approachMs, 1)
         let u = min(1, max(0, (now - approachStart) / duration))
         pressU = u
