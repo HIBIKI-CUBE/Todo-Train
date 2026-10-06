@@ -123,7 +123,7 @@ private struct PassengerClock: ViewModifier {
     }
 }
 
-/// 日常面の申し出。取り消しバナーと同じく下部のシステム素材。車内液晶の文法は使わない。
+/// タブバー付属の一行。内容を押し上げる大きなバナーにはしない。
 struct PassengerOfferInset: View {
     @Environment(SessionManager.self) private var sessionManager
 
@@ -132,19 +132,14 @@ struct PassengerOfferInset: View {
             switch sessionManager.passengerChrome {
             case .soon(let interval):
                 PassengerHubSoon(interval: interval)
-            case .offer(let interval, true):
-                PassengerHubLate(interval: interval) {
-                    sessionManager.boardPassenger()
-                }
-            case .offer(let interval, false):
-                PassengerHubProminent(interval: interval) {
+            case .offer(let interval, let collapsed):
+                PassengerHubOffer(interval: interval, collapsed: collapsed) {
                     sessionManager.boardPassenger()
                 }
             default:
                 EmptyView()
             }
         }
-        .padding(.horizontal, TrainTheme.Space.lg)
         .modifier(PassengerClock())
     }
 }
@@ -441,63 +436,19 @@ struct PassengerCabinScreen: View {
     }
 }
 
-private struct PassengerHubChrome: ViewModifier {
-    func body(content: Content) -> some View {
-        content.background(
-            .regularMaterial,
-            in: RoundedRectangle(cornerRadius: TrainTheme.Radius.control, style: .continuous)
-        )
-    }
-}
-
-private struct PassengerHubProminent: View {
+private struct PassengerHubOffer: View {
     var interval: PassengerInterval
-    var onBoard: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: TrainTheme.Space.md) {
-            VStack(alignment: .leading, spacing: TrainTheme.Space.xs) {
-                Text(PassengerCopy.now)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                Text(interval.title)
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(.primary)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text(PassengerTimeRange.string(start: interval.startsAt, end: interval.endsAt))
-                    .font(.subheadline)
-                    .monospacedDigit()
-                    .foregroundStyle(.secondary)
-            }
-            .accessibilityElement(children: .combine)
-
-            Button(action: onBoard) {
-                Text(PassengerCopy.board)
-                    .font(.body.weight(.semibold))
-                    .frame(maxWidth: .infinity, minHeight: 44)
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(TrainTheme.rail)
-            .accessibilityLabel(PassengerCopy.board)
-        }
-        .padding(TrainTheme.Space.lg)
-        .modifier(PassengerHubChrome())
-    }
-}
-
-private struct PassengerHubLate: View {
-    var interval: PassengerInterval
+    var collapsed: Bool
     var onBoard: () -> Void
 
     var body: some View {
         HStack(alignment: .center, spacing: TrainTheme.Space.md) {
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 1) {
                 Text(interval.title)
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.primary)
                     .lineLimit(1)
-                Text(PassengerCopy.boardLate)
+                Text(collapsed ? PassengerCopy.boardLate : PassengerCopy.now)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -507,17 +458,14 @@ private struct PassengerHubLate: View {
             Button(action: onBoard) {
                 Text(PassengerCopy.board)
                     .font(.body.weight(.semibold))
-                    .frame(minHeight: 44)
-                    .padding(.horizontal, TrainTheme.Space.sm)
             }
             .buttonStyle(.borderedProminent)
+            .controlSize(.regular)
             .tint(TrainTheme.rail)
             .accessibilityLabel(PassengerCopy.board)
         }
-        .padding(.leading, TrainTheme.Space.lg)
-        .padding(.trailing, TrainTheme.Space.md)
-        .padding(.vertical, TrainTheme.Space.sm)
-        .modifier(PassengerHubChrome())
+        .padding(.horizontal, TrainTheme.Space.md)
+        .padding(.vertical, TrainTheme.Space.xs)
     }
 }
 
@@ -538,10 +486,9 @@ private struct PassengerHubSoon: View {
                 .foregroundStyle(.secondary)
         }
         .foregroundStyle(.primary)
-        .padding(.horizontal, TrainTheme.Space.lg)
-        .padding(.vertical, TrainTheme.Space.md)
+        .padding(.horizontal, TrainTheme.Space.md)
+        .padding(.vertical, TrainTheme.Space.sm)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .modifier(PassengerHubChrome())
         .accessibilityElement(children: .combine)
     }
 }

@@ -52,6 +52,12 @@ struct ContentView: View {
             }
         }
         .tint(TrainTheme.rail)
+        .tabViewBottomAccessory {
+            if sessionManager.passengerChrome.showsHubOffer && !isFocusPresented {
+                PassengerOfferInset()
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
         .environment(transferCanvas)
         .environment(ticketMotion)
         .environment(ArrivalForecastTraceLog.shared)
@@ -66,21 +72,12 @@ struct ContentView: View {
             }
         }
         .safeAreaInset(edge: .bottom, spacing: 8) {
-            let showsOffer = sessionManager.passengerChrome.showsHubOffer && !isFocusPresented
-            if showsOffer || undoCenter.bannerMessage != nil {
-                VStack(spacing: TrainTheme.Space.sm) {
-                    if showsOffer {
-                        PassengerOfferInset()
-                            .transition(.move(edge: .bottom).combined(with: .opacity))
-                    }
-                    if let message = undoCenter.bannerMessage {
-                        DeletionUndoBanner(message: message) {
-                            undoCenter.undo()
-                        }
-                        .padding(.horizontal, TrainTheme.Space.lg)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                    }
+            if let message = undoCenter.bannerMessage {
+                DeletionUndoBanner(message: message) {
+                    undoCenter.undo()
                 }
+                .padding(.horizontal, TrainTheme.Space.lg)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
         .animation(TrainTheme.Motion.soft, value: passengerOfferMotion)
