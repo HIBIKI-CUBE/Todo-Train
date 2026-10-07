@@ -38,6 +38,8 @@ final class CompanionMacRuntime {
     var connection: ConnectionStatus = .disconnected
     var outgoingPause: OutgoingPauseState = .idle
     var issueBoardTrack: IssueBoardTrack = .idle
+    /// Hide the ride PiP while いまやる is in flight, so it appears under the dispensed ticket.
+    var suppressRideOverlay = false
     var now = Int(Date().timeIntervalSince1970)
     var lastStatus: String?
     var sentTimetablePauseAt: Int?

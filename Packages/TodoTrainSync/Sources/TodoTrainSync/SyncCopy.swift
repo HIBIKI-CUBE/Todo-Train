@@ -13,6 +13,8 @@ public enum SyncCopy {
     public static let notPaused = "停車中ではない"
     public static let invalidPayload = "題名か所要が送れない"
     public static let sentToIPhone = "iPhone に送った"
+    public static let waitingForIPhone = "iPhone を待っています"
+    public static let iphoneNoReply = "iPhone から返事がない"
     public static let iphoneConfirmReason = "画面を自分に戻して、この Mac との連携を確定します"
     public static let macConfirmReason = "画面を自分に戻して、iPhone との連携を確定します"
 

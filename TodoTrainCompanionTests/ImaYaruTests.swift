@@ -1,25 +1,48 @@
+import CoreGraphics
 import Foundation
 import Testing
 import TodoTrainSync
 @testable import TodoTrainCompanion
 
 struct ImaYaruTests {
-    @Test func canvasSizeDoesNotChangeWithPhase() {
-        let phases: [ImaYaruPhase] = [.composing, .ejecting, .holding, .failed]
-        let first = ImaYaruCanvas.size(for: .composing)
-        for phase in phases {
-            #expect(ImaYaruCanvas.size(for: phase) == first)
-        }
-        #expect(ImaYaruCanvas.size.width == 440)
-        #expect(ImaYaruCanvas.ticketSlotHeight > 0)
-        #expect(ImaYaruCanvas.size.height > ImaYaruCanvas.titleRail + ImaYaruCanvas.gaugeRail)
-    }
-
     @Test func offerRequiresPairAndService() {
         #expect(ImaYaruOffer.isAvailable(isPaired: true, serviceActive: true))
         #expect(!ImaYaruOffer.isAvailable(isPaired: true, serviceActive: false))
         #expect(!ImaYaruOffer.isAvailable(isPaired: true, serviceActive: nil))
         #expect(!ImaYaruOffer.isAvailable(isPaired: false, serviceActive: true))
+    }
+
+    @Test func idleSnapDoesNotNameARide() {
+        let stale = UUID(uuidString: "11111111-1111-4111-8111-111111111111")!
+        let idle = SnapPlaintext(
+            rev: 1,
+            sessionId: stale,
+            ticketId: nil,
+            title: nil,
+            phase: .idle,
+            startedAt: nil,
+            estimatedSeconds: nil,
+            pausedAccumulated: nil,
+            pausedAt: nil,
+            boardedDeviceID: nil,
+            serviceActive: true
+        )
+        #expect(ImaYaruOffer.ridingSessionID(idle) == nil)
+        #expect(ImaYaruOffer.ridingSessionID(nil) == nil)
+        let riding = SnapPlaintext(
+            rev: 2,
+            sessionId: stale,
+            ticketId: UUID(),
+            title: "下書き",
+            phase: .paused,
+            startedAt: 1,
+            estimatedSeconds: 600,
+            pausedAccumulated: 0,
+            pausedAt: 2,
+            boardedDeviceID: "phone",
+            serviceActive: true
+        )
+        #expect(ImaYaruOffer.ridingSessionID(riding) == stale)
     }
 
     @Test func snapConfirmsANewRideOnly() {
@@ -29,7 +52,7 @@ struct ImaYaruTests {
             rev: 2,
             sessionId: fresh,
             ticketId: UUID(),
-            title: "週次レビュー",
+            title: " 週次レビュー ",
             phase: .running,
             startedAt: 1,
             estimatedSeconds: 1500,
@@ -65,5 +88,32 @@ struct ImaYaruTests {
             Issue.record("expected ack")
             return
         }
+    }
+
+    @Test func confirmedRideDispensesEvenAfterAMismatchAck() {
+        let id = UUID()
+        #expect(ImaYaruCommit.next(track: .sending(cmdId: id, title: "下書き", priorSessionId: nil), rideConfirmed: false) == .wait)
+        #expect(ImaYaruCommit.next(track: .acked(cmdId: id, title: "下書き", priorSessionId: nil), rideConfirmed: false) == .dispense)
+        #expect(ImaYaruCommit.next(track: .failed(.sessionMismatch), rideConfirmed: false) == .fail(.sessionMismatch))
+        #expect(ImaYaruCommit.next(track: .failed(.sessionMismatch), rideConfirmed: true) == .dispense)
+    }
+
+    @Test func waitCuesTimeout() {
+        #expect(ImaYaruWait.cue(elapsed: 0) == .quiet)
+        #expect(ImaYaruWait.cue(elapsed: 1.5) == .waiting)
+        #expect(ImaYaruWait.cue(elapsed: 8) == .timedOut)
+    }
+
+    @Test func ticketEntersFromOffscreenAtThePip() {
+        let display = CGRect(x: 0, y: 0, width: 1440, height: 900)
+        let pip = CGRect(x: 1440 - 12 - 320, y: 12, width: 320, height: 128)
+        let rest = TicketDispenseGeometry.restingFrame(pip: pip)
+        let entry = TicketDispenseGeometry.entryFrame(resting: rest, display: display)
+        #expect(rest.midX == pip.midX)
+        #expect(rest.midY == pip.midY)
+        #expect(rest.width == pip.width)
+        #expect(entry.size == rest.size)
+        #expect(entry.maxY < display.minY)
+        #expect(entry.minX == rest.minX)
     }
 }

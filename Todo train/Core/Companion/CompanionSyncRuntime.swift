@@ -281,9 +281,17 @@ final class CompanionSyncRuntime {
             rev: envelope.rev,
             encKey: encKey
         )
+        // issueAndBoard has already boarded. A debounced snap push re-pulls cmds
+        // during putAck; applying twice acks sessionMismatch and the Mac drops the ride.
+        if command.op == .issueAndBoard {
+            processedCommandIDs.insert(command.id)
+            persistProcessed()
+        }
         _ = try await client.putAck(ackEnvelope)
-        processedCommandIDs.insert(command.id)
-        persistProcessed()
+        if command.op != .issueAndBoard {
+            processedCommandIDs.insert(command.id)
+            persistProcessed()
+        }
     }
 
     private func issueAndBoardAck(

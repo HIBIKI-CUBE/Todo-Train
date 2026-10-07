@@ -110,7 +110,7 @@ extension CompanionMacRuntime {
             issueBoardTrack = .failed(.noActiveService)
             return
         }
-        let prior = snap?.sessionId
+        let prior = ImaYaruOffer.ridingSessionID(snap)
         let cmdId = UUID()
         guard let next = IssueBoardTracking.begin(
             cmdId: cmdId,

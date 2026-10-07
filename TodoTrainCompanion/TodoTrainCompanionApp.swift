@@ -47,8 +47,11 @@ final class CompanionAppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         CompanionStatusItemRightClick.install()
-        overlay = CompanionRideOverlayController(runtime: runtime)
-        let imaYaru = ImaYaruPanelController(runtime: runtime)
+        let overlay = CompanionRideOverlayController(runtime: runtime)
+        self.overlay = overlay
+        let imaYaru = ImaYaruPanelController(runtime: runtime) { [weak overlay] in
+            overlay?.revealParkedRide()
+        }
         self.imaYaru = imaYaru
         ImaYaruOpener.present = { [weak imaYaru] in
             imaYaru?.present()

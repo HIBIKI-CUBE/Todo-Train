@@ -44,6 +44,7 @@ extension CompanionMacRuntime {
         snap = nil
         outgoingPause = .idle
         issueBoardTrack = .idle
+        suppressRideOverlay = false
         lastStatus = nil
         connection = .disconnected
         clearOptimisticCabin()

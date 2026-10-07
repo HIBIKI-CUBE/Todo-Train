@@ -83,6 +83,7 @@ final class CompanionRideOverlayController: NSObject {
         applyPresentation(presentation)
         withObservationTracking {
             _ = self.runtime.overlayPresentation
+            _ = self.runtime.suppressRideOverlay
         } onChange: { [weak self] in
             Task { @MainActor [weak self] in
                 self?.observeRuntime()
@@ -98,7 +99,30 @@ final class CompanionRideOverlayController: NSObject {
         rootView.updateTrackingAreas()
     }
 
+    /// Park the card fully on screen and show it. Used when the dispensed ticket hands off.
+    func revealParkedRide() {
+        if layout.isTucked {
+            layout.isTucked = false
+            persist()
+        }
+        applyLayoutToChrome()
+        let presentation = runtime.overlayPresentation
+        model.presentation = presentation
+        guard presentation.isVisible else { return }
+        applyFrame(animated: false)
+        panel.orderFrontRegardless()
+        lastVisible = true
+        lastCabinPrompt = presentation.cabinPrompt
+    }
+
     private func applyPresentation(_ presentation: RideOverlayPresentation) {
+        if runtime.suppressRideOverlay {
+            model.presentation = presentation
+            panel.orderOut(nil)
+            lastVisible = false
+            lastCabinPrompt = presentation.cabinPrompt
+            return
+        }
         let cabinAppeared = presentation.cabinPrompt != nil && lastCabinPrompt == nil
         model.presentation = presentation
         applyLayoutToChrome()

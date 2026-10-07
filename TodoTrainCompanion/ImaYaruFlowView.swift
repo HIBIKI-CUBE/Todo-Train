@@ -2,173 +2,255 @@ import SwiftUI
 import TodoTrainSync
 import TodoTrainTicketUI
 
-/// One fixed canvas: title + gauge, then the shared eject, then the existing ride PiP.
-struct ImaYaruFlowView: View {
+/// Mac panel: title, duration, and a button. The Mars face is not in this window.
+struct ImaYaruFormView: View {
     @Environment(CompanionMacRuntime.self) private var runtime
 
-    var onHandOff: () -> Void
+    var initialNotice: String?
+    var seededTitle: String = ""
+    var seededMinutes: Int = 30
+    var seededPrior: UUID?
+    var onDispense: (_ title: String, _ minutes: Int, _ priorSessionId: UUID?) -> Void
     var onClose: () -> Void
 
     @State private var title = ""
-    @State private var minutes = 30
-    @State private var focusNonce = 0
-    @State private var phase: ImaYaruPhase = .composing
-    @State private var event: TicketIssueEjectEvent?
-    @State private var customMinutes = false
+    @State private var minutes = 30.0
+    @State private var phase: FormPhase = .editing
+    @State private var notice: String?
+    @State private var noticeIsFailure = false
+    @State private var sendID = 0
+    @State private var sentTitle = ""
+    @State private var sentMinutes = 30
+    @State private var sentPrior: UUID?
+    @FocusState private var titleFocused: Bool
+
+    private enum FormPhase {
+        case editing
+        case sending
+    }
 
     private var trimmedTitle: String {
         IssueAndBoardEvaluating.trimmedTitle(title)
     }
 
     private var canIssue: Bool {
-        IssueAndBoardEvaluating.isValid(title: trimmedTitle, estimatedSeconds: minutes * 60)
+        IssueAndBoardEvaluating.isValid(title: trimmedTitle, estimatedSeconds: Int(minutes.rounded()) * 60)
     }
 
     var body: some View {
-        ZStack {
-            VStack(spacing: ImaYaruCanvas.stackSpacing) {
-                titleRail
-                gaugeRail
-                ticketSlot
-            }
-            .padding(.horizontal, ImaYaruCanvas.horizontalPad)
-            .padding(.vertical, ImaYaruCanvas.verticalPad)
-            .opacity(showsComposer ? 1 : 0)
-            .allowsHitTesting(phase == .composing)
+        VStack(alignment: .leading, spacing: 16) {
+            TextField("何をする？", text: $title)
+                .textFieldStyle(.roundedBorder)
+                .focused($titleFocused)
+                .onSubmit(commit)
+                .disabled(phase != .editing)
 
-            if showsEject, let event {
-                TicketIssueEjectOverlay(
-                    event: event,
-                    finish: .zoomIntoFocus,
-                    onFinished: finishEject
-                )
+            HStack(spacing: 10) {
+                Text("所要")
+                    .foregroundStyle(.secondary)
+                Slider(value: $minutes, in: 1...60, step: 1)
+                    .disabled(phase != .editing)
+                Text("\(Int(minutes.rounded()))分")
+                    .monospacedDigit()
+                    .frame(width: 48, alignment: .trailing)
+                Stepper("", value: $minutes, in: 1...60, step: 1)
+                    .labelsHidden()
+                    .disabled(phase != .editing)
             }
 
-            if phase == .failed {
-                failureBanner
+            if let notice {
+                Text(notice)
+                    .font(.callout)
+                    .foregroundStyle(noticeIsFailure ? Color.red : Color.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            HStack {
+                Spacer()
+                Button("キャンセル", action: onClose)
+                    .keyboardShortcut(.cancelAction)
+                Button(phase == .sending ? "送っています…" : "発車") {
+                    commit()
+                }
+                .keyboardShortcut(.defaultAction)
+                .buttonStyle(.borderedProminent)
+                .disabled(phase != .editing || !canIssue)
             }
         }
-        .frame(width: ImaYaruCanvas.size.width, height: ImaYaruCanvas.size.height)
-        .background(.regularMaterial)
-        .onAppear { focusNonce += 1 }
+        .padding(20)
+        .frame(width: 400, alignment: .topLeading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .onAppear {
+            if title.isEmpty, !seededTitle.isEmpty {
+                title = seededTitle
+                minutes = Double(seededMinutes)
+                sentTitle = seededTitle
+                sentMinutes = seededMinutes
+                sentPrior = seededPrior
+            }
+            if notice == nil {
+                notice = initialNotice
+                noticeIsFailure = initialNotice != nil
+            }
+            titleFocused = true
+            noteProgress()
+        }
         .onChange(of: runtime.issueBoardTrack) { _, _ in
-            noteTrack()
+            noteProgress()
         }
         .onChange(of: runtime.snap) { _, _ in
-            tryHandOff()
+            noteProgress()
         }
-        .onExitCommand { onClose() }
+        .onExitCommand(perform: onClose)
+        .task(id: sendID) {
+            guard phase == .sending else { return }
+            try? await Task.sleep(for: .seconds(ImaYaruWait.captionAfter))
+            guard phase == .sending else { return }
+            notice = SyncCopy.waitingForIPhone
+            noticeIsFailure = false
+            let rest = ImaYaruWait.limit - ImaYaruWait.captionAfter
+            try? await Task.sleep(for: .seconds(rest))
+            guard phase == .sending else { return }
+            runtime.suppressRideOverlay = false
+            phase = .editing
+            notice = SyncCopy.iphoneNoReply
+            noticeIsFailure = true
+        }
     }
 
-    private var showsComposer: Bool {
-        phase == .composing || phase == .failed
-    }
-
-    private var showsEject: Bool {
-        phase == .ejecting || phase == .holding
-    }
-
-    private var titleRail: some View {
-        ComposingTextField(
-            text: $title,
-            placeholder: "何をする？",
-            focusNonce: focusNonce,
-            onSubmit: commit
+    private var rideConfirmed: Bool {
+        guard phase == .sending else { return false }
+        return ImaYaruSnap.confirms(
+            snap: runtime.snap,
+            title: sentTitle,
+            priorSessionId: sentPrior
         )
-        .frame(height: ImaYaruCanvas.titleRail, alignment: .center)
-    }
-
-    private var gaugeRail: some View {
-        ZStack {
-            if customMinutes {
-                CustomEstimateInput(minutes: $minutes)
-            } else {
-                EstimateSnapGauge(
-                    minutes: $minutes,
-                    highlightedMinutes: 30,
-                    willIssue: { canIssue },
-                    onCommit: commit,
-                    onLongPress: { customMinutes = true }
-                )
-                .frame(height: 48)
-            }
-        }
-        .frame(height: ImaYaruCanvas.gaugeRail)
-    }
-
-    private var ticketSlot: some View {
-        MarsTicketView(
-            content: MarsTicketContent(
-                title: trimmedTitle.isEmpty ? " " : trimmedTitle,
-                minutes: minutes
-            )
-        )
-        .frame(height: ImaYaruCanvas.ticketSlotHeight)
-        .opacity(trimmedTitle.isEmpty ? 0.35 : 1)
-        .accessibilityHidden(trimmedTitle.isEmpty)
-    }
-
-    private var failureBanner: some View {
-        VStack {
-            Spacer()
-            HStack(spacing: 12) {
-                Text(failureLine)
-                    .font(.callout)
-                    .foregroundStyle(.red)
-                Spacer(minLength: 8)
-                Button("閉じる", action: onClose)
-            }
-            .padding(12)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
-            .padding(16)
-        }
-    }
-
-    private var failureLine: String {
-        if case .failed(let error) = runtime.issueBoardTrack {
-            return MenuBarPresentation.failureCopy(error)
-        }
-        return SyncCopy.invalidPayload
     }
 
     private func commit() {
-        guard phase == .composing, canIssue else { return }
-        let issued = TicketIssueEjectEvent(
-            ticketID: UUID(),
-            title: trimmedTitle,
-            minutes: minutes
-        )
-        event = issued
-        phase = .ejecting
-        let seconds = minutes * 60
-        let sentTitle = trimmedTitle
-        Task { await runtime.sendIssueAndBoard(title: sentTitle, estimatedSeconds: seconds) }
+        guard phase == .editing, canIssue else { return }
+        let trimmed = trimmedTitle
+        let wholeMinutes = Int(minutes.rounded())
+        sentTitle = trimmed
+        sentMinutes = wholeMinutes
+        sentPrior = ImaYaruOffer.ridingSessionID(runtime.snap)
+        notice = SyncCopy.sentToIPhone
+        noticeIsFailure = false
+        phase = .sending
+        runtime.suppressRideOverlay = true
+        sendID += 1
+        let seconds = wholeMinutes * 60
+        Task { await runtime.sendIssueAndBoard(title: trimmed, estimatedSeconds: seconds) }
     }
 
-    private func finishEject() {
-        if case .failed = runtime.issueBoardTrack {
-            phase = .failed
+    private func noteProgress() {
+        guard phase == .sending else {
+            if notice == SyncCopy.iphoneNoReply, snapMatchesSent {
+                notice = nil
+                onClose()
+            }
             return
         }
-        if phase == .ejecting {
-            phase = .holding
+        switch ImaYaruCommit.next(track: runtime.issueBoardTrack, rideConfirmed: rideConfirmed) {
+        case .wait:
+            break
+        case .dispense:
+            phase = .editing
+            sendID += 1
+            onDispense(sentTitle, sentMinutes, sentPrior)
+        case .fail(let error):
+            runtime.suppressRideOverlay = false
+            phase = .editing
+            notice = MenuBarPresentation.failureCopy(error)
+            noticeIsFailure = true
         }
-        tryHandOff()
     }
 
-    private func noteTrack() {
-        if case .failed = runtime.issueBoardTrack, phase != .composing {
-            if phase != .ejecting {
-                phase = .failed
+    private var snapMatchesSent: Bool {
+        ImaYaruSnap.confirms(snap: runtime.snap, title: sentTitle, priorSessionId: sentPrior)
+    }
+}
+
+@MainActor
+@Observable
+final class ImaYaruDispenseModel {
+    var seated = false
+    var handingOff = false
+    var showsWait = false
+    var gaveUp = false
+}
+
+/// Mars ticket only. The window itself slides in from off-screen.
+struct ImaYaruDispenseView: View {
+    @Environment(CompanionMacRuntime.self) private var runtime
+    @Bindable var model: ImaYaruDispenseModel
+
+    var title: String
+    var minutes: Int
+    var priorSessionId: UUID?
+    var onReveal: () -> Void
+    var onGiveUp: () -> Void
+    var onClose: () -> Void
+
+    var body: some View {
+        ZStack(alignment: .bottom) {
+            MarsTicketView(
+                content: MarsTicketContent(title: title, minutes: minutes)
+            )
+            .scaleEffect(model.handingOff ? 0.94 : 1)
+            .opacity(model.handingOff ? 0 : 1)
+
+            if model.gaveUp {
+                caption(SyncCopy.iphoneNoReply, failure: true)
+            } else if model.showsWait && !model.handingOff {
+                caption(SyncCopy.waitingForIPhone, failure: false)
             }
         }
-        tryHandOff()
+        .animation(.easeInOut(duration: 0.28), value: model.handingOff)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("発券。\(title)。\(minutes)分")
+        .onAppear {
+            tryReveal()
+        }
+        .onChange(of: model.seated) { _, _ in
+            tryReveal()
+        }
+        .onChange(of: runtime.snap) { _, _ in
+            tryReveal()
+        }
+        .onExitCommand(perform: onClose)
+        .task {
+            try? await Task.sleep(for: .seconds(ImaYaruWait.captionAfter))
+            guard !model.handingOff, !model.gaveUp else { return }
+            model.showsWait = true
+            let rest = ImaYaruWait.limit - ImaYaruWait.captionAfter
+            try? await Task.sleep(for: .seconds(rest))
+            guard !model.handingOff, !model.gaveUp else { return }
+            model.showsWait = false
+            model.gaveUp = true
+            try? await Task.sleep(for: .seconds(1.4))
+            guard !model.handingOff else { return }
+            onGiveUp()
+        }
     }
 
-    private func tryHandOff() {
-        guard phase == .holding else { return }
-        guard case .acked(_, let sentTitle, let prior) = runtime.issueBoardTrack else { return }
-        guard ImaYaruSnap.confirms(snap: runtime.snap, title: sentTitle, priorSessionId: prior) else { return }
-        onHandOff()
+    private func caption(_ text: String, failure: Bool) -> some View {
+        Text(text)
+            .font(.caption)
+            .foregroundStyle(failure ? Color.red : Color.primary)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(.regularMaterial, in: Capsule())
+            .padding(.bottom, 8)
+    }
+
+    private func tryReveal() {
+        guard model.seated, !model.handingOff else { return }
+        guard ImaYaruSnap.confirms(snap: runtime.snap, title: title, priorSessionId: priorSessionId) else {
+            return
+        }
+        model.showsWait = false
+        model.handingOff = true
+        onReveal()
     }
 }

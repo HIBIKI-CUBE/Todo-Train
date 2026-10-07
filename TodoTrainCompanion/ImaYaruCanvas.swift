@@ -3,43 +3,20 @@ import Foundation
 import TodoTrainSync
 import TodoTrainTicketUI
 
-/// Fixed frame for いまやる. Every phase reports the same size.
-enum ImaYaruPhase: Equatable, Sendable {
-    case composing
-    case ejecting
-    case holding
-    case failed
-}
-
-enum ImaYaruCanvas {
-    static let width: CGFloat = 440
-    static let titleRail: CGFloat = 76
-    static let gaugeRail: CGFloat = 120
-    static let horizontalPad: CGFloat = 20
-    static let verticalPad: CGFloat = 16
-    static let stackSpacing: CGFloat = 12
-
-    static var ticketSlotHeight: CGFloat {
-        MarsTicketSpec.height(forWidth: width - horizontalPad * 2)
-    }
-
-    static var height: CGFloat {
-        verticalPad * 2 + titleRail + stackSpacing + gaugeRail + stackSpacing + ticketSlotHeight
-    }
-
-    static var size: CGSize {
-        CGSize(width: width, height: height)
-    }
-
-    static func size(for phase: ImaYaruPhase) -> CGSize {
-        _ = phase
-        return size
-    }
-}
-
 enum ImaYaruOffer {
     static func isAvailable(isPaired: Bool, serviceActive: Bool?) -> Bool {
         isPaired && serviceActive == true
+    }
+
+    /// Session the next interrupt must name. Idle snaps do not count, even with a leftover id.
+    static func ridingSessionID(_ snap: SnapPlaintext?) -> UUID? {
+        guard let snap else { return nil }
+        switch snap.phase {
+        case .running, .paused, .overtime:
+            return snap.sessionId
+        case .idle, .unknown:
+            return nil
+        }
     }
 }
 
@@ -88,8 +65,83 @@ enum ImaYaruSnap {
             return false
         }
         let expected = IssueAndBoardEvaluating.trimmedTitle(title)
-        guard snap.title == expected else { return false }
+        let actual = IssueAndBoardEvaluating.trimmedTitle(snap.title ?? "")
+        guard actual == expected else { return false }
         if let priorSessionId, sessionId == priorSessionId { return false }
         return true
+    }
+}
+
+enum ImaYaruStep: Equatable, Sendable {
+    case wait
+    case dispense
+    case fail(WireError)
+}
+
+enum ImaYaruCommit {
+    /// Ride confirmation wins over a failure ack. A second pull can ack mismatch after the board stuck.
+    static func next(track: IssueBoardTrack, rideConfirmed: Bool) -> ImaYaruStep {
+        if rideConfirmed { return .dispense }
+        switch track {
+        case .acked:
+            return .dispense
+        case .failed(let error):
+            return .fail(error)
+        case .idle, .sending:
+            return .wait
+        }
+    }
+}
+
+enum ImaYaruWaitCue: Equatable, Sendable {
+    case quiet
+    case waiting
+    case timedOut
+}
+
+enum ImaYaruWait {
+    static let captionAfter: TimeInterval = 1.5
+    static let limit: TimeInterval = 8
+
+    static func cue(elapsed: TimeInterval) -> ImaYaruWaitCue {
+        if elapsed >= limit { return .timedOut }
+        if elapsed >= captionAfter { return .waiting }
+        return .quiet
+    }
+}
+
+/// Mars face centered on the future PiP, entering from the nearest screen edge.
+enum TicketDispenseGeometry {
+    static let edgeGap: CGFloat = 12
+
+    static func restingFrame(pip: CGRect) -> CGRect {
+        let width = pip.width
+        let height = MarsTicketSpec.height(forWidth: width)
+        return CGRect(
+            x: pip.midX - width / 2,
+            y: pip.midY - height / 2,
+            width: width,
+            height: height
+        )
+    }
+
+    static func entryFrame(resting: CGRect, display: CGRect) -> CGRect {
+        var frame = resting
+        let distBottom = resting.midY - display.minY
+        let distTop = display.maxY - resting.midY
+        let distLeft = resting.midX - display.minX
+        let distRight = display.maxX - resting.midX
+        if min(distBottom, distTop) <= min(distLeft, distRight) {
+            if distBottom <= distTop {
+                frame.origin.y = display.minY - resting.height - edgeGap
+            } else {
+                frame.origin.y = display.maxY + edgeGap
+            }
+        } else if distLeft <= distRight {
+            frame.origin.x = display.minX - resting.width - edgeGap
+        } else {
+            frame.origin.x = display.maxX + edgeGap
+        }
+        return frame
     }
 }
