@@ -50,6 +50,9 @@ public enum RemotePauseEvaluating {
                 guard commandSession == openSessionId else { return .sessionMismatch }
             }
             return .apply
+        case .issueAndBoard:
+            // Host applies this op itself. Never treat it as pause/resume/still.
+            return .noActiveService
         }
     }
 

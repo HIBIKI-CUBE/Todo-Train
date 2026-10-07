@@ -11,6 +11,7 @@ public enum SyncCopy {
     public static let relayURLMissing = "リレー URL を設定に書いてから、もう一度。"
     public static let pauseLimitReached = "停車できません（停車上限）"
     public static let notPaused = "停車中ではない"
+    public static let invalidPayload = "題名か所要が送れない"
     public static let sentToIPhone = "iPhone に送った"
     public static let iphoneConfirmReason = "画面を自分に戻して、この Mac との連携を確定します"
     public static let macConfirmReason = "画面を自分に戻して、iPhone との連携を確定します"

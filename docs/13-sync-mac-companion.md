@@ -6,9 +6,11 @@
 
 iPhone の SwiftData + `SessionManager` が本尊。リレーは正本にしないし、復号できない。
 
-運ぶのは **いまの乗務** の暗号スナップショットと、コマンド `pause` / `resume` / `still` だけ。到着・延長・切符全件レプリカ・CRDT は載せない。`arrive` / `extend` を足さない。
+運ぶのは **いまの乗務** の暗号スナップショットと、コマンド `pause` / `resume` / `still` / `issueAndBoard`。`issueAndBoard` は Mac の「いまやる」一拍（題名と所要を送り、母艦が発行して発車する）。在庫のみ発行・切符全件レプリカ・CRDT は載せない。`arrive` / `extend` を足さない。成功の中身は ack ではなく後続 snap。
 
-土管は Cloudflare Workers + pairing 1 = Durable Object 1。アカウントなし。起こし（APNs）を求めない。iOS は前面、または `ScenePhase.active` で送受信する。Personal Team のまま動く。
+iOS は前面、または `ScenePhase.active` で送受信する。ロック中に「いまやる」が届くことは、この slice の約束にしない。
+
+土管は Cloudflare Workers + pairing 1 = Durable Object 1。アカウントなし。起こし（APNs）を求めない。Personal Team のまま動く。
 
 機密: 正規ユーザー以外は中身を見られない（Apple / 自前サーバ / 押収を含む）。だから CloudKit 私有同期はこの土管に使わない。鍵が Apple 側にある。暗号文だけ載せるなら自前同期と同じ仕事になる。
 

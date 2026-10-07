@@ -8,13 +8,13 @@
 
 import SwiftUI
 
-enum TicketStockColor {
-    struct RGB: Equatable, Sendable {
-        var red: UInt8
-        var green: UInt8
-        var blue: UInt8
+public enum TicketStockColor {
+    public struct RGB: Equatable, Sendable {
+        public var red: UInt8
+        public var green: UInt8
+        public var blue: UInt8
 
-        var color: Color {
+        public var color: Color {
             Color(
                 red: Double(red) / 255,
                 green: Double(green) / 255,
@@ -22,34 +22,31 @@ enum TicketStockColor {
             )
         }
 
-        init(_ red: UInt8, _ green: UInt8, _ blue: UInt8) {
+        public init(_ red: UInt8, _ green: UInt8, _ blue: UInt8) {
             self.red = red
             self.green = green
             self.blue = blue
         }
     }
 
-    struct Stock: Equatable, Sendable {
-        var paper: RGB
-        var band: RGB
+    public struct Stock: Equatable, Sendable {
+        public var paper: RGB
+        public var band: RGB
     }
 
     /// Canonical unused Mars cyan (ref: docs/references/mars-joshaken.png).
-    static let untagged = Stock(
+    public static let untagged = Stock(
         paper: RGB(0xD5, 0xE6, 0xEA),
         band: RGB(0xE7, 0xF1, 0xF3)
     )
 
     /// Lowest `sortOrder` wins. Empty → nil (untagged stock).
-    static func winningColorHex(from tags: [(sortOrder: Int, colorHex: String)]) -> String? {
+    public static func winningColorHex(from tags: [(sortOrder: Int, colorHex: String)]) -> String? {
         tags.min { $0.sortOrder < $1.sortOrder }?.colorHex
     }
 
-    static func winningColorHex(tags: [Tag]) -> String? {
-        winningColorHex(from: tags.map { (sortOrder: $0.sortOrder, colorHex: $0.colorHex) })
-    }
 
-    static func stock(for colorHex: String?) -> Stock {
+    public static func stock(for colorHex: String?) -> Stock {
         guard let colorHex, !colorHex.isEmpty else { return untagged }
         return table[canonicalHex(colorHex)] ?? untagged
     }

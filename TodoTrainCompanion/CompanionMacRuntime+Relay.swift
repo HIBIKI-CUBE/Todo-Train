@@ -213,6 +213,7 @@ extension CompanionMacRuntime {
     func applyAck(_ envelope: Envelope, pairingId: UUID, encKey: Data) throws {
         let ack = try SyncCrypto.openJSON(AckPlaintext.self, envelope: envelope, pairingId: pairingId, encKey: encKey)
         outgoingPause = OutgoingPauseApplying.applyAck(ack, current: outgoingPause)
+        issueBoardTrack = IssueBoardTracking.applyAck(ack, current: issueBoardTrack)
         if case .failed = outgoingPause {
             clearOptimisticCabin()
             optimisticIdleConsumed = false

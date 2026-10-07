@@ -43,10 +43,16 @@ struct TodoTrainCompanionApp: App {
 final class CompanionAppDelegate: NSObject, NSApplicationDelegate {
     let runtime = CompanionMacRuntime()
     private var overlay: CompanionRideOverlayController?
+    private var imaYaru: ImaYaruPanelController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         CompanionStatusItemRightClick.install()
         overlay = CompanionRideOverlayController(runtime: runtime)
+        let imaYaru = ImaYaruPanelController(runtime: runtime)
+        self.imaYaru = imaYaru
+        ImaYaruOpener.present = { [weak imaYaru] in
+            imaYaru?.present()
+        }
         let workspace = NSWorkspace.shared.notificationCenter
         workspace.addObserver(
             self,

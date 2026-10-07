@@ -26,7 +26,7 @@ struct EstimateChips: View {
 
     @Environment(\.verticalSizeClass) private var verticalSizeClass
 
-    static let ticketPresets = [5, 10, 15, 20, 30, 45, 60]
+    static let ticketPresets = EstimateSnapMapping.stops
     static let extendPresets = [5, 10, 15]
 
     init(

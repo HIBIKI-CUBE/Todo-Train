@@ -66,7 +66,15 @@ struct HubMarsTicketCard: View {
             MarsTicketView(
                 content: content,
                 density: .hub,
-                occupancyMarks: occupancyMarks
+                occupancyMarks: occupancyMarks.map {
+                    MarsOccupancyMark(
+                        id: $0.id,
+                        position: $0.position,
+                        span: $0.span,
+                        isCurrent: $0.isCurrent,
+                        isAdopted: $0.isAdopted
+                    )
+                }
             )
             .equatable()
             .contentShape(Rectangle())

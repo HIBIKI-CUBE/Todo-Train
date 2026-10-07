@@ -5,15 +5,15 @@
 
 import SwiftUI
 
-enum CustomEstimate {
-    static let minMinutes = 1
-    static let maxMinutes = 60
+public enum CustomEstimate {
+    public static let minMinutes = 1
+    public static let maxMinutes = 60
 
-    static func clampMinutes(_ value: Int) -> Int {
+    public static func clampMinutes(_ value: Int) -> Int {
         min(max(value, minMinutes), maxMinutes)
     }
 
-    static func parseMinutes(from text: String) -> Int? {
+    public static func parseMinutes(from text: String) -> Int? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let value = Int(trimmed) else { return nil }
         guard (minMinutes...maxMinutes).contains(value) else { return nil }
@@ -21,17 +21,24 @@ enum CustomEstimate {
     }
 }
 
-struct CustomEstimateInput: View {
+public struct CustomEstimateInput: View {
     @Binding var minutes: Int
-    var highlightedMinutes: Int?
+    public var highlightedMinutes: Int?
+
+    public init(minutes: Binding<Int>, highlightedMinutes: Int? = nil) {
+        _minutes = minutes
+        self.highlightedMinutes = highlightedMinutes
+    }
 
     @State private var text = ""
 
-    var body: some View {
+    public var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 TextField("分（1–60）", text: $text)
+                    #if os(iOS)
                     .keyboardType(.numberPad)
+                    #endif
                     .textFieldStyle(.roundedBorder)
                     .onChange(of: text) { _, newValue in
                         if let parsed = CustomEstimate.parseMinutes(from: newValue) {

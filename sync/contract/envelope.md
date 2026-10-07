@@ -88,6 +88,7 @@ remaining      = estimatedSeconds - elapsedActive
 
 ## Cmd / ack 平文
 
-- cmd: [fixtures/cmd-pause.json](fixtures/cmd-pause.json) / [fixtures/cmd-resume.json](fixtures/cmd-resume.json) / [fixtures/cmd-still.json](fixtures/cmd-still.json)。`op` は `pause` / `resume` / `still`。`still` はいまの車内放送 pending を消費する。`sessionId` は任意（乗務なし idle は `null`。例: [fixtures/cmd-still-nosession.json](fixtures/cmd-still-nosession.json)）。
+- cmd: [fixtures/cmd-pause.json](fixtures/cmd-pause.json) / [fixtures/cmd-resume.json](fixtures/cmd-resume.json) / [fixtures/cmd-still.json](fixtures/cmd-still.json) / [fixtures/cmd-issueAndBoard.json](fixtures/cmd-issueAndBoard.json)。`op` は `pause` / `resume` / `still` / `issueAndBoard`。`still` はいまの車内放送 pending を消費する。`sessionId` は任意（乗務なし idle は `null`。例: [fixtures/cmd-still-nosession.json](fixtures/cmd-still-nosession.json)）。
+- `issueAndBoard` はこの op のときだけ `title`（trim 後非空。母艦 `Ticket.title` に文字数上限は無い）と `estimatedSeconds`（60〜3600。1〜60分。5分刻み以外も可）を載せる。他の op ではこの 2 キーを置かない。`sessionId` は非乗務なら `null`、乗務中の割り込みならいまの乗務の id（不一致は `sessionMismatch`）。運行外は `noActiveService`。題名や秒が不正なら `invalidPayload`。成功 ack は `ok: true` のみ。切符 id は ack に載せない。結果は後続 snap。例: [fixtures/cmd-issueAndBoard.json](fixtures/cmd-issueAndBoard.json)（非乗務）、[fixtures/cmd-issueAndBoard-interrupt.json](fixtures/cmd-issueAndBoard-interrupt.json)（割り込み）。
 - ack 成功: [fixtures/ack-ok.json](fixtures/ack-ok.json)。`ok: true` のとき `error` キーは置かない。
 - ack 失敗: [fixtures/ack-pauseLimitReached.json](fixtures/ack-pauseLimitReached.json)。`error` は [enums.json](enums.json) のみ。タイトルは載せない。

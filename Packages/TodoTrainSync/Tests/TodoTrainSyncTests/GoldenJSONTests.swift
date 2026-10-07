@@ -67,6 +67,33 @@ struct GoldenJSONTests {
         let object = try JSONSerialization.jsonObject(with: encoded) as! [String: Any]
         #expect(object["op"] as? String == "pause")
         #expect((object["id"] as? String)?.contains("A") == false)
+        #expect(object["title"] == nil)
+        #expect(object["estimatedSeconds"] == nil)
+    }
+
+    @Test func cmdIssueAndBoardRoundTripOmitsNothingRequired() throws {
+        let data = try ContractFixtures.data("fixtures/cmd-issueAndBoard.json")
+        let decoded = try WireJSON.decoder().decode(CommandPlaintext.self, from: data)
+        #expect(decoded.op == .issueAndBoard)
+        #expect(decoded.sessionId == nil)
+        #expect(decoded.title == "週次レビューの下書き")
+        #expect(decoded.estimatedSeconds == 1500)
+
+        let encoded = try WireJSON.encoder().encode(decoded)
+        let object = try JSONSerialization.jsonObject(with: encoded) as! [String: Any]
+        #expect(object["title"] as? String == "週次レビューの下書き")
+        #expect(object["estimatedSeconds"] as? Int == 1500)
+        #expect(object["sessionId"] is NSNull)
+        #expect(object.keys.sorted() == ["at", "estimatedSeconds", "id", "op", "sessionId", "title"])
+    }
+
+    @Test func cmdIssueAndBoardInterruptKeepsSession() throws {
+        let data = try ContractFixtures.data("fixtures/cmd-issueAndBoard-interrupt.json")
+        let decoded = try WireJSON.decoder().decode(CommandPlaintext.self, from: data)
+        #expect(decoded.op == .issueAndBoard)
+        #expect(decoded.sessionId == UUID(uuidString: "11111111-1111-4111-8111-111111111111"))
+        #expect(decoded.estimatedSeconds == 600)
+        #expect(decoded.title == "割り込みの下書き")
     }
 
     @Test func cmdStillRoundTrip() throws {
@@ -166,10 +193,11 @@ struct GoldenJSONTests {
         let json = try JSONSerialization.jsonObject(with: data) as! [String: Any]
         #expect(json["phase"] as? [String] == ["idle", "running", "paused", "overtime"])
         #expect(json["kind"] as? [String] == ["snap", "cmd", "ack"])
-        #expect(json["op"] as? [String] == ["pause", "resume", "still"])
+        #expect(json["op"] as? [String] == ["pause", "resume", "still", "issueAndBoard"])
         #expect(json["pendingCabin"] as? [String] == ["progress", "away", "idle"])
         #expect(json["error"] as? [String] == [
             "pauseLimitReached", "noActiveService", "sessionMismatch", "decryptFailed", "notPaused",
+            "invalidPayload",
         ])
     }
 }

@@ -9,10 +9,14 @@
 /* Begin PBXBuildFile section */
 		B6EE2E8C302B4E730022EBAD /* TodoTrainWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = B6EE2E80302B4E730022EBAD /* TodoTrainWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		C0DE1004302B4E730022EBAD /* TodoTrainSync in Frameworks */ = {isa = PBXBuildFile; productRef = C0DE1002302B4E730022EBAD /* TodoTrainSync */; };
+		C0DE3004302B4E730022EBAD /* TodoTrainTicketUI in Frameworks */ = {isa = PBXBuildFile; productRef = C0DE3012302B4E730022EBAD /* TodoTrainTicketUI */; };
 		C0DE1005302B4E730022EBAD /* TodoTrainSync in Frameworks */ = {isa = PBXBuildFile; productRef = C0DE1003302B4E730022EBAD /* TodoTrainSync */; };
+		C0DE3005302B4E730022EBAD /* TodoTrainTicketUI in Frameworks */ = {isa = PBXBuildFile; productRef = C0DE3013302B4E730022EBAD /* TodoTrainTicketUI */; };
 		C0DE1006302B4E730022EBAD /* TodoTrainSync in Frameworks */ = {isa = PBXBuildFile; productRef = C0DE1007302B4E730022EBAD /* TodoTrainSync */; };
 		C0DE2004302B4E730022EBAD /* TodoTrainSync in Frameworks */ = {isa = PBXBuildFile; productRef = C0DE2002302B4E730022EBAD /* TodoTrainSync */; };
+		C0DE3006302B4E730022EBAD /* TodoTrainTicketUI in Frameworks */ = {isa = PBXBuildFile; productRef = C0DE3014302B4E730022EBAD /* TodoTrainTicketUI */; };
 		C0DE2005302B4E730022EBAD /* TodoTrainSync in Frameworks */ = {isa = PBXBuildFile; productRef = C0DE2003302B4E730022EBAD /* TodoTrainSync */; };
+		C0DE3007302B4E730022EBAD /* TodoTrainTicketUI in Frameworks */ = {isa = PBXBuildFile; productRef = C0DE3015302B4E730022EBAD /* TodoTrainTicketUI */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -154,12 +158,14 @@
 			isa = PBXFrameworksBuildPhase;
 			files = (
 				C0DE1004302B4E730022EBAD /* TodoTrainSync in Frameworks */,
+				C0DE3004302B4E730022EBAD /* TodoTrainTicketUI in Frameworks */,
 			);
 		};
 		B6EE2E60302B4E730022EBAD /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
 				C0DE1005302B4E730022EBAD /* TodoTrainSync in Frameworks */,
+				C0DE3005302B4E730022EBAD /* TodoTrainTicketUI in Frameworks */,
 			);
 		};
 		B6EE2E6A302B4E730022EBAD /* Frameworks */ = {
@@ -177,12 +183,14 @@
 			isa = PBXFrameworksBuildPhase;
 			files = (
 				C0DE2004302B4E730022EBAD /* TodoTrainSync in Frameworks */,
+				C0DE3006302B4E730022EBAD /* TodoTrainTicketUI in Frameworks */,
 			);
 		};
 		C0DE2123302B4E730022EBAD /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
 				C0DE2005302B4E730022EBAD /* TodoTrainSync in Frameworks */,
+				C0DE3007302B4E730022EBAD /* TodoTrainTicketUI in Frameworks */,
 			);
 		};
 /* End PBXFrameworksBuildPhase section */
@@ -238,6 +246,7 @@
 			name = "Todo train";
 			packageProductDependencies = (
 				C0DE1002302B4E730022EBAD /* TodoTrainSync */,
+				C0DE3012302B4E730022EBAD /* TodoTrainTicketUI */,
 			);
 			productName = "Todo train";
 			productReference = B6EE2E52302B4E710022EBAD /* Todo train.app */;
@@ -262,6 +271,7 @@
 			name = "Todo trainTests";
 			packageProductDependencies = (
 				C0DE1003302B4E730022EBAD /* TodoTrainSync */,
+				C0DE3013302B4E730022EBAD /* TodoTrainTicketUI */,
 			);
 			productName = "Todo trainTests";
 			productReference = B6EE2E63302B4E730022EBAD /* Todo trainTests.xctest */;
@@ -325,6 +335,7 @@
 			name = TodoTrainCompanion;
 			packageProductDependencies = (
 				C0DE2002302B4E730022EBAD /* TodoTrainSync */,
+				C0DE3014302B4E730022EBAD /* TodoTrainTicketUI */,
 			);
 			productName = TodoTrainCompanion;
 			productReference = C0DE2101302B4E730022EBAD /* TodoTrainCompanion.app */;
@@ -349,6 +360,7 @@
 			name = TodoTrainCompanionTests;
 			packageProductDependencies = (
 				C0DE2003302B4E730022EBAD /* TodoTrainSync */,
+				C0DE3015302B4E730022EBAD /* TodoTrainTicketUI */,
 			);
 			productName = TodoTrainCompanionTests;
 			productReference = C0DE2102302B4E730022EBAD /* TodoTrainCompanionTests.xctest */;
@@ -398,6 +410,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				C0DE2001302B4E730022EBAD /* XCLocalSwiftPackageReference "Packages/TodoTrainSync" */,
+				C0DE3011302B4E730022EBAD /* XCLocalSwiftPackageReference "Packages/TodoTrainTicketUI" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = B6EE2E53302B4E710022EBAD /* Products */;
@@ -1043,6 +1056,10 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = Packages/TodoTrainSync;
 		};
+		C0DE3011302B4E730022EBAD /* XCLocalSwiftPackageReference "Packages/TodoTrainTicketUI" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/TodoTrainTicketUI;
+		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -1070,6 +1087,26 @@
 			isa = XCSwiftPackageProductDependency;
 			package = C0DE2001302B4E730022EBAD /* XCLocalSwiftPackageReference "Packages/TodoTrainSync" */;
 			productName = TodoTrainSync;
+		};
+		C0DE3012302B4E730022EBAD /* TodoTrainTicketUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C0DE3011302B4E730022EBAD /* XCLocalSwiftPackageReference "Packages/TodoTrainTicketUI" */;
+			productName = TodoTrainTicketUI;
+		};
+		C0DE3013302B4E730022EBAD /* TodoTrainTicketUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C0DE3011302B4E730022EBAD /* XCLocalSwiftPackageReference "Packages/TodoTrainTicketUI" */;
+			productName = TodoTrainTicketUI;
+		};
+		C0DE3014302B4E730022EBAD /* TodoTrainTicketUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C0DE3011302B4E730022EBAD /* XCLocalSwiftPackageReference "Packages/TodoTrainTicketUI" */;
+			productName = TodoTrainTicketUI;
+		};
+		C0DE3015302B4E730022EBAD /* TodoTrainTicketUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C0DE3011302B4E730022EBAD /* XCLocalSwiftPackageReference "Packages/TodoTrainTicketUI" */;
+			productName = TodoTrainTicketUI;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

@@ -24,6 +24,8 @@ public enum WireOp: String, Codable, Sendable, Equatable {
     case pause
     case resume
     case still
+    /// Issue a ticket and board it in one beat. Not arrive/extend.
+    case issueAndBoard
 }
 
 public enum WireError: String, Codable, Sendable, Equatable {
@@ -32,6 +34,8 @@ public enum WireError: String, Codable, Sendable, Equatable {
     case sessionMismatch
     case decryptFailed
     case notPaused
+    /// Empty title, or estimatedSeconds outside 60...3600, on issueAndBoard.
+    case invalidPayload
 }
 
 /// `phase` on the wire. Unknown values must not crash; display conservatively.

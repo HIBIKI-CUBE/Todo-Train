@@ -78,6 +78,14 @@ struct CompanionPopover: View {
                 .buttonStyle(.bordered)
             }
 
+            if runtime.canOfferImaYaru {
+                Button("いまやる") {
+                    CompanionSettingsOpener.dismissPopover?()
+                    runtime.openImaYaru()
+                }
+                .buttonStyle(.bordered)
+            }
+
             if view.canPause {
                 Button("停車") {
                     Task { await runtime.sendPause() }

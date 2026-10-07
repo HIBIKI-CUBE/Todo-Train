@@ -37,6 +37,7 @@ final class CompanionMacRuntime {
     var snap: SnapPlaintext?
     var connection: ConnectionStatus = .disconnected
     var outgoingPause: OutgoingPauseState = .idle
+    var issueBoardTrack: IssueBoardTrack = .idle
     var now = Int(Date().timeIntervalSince1970)
     var lastStatus: String?
     var sentTimetablePauseAt: Int?
@@ -109,6 +110,14 @@ final class CompanionMacRuntime {
 
     var presentation: MenuBarPresentation {
         MenuBarPresentation.make(menuBarInput)
+    }
+
+    var canOfferImaYaru: Bool {
+        ImaYaruOffer.isAvailable(isPaired: isPaired, serviceActive: snap?.serviceActive)
+    }
+
+    func openImaYaru() {
+        ImaYaruOpener.present?()
     }
 
     var overlayPresentation: RideOverlayPresentation {

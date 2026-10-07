@@ -343,4 +343,37 @@ struct SessionManagerBoardingTests {
         #expect(manager.companionSyncTick == 7)
         #expect(manager.phase == .idle)
     }
+
+    @Test func issueAndBoard_startsANewRide() throws {
+        let (manager, _, _, _) = try SessionManagerFixtures.makeHarness()
+        try manager.startService()
+
+        try manager.issueAndBoard(title: "  週次レビュー  ", estimatedSeconds: 1500)
+
+        #expect(manager.phase == .running)
+        #expect(manager.activeSession?.ticket?.title == "週次レビュー")
+        #expect(manager.activeSession?.ticket?.estimatedSeconds == 1500)
+    }
+
+    @Test func issueAndBoard_interruptsTheOpenRide() throws {
+        let (manager, context, _, _) = try SessionManagerFixtures.makeHarness()
+        try manager.startService()
+        let current = try SessionManagerFixtures.makeTicket(context, title: "いま")
+        try manager.board(ticket: current)
+        let previous = manager.activeSession?.id
+
+        try manager.issueAndBoard(title: "割り込み", estimatedSeconds: 600)
+
+        #expect(manager.phase == .running)
+        #expect(manager.activeSession?.id != previous)
+        #expect(manager.activeSession?.ticket?.title == "割り込み")
+        #expect(current.isOpen)
+    }
+
+    @Test func issueAndBoard_refusesWithoutService() throws {
+        let (manager, _, _, _) = try SessionManagerFixtures.makeHarness()
+        #expect(throws: SessionError.noActiveService) {
+            try manager.issueAndBoard(title: "下書き", estimatedSeconds: 600)
+        }
+    }
 }
