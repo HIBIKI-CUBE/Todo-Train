@@ -112,7 +112,7 @@ enum ImaYaruWait {
     }
 }
 
-/// Mars face centered on the future PiP, entering from the nearest screen edge.
+/// Mars face centered on the future PiP, entering from the nearer side of the screen.
 enum TicketDispenseGeometry {
     static let edgeGap: CGFloat = 12
 
@@ -129,17 +129,9 @@ enum TicketDispenseGeometry {
 
     static func entryFrame(resting: CGRect, display: CGRect) -> CGRect {
         var frame = resting
-        let distBottom = resting.midY - display.minY
-        let distTop = display.maxY - resting.midY
         let distLeft = resting.midX - display.minX
         let distRight = display.maxX - resting.midX
-        if min(distBottom, distTop) <= min(distLeft, distRight) {
-            if distBottom <= distTop {
-                frame.origin.y = display.minY - resting.height - edgeGap
-            } else {
-                frame.origin.y = display.maxY + edgeGap
-            }
-        } else if distLeft <= distRight {
+        if distLeft <= distRight {
             frame.origin.x = display.minX - resting.width - edgeGap
         } else {
             frame.origin.x = display.maxX + edgeGap

@@ -118,8 +118,14 @@ struct ImaYaruTests {
         #expect(rest.height == MarsTicketSpec.height(forWidth: pip.width))
         #expect(rest.height > 100)
         #expect(entry.size == rest.size)
-        #expect(entry.maxY < display.minY)
-        #expect(entry.minX == rest.minX)
+        #expect(entry.minY == rest.minY)
+        #expect(entry.minX == display.maxX + TicketDispenseGeometry.edgeGap)
+
+        let leftPip = CGRect(x: 12, y: 900 - 12 - 128, width: 320, height: 128)
+        let leftRest = TicketDispenseGeometry.restingFrame(pip: leftPip)
+        let leftEntry = TicketDispenseGeometry.entryFrame(resting: leftRest, display: display)
+        #expect(leftEntry.minY == leftRest.minY)
+        #expect(leftEntry.maxX < display.minX)
     }
 
     @Test func ticketRestsBeforeTheRideReplacesIt() {
