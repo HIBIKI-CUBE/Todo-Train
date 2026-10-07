@@ -11,19 +11,20 @@ final class ImaYaruPanelController {
     private let runtime: CompanionMacRuntime
     private let revealRide: () -> Void
     private let formPanel: NSPanel
-    private let ticketPanel: NSPanel
+    private let ticketPanel: ImaYaruTicketPanel
     private var alive = false
     private var dispensing = false
     private var dispenseModel: ImaYaruDispenseModel?
     private var attemptTitle = ""
     private var attemptMinutes = 30
     private var attemptPrior: UUID?
+    private var slideTimer: Timer?
 
     init(runtime: CompanionMacRuntime, revealRide: @escaping () -> Void) {
         self.runtime = runtime
         self.revealRide = revealRide
         formPanel = ImaYaruFormPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 400, height: 240),
+            contentRect: NSRect(x: 0, y: 0, width: 400, height: 260),
             styleMask: [.titled, .closable, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -46,6 +47,7 @@ final class ImaYaruPanelController {
     func present() {
         alive = true
         dispensing = false
+        stopSlide()
         runtime.issueBoardTrack = .idle
         runtime.suppressRideOverlay = false
         ticketPanel.orderOut(nil)
@@ -55,6 +57,7 @@ final class ImaYaruPanelController {
     func close() {
         alive = false
         dispensing = false
+        stopSlide()
         runtime.suppressRideOverlay = false
         runtime.issueBoardTrack = .idle
         formPanel.orderOut(nil)
@@ -78,6 +81,7 @@ final class ImaYaruPanelController {
         install(root, in: formPanel)
         formPanel.alphaValue = 1
         formPanel.setFrame(centeredFormFrame(), display: true)
+        NSApp.activate(ignoringOtherApps: true)
         formPanel.orderFrontRegardless()
         formPanel.makeKey()
     }
@@ -89,18 +93,6 @@ final class ImaYaruPanelController {
         attemptMinutes = minutes
         attemptPrior = prior
         formPanel.orderOut(nil)
-        let model = ImaYaruDispenseModel()
-        dispenseModel = model
-        let root = ImaYaruDispenseView(
-            model: model,
-            title: title,
-            minutes: minutes,
-            priorSessionId: prior,
-            onReveal: { [weak self] in self?.reveal() },
-            onGiveUp: { [weak self] in self?.giveUp() },
-            onClose: { [weak self] in self?.close() }
-        )
-        .environment(runtime)
         guard let anchor = anchorFrames() else {
             runtime.suppressRideOverlay = false
             dispensing = false
@@ -112,26 +104,69 @@ final class ImaYaruPanelController {
             )
             return
         }
-        install(root, in: ticketPanel, fillTicket: true)
+        let model = ImaYaruDispenseModel()
+        dispenseModel = model
+        let root = ImaYaruDispenseView(
+            model: model,
+            title: title,
+            minutes: minutes,
+            ticketSize: anchor.rest.size,
+            priorSessionId: prior,
+            onReveal: { [weak self] in self?.reveal() },
+            onGiveUp: { [weak self] in self?.giveUp() },
+            onClose: { [weak self] in self?.close() }
+        )
+        .environment(runtime)
+        installTicket(root, size: anchor.rest.size)
         ticketPanel.alphaValue = 1
         let reduce = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         let start = reduce ? anchor.rest : anchor.entry
-        ticketPanel.setFrame(start, display: true)
+        ticketPanel.setFrame(start, display: false)
+        ticketPanel.contentView?.layoutSubtreeIfNeeded()
         ticketPanel.orderFrontRegardless()
         ticketPanel.makeKey()
         if reduce {
             model.seated = true
             return
         }
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.48
-            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
-            ticketPanel.animator().setFrame(anchor.rest, display: true)
-        } completionHandler: { [weak self] in
+        slideTicket(from: start, to: anchor.rest)
+    }
+
+    /// `animator().setFrame` can leave a borderless panel off-screen. Step the origin ourselves.
+    private func slideTicket(from start: NSRect, to rest: NSRect) {
+        stopSlide()
+        let duration = 0.48
+        let started = Date()
+        let timer = Timer(timeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
+            let raw = min(1, Date().timeIntervalSince(started) / duration)
+            let eased = 1 - pow(1 - raw, 3)
+            let frame = NSRect(
+                x: start.origin.x + (rest.origin.x - start.origin.x) * eased,
+                y: start.origin.y + (rest.origin.y - start.origin.y) * eased,
+                width: rest.width,
+                height: rest.height
+            )
+            let finished = raw >= 1
             Task { @MainActor [weak self] in
-                self?.markTicketSeated()
+                guard let self, self.alive, self.dispensing else {
+                    self?.stopSlide()
+                    return
+                }
+                self.ticketPanel.setFrame(finished ? rest : frame, display: true)
+                if finished {
+                    self.stopSlide()
+                    self.ticketPanel.invalidateShadow()
+                    self.markTicketSeated()
+                }
             }
         }
+        slideTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
+    }
+
+    private func stopSlide() {
+        slideTimer?.invalidate()
+        slideTimer = nil
     }
 
     private func markTicketSeated() {
@@ -142,6 +177,7 @@ final class ImaYaruPanelController {
     private func reveal() {
         guard alive, dispensing else { return }
         dispensing = false
+        stopSlide()
         runtime.suppressRideOverlay = false
         revealRide()
         Task { @MainActor in
@@ -156,6 +192,7 @@ final class ImaYaruPanelController {
     private func giveUp() {
         guard alive, dispensing else { return }
         dispensing = false
+        stopSlide()
         runtime.suppressRideOverlay = false
         ticketPanel.orderOut(nil)
         dispensing = false
@@ -168,13 +205,33 @@ final class ImaYaruPanelController {
         )
     }
 
-    private func install<V: View>(_ root: V, in panel: NSPanel, fillTicket: Bool = false) {
+    private func install<V: View>(_ root: V, in panel: NSPanel) {
         let host = NSHostingView(rootView: root)
-        if fillTicket {
-            host.safeAreaRegions = []
-        }
         host.sizingOptions = [.standardBounds]
         panel.contentView = host
+    }
+
+    /// GeometryReader's ideal size is ~0. Letting the hosting view size the window hides the face.
+    private func installTicket<V: View>(_ root: V, size: NSSize) {
+        let host = NSHostingView(rootView: root)
+        host.sizingOptions = []
+        host.safeAreaRegions = []
+        host.wantsLayer = true
+        host.layer?.backgroundColor = NSColor.clear.cgColor
+        host.translatesAutoresizingMaskIntoConstraints = true
+        host.autoresizingMask = [.width, .height]
+
+        let container = TicketDispenseRootView(frame: NSRect(origin: .zero, size: size))
+        host.frame = container.bounds
+        container.addSubview(host)
+
+        ticketPanel.lockedSize = size
+        ticketPanel.contentMinSize = size
+        ticketPanel.contentMaxSize = size
+        ticketPanel.minSize = size
+        ticketPanel.maxSize = size
+        ticketPanel.contentView = container
+        container.layoutSubtreeIfNeeded()
     }
 
     private func configure(_ panel: NSPanel, titled: Bool) {
@@ -237,12 +294,29 @@ final class ImaYaruFormPanel: NSPanel {
     override var canBecomeMain: Bool { false }
 }
 
-/// Frame is not pinned, so the ticket can start off-screen.
+/// Origin may start off-screen. Size stays the Mars face, so the window cannot collapse.
 final class ImaYaruTicketPanel: NSPanel {
+    var lockedSize: NSSize = .zero
+
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
 
     override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect {
-        frameRect
+        var rect = frameRect
+        if lockedSize.width > 1, lockedSize.height > 1 {
+            rect.size = lockedSize
+        }
+        return rect
+    }
+}
+
+private final class TicketDispenseRootView: NSView {
+    override var isOpaque: Bool { false }
+
+    override func layout() {
+        super.layout()
+        for subview in subviews {
+            subview.frame = bounds
+        }
     }
 }

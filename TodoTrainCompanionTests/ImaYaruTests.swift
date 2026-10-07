@@ -1,7 +1,10 @@
+import AppKit
+import Carbon
 import CoreGraphics
 import Foundation
 import Testing
 import TodoTrainSync
+import TodoTrainTicketUI
 @testable import TodoTrainCompanion
 
 struct ImaYaruTests {
@@ -112,8 +115,38 @@ struct ImaYaruTests {
         #expect(rest.midX == pip.midX)
         #expect(rest.midY == pip.midY)
         #expect(rest.width == pip.width)
+        #expect(rest.height == MarsTicketSpec.height(forWidth: pip.width))
+        #expect(rest.height > 100)
         #expect(entry.size == rest.size)
         #expect(entry.maxY < display.minY)
         #expect(entry.minX == rest.minX)
+    }
+
+    @Test func ticketRestsBeforeTheRideReplacesIt() {
+        #expect(ImaYaruWait.ticketHold > 0)
+        #expect(ImaYaruWait.ticketHold < ImaYaruWait.captionAfter)
+    }
+
+    @Test func shortcutNeedsAModifier() {
+        #expect(ImaYaruShortcut.make(keyCode: 34, modifiers: [], characters: "i") == nil)
+        #expect(ImaYaruShortcut.make(keyCode: 34, modifiers: .command, characters: "") == nil)
+        let command = ImaYaruShortcut.make(keyCode: 34, modifiers: .command, characters: "i")
+        #expect(command?.display == "⌘I")
+        #expect(command?.carbonModifiers == UInt32(cmdKey))
+        let shifted = ImaYaruShortcut.make(keyCode: 34, modifiers: [.command, .shift], characters: "i")
+        #expect(shifted?.display == "⇧⌘I")
+        #expect(shifted?.carbonModifiers == UInt32(cmdKey) | UInt32(shiftKey))
+    }
+
+    @Test func shortcutRoundTripsAndDropsABareKey() {
+        let defaults = UserDefaults(suiteName: "ima-yaru-shortcut-\(UUID().uuidString)")!
+        #expect(ImaYaruShortcutStore.read(defaults) == nil)
+        let made = ImaYaruShortcut.make(keyCode: 34, modifiers: .command, characters: "i")!
+        ImaYaruShortcutStore.write(made, to: defaults)
+        #expect(ImaYaruShortcutStore.read(defaults) == made)
+        defaults.set(0, forKey: ImaYaruShortcutStore.modifiers)
+        #expect(ImaYaruShortcutStore.read(defaults) == nil)
+        ImaYaruShortcutStore.write(nil, to: defaults)
+        #expect(defaults.object(forKey: ImaYaruShortcutStore.keyCode) == nil)
     }
 }

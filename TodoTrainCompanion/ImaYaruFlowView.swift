@@ -14,7 +14,7 @@ struct ImaYaruFormView: View {
     var onClose: () -> Void
 
     @State private var title = ""
-    @State private var minutes = 30.0
+    @State private var minutes = 30
     @State private var phase: FormPhase = .editing
     @State private var notice: String?
     @State private var noticeIsFailure = false
@@ -34,7 +34,7 @@ struct ImaYaruFormView: View {
     }
 
     private var canIssue: Bool {
-        IssueAndBoardEvaluating.isValid(title: trimmedTitle, estimatedSeconds: Int(minutes.rounded()) * 60)
+        IssueAndBoardEvaluating.isValid(title: trimmedTitle, estimatedSeconds: minutes * 60)
     }
 
     var body: some View {
@@ -45,17 +45,18 @@ struct ImaYaruFormView: View {
                 .onSubmit(commit)
                 .disabled(phase != .editing)
 
-            HStack(spacing: 10) {
-                Text("所要")
+            VStack(alignment: .leading, spacing: 8) {
+                Text("所要（分）")
+                    .font(.subheadline)
                     .foregroundStyle(.secondary)
-                Slider(value: $minutes, in: 1...60, step: 1)
-                    .disabled(phase != .editing)
-                Text("\(Int(minutes.rounded()))分")
-                    .monospacedDigit()
-                    .frame(width: 48, alignment: .trailing)
-                Stepper("", value: $minutes, in: 1...60, step: 1)
-                    .labelsHidden()
-                    .disabled(phase != .editing)
+                Picker("所要", selection: $minutes) {
+                    ForEach(EstimateSnapMapping.stops, id: \.self) { stop in
+                        Text("\(stop)").tag(stop)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .disabled(phase != .editing)
             }
 
             if let notice {
@@ -81,12 +82,14 @@ struct ImaYaruFormView: View {
         .frame(width: 400, alignment: .topLeading)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .onAppear {
-            if title.isEmpty, !seededTitle.isEmpty {
-                title = seededTitle
-                minutes = Double(seededMinutes)
-                sentTitle = seededTitle
-                sentMinutes = seededMinutes
-                sentPrior = seededPrior
+            if title.isEmpty {
+                minutes = EstimateSnapMapping.snap(rawMinutes: Double(seededMinutes))
+                if !seededTitle.isEmpty {
+                    title = seededTitle
+                    sentTitle = seededTitle
+                    sentMinutes = minutes
+                    sentPrior = seededPrior
+                }
             }
             if notice == nil {
                 notice = initialNotice
@@ -130,16 +133,15 @@ struct ImaYaruFormView: View {
     private func commit() {
         guard phase == .editing, canIssue else { return }
         let trimmed = trimmedTitle
-        let wholeMinutes = Int(minutes.rounded())
         sentTitle = trimmed
-        sentMinutes = wholeMinutes
+        sentMinutes = minutes
         sentPrior = ImaYaruOffer.ridingSessionID(runtime.snap)
         notice = SyncCopy.sentToIPhone
         noticeIsFailure = false
         phase = .sending
         runtime.suppressRideOverlay = true
         sendID += 1
-        let seconds = wholeMinutes * 60
+        let seconds = minutes * 60
         Task { await runtime.sendIssueAndBoard(title: trimmed, estimatedSeconds: seconds) }
     }
 
@@ -184,9 +186,11 @@ final class ImaYaruDispenseModel {
 struct ImaYaruDispenseView: View {
     @Environment(CompanionMacRuntime.self) private var runtime
     @Bindable var model: ImaYaruDispenseModel
+    @State private var armedReveal = false
 
     var title: String
     var minutes: Int
+    var ticketSize: CGSize
     var priorSessionId: UUID?
     var onReveal: () -> Void
     var onGiveUp: () -> Void
@@ -197,6 +201,7 @@ struct ImaYaruDispenseView: View {
             MarsTicketView(
                 content: MarsTicketContent(title: title, minutes: minutes)
             )
+            .frame(width: ticketSize.width, height: ticketSize.height)
             .scaleEffect(model.handingOff ? 0.94 : 1)
             .opacity(model.handingOff ? 0 : 1)
 
@@ -219,6 +224,19 @@ struct ImaYaruDispenseView: View {
             tryReveal()
         }
         .onExitCommand(perform: onClose)
+        .task(id: armedReveal) {
+            guard armedReveal else { return }
+            try? await Task.sleep(for: .seconds(ImaYaruWait.ticketHold))
+            guard !Task.isCancelled, model.seated, !model.handingOff else { return }
+            guard ImaYaruSnap.confirms(snap: runtime.snap, title: title, priorSessionId: priorSessionId) else {
+                armedReveal = false
+                return
+            }
+            model.showsWait = false
+            model.gaveUp = false
+            model.handingOff = true
+            onReveal()
+        }
         .task {
             try? await Task.sleep(for: .seconds(ImaYaruWait.captionAfter))
             guard !model.handingOff, !model.gaveUp else { return }
@@ -245,12 +263,10 @@ struct ImaYaruDispenseView: View {
     }
 
     private func tryReveal() {
-        guard model.seated, !model.handingOff else { return }
+        guard model.seated, !model.handingOff, !armedReveal else { return }
         guard ImaYaruSnap.confirms(snap: runtime.snap, title: title, priorSessionId: priorSessionId) else {
             return
         }
-        model.showsWait = false
-        model.handingOff = true
-        onReveal()
+        armedReveal = true
     }
 }

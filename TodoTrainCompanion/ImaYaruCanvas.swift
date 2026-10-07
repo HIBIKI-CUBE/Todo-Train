@@ -102,6 +102,8 @@ enum ImaYaruWaitCue: Equatable, Sendable {
 enum ImaYaruWait {
     static let captionAfter: TimeInterval = 1.5
     static let limit: TimeInterval = 8
+    /// Rest at the PiP slot before the face fades into the ride card.
+    static let ticketHold: TimeInterval = 0.55
 
     static func cue(elapsed: TimeInterval) -> ImaYaruWaitCue {
         if elapsed >= limit { return .timedOut }

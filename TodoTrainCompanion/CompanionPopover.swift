@@ -162,6 +162,20 @@ struct RelaySettingsView: View {
             }
 
             Section {
+                LabeledContent("キーボードショートカット") {
+                    ImaYaruShortcutField(shortcut: $runtime.imaYaruShortcut)
+                }
+                if runtime.imaYaruShortcutRejected {
+                    Text("そのキーは使えません")
+                        .foregroundStyle(.red)
+                }
+            } header: {
+                Text("いまやる")
+            } footer: {
+                Text("ペア済みで運行中のとき、このキーで開きます。")
+            }
+
+            Section {
                 Toggle("車内放送", isOn: $runtime.cabinAnnouncementsEnabled)
             } header: {
                 Text("フォーカス")

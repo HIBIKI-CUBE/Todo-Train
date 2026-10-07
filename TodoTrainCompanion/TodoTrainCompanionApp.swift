@@ -56,6 +56,12 @@ final class CompanionAppDelegate: NSObject, NSApplicationDelegate {
         ImaYaruOpener.present = { [weak imaYaru] in
             imaYaru?.present()
         }
+        let runtime = self.runtime
+        ImaYaruHotKeyCenter.shared.setHandler { [weak runtime] in
+            guard let runtime, runtime.canOfferImaYaru else { return }
+            runtime.openImaYaru()
+        }
+        runtime.activateImaYaruShortcut()
         let workspace = NSWorkspace.shared.notificationCenter
         workspace.addObserver(
             self,

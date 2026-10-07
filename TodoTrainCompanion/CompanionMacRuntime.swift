@@ -62,6 +62,15 @@ final class CompanionMacRuntime {
         didSet { defaults.set(cabinAnnouncementsEnabled, forKey: Defaults.cabinEnabled) }
     }
 
+    var imaYaruShortcut: ImaYaruShortcut? {
+        didSet {
+            ImaYaruShortcutStore.write(imaYaruShortcut, to: defaults)
+            imaYaruShortcutRejected = !ImaYaruHotKeyCenter.shared.register(imaYaruShortcut)
+        }
+    }
+
+    var imaYaruShortcutRejected = false
+
     init(
         secrets: any SecretStoring = KeychainSecretStore(),
         localAuth: any LocalAuthenticating = DeviceLocalAuth(reason: SyncCopy.macConfirmReason),
@@ -83,6 +92,7 @@ final class CompanionMacRuntime {
         } else {
             self.cabinAnnouncementsEnabled = defaults.bool(forKey: Defaults.cabinEnabled)
         }
+        self.imaYaruShortcut = ImaYaruShortcutStore.read(defaults)
         refreshPaired()
         applyLoginItem()
         cabinNotifier.configure()
@@ -120,6 +130,10 @@ final class CompanionMacRuntime {
 
     func openImaYaru() {
         ImaYaruOpener.present?()
+    }
+
+    func activateImaYaruShortcut() {
+        imaYaruShortcutRejected = !ImaYaruHotKeyCenter.shared.register(imaYaruShortcut)
     }
 
     var overlayPresentation: RideOverlayPresentation {
