@@ -43,6 +43,8 @@ extension CompanionMacRuntime {
         try? secrets.delete()
         snap = nil
         outgoingPause = .idle
+        issueBoardTrack = .idle
+        suppressRideOverlay = false
         lastStatus = nil
         connection = .disconnected
         clearOptimisticCabin()

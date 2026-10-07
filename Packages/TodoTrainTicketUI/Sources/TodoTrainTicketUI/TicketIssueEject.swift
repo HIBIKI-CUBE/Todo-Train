@@ -8,15 +8,15 @@
 
 import SwiftUI
 
-struct TicketIssueEjectEvent: Identifiable, Equatable {
-    let id: UUID
-    let ticketID: UUID
-    let title: String
-    let minutes: Int
-    let tagNames: [String]
-    let issuedAt: Date
+public struct TicketIssueEjectEvent: Identifiable, Equatable {
+    public let id: UUID
+    public let ticketID: UUID
+    public let title: String
+    public let minutes: Int
+    public let tagNames: [String]
+    public let issuedAt: Date
 
-    init(
+    public init(
         id: UUID = UUID(),
         ticketID: UUID,
         title: String,
@@ -32,19 +32,8 @@ struct TicketIssueEjectEvent: Identifiable, Equatable {
         self.issuedAt = issuedAt
     }
 
-    init(ticket: Ticket) {
-        self.init(
-            ticketID: ticket.id,
-            title: ticket.title,
-            minutes: max(1, ticket.estimatedSeconds / 60),
-            tagNames: ticket.tags
-                .sorted { $0.sortOrder < $1.sortOrder }
-                .map(\.name),
-            issuedAt: ticket.createdAt
-        )
-    }
 
-    var ticketContent: MarsTicketContent {
+    public var ticketContent: MarsTicketContent {
         MarsTicketContent(
             title: title,
             minutes: minutes,
@@ -53,12 +42,12 @@ struct TicketIssueEjectEvent: Identifiable, Equatable {
         )
     }
 
-    static var presentationMilliseconds: Int {
+    public static var presentationMilliseconds: Int {
         MarsTicketSpec.IssueMotion.presentationMilliseconds
     }
 }
 
-enum TicketIssueEjectFinish: Equatable {
+public enum TicketIssueEjectFinish: Equatable {
     /// Hub: hold, then seat in the deck slot.
     case landInDeck
     /// Focus interrupt: after the ticket is readable, zoom into Focus.
@@ -67,12 +56,24 @@ enum TicketIssueEjectFinish: Equatable {
 
 /// Hub celebration: emerge from bottom edge → upright → hold → land in deck slot.
 /// Interrupt: same eject, then the upright ticket becomes the Focus zoom source.
-struct TicketIssueEjectOverlay: View {
-    let event: TicketIssueEjectEvent
+public struct TicketIssueEjectOverlay: View {
+    public let event: TicketIssueEjectEvent
     /// Resting frame of the real deck card, in `HubTicketCanvas` space.
-    var landingRect: CGRect?
-    var finish: TicketIssueEjectFinish = .landInDeck
-    var onFinished: (() -> Void)?
+    public var landingRect: CGRect?
+    public var finish: TicketIssueEjectFinish = .landInDeck
+    public var onFinished: (() -> Void)?
+
+    public init(
+        event: TicketIssueEjectEvent,
+        landingRect: CGRect? = nil,
+        finish: TicketIssueEjectFinish = .landInDeck,
+        onFinished: (() -> Void)? = nil
+    ) {
+        self.event = event
+        self.landingRect = landingRect
+        self.finish = finish
+        self.onFinished = onFinished
+    }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.focusZoomNamespace) private var focusZoomNamespace
@@ -100,7 +101,7 @@ struct TicketIssueEjectOverlay: View {
         }
     }
 
-    var body: some View {
+    public var body: some View {
         GeometryReader { geo in
             scene(in: geo)
         }
@@ -167,7 +168,11 @@ struct TicketIssueEjectOverlay: View {
     private var ticketFace: some View {
         let face = MarsTicketView(content: event.ticketContent, titleReveal: 1)
         if finish == .zoomIntoFocus, let focusZoomNamespace {
-            face.matchedTransitionSource(id: event.ticketID, in: focusZoomNamespace)
+            if #available(iOS 18.0, macOS 15.0, *) {
+                face.matchedTransitionSource(id: event.ticketID, in: focusZoomNamespace)
+            } else {
+                face
+            }
         } else {
             face
         }
@@ -180,7 +185,7 @@ struct TicketIssueEjectOverlay: View {
         let ticketWidth: CGFloat
         let ticketHeight: CGFloat
         if phase == .landing, let landing, landing.width > 8 {
-            let clamped = TrainLayout.clampedLandingRect(landing, containerSize: geo.size)
+            let clamped = MarsTicketSpec.clampedLandingRect(landing, containerSize: geo.size)
             ticketWidth = clamped.width
             ticketHeight = clamped.height
         } else {
@@ -273,7 +278,7 @@ struct TicketIssueEjectOverlay: View {
             return CGPoint(x: size.width / 2, y: uprightCenterY + dragY)
         case .landing:
             if let landing, landing.width > 8 {
-                let clamped = TrainLayout.clampedLandingRect(landing, containerSize: size)
+                let clamped = MarsTicketSpec.clampedLandingRect(landing, containerSize: size)
                 return CGPoint(x: clamped.midX, y: clamped.midY)
             }
             return CGPoint(x: size.width / 2, y: uprightCenterY)
@@ -360,7 +365,7 @@ struct TicketIssueEjectOverlay: View {
 
 #Preview("Issue eject") {
     ZStack {
-        Color(uiColor: .systemGroupedBackground).ignoresSafeArea()
+        Color(white: 0.95).ignoresSafeArea()
         TicketIssueEjectOverlay(
             event: TicketIssueEjectEvent(
                 ticketID: UUID(),

@@ -52,6 +52,8 @@ extension CompanionMacRuntime {
             guard presentation.canResume, !presentation.isSending else { return }
         case .still:
             guard !presentation.isSending else { return }
+        case .issueAndBoard:
+            return
         }
         let sessionId: UUID?
         switch op {
@@ -60,6 +62,8 @@ extension CompanionMacRuntime {
             sessionId = id
         case .still:
             sessionId = snap?.sessionId
+        case .issueAndBoard:
+            return
         }
         let cmdId = UUID()
         guard let next = OutgoingPauseApplying.beginSending(cmdId: cmdId, current: outgoingPause) else {
@@ -93,6 +97,53 @@ extension CompanionMacRuntime {
                 clearOptimisticCabin()
                 optimisticIdleConsumed = false
             }
+        }
+    }
+
+    func sendIssueAndBoard(title: String, estimatedSeconds: Int) async {
+        let trimmed = IssueAndBoardEvaluating.trimmedTitle(title)
+        guard IssueAndBoardEvaluating.isValid(title: trimmed, estimatedSeconds: estimatedSeconds) else {
+            issueBoardTrack = .failed(.invalidPayload)
+            return
+        }
+        guard ImaYaruOffer.isAvailable(isPaired: isPaired, serviceActive: snap?.serviceActive) else {
+            issueBoardTrack = .failed(.noActiveService)
+            return
+        }
+        let prior = ImaYaruOffer.ridingSessionID(snap)
+        let cmdId = UUID()
+        guard let next = IssueBoardTracking.begin(
+            cmdId: cmdId,
+            title: trimmed,
+            priorSessionId: prior,
+            current: issueBoardTrack
+        ) else { return }
+        issueBoardTrack = next
+        do {
+            let pairing = try requireSecrets()
+            let keys = try SyncCrypto.deriveKeys(masterKey: pairing.masterKey, pairingId: pairing.pairingId)
+            let client = try authedClient(pairing)
+            let command = CommandPlaintext(
+                id: cmdId,
+                op: .issueAndBoard,
+                sessionId: prior,
+                at: now,
+                title: trimmed,
+                estimatedSeconds: estimatedSeconds
+            )
+            let rev = OutgoingPauseApplying.nextCommandRev(current: cmdRev)
+            cmdRev = rev
+            let envelope = try SyncCrypto.sealJSON(
+                command,
+                pairingId: pairing.pairingId,
+                kind: .cmd,
+                rev: rev,
+                encKey: keys.enc
+            )
+            _ = try await client.postCmd(envelope)
+        } catch {
+            issueBoardTrack = IssueBoardTracking.failTransport(issueBoardTrack)
+            lastStatus = userFacing(error)
         }
     }
 

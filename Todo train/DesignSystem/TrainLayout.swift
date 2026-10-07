@@ -127,15 +127,7 @@ enum TrainLayout {
 
     /// Shrink an oversized landing frame around its center; keep Mars aspect.
     static func clampedLandingRect(_ rect: CGRect, containerSize: CGSize) -> CGRect {
-        let face = ticketFaceSize(containerWidth: containerSize.width)
-        let width = min(max(1, rect.width), face.width)
-        let height = MarsTicketSpec.height(forWidth: width)
-        return CGRect(
-            x: rect.midX - width / 2,
-            y: rect.midY - height / 2,
-            width: width,
-            height: height
-        )
+        MarsTicketSpec.clampedLandingRect(rect, containerSize: containerSize)
     }
 
     /// Hub present: boarding forecast plate under the ticket when vertical room remains.

@@ -34,7 +34,22 @@ enum TicketIssuer {
         minutes: Int,
         into context: ModelContext
     ) throws -> Ticket {
-        let minutes = AppSettings.clampEstimateMinutes(minutes)
+        try issue(
+            title: title,
+            estimatedSeconds: AppSettings.clampEstimateMinutes(minutes) * 60,
+            into: context
+        )
+    }
+
+    /// `estimatedSeconds` is stored as given after clamping to 1...`Ticket.maxEstimatedSeconds`.
+    /// Remote `issueAndBoard` validates 60...3600 before calling this.
+    @discardableResult
+    static func issue(
+        title: String,
+        estimatedSeconds: Int,
+        into context: ModelContext
+    ) throws -> Ticket {
+        let seconds = min(max(estimatedSeconds, 1), Ticket.maxEstimatedSeconds)
         let descriptor = FetchDescriptor<Ticket>(sortBy: [SortDescriptor(\.sortOrder)])
         let all = (try? context.fetch(descriptor)) ?? []
         let open = all.filter(\.isOpen)
@@ -45,7 +60,7 @@ enum TicketIssuer {
         )
         let ticket = Ticket(
             title: title,
-            estimatedSeconds: minutes * 60,
+            estimatedSeconds: seconds,
             sortOrder: insertAt
         )
         context.insert(ticket)

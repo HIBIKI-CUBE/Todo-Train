@@ -14,6 +14,43 @@ import UIKit
 extension SessionManager {
     // MARK: - Boarding
 
+    /// Issue at the end of the open deck, then board. Riding interrupts without a confirm.
+    /// A failed board deletes the new ticket so inventory-only issue does not stick.
+    func issueAndBoard(title: String, estimatedSeconds: Int, now: Date? = nil) throws {
+        let now = now ?? clock.now
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty,
+              (60...Ticket.maxEstimatedSeconds).contains(estimatedSeconds)
+        else {
+            throw SessionError.noActiveService
+        }
+        try refusePassengerDriving()
+        try ensureServiceAllowsBoarding(at: now)
+        guard PauseLimitGuard.canBoardNewRide(
+            pausedCount: pausedCountTowardLimit,
+            limit: settings.pauseLimit
+        ) else {
+            throw SessionError.pauseLimitReached
+        }
+
+        let ticket = try TicketIssuer.issue(
+            title: trimmed,
+            estimatedSeconds: estimatedSeconds,
+            into: modelContext
+        )
+        do {
+            if fetchRunningSession() != nil {
+                try switchBoard(ticket: ticket, now: now)
+            } else {
+                try board(ticket: ticket, now: now)
+            }
+        } catch {
+            modelContext.delete(ticket)
+            try? modelContext.save()
+            throw error
+        }
+    }
+
     func board(ticket: Ticket, now: Date? = nil) throws {
         let now = now ?? clock.now
         try refusePassengerDriving()

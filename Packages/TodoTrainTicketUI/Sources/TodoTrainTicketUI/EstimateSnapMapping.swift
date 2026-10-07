@@ -9,71 +9,71 @@
 import Foundation
 import CoreGraphics
 
-enum EstimateSnapMapping {
-    static let stops = EstimateChips.ticketPresets
-    static let maxMinutes = 60
+public enum EstimateSnapMapping {
+    public static let stops = [5, 10, 15, 20, 30, 45, 60]
+    public static let maxMinutes = 60
 
     /// Rubber-band extent beyond 0…1 (as fraction of track).
-    static let rubberLimit: CGFloat = 0.18
+    public static let rubberLimit: CGFloat = 0.18
 
     /// Progress toward the adjacent stop required to escape the sticky well (0…1 of the gap).
     /// Above 0.5 = hysteresis past the midpoint.
-    static let stickyEscapeProgress: CGFloat = 0.62
+    public static let stickyEscapeProgress: CGFloat = 0.62
 
     /// How much the knob follows the finger while still stuck to the anchor (0 = glued, 1 = free).
-    static let stickyStretch: CGFloat = 0.38
+    public static let stickyStretch: CGFloat = 0.38
 
-    struct StickyScrub: Equatable {
-        var displayFraction: CGFloat
-        var anchoredMinutes: Int
+    public struct StickyScrub: Equatable {
+        public var displayFraction: CGFloat
+        public var anchoredMinutes: Int
         /// True when the finger escaped the well and landed on a new stop.
-        var didEscape: Bool
+        public var didEscape: Bool
     }
 
     /// 0...1 from minutes (clamped). 30 → 0.5, 60 → 1.
-    static func fraction(minutes: Int) -> CGFloat {
+    public static func fraction(minutes: Int) -> CGFloat {
         let clamped = min(max(minutes, 0), maxMinutes)
         return CGFloat(clamped) / CGFloat(maxMinutes)
     }
 
     /// Raw minutes from a 0...1 fraction (before snap).
-    static func rawMinutes(fraction: CGFloat) -> Double {
+    public static func rawMinutes(fraction: CGFloat) -> Double {
         let clamped = min(max(fraction, 0), 1)
         return Double(clamped) * Double(maxMinutes)
     }
 
     /// Nearest stop; ties prefer the lower preset (matches EstimateHeuristic).
-    static func snap(rawMinutes: Double) -> Int {
+    public static func snap(rawMinutes: Double) -> Int {
         stops.min(by: { lhs, rhs in
             let dL = abs(Double(lhs) - rawMinutes)
             let dR = abs(Double(rhs) - rawMinutes)
             if dL == dR { return lhs < rhs }
             return dL < dR
-        }) ?? EstimateHeuristic.defaultHighlightMinutes
+        }) ?? 30
     }
 
-    static func snap(fraction: CGFloat) -> Int {
+    public static func snap(fraction: CGFloat) -> Int {
         snap(rawMinutes: rawMinutes(fraction: fraction))
     }
 
     /// Fraction from an X position within a track width (clamped 0…1).
-    static func fraction(x: CGFloat, width: CGFloat) -> CGFloat {
+    public static func fraction(x: CGFloat, width: CGFloat) -> CGFloat {
         guard width > 0 else { return 0 }
         return min(max(x / width, 0), 1)
     }
 
     /// Unclamped finger fraction (may be <0 or >1).
-    static func unboundedFraction(x: CGFloat, width: CGFloat) -> CGFloat {
+    public static func unboundedFraction(x: CGFloat, width: CGFloat) -> CGFloat {
         guard width > 0 else { return 0 }
         return x / width
     }
 
-    static func snap(x: CGFloat, width: CGFloat) -> Int {
+    public static func snap(x: CGFloat, width: CGFloat) -> Int {
         snap(fraction: fraction(x: x, width: width))
     }
 
     /// Classic rubber-band: past 0…1, displacement decays.
-    static func rubberBand(_ fraction: CGFloat, limit: CGFloat = rubberLimit) -> CGFloat {
+    public static func rubberBand(_ fraction: CGFloat, limit: CGFloat = rubberLimit) -> CGFloat {
         if fraction >= 0, fraction <= 1 { return fraction }
         let dimension: CGFloat = 1
         if fraction < 0 {
@@ -88,13 +88,13 @@ enum EstimateSnapMapping {
     }
 
     /// Stop implied by a (possibly unclamped) finger fraction.
-    static func stop(forFingerFraction fingerFraction: CGFloat) -> Int {
+    public static func stop(forFingerFraction fingerFraction: CGFloat) -> Int {
         let clamped = min(max(fingerFraction, 0), 1)
         return snap(fraction: clamped)
     }
 
     /// Sticky detent scrub: stretch away from `anchoredMinutes`, escape only past hysteresis.
-    static func stickyScrub(
+    public static func stickyScrub(
         fingerFraction: CGFloat,
         anchoredMinutes: Int
     ) -> StickyScrub {

@@ -1,19 +1,20 @@
 {
   "phase": ["idle", "running", "paused", "overtime"],
   "kind": ["snap", "cmd", "ack"],
-  "op": ["pause", "resume", "still"],
+  "op": ["pause", "resume", "still", "issueAndBoard"],
   "pendingCabin": ["progress", "away", "idle"],
   "error": [
     "pauseLimitReached",
     "noActiveService",
     "sessionMismatch",
     "decryptFailed",
-    "notPaused"
+    "notPaused",
+    "invalidPayload"
   ],
   "notes": {
     "phase": "SessionPhase raw values. Unknown values: display conservatively, do not crash.",
-    "op": "v1 allows pause, resume, and still (consume the current cabin prompt). Do not add arrive/extend on the wire.",
+    "op": "pause, resume, still (consume the current cabin prompt), and issueAndBoard (issue a ticket and board it in one beat). Do not add arrive/extend. issueAndBoard carries title and estimatedSeconds; other ops omit those keys.",
     "pendingCabin": "Current 車内放送 kind on snap. null when none. Unknown values: ignore for display. idle means service is open with no ride; iPhone sets it, Mac notifies only.",
-    "error": "Ack wire errors only. sessionMismatch and decryptFailed are wire-only (not SessionError cases). Map noActiveSession to noActiveService. Map SessionError.notPaused to notPaused. Do not put the rest of SessionError on the wire."
+    "error": "Ack wire errors only. sessionMismatch and decryptFailed are wire-only (not SessionError cases). Map noActiveSession to noActiveService. Map SessionError.notPaused to notPaused. invalidPayload is issueAndBoard input (empty title or estimatedSeconds outside 60...3600). Do not put the rest of SessionError on the wire."
   }
 }

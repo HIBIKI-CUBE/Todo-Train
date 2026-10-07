@@ -175,6 +175,7 @@ public struct MenuBarPresentation: Equatable, Sendable {
         case .sessionMismatch: "乗務が変わった"
         case .decryptFailed: "送れなかった"
         case .notPaused: SyncCopy.notPaused
+        case .invalidPayload: SyncCopy.invalidPayload
         }
     }
 

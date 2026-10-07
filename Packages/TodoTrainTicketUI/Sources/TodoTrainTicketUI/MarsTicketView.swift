@@ -8,16 +8,16 @@
 
 import SwiftUI
 
-struct MarsTicketContent: Equatable {
-    var title: String
-    var minutes: Int
-    var tagNames: [String]
+public struct MarsTicketContent: Equatable, Sendable {
+    public var title: String
+    public var minutes: Int
+    public var tagNames: [String]
     /// Winning tag chip hex (`sortOrder` min). Nil = untagged cyan stock.
-    var colorHex: String?
-    var issuedAt: Date
-    var serial: String
+    public var colorHex: String?
+    public var issuedAt: Date
+    public var serial: String
 
-    init(
+    public init(
         title: String,
         minutes: Int,
         tagNames: [String] = [],
@@ -33,19 +33,8 @@ struct MarsTicketContent: Equatable {
         self.serial = serial ?? MarsTicketContent.makeSerial(from: issuedAt)
     }
 
-    init(ticket: Ticket) {
-        let tags = ticket.tags.sorted { $0.sortOrder < $1.sortOrder }
-        self.init(
-            title: ticket.title,
-            minutes: max(ticket.estimatedSeconds / 60, 1),
-            tagNames: tags.map(\.name),
-            colorHex: TicketStockColor.winningColorHex(tags: tags),
-            issuedAt: ticket.createdAt,
-            serial: MarsTicketContent.makeSerial(from: ticket.createdAt, salt: ticket.id)
-        )
-    }
 
-    static func makeSerial(from date: Date, salt: UUID? = nil) -> String {
+    public static func makeSerial(from date: Date, salt: UUID? = nil) -> String {
         let cal = Calendar.current
         let h = cal.component(.hour, from: date)
         let m = cal.component(.minute, from: date)
@@ -57,44 +46,56 @@ struct MarsTicketContent: Equatable {
         return String(format: "%05d", n)
     }
 
-    var validityLine: String {
+    public var validityLine: String {
         let f = DateFormatter()
         f.locale = Locale(identifier: "ja_JP")
         f.dateFormat = "M月d日"
         return "\(f.string(from: issuedAt))から \(minutes)分間有効"
     }
 
-    var terminalDate: String {
+    public var terminalDate: String {
         let f = DateFormatter()
         f.locale = Locale(identifier: "ja_JP")
         f.dateFormat = "yyyy.-M.d"
         return f.string(from: issuedAt)
     }
 
-    var verticalDate: String {
+    public var verticalDate: String {
         let f = DateFormatter()
         f.locale = Locale(identifier: "ja_JP")
         f.dateFormat = "M.d"
         return f.string(from: issuedAt)
     }
 
-    var issuedMonth: Int {
+    public var issuedMonth: Int {
         Calendar.current.component(.month, from: issuedAt)
     }
 
-    var issuedDay: Int {
+    public var issuedDay: Int {
         Calendar.current.component(.day, from: issuedAt)
     }
 }
 
 /// Pure unused ticket face. Animation lives in overlays / Hub stack.
-struct MarsTicketView: View, Equatable {
-    let content: MarsTicketContent
-    var density: MarsTicketSpec.Density = .celebration
+public struct MarsTicketView: View, Equatable {
+    nonisolated public let content: MarsTicketContent
+    nonisolated public let density: MarsTicketSpec.Density
     /// 0…1 — title row reveal for thermal scan (1 = fully printed).
-    var titleReveal: CGFloat = 1
+    nonisolated public let titleReveal: CGFloat
     /// Hub peek/deck only. Printed occupancy on the 60-minute scale.
-    var occupancyMarks: [TimetableOccupancyMark] = []
+    nonisolated public let occupancyMarks: [MarsOccupancyMark]
+
+    public init(
+        content: MarsTicketContent,
+        density: MarsTicketSpec.Density = .celebration,
+        titleReveal: CGFloat = 1,
+        occupancyMarks: [MarsOccupancyMark] = []
+    ) {
+        self.content = content
+        self.density = density
+        self.titleReveal = titleReveal
+        self.occupancyMarks = occupancyMarks
+    }
 
     private var pad: CGFloat {
         density == .hub ? MarsTicketSpec.hubContentPad : MarsTicketSpec.contentPad
@@ -108,7 +109,7 @@ struct MarsTicketView: View, Equatable {
         TicketStockColor.stock(for: content.colorHex)
     }
 
-    var body: some View {
+    public var body: some View {
         GeometryReader { geo in
             let w = geo.size.width
             let h = geo.size.height
@@ -390,7 +391,7 @@ private struct MarsTicketGroundPattern: View {
 
 #Preview("短題・祝祭") {
     ZStack {
-        Color(uiColor: .systemGroupedBackground).ignoresSafeArea()
+        Color(white: 0.95).ignoresSafeArea()
         MarsTicketView(
             content: MarsTicketContent(
                 title: "メモ",
@@ -405,7 +406,7 @@ private struct MarsTicketGroundPattern: View {
 
 #Preview("長題・60分") {
     ZStack {
-        Color(uiColor: .systemGroupedBackground).ignoresSafeArea()
+        Color(white: 0.95).ignoresSafeArea()
         MarsTicketView(
             content: MarsTicketContent(
                 title: "週次レビューの下書きを共有してコメントを整理する",
@@ -420,7 +421,7 @@ private struct MarsTicketGroundPattern: View {
 
 #Preview("Hub密度") {
     ZStack {
-        Color(uiColor: .systemGroupedBackground).ignoresSafeArea()
+        Color(white: 0.95).ignoresSafeArea()
         VStack(spacing: 16) {
             MarsTicketView(
                 content: MarsTicketContent(

@@ -78,6 +78,14 @@ struct CompanionPopover: View {
                 .buttonStyle(.bordered)
             }
 
+            if runtime.canOfferImaYaru {
+                Button("いまやる") {
+                    CompanionSettingsOpener.dismissPopover?()
+                    runtime.openImaYaru()
+                }
+                .buttonStyle(.bordered)
+            }
+
             if view.canPause {
                 Button("停車") {
                     Task { await runtime.sendPause() }
@@ -151,6 +159,20 @@ struct RelaySettingsView: View {
 
             Section("起動") {
                 Toggle("ログイン時に起動", isOn: $runtime.loginAtStartup)
+            }
+
+            Section {
+                LabeledContent("キーボードショートカット") {
+                    ImaYaruShortcutField(shortcut: $runtime.imaYaruShortcut)
+                }
+                if runtime.imaYaruShortcutRejected {
+                    Text("そのキーは使えません")
+                        .foregroundStyle(.red)
+                }
+            } header: {
+                Text("いまやる")
+            } footer: {
+                Text("ペア済みで運行中のとき、このキーで開きます。")
             }
 
             Section {

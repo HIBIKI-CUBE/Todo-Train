@@ -6,14 +6,31 @@
 //
 
 import SwiftUI
+#if os(iOS)
+import UIKit
+#endif
 
-struct EstimateSnapGauge: View {
+public struct EstimateSnapGauge: View {
     @Binding var minutes: Int
-    var highlightedMinutes: Int?
+    public var highlightedMinutes: Int?
     /// When true, finger-up issues a ticket — quiet detent so sheet owns celebration.
-    var willIssue: () -> Bool = { false }
-    var onCommit: (() -> Void)?
-    var onLongPress: (() -> Void)?
+    public var willIssue: () -> Bool = { false }
+    public var onCommit: (() -> Void)?
+    public var onLongPress: (() -> Void)?
+
+    public init(
+        minutes: Binding<Int>,
+        highlightedMinutes: Int? = nil,
+        willIssue: @escaping () -> Bool = { false },
+        onCommit: (() -> Void)? = nil,
+        onLongPress: (() -> Void)? = nil
+    ) {
+        _minutes = minutes
+        self.highlightedMinutes = highlightedMinutes
+        self.willIssue = willIssue
+        self.onCommit = onCommit
+        self.onLongPress = onLongPress
+    }
 
     @State private var displayFraction: CGFloat = 0.5
     @State private var anchoredMinutes: Int = 30
@@ -25,7 +42,7 @@ struct EstimateSnapGauge: View {
     private let trackHeight: CGFloat = 48
     private let knobSize: CGFloat = 32
 
-    var body: some View {
+    public var body: some View {
         GeometryReader { geo in
             let width = geo.size.width
             let knobX = displayFraction * width
@@ -35,10 +52,10 @@ struct EstimateSnapGauge: View {
                 Capsule()
                     .fill(.clear)
                     .frame(height: trackHeight)
-                    .glassEffect(.regular, in: .capsule)
+                    .ticketGlass(nil, in: Capsule())
 
                 Capsule()
-                    .fill(TrainTheme.rail.opacity(0.28))
+                    .fill(TicketGaugeInk.rail.opacity(0.28))
                     .frame(width: fillWidth, height: trackHeight)
                     .allowsHitTesting(false)
 
@@ -49,8 +66,8 @@ struct EstimateSnapGauge: View {
                     Circle()
                         .fill(
                             isActive
-                                ? TrainTheme.rail
-                                : (isHighlighted ? TrainTheme.signalGreen : Color.primary.opacity(0.2))
+                                ? TicketGaugeInk.rail
+                                : (isHighlighted ? TicketGaugeInk.highlight : Color.primary.opacity(0.2))
                         )
                         .frame(width: isActive ? 7 : (isHighlighted ? 6 : 4),
                                height: isActive ? 7 : (isHighlighted ? 6 : 4))
@@ -61,10 +78,7 @@ struct EstimateSnapGauge: View {
                 Circle()
                     .fill(.clear)
                     .frame(width: knobSize, height: knobSize)
-                    .glassEffect(
-                        .regular.tint(TrainTheme.rail).interactive(),
-                        in: .circle
-                    )
+                    .ticketGlass(TicketGaugeInk.rail, in: Circle())
                     .position(x: knobX, y: trackHeight / 2)
                     .allowsHitTesting(false)
             }
@@ -159,7 +173,7 @@ struct EstimateSnapGauge: View {
                 )
 
                 if suppressCommit {
-                    withAnimation(TrainTheme.Motion.gaugeSnap) {
+                    withAnimation(TicketGaugeInk.snap) {
                         displayFraction = EstimateSnapMapping.fraction(minutes: anchoredMinutes)
                         isDragging = false
                     }
@@ -188,7 +202,7 @@ struct EstimateSnapGauge: View {
                     isDragging = false
                     onCommit?()
                 } else {
-                    withAnimation(TrainTheme.Motion.gaugeSnap) {
+                    withAnimation(TicketGaugeInk.snap) {
                         displayFraction = landed
                         isDragging = false
                     }
@@ -205,11 +219,11 @@ struct EstimateSnapGauge: View {
         }
         let target = EstimateSnapMapping.fraction(minutes: stop)
         if animated {
-            withAnimation(TrainTheme.Motion.gaugeSnap) {
+            withAnimation(TicketGaugeInk.snap) {
                 displayFraction = target
             }
         } else {
-            withAnimation(TrainTheme.Motion.soft) {
+            withAnimation(TicketGaugeInk.soft) {
                 displayFraction = target
             }
         }
@@ -220,7 +234,7 @@ struct EstimateSnapGauge: View {
         anchoredMinutes = stop
         let target = EstimateSnapMapping.fraction(minutes: stop)
         if animated {
-            withAnimation(TrainTheme.Motion.gaugeSnap) {
+            withAnimation(TicketGaugeInk.snap) {
                 displayFraction = target
             }
         } else {

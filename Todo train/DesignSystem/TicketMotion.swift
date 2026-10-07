@@ -36,7 +36,6 @@ final class TicketMotionBridge {
 }
 
 extension EnvironmentValues {
-    @Entry var focusZoomNamespace: Namespace.ID? = nil
     @Entry var isFocusCoverPresented: Bool = false
 }
 

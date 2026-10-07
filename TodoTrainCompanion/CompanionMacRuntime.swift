@@ -37,6 +37,9 @@ final class CompanionMacRuntime {
     var snap: SnapPlaintext?
     var connection: ConnectionStatus = .disconnected
     var outgoingPause: OutgoingPauseState = .idle
+    var issueBoardTrack: IssueBoardTrack = .idle
+    /// Hide the ride PiP while いまやる is in flight, so it appears under the dispensed ticket.
+    var suppressRideOverlay = false
     var now = Int(Date().timeIntervalSince1970)
     var lastStatus: String?
     var sentTimetablePauseAt: Int?
@@ -59,6 +62,15 @@ final class CompanionMacRuntime {
         didSet { defaults.set(cabinAnnouncementsEnabled, forKey: Defaults.cabinEnabled) }
     }
 
+    var imaYaruShortcut: ImaYaruShortcut? {
+        didSet {
+            ImaYaruShortcutStore.write(imaYaruShortcut, to: defaults)
+            imaYaruShortcutRejected = !ImaYaruHotKeyCenter.shared.register(imaYaruShortcut)
+        }
+    }
+
+    var imaYaruShortcutRejected = false
+
     init(
         secrets: any SecretStoring = KeychainSecretStore(),
         localAuth: any LocalAuthenticating = DeviceLocalAuth(reason: SyncCopy.macConfirmReason),
@@ -80,6 +92,7 @@ final class CompanionMacRuntime {
         } else {
             self.cabinAnnouncementsEnabled = defaults.bool(forKey: Defaults.cabinEnabled)
         }
+        self.imaYaruShortcut = ImaYaruShortcutStore.read(defaults)
         refreshPaired()
         applyLoginItem()
         cabinNotifier.configure()
@@ -109,6 +122,18 @@ final class CompanionMacRuntime {
 
     var presentation: MenuBarPresentation {
         MenuBarPresentation.make(menuBarInput)
+    }
+
+    var canOfferImaYaru: Bool {
+        ImaYaruOffer.isAvailable(isPaired: isPaired, serviceActive: snap?.serviceActive)
+    }
+
+    func openImaYaru() {
+        ImaYaruOpener.present?()
+    }
+
+    func activateImaYaruShortcut() {
+        imaYaruShortcutRejected = !ImaYaruHotKeyCenter.shared.register(imaYaruShortcut)
     }
 
     var overlayPresentation: RideOverlayPresentation {
