@@ -19,6 +19,7 @@ struct FocusView: View {
     @State private var showExtendChips = false
     @State private var showPauseLimitSheet = false
     @State private var showInterruptIssue = false
+    @State private var showNextRideReserve = false
     @State private var pendingSwitchTicketID: UUID?
     @State private var errorMessage = ""
     @State private var showError = false
@@ -69,6 +70,10 @@ struct FocusView: View {
             QuickAddSheet(presentation: .focusInterrupt) { event in
                 boardIssuedInterrupt(event)
             }
+        }
+        .sheet(isPresented: $showNextRideReserve) {
+            NextRideReserveSheet()
+                .environment(sessionManager)
         }
         .alert("エラー", isPresented: $showError) {
             Button("OK", role: .cancel) {}
@@ -141,13 +146,24 @@ struct FocusView: View {
 
     private var headerStrip: some View {
         HStack(alignment: .center, spacing: TrainTheme.Space.sm) {
-            Text(title)
-                .font(.system(size: 18, weight: .semibold, design: .default))
-                .foregroundStyle(FocusPanel.ink)
-                .lineLimit(2)
-                .minimumScaleFactor(0.8)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityAddTraits(.isHeader)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.system(size: 18, weight: .semibold, design: .default))
+                    .foregroundStyle(FocusPanel.ink)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityAddTraits(.isHeader)
+                if showsNextRideReserve {
+                    Button("予約") {
+                        showNextRideReserve = true
+                    }
+                    .font(.system(size: 13, weight: .semibold, design: .default))
+                    .foregroundStyle(FocusPanel.muted)
+                    .accessibilityHint("次の一本の予約欄を開く。乗車は始まらない")
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             if let label = headerStateLabel {
                 Text(label)
@@ -337,6 +353,11 @@ struct FocusView: View {
 
     private var title: String {
         sessionManager.activeSession?.ticket?.title ?? "乗務中"
+    }
+
+    /// 乗客 aboard 中は予約欄を出さない。ボタン自体も予約した切符を示さない。
+    private var showsNextRideReserve: Bool {
+        !sessionManager.passengerChrome.locksDriving && sessionManager.fetchOpenPassengerRide() == nil
     }
 
     private var currentBudgetSeconds: TimeInterval {

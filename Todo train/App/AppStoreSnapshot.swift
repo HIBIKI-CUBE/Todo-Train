@@ -34,6 +34,9 @@ struct AppStoreSnapshot: Sendable {
         var dueDate: Date?
         var closedAt: Date?
         var closureKindRaw: String?
+        var reservedAt: Date?
+        var reservedFromRideId: UUID?
+        var reservedViaRaw: String?
         var tagIDs: [UUID]
     }
 
@@ -114,6 +117,9 @@ struct AppStoreSnapshot: Sendable {
                 dueDate: ticket.dueDate,
                 closedAt: ticket.closedAt,
                 closureKindRaw: ticket.closureKindRaw,
+                reservedAt: ticket.reservedAt,
+                reservedFromRideId: ticket.reservedFromRideId,
+                reservedViaRaw: ticket.reservedViaRaw,
                 tagIDs: ticket.tags.map(\.id)
             )
         }
@@ -216,6 +222,9 @@ struct AppStoreSnapshot: Sendable {
             ticket.dueDate = row.dueDate
             ticket.closedAt = row.closedAt
             ticket.closureKindRaw = row.closureKindRaw
+            ticket.reservedAt = row.reservedAt
+            ticket.reservedFromRideId = row.reservedFromRideId
+            ticket.reservedViaRaw = row.reservedViaRaw
             ticket.tags = row.tagIDs.compactMap { tagsByID[$0] }
             context.insert(ticket)
             ticketsByID[row.id] = ticket

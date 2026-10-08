@@ -21,6 +21,9 @@ enum DeletionUndo {
         var dueDate: Date?
         var closedAt: Date?
         var closureKindRaw: String?
+        var reservedAt: Date?
+        var reservedFromRideId: UUID?
+        var reservedViaRaw: String?
         var tagIDs: [UUID]
         var sessions: [SessionRecord]
         var lineages: [LineageRecord]
@@ -93,6 +96,9 @@ enum DeletionUndo {
             dueDate: ticket.dueDate,
             closedAt: ticket.closedAt,
             closureKindRaw: ticket.closureKindRaw,
+            reservedAt: ticket.reservedAt,
+            reservedFromRideId: ticket.reservedFromRideId,
+            reservedViaRaw: ticket.reservedViaRaw,
             tagIDs: ticket.tags.map(\.id),
             sessions: ticket.sessions.map { captureSession($0) },
             lineages: lineages
@@ -168,6 +174,9 @@ enum DeletionUndo {
         ticket.dueDate = record.dueDate
         ticket.closedAt = record.closedAt
         ticket.closureKindRaw = record.closureKindRaw
+        ticket.reservedAt = record.reservedAt
+        ticket.reservedFromRideId = record.reservedFromRideId
+        ticket.reservedViaRaw = record.reservedViaRaw
         ticket.tags = record.tagIDs.compactMap { fetchTag($0, in: context) }
         for sessionRecord in record.sessions {
             restoreSession(sessionRecord, onto: ticket, into: context)

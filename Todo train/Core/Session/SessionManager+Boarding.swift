@@ -133,6 +133,7 @@ extension SessionManager {
             boardedDeviceID: deviceIdentity.id
         )
         modelContext.insert(session)
+        releaseNextRideReservation(on: ticket)
         applyCheckInSchedule(to: session, title: ticket.title, estimatedSeconds: estimate)
         activeSession = session
         phase = .running
@@ -242,6 +243,9 @@ extension SessionManager {
             throw SessionError.notPaused
         }
 
+        if let ticket = session.ticket {
+            releaseNextRideReservation(on: ticket)
+        }
         reopenPausedSession(session, now: now)
         try save()
         alarmScheduler.cancelAllExcept(sessionID: session.id)
