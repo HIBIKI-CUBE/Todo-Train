@@ -5,6 +5,7 @@
 //  到着画面の行き先。検札は締めだけで、発車は別の操作。
 //
 
+import CoreGraphics
 import Foundation
 
 struct ArrivalTicketFace: Equatable, Identifiable, Sendable {
@@ -85,5 +86,20 @@ struct ArrivalDeck: Equatable, Sendable {
         guard let destination else { return }
         stampedFace = destination.face
         picker = nil
+    }
+
+    /// 検札後の券面で、leading のスワイプが発車の閾値を超えたときだけ切符 id を返す。
+    func boardTicketID(
+        translation: CGSize,
+        predictedEnd: CGSize,
+        leadingIsPositiveX: Bool
+    ) -> UUID? {
+        guard let stampedFace else { return nil }
+        guard TicketStackLayout.isCommittedLeadingThrow(
+            translation: translation,
+            predictedEnd: predictedEnd,
+            leadingIsPositiveX: leadingIsPositiveX
+        ) else { return nil }
+        return stampedFace.id
     }
 }

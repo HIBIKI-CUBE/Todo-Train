@@ -18,8 +18,10 @@ struct ArrivalInvalidateOverlay: View {
     var onClose: () -> Void
     var onStamp: (UUID, ArrivalAction) throws -> Void
     var onIssueInstant: (String, Int) throws -> ArrivalTicketFace
+    var onLeadingBoard: (UUID) throws -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.layoutDirection) private var layoutDirection
     @Environment(SessionManager.self) private var sessionManager
     @Environment(AppSettings.self) private var settings
 
@@ -29,6 +31,7 @@ struct ArrivalInvalidateOverlay: View {
     @State private var instantMinutes = EstimateHeuristic.defaultHighlightMinutes
     @State private var didSeedMinutes = false
     @State private var issueError = ""
+    @State private var boardError = ""
 
     /// 0 hidden below → 1 settled and waiting.
     @State private var enter: CGFloat = 0
@@ -79,7 +82,7 @@ struct ArrivalInvalidateOverlay: View {
 
     @ViewBuilder
     private func scene(arrival: (title: String, minutes: Int, punctuality: ArrivalPunctuality)) -> some View {
-        let ticket = MarsTicketContent(title: arrival.title, minutes: arrival.minutes)
+        let ticket = displayedTicket(arrived: arrival)
         let scrim = 0.12 + 0.23 * Double(enter)
 
         ZStack {
@@ -89,6 +92,7 @@ struct ArrivalInvalidateOverlay: View {
                 ZStack {
                     MarsTicketView(content: ticket, titleReveal: 1)
                         .padding(.horizontal, MarsTicketSpec.horizontalMargin)
+                        .gesture(boardGesture)
                         .overlay {
                             MarsTicketUsedMarks(
                                 punctuality: arrival.punctuality,
@@ -169,12 +173,14 @@ struct ArrivalInvalidateOverlay: View {
                     .tint(MarsTicketSpec.stampBlue)
                     .disabled(!deck.canStamp)
                 }
-            } else if let face = deck.stampedFace {
-                Text(face.title)
-                    .font(.headline)
-                Text("検札しました")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+            } else {
+                Text("右にスワイプして発車")
+                    .font(.subheadline.weight(.semibold))
+                if !boardError.isEmpty {
+                    Text(boardError)
+                        .font(.footnote)
+                        .foregroundStyle(.red)
+                }
             }
             Button("閉じる", action: onClose)
                 .buttonStyle(.bordered)
@@ -286,6 +292,37 @@ struct ArrivalInvalidateOverlay: View {
                     resumeInvite()
                 }
             }
+    }
+
+    private func displayedTicket(
+        arrived: (title: String, minutes: Int, punctuality: ArrivalPunctuality)
+    ) -> MarsTicketContent {
+        if let face = deck.stampedFace {
+            return MarsTicketContent(title: face.title, minutes: face.minutes)
+        }
+        return MarsTicketContent(title: arrived.title, minutes: arrived.minutes)
+    }
+
+    private var boardGesture: some Gesture {
+        DragGesture(minimumDistance: 12)
+            .onEnded { value in
+                let ticketID = deck.boardTicketID(
+                    translation: value.translation,
+                    predictedEnd: value.predictedEndTranslation,
+                    leadingIsPositiveX: layoutDirection == .leftToRight
+                )
+                boardFromSwipe(ticketID: ticketID)
+            }
+    }
+
+    private func boardFromSwipe(ticketID: UUID?) {
+        guard let ticketID else { return }
+        do {
+            try onLeadingBoard(ticketID)
+            boardError = ""
+        } catch {
+            boardError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        }
     }
 
     private func seedDeckIfNeeded() {
@@ -503,7 +540,8 @@ struct MarsTicketUsedMarks: View {
         onStamp: { _, _ in },
         onIssueInstant: { title, minutes in
             ArrivalTicketFace(id: UUID(), title: title, minutes: minutes)
-        }
+        },
+        onLeadingBoard: { _ in }
     )
     .environment(manager)
     .environment(AppSettings.shared)

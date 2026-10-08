@@ -183,6 +183,9 @@ struct ContentView: View {
                                 title: ticket.title,
                                 minutes: max(ticket.estimatedSeconds / 60, 1)
                             )
+                        },
+                        onLeadingBoard: { ticketID in
+                            try sessionManager.boardFromArrivalSwipe(ticketID: ticketID)
                         }
                     )
                     .id(moment.id)

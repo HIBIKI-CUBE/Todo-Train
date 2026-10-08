@@ -122,4 +122,75 @@ struct SessionManagerArrivalTests {
         })
         #expect(manager.punctualityMoment?.kind == .onTimeService)
     }
+
+    @Test func boardFromArrivalSwipe_startsOnlyThatRide() throws {
+        let (manager, context, _, _) = try SessionManagerFixtures.makeHarness()
+        try manager.startService()
+        let riding = try SessionManagerFixtures.makeTicket(context, title: "今", seconds: 600)
+        let next = try SessionManagerFixtures.makeTicket(context, title: "次", seconds: 900)
+        try manager.board(ticket: riding)
+        #expect(manager.activeSession?.startedFrom == .other)
+        let arrivedID = try #require(manager.activeSession?.id)
+        try manager.reserveNextRide(ticket: next, via: .riding)
+        try manager.arrive()
+        try manager.recordArrivalStamp(sessionID: arrivedID, action: .nextRide)
+        #expect(manager.phase == .idle)
+
+        try manager.boardFromArrivalSwipe(ticketID: next.id)
+
+        let arrived = try #require(manager.fetchWorkSession(id: arrivedID))
+        #expect(arrived.outcome == .arrived)
+        #expect(arrived.arrivalAction == .nextRide)
+        #expect(manager.phase == .running)
+        #expect(manager.activeSession?.ticket?.id == next.id)
+        #expect(manager.activeSession?.startedFrom == .arrivalSwipe)
+        #expect(manager.punctualityMoment == nil)
+        #expect(next.reservedAt == nil)
+    }
+
+    @Test func closingAfterStamp_doesNotStartTheNextRide() throws {
+        let (manager, context, _, _) = try SessionManagerFixtures.makeHarness()
+        try manager.startService()
+        let riding = try SessionManagerFixtures.makeTicket(context, title: "今")
+        let next = try SessionManagerFixtures.makeTicket(context, title: "次")
+        try manager.board(ticket: riding)
+        let arrivedID = try #require(manager.activeSession?.id)
+        try manager.arrive()
+        try manager.recordArrivalStamp(sessionID: arrivedID, action: .otherTicket)
+
+        manager.consumePunctualityMoment()
+
+        let arrived = try #require(manager.fetchWorkSession(id: arrivedID))
+        #expect(arrived.outcome == .arrived)
+        #expect(arrived.arrivalAction == .otherTicket)
+        #expect(arrived.arrivalStampedAt != nil)
+        #expect(manager.phase == .idle)
+        #expect(manager.activeSession == nil)
+        #expect(next.sessions.isEmpty)
+    }
+
+    @Test func failedArrivalSwipe_keepsTheArrivalAndTheIssuedTicket() throws {
+        let (manager, context, _, _) = try SessionManagerFixtures.makeHarness()
+        try manager.startService()
+        let riding = try SessionManagerFixtures.makeTicket(context, title: "今")
+        try manager.board(ticket: riding)
+        let arrivedID = try #require(manager.activeSession?.id)
+        try manager.arrive()
+        let issued = try manager.issueArrivalInstant(title: "続き", minutes: 20)
+        try manager.recordArrivalStamp(sessionID: arrivedID, action: .instantTicket)
+        try manager.endService()
+
+        #expect(throws: SessionError.noActiveService) {
+            try manager.boardFromArrivalSwipe(ticketID: issued.id)
+        }
+
+        let arrived = try #require(manager.fetchWorkSession(id: arrivedID))
+        #expect(arrived.outcome == .arrived)
+        #expect(arrived.endedAt != nil)
+        #expect(arrived.arrivalAction == .instantTicket)
+        #expect(arrived.arrivalStampedAt != nil)
+        #expect(issued.isOpen)
+        #expect(issued.sessions.isEmpty)
+        #expect(manager.activeSession == nil)
+    }
 }

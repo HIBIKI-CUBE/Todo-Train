@@ -51,7 +51,11 @@ extension SessionManager {
         }
     }
 
-    func board(ticket: Ticket, now: Date? = nil) throws {
+    func board(
+        ticket: Ticket,
+        now: Date? = nil,
+        startedFrom: RideStartOrigin = .other
+    ) throws {
         let now = now ?? clock.now
         try refusePassengerDriving()
         try ensureServiceAllowsBoarding(at: now)
@@ -79,7 +83,7 @@ extension SessionManager {
             throw SessionError.pauseLimitReached
         }
 
-        try startNewSession(ticket: ticket, now: now)
+        try startNewSession(ticket: ticket, now: now, startedFrom: startedFrom)
     }
 
     /// Pause the current ride in the store, then board `ticket`, without publishing `.paused`.
@@ -123,7 +127,11 @@ extension SessionManager {
         try board(ticket: ticket, now: now)
     }
 
-    func startNewSession(ticket: Ticket, now: Date) throws {
+    func startNewSession(
+        ticket: Ticket,
+        now: Date,
+        startedFrom: RideStartOrigin = .other
+    ) throws {
         try refusePassengerDriving()
         let estimate = min(max(ticket.estimatedSeconds, 1), Ticket.maxEstimatedSeconds)
         let session = WorkSession(
@@ -132,6 +140,7 @@ extension SessionManager {
             ticket: ticket,
             boardedDeviceID: deviceIdentity.id
         )
+        session.startedFrom = startedFrom
         modelContext.insert(session)
         releaseNextRideReservation(on: ticket)
         applyCheckInSchedule(to: session, title: ticket.title, estimatedSeconds: estimate)

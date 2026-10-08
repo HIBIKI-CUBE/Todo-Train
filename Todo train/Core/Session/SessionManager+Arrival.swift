@@ -41,6 +41,21 @@ extension SessionManager {
         }
     }
 
+    /// 検札後の券面を右スワイプしたときの発車。`issueAndBoard` は使わない。
+    func boardFromArrivalSwipe(ticketID: UUID, now: Date? = nil) throws {
+        guard let ticket = fetchTicket(id: ticketID), ticket.isOpen else {
+            throw SessionError.ticketAlreadyClosed
+        }
+        try board(ticket: ticket, now: now, startedFrom: .arrivalSwipe)
+    }
+
+    func fetchTicket(id: UUID) -> Ticket? {
+        let target = id
+        var descriptor = FetchDescriptor<Ticket>(predicate: #Predicate { $0.id == target })
+        descriptor.fetchLimit = 1
+        return (try? modelContext.fetch(descriptor))?.first
+    }
+
     func fetchWorkSession(id: UUID) -> WorkSession? {
         let target = id
         var descriptor = FetchDescriptor<WorkSession>(predicate: #Predicate { $0.id == target })

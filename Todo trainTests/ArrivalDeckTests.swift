@@ -70,6 +70,37 @@ struct ArrivalDeckTests {
         #expect(deck.destination?.face.id == reserved.id)
     }
 
+    @Test func leadingSwipe_afterStamp_isTheOnlyBoard() {
+        var deck = ArrivalDeck(reserved: reserved)
+        #expect(deck.boardTicketID(
+            translation: CGSize(width: 180, height: 0),
+            predictedEnd: CGSize(width: 200, height: 0),
+            leadingIsPositiveX: true
+        ) == nil)
+
+        deck.markStamped()
+        #expect(deck.boardTicketID(
+            translation: CGSize(width: 180, height: 10),
+            predictedEnd: CGSize(width: 220, height: 10),
+            leadingIsPositiveX: true
+        ) == reserved.id)
+        #expect(deck.boardTicketID(
+            translation: CGSize(width: 40, height: 0),
+            predictedEnd: CGSize(width: 40, height: 0),
+            leadingIsPositiveX: true
+        ) == nil)
+        #expect(deck.boardTicketID(
+            translation: CGSize(width: -180, height: 0),
+            predictedEnd: CGSize(width: -200, height: 0),
+            leadingIsPositiveX: true
+        ) == nil)
+        #expect(deck.boardTicketID(
+            translation: CGSize(width: -180, height: 0),
+            predictedEnd: CGSize(width: -220, height: 0),
+            leadingIsPositiveX: false
+        ) == reserved.id)
+    }
+
     @Test func choosingAnother_thenReturningToNextRide() {
         var deck = ArrivalDeck(reserved: reserved)
         deck.selectOther(other)

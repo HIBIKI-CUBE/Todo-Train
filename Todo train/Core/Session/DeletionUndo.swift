@@ -42,6 +42,7 @@ enum DeletionUndo {
         var overtimeResolutionRaw: String?
         var arrivalActionRaw: String?
         var arrivalStampedAt: Date?
+        var startedFromRaw: String?
         var checkInOffsetSeconds: [Double]
         var checkInFiredCount: Int
         var pendingCheckInKindRaw: String?
@@ -121,6 +122,7 @@ enum DeletionUndo {
             overtimeResolutionRaw: session.overtimeResolutionRaw,
             arrivalActionRaw: session.arrivalActionRaw,
             arrivalStampedAt: session.arrivalStampedAt,
+            startedFromRaw: session.startedFromRaw,
             checkInOffsetSeconds: session.checkInOffsetSeconds,
             checkInFiredCount: session.checkInFiredCount,
             pendingCheckInKindRaw: session.pendingCheckInKindRaw,
@@ -217,6 +219,9 @@ enum DeletionUndo {
         session.overtimeResolutionRaw = record.overtimeResolutionRaw
         session.arrivalActionRaw = record.arrivalActionRaw
         session.arrivalStampedAt = record.arrivalStampedAt
+        if let startedFromRaw = record.startedFromRaw {
+            session.startedFromRaw = startedFromRaw
+        }
         session.checkInOffsetSeconds = record.checkInOffsetSeconds
         session.checkInFiredCount = record.checkInFiredCount
         session.pendingCheckInKindRaw = record.pendingCheckInKindRaw
