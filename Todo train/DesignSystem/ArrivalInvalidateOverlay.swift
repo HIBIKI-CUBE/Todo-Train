@@ -68,7 +68,7 @@ struct ArrivalInvalidateOverlay: View {
     }
 
     private var boardHint: String {
-        leadingIsPositiveX ? "右へスワイプして発車" : "左へスワイプして発車"
+        leadingIsPositiveX ? "右に投げて発車" : "左に投げて発車"
     }
 
     var body: some View {
@@ -85,50 +85,29 @@ struct ArrivalInvalidateOverlay: View {
 
     @ViewBuilder
     private func scene(arrival: (title: String, minutes: Int, punctuality: ArrivalPunctuality)) -> some View {
-        let scrim = 0.12 + 0.23 * Double(enter)
-
         ZStack {
-            Color.black.opacity(scrim).ignoresSafeArea()
+            Color.black.opacity(0.7 * Double(enter)).ignoresSafeArea()
 
             GeometryReader { geo in
-                let width = geo.size.width
-                let footerBlock: CGFloat = deck.stampedFace == nil ? (deck.canStamp ? 108 : 128) : 92
-                let choiceBlock: CGFloat = deck.stampedFace == nil ? 52 : 0
-                let ticketBudget = max(180, geo.size.height - footerBlock - choiceBlock - 36)
-                let arrivedTicket = min(
-                    ticketBudget * 0.4,
-                    MarsTicketSpec.height(forWidth: max(120, width - 88))
-                )
-                let nextTicket = min(
-                    ticketBudget - arrivedTicket,
-                    MarsTicketSpec.height(forWidth: max(120, width - 40))
+                let width = min(max(geo.size.width - 40, 120), 420)
+                let ticketHeight = MarsTicketSpec.height(forWidth: width)
+                let nextHeight: CGFloat = deck.destination == nil ? 36 : ticketHeight
+                let scale = sceneScale(
+                    available: geo.size.height,
+                    ticketHeight: ticketHeight,
+                    nextHeight: nextHeight
                 )
 
-                VStack(alignment: .leading, spacing: 10) {
-                    arrivedBlock(arrival: arrival)
-                        .frame(height: arrivedTicket + 22, alignment: .top)
+                VStack(spacing: 18) {
+                    arrivedTicket(arrival: arrival)
+                        .frame(width: width, height: ticketHeight)
                     nextBlock
-                        .frame(height: nextTicket + 22, alignment: .top)
-                    if deck.stampedFace == nil {
-                        choiceRow
-                    }
-                    if !stampError.isEmpty {
-                        Text(stampError)
-                            .font(.footnote)
-                            .foregroundStyle(TrainTheme.signalRed)
-                    }
-                    if !boardError.isEmpty {
-                        Text(boardError)
-                            .font(.footnote)
-                            .foregroundStyle(TrainTheme.signalRed)
-                    }
-                    Spacer(minLength: 0)
-                    footer(punctuality: arrival.punctuality)
+                        .frame(width: width, height: nextHeight)
+                    handColumn(punctuality: arrival.punctuality)
+                        .frame(width: width, alignment: .leading)
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 8)
-                .padding(.bottom, 12)
-                .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
+                .scaleEffect(scale, anchor: .center)
+                .frame(width: geo.size.width, height: geo.size.height)
             }
             .offset(y: (1 - enter) * 28)
             .opacity(Double(max(0, enter)))
@@ -147,41 +126,42 @@ struct ArrivalInvalidateOverlay: View {
         }
     }
 
-    private func arrivedBlock(
+    private func sceneScale(available: CGFloat, ticketHeight: CGFloat, nextHeight: CGFloat) -> CGFloat {
+        let errors: CGFloat = (stampError.isEmpty ? 0 : 24) + (boardError.isEmpty ? 0 : 24)
+        let hands: CGFloat = deck.stampedFace == nil ? 92 : 36
+        let raw = ticketHeight + nextHeight + hands + errors + 18 * 2 + 8
+        return min(1, (available - 8) / max(raw, 1))
+    }
+
+    private func arrivedTicket(
         arrival: (title: String, minutes: Int, punctuality: ArrivalPunctuality)
     ) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            sectionLabel("到着")
-            MarsTicketView(
-                content: MarsTicketContent(title: arrival.title, minutes: arrival.minutes),
-                titleReveal: 1
+        MarsTicketView(
+            content: MarsTicketContent(title: arrival.title, minutes: arrival.minutes),
+            titleReveal: 1
+        )
+        .overlay {
+            MarsTicketUsedMarks(
+                punctuality: arrival.punctuality,
+                stampSettled: impact
             )
-            .padding(.horizontal, 24)
-            .overlay {
-                MarsTicketUsedMarks(
-                    punctuality: arrival.punctuality,
-                    stampSettled: impact
-                )
-                .padding(.horizontal, 24)
-                .opacity(deck.stampedFace == nil ? 0 : 1)
-                .allowsHitTesting(false)
-            }
-            .overlay(alignment: .bottomTrailing) {
-                if deck.stampedFace == nil {
-                    stampPress(punctuality: arrival.punctuality)
-                        .padding(.trailing, 36)
-                        .padding(.bottom, 10)
+            .opacity(deck.stampedFace == nil ? 0 : 1)
+            .allowsHitTesting(false)
+        }
+        .overlay {
+            if deck.stampedFace == nil {
+                GeometryReader { geo in
+                    let diameter = min(geo.size.width, geo.size.height) * 0.36
+                    stampPress(punctuality: arrival.punctuality, diameter: diameter)
+                        .position(x: geo.size.width * 0.7, y: geo.size.height * 0.62)
                 }
             }
-            .opacity(deck.stampedFace == nil ? 1 : 0.92)
         }
+        .opacity(deck.stampedFace == nil ? 1 : 0.92)
     }
 
     private var nextBlock: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            sectionLabel("次の一本")
-            nextCard
-        }
+        nextCard
     }
 
     @ViewBuilder
@@ -193,29 +173,15 @@ struct ArrivalInvalidateOverlay: View {
                 }
                 swipeableNextTicket(face)
             }
-            .accessibilityElement(children: .combine)
+            .accessibilityElement(children: .ignore)
             .accessibilityLabel("次の一本 \(face.title) \(face.minutes)分")
-            .accessibilityHint(deck.stampedFace == nil ? "検札すると発車できます" : boardHint)
+            .accessibilityHint(deck.stampedFace == nil ? "" : boardHint)
         } else {
-            RoundedRectangle(cornerRadius: MarsTicketSpec.cornerRadius, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.28), lineWidth: 1)
-                .background {
-                    RoundedRectangle(cornerRadius: MarsTicketSpec.cornerRadius, style: .continuous)
-                        .fill(Color.white.opacity(0.04))
-                }
-                .aspectRatio(MarsTicketSpec.aspectRatio, contentMode: .fit)
-                .overlay {
-                    VStack(spacing: 6) {
-                        Text("予約なし")
-                            .font(.headline)
-                        Text("別の切符、または即時切符")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-                    .foregroundStyle(.white)
-                }
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("予約なし。別の切符、または即時切符")
+            Text("予約なし")
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+                .accessibilityLabel("予約なし")
         }
     }
 
@@ -240,85 +206,69 @@ struct ArrivalInvalidateOverlay: View {
             .accessibilityHidden(true)
     }
 
-    private var choiceRow: some View {
-        HStack(spacing: 8) {
-            Button("別の切符") { deck.showOtherTickets() }
-                .buttonStyle(.bordered)
-                .tint(.white)
-            Button("即時切符") { deck.showInstant() }
-                .buttonStyle(.bordered)
-                .tint(.white)
-            if deck.reserved != nil, deck.destination?.action != .nextRide {
-                Button("予約に戻す") { deck.selectNextRide() }
-                    .buttonStyle(.bordered)
-                    .tint(.white)
-            }
-        }
-        .controlSize(.regular)
-    }
-
-    @ViewBuilder
-    private func footer(punctuality: ArrivalPunctuality) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+    private func handColumn(punctuality: ArrivalPunctuality) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
             if deck.stampedFace == nil {
-            Button {
-                commitStamp(punctuality: punctuality)
-            } label: {
-                Text("検札する")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(MarsTicketSpec.stampBlue)
-            .disabled(!deck.canStamp)
-            .accessibilityHint(deck.canStamp ? "到着を締める。発車はしない" : "行き先が決まるまで押せません")
-                if !deck.canStamp {
-                    Text("行き先を選ぶと検札できます")
-                        .font(.footnote)
-                        .foregroundStyle(.white.opacity(0.72))
+                HStack(spacing: 22) {
+                    hand("別の切符") { deck.showOtherTickets() }
+                    hand("即時切符") { deck.showInstant() }
+                    if deck.reserved != nil, deck.destination?.action != .nextRide {
+                        hand("次の一本") { deck.selectNextRide() }
+                    }
                 }
-            } else {
-                Text(boardHint)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.white)
+                if reduceMotion {
+                    hand("検札する") { commitStamp(punctuality: punctuality) }
+                        .disabled(!deck.canStamp)
+                        .opacity(deck.canStamp ? 1 : 0.4)
+                        .accessibilityHint(deck.canStamp ? "到着を締める" : "行き先が決まるまで押せません")
+                }
             }
-            Button("閉じる", action: onClose)
-                .buttonStyle(.bordered)
-                .tint(.white)
+            hand("閉じる", action: onClose)
+            if !stampError.isEmpty {
+                Text(stampError)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(TrainTheme.signalRed)
+            }
+            if !boardError.isEmpty {
+                Text(boardError)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(TrainTheme.signalRed)
+            }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func sectionLabel(_ title: String) -> some View {
-        Text(title)
-            .font(.caption.weight(.bold))
-            .foregroundStyle(.white.opacity(0.72))
+    private func hand(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(title, action: action)
+            .font(.system(size: 20, weight: .bold))
+            .foregroundStyle(.white)
+            .buttonStyle(.plain)
     }
 
-    private func stampPress(punctuality: ArrivalPunctuality) -> some View {
+    private func stampPress(punctuality: ArrivalPunctuality, diameter: CGFloat) -> some View {
         let ink = stampInk(punctuality)
         return Button {
             commitStamp(punctuality: punctuality)
         } label: {
-            VStack(spacing: 4) {
-                Capsule()
-                    .fill(ink.opacity(0.85))
-                    .frame(width: 16, height: 22)
+            ZStack {
+                Circle().fill(Color.white)
+                Circle().strokeBorder(ink, lineWidth: max(3, diameter * 0.045))
                 Circle()
-                    .strokeBorder(ink, lineWidth: 2.4)
-                    .background(Circle().fill(Color.white.opacity(0.92)))
-                    .frame(width: 64, height: 64)
-                    .overlay {
-                        Text(stampCenterLabel(punctuality))
-                            .font(.system(size: 13, weight: .bold, design: .default))
-                            .foregroundStyle(ink)
-                    }
+                    .strokeBorder(ink.opacity(0.35), lineWidth: 1)
+                    .padding(diameter * 0.08)
+                Text(stampCenterLabel(punctuality))
+                    .font(.system(size: diameter * 0.24, weight: .bold, design: .default))
+                    .foregroundStyle(ink)
+                    .minimumScaleFactor(0.6)
+                    .lineLimit(1)
             }
-            .shadow(color: .black.opacity(0.18), radius: 3, y: 1)
+            .frame(width: diameter, height: diameter)
+            .shadow(color: .black.opacity(0.28), radius: 4, y: 2)
         }
         .buttonStyle(.plain)
         .disabled(!deck.canStamp)
-        .opacity(deck.canStamp ? 1 : 0.38)
-        .accessibilityHidden(true)
+        .opacity(deck.canStamp ? 1 : 0.45)
+        .accessibilityLabel("検札印")
+        .accessibilityHint(deck.canStamp ? "到着を締める" : "行き先が決まるまで押せません")
     }
 
     private var otherTicketPicker: some View {
@@ -519,10 +469,10 @@ struct ArrivalInvalidateOverlay: View {
 
     private func accessibilityText(arrival: (title: String, minutes: Int, punctuality: ArrivalPunctuality)) -> String {
         let head = Punctuality.arrivalHeadline(arrival.punctuality)
-        if deck.canStamp {
-            return "\(head)。\(arrival.title)。検札印を押してください"
+        if let next = deck.destination?.face {
+            return "\(head)。\(arrival.title)。次の一本 \(next.title)"
         }
-        return "\(head)。\(arrival.title)。行き先を選ぶか、閉じてください"
+        return "\(head)。\(arrival.title)。予約なし"
     }
 
     private func announceIfNeeded(arrival: (title: String, minutes: Int, punctuality: ArrivalPunctuality)) {

@@ -279,10 +279,7 @@ struct FocusView: View {
                             Button {
                                 showNextRideReserve = true
                             } label: {
-                                ReservedNextRideSign(
-                                    title: reservedRide.title,
-                                    minutes: max(reservedRide.estimatedSeconds / 60, 1)
-                                )
+                                ReservedNextRideSign(title: reservedRide.title)
                             }
                             .buttonStyle(.plain)
                         }
@@ -545,17 +542,17 @@ struct FocusView: View {
     }
 }
 
-/// ダイヤの「次」とは別の行先。本人が予約した切符だけを出す。
+/// ダイヤの「次」とは別の行先。題名が主。見積もりの分は券面に残す。
 private struct ReservedNextRideSign: View {
     var title: String
-    var minutes: Int
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
             Text("予約")
                 .font(.caption.weight(.bold))
                 .foregroundStyle(.white)
-                .frame(minWidth: 26)
+                .lineLimit(1)
+                .frame(minWidth: 36)
                 .padding(.vertical, 4)
                 .background {
                     RoundedRectangle(cornerRadius: 3, style: .continuous)
@@ -564,18 +561,13 @@ private struct ReservedNextRideSign: View {
                 .padding(.top, 2)
 
             VStack(alignment: .leading, spacing: 4) {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(title)
-                        .font(.title3.weight(.medium))
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.72)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    Text("\(minutes)分")
-                        .font(.caption.weight(.semibold))
-                        .monospacedDigit()
-                        .foregroundStyle(.white.opacity(0.82))
-                }
+                Text(title)
+                    .font(.title3.weight(.medium))
+                    .tracking(StationSignMetrics.nameTracking(title, compact: false))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 Rectangle()
                     .fill(TrainTheme.rail.opacity(0.55))
                     .frame(height: 4)
@@ -583,7 +575,7 @@ private struct ReservedNextRideSign: View {
             }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("予約 \(title) \(minutes)分")
+        .accessibilityLabel("予約 \(title)")
         .accessibilityHint("予約欄を開く。乗車は始まらない")
     }
 }
