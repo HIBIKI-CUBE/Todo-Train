@@ -88,18 +88,38 @@ struct ArrivalDeck: Equatable, Sendable {
         picker = nil
     }
 
-    /// 検札後の券面で、leading のスワイプが発車の閾値を超えたときだけ切符 id を返す。
+    /// 画面を開いたときに予約を読み直す。別の切符・即時切符を選んだあとは行き先を上書きしない。
+    mutating func adoptReservation(_ face: ArrivalTicketFace?) {
+        guard stampedFace == nil else { return }
+        reserved = face
+        switch destination?.action {
+        case .otherTicket, .instantTicket:
+            return
+        case .nextRide, nil:
+            if let face {
+                destination = ArrivalDestination(action: .nextRide, face: face)
+            } else {
+                destination = nil
+            }
+        }
+    }
+
+    /// 指を止めて離しても、leading にこの距離まで動かせば発車する。Hub のフリック閾値は使わない。
+    static let boardDistance: CGFloat = 96
+
+    /// 検札後の券面で、leading のスワイプが発車の距離を超えたときだけ切符 id を返す。
     func boardTicketID(
         translation: CGSize,
         predictedEnd: CGSize,
         leadingIsPositiveX: Bool
     ) -> UUID? {
+        _ = predictedEnd
         guard let stampedFace else { return nil }
-        guard TicketStackLayout.isCommittedLeadingThrow(
-            translation: translation,
-            predictedEnd: predictedEnd,
+        let width = TicketStackLayout.leadingWidth(
+            translationWidth: translation.width,
             leadingIsPositiveX: leadingIsPositiveX
-        ) else { return nil }
+        )
+        guard width >= Self.boardDistance, width > abs(translation.height) else { return nil }
         return stampedFace.id
     }
 }

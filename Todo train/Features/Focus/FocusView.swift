@@ -9,7 +9,6 @@ import SwiftUI
 struct FocusView: View {
     @Environment(SessionManager.self) private var sessionManager
     @Environment(AppSettings.self) private var settings
-    @Environment(TransferCanvasPresenter.self) private var transferCanvas
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.verticalSizeClass) private var verticalSizeClass
@@ -154,14 +153,6 @@ struct FocusView: View {
                     .minimumScaleFactor(0.8)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .accessibilityAddTraits(.isHeader)
-                if showsNextRideReserve {
-                    Button("予約") {
-                        showNextRideReserve = true
-                    }
-                    .font(.system(size: 13, weight: .semibold, design: .default))
-                    .foregroundStyle(FocusPanel.muted)
-                    .accessibilityHint("次の一本の予約欄を開く。乗車は始まらない")
-                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -241,6 +232,7 @@ struct FocusView: View {
                 scheduledArrival: context.date.addingTimeInterval(remainingInterval),
                 predictedArrival: nil
             )
+            let reservedRide = showsNextRideReserve ? sessionManager.reservedNextTicket() : nil
 
             VStack(spacing: 0) {
                 FocusProgressBar(
@@ -270,7 +262,7 @@ struct FocusView: View {
                 .padding(.horizontal, 14)
                 .padding(.vertical, 12)
 
-                if !occupancy.rows.isEmpty {
+                if !occupancy.rows.isEmpty || reservedRide != nil {
                     VStack(alignment: .leading, spacing: 6) {
                         ForEach(occupancy.rows) { row in
                             OccupancyDestinationSign(
@@ -282,6 +274,17 @@ struct FocusView: View {
                                 action: row.id == occupancy.rows.first?.id
                                     ? occupancy.action : nil
                             )
+                        }
+                        if let reservedRide {
+                            Button {
+                                showNextRideReserve = true
+                            } label: {
+                                ReservedNextRideSign(
+                                    title: reservedRide.title,
+                                    minutes: max(reservedRide.estimatedSeconds / 60, 1)
+                                )
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
                     .padding(.horizontal, 14)
@@ -334,14 +337,15 @@ struct FocusView: View {
             } else {
                 FocusControlsView(
                     onPause: { run { try sessionManager.pause() } },
-                    onPartialDisembark: { partialDisembarkAndShowCanvas() },
+                    onReserve: { showNextRideReserve = true },
                     onArrive: { run { try sessionManager.arrive() } },
                     onExtendMenu: {
                         withAnimation(TrainTheme.Motion.soft) {
                             showExtendChips.toggle()
                         }
                     },
-                    onInterrupt: { showInterruptIssue = true }
+                    onInterrupt: { showInterruptIssue = true },
+                    showsReserve: showsNextRideReserve
                 )
             }
         }
@@ -531,20 +535,6 @@ struct FocusView: View {
         return (try? modelContext.fetch(descriptor))?.first
     }
 
-    private func partialDisembarkAndShowCanvas() {
-        guard let ticket = sessionManager.activeSession?.ticket else { return }
-        let sessionID = sessionManager.activeSession?.id
-        do {
-            // Enqueue before close: Focus fullScreenCover dismisses on phase change.
-            transferCanvas.enqueueAfterFocusDismiss(parent: ticket, sessionID: sessionID)
-            try sessionManager.partialDisembark()
-        } catch {
-            transferCanvas.clearPending()
-            errorMessage = error.localizedDescription
-            showError = true
-        }
-    }
-
     private func run(_ body: () throws -> Void) {
         do {
             try body()
@@ -552,6 +542,49 @@ struct FocusView: View {
             errorMessage = error.localizedDescription
             showError = true
         }
+    }
+}
+
+/// ダイヤの「次」とは別の行先。本人が予約した切符だけを出す。
+private struct ReservedNextRideSign: View {
+    var title: String
+    var minutes: Int
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Text("予約")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(.white)
+                .frame(minWidth: 26)
+                .padding(.vertical, 4)
+                .background {
+                    RoundedRectangle(cornerRadius: 3, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.7), lineWidth: 1)
+                }
+                .padding(.top, 2)
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(title)
+                        .font(.title3.weight(.medium))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.72)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Text("\(minutes)分")
+                        .font(.caption.weight(.semibold))
+                        .monospacedDigit()
+                        .foregroundStyle(.white.opacity(0.82))
+                }
+                Rectangle()
+                    .fill(TrainTheme.rail.opacity(0.55))
+                    .frame(height: 4)
+                    .frame(maxWidth: .infinity)
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("予約 \(title) \(minutes)分")
+        .accessibilityHint("予約欄を開く。乗車は始まらない")
     }
 }
 
@@ -566,7 +599,6 @@ struct FocusView: View {
     return FocusView()
         .environment(manager)
         .environment(AppSettings.shared)
-        .environment(TransferCanvasPresenter())
         .environment(TicketMotionBridge())
         .modelContainer(container)
 }

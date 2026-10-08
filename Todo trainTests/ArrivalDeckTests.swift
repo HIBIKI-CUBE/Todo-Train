@@ -86,6 +86,16 @@ struct ArrivalDeckTests {
             leadingIsPositiveX: true
         ) == reserved.id)
         #expect(deck.boardTicketID(
+            translation: CGSize(width: 110, height: 8),
+            predictedEnd: CGSize(width: 20, height: 8),
+            leadingIsPositiveX: true
+        ) == reserved.id)
+        #expect(deck.boardTicketID(
+            translation: CGSize(width: 120, height: 140),
+            predictedEnd: CGSize(width: 120, height: 140),
+            leadingIsPositiveX: true
+        ) == nil)
+        #expect(deck.boardTicketID(
             translation: CGSize(width: 40, height: 0),
             predictedEnd: CGSize(width: 40, height: 0),
             leadingIsPositiveX: true
@@ -100,6 +110,26 @@ struct ArrivalDeckTests {
             predictedEnd: CGSize(width: -220, height: 0),
             leadingIsPositiveX: false
         ) == reserved.id)
+    }
+
+    @Test func adoptReservation_refreshesNextRideWithoutReplacingAnotherChoice() {
+        var deck = ArrivalDeck(reserved: nil)
+        #expect(deck.destination == nil)
+        deck.adoptReservation(reserved)
+        #expect(deck.canStamp)
+        #expect(deck.destination?.face.id == reserved.id)
+
+        deck.selectOther(other)
+        let replacement = ArrivalTicketFace(id: UUID(), title: "差し替え", minutes: 20)
+        deck.adoptReservation(replacement)
+        #expect(deck.reserved?.id == replacement.id)
+        #expect(deck.destination?.action == .otherTicket)
+        #expect(deck.destination?.face.id == other.id)
+
+        deck.markStamped()
+        deck.adoptReservation(reserved)
+        #expect(deck.reserved?.id == replacement.id)
+        #expect(deck.stampedFace?.id == other.id)
     }
 
     @Test func choosingAnother_thenReturningToNextRide() {
