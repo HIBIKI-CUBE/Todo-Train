@@ -173,17 +173,6 @@ struct ContentView: View {
                         onStamp: { sessionID, action in
                             try sessionManager.recordArrivalStamp(sessionID: sessionID, action: action)
                         },
-                        onIssueInstant: { title, minutes in
-                            let ticket = try sessionManager.issueArrivalInstant(
-                                title: title,
-                                minutes: minutes
-                            )
-                            return ArrivalTicketFace(
-                                id: ticket.id,
-                                title: ticket.title,
-                                minutes: max(ticket.estimatedSeconds / 60, 1)
-                            )
-                        },
                         onLeadingBoard: { ticketID in
                             try sessionManager.boardFromArrivalSwipe(ticketID: ticketID)
                         }
