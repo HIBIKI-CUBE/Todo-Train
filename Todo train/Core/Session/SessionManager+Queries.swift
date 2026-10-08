@@ -64,7 +64,8 @@ extension SessionManager {
                     estimateSeconds: session.estimatedSecondsAtStart,
                     actualSeconds: session.accumulatedActiveSeconds,
                     punctuality: Punctuality.classify(session)
-                )
+                ),
+                arrivedSessionID: session.id
             )
         )
     }

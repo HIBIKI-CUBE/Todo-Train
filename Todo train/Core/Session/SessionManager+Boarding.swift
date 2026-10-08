@@ -146,6 +146,7 @@ extension SessionManager {
         reconcile(now: now)
         refreshRideSideEffects(for: session, now: now)
         requestCheckInPrompt(for: session, title: ticket.title, estimatedMinutes: estimate / 60)
+        consumeArrivalCelebrations()
     }
 
     func pause(now: Date? = nil, timetableHeld: Bool = false) throws {
@@ -252,6 +253,7 @@ extension SessionManager {
         let resumedAlarm = isAlarmKitEndBellActive && alarmScheduler.resume(sessionID: session.id)
         reconcile(now: now)
         refreshRideSideEffects(for: session, now: now, endBell: resumedAlarm ? .skip : .schedule)
+        consumeArrivalCelebrations()
     }
 
     /// StandBy / system AlarmKit resume → mirror into the open session (no AlarmKit echo).
@@ -263,6 +265,7 @@ extension SessionManager {
         try save()
         reconcile(now: now)
         refreshRideSideEffects(for: session, now: now, endBell: .skip)
+        consumeArrivalCelebrations()
     }
 
     func reopenPausedSession(_ session: WorkSession, now: Date) {

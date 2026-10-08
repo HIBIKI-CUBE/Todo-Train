@@ -166,9 +166,25 @@ struct ContentView: View {
             if let moment = sessionManager.punctualityMoment {
                 switch moment.kind {
                 case .arrival:
-                    ArrivalInvalidateOverlay(moment: moment, skipEnter: true) {
-                        sessionManager.consumePunctualityMoment()
-                    }
+                    ArrivalInvalidateOverlay(
+                        moment: moment,
+                        skipEnter: true,
+                        onClose: { sessionManager.consumePunctualityMoment() },
+                        onStamp: { sessionID, action in
+                            try sessionManager.recordArrivalStamp(sessionID: sessionID, action: action)
+                        },
+                        onIssueInstant: { title, minutes in
+                            let ticket = try sessionManager.issueArrivalInstant(
+                                title: title,
+                                minutes: minutes
+                            )
+                            return ArrivalTicketFace(
+                                id: ticket.id,
+                                title: ticket.title,
+                                minutes: max(ticket.estimatedSeconds / 60, 1)
+                            )
+                        }
+                    )
                     .id(moment.id)
                 case .onTimeService:
                     if !isFocusPresented {

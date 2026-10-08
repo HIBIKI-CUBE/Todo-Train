@@ -71,6 +71,8 @@ struct AppStoreSnapshot: Sendable {
         var budgetSecondsAtStart: Int
         var outcomeRaw: String?
         var overtimeResolutionRaw: String?
+        var arrivalActionRaw: String?
+        var arrivalStampedAt: Date?
         var checkInOffsetSeconds: [Double]
         var checkInFiredCount: Int
         var pendingCheckInKindRaw: String?
@@ -157,6 +159,8 @@ struct AppStoreSnapshot: Sendable {
                 budgetSecondsAtStart: session.budgetSecondsAtStart,
                 outcomeRaw: session.outcomeRaw,
                 overtimeResolutionRaw: session.overtimeResolutionRaw,
+                arrivalActionRaw: session.arrivalActionRaw,
+                arrivalStampedAt: session.arrivalStampedAt,
                 checkInOffsetSeconds: session.checkInOffsetSeconds,
                 checkInFiredCount: session.checkInFiredCount,
                 pendingCheckInKindRaw: session.pendingCheckInKindRaw,
@@ -272,6 +276,8 @@ struct AppStoreSnapshot: Sendable {
             session.budgetSecondsAtStart = row.budgetSecondsAtStart
             session.outcomeRaw = row.outcomeRaw
             session.overtimeResolutionRaw = row.overtimeResolutionRaw
+            session.arrivalActionRaw = row.arrivalActionRaw
+            session.arrivalStampedAt = row.arrivalStampedAt
             session.checkInOffsetSeconds = row.checkInOffsetSeconds
             session.checkInFiredCount = row.checkInFiredCount
             session.pendingCheckInKindRaw = row.pendingCheckInKindRaw

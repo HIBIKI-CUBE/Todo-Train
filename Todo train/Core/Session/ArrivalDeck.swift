@@ -1,0 +1,89 @@
+//
+//  ArrivalDeck.swift
+//  Todo train
+//
+//  到着画面の行き先。検札は締めだけで、発車は別の操作。
+//
+
+import Foundation
+
+struct ArrivalTicketFace: Equatable, Identifiable, Sendable {
+    var id: UUID
+    var title: String
+    var minutes: Int
+}
+
+struct ArrivalDestination: Equatable, Sendable {
+    var action: ArrivalAction
+    var face: ArrivalTicketFace
+}
+
+/// 到着画面の中だけで持つ選択。ピッカーを閉じても到着画面は閉じない。
+struct ArrivalDeck: Equatable, Sendable {
+    enum Picker: Equatable, Sendable {
+        case otherTickets
+        case instant
+    }
+
+    var reserved: ArrivalTicketFace?
+    var destination: ArrivalDestination?
+    var picker: Picker?
+    /// 検札後。この時点ではまだ発車していない。
+    var stampedFace: ArrivalTicketFace?
+
+    init(reserved: ArrivalTicketFace?) {
+        self.reserved = reserved
+        if let reserved {
+            destination = ArrivalDestination(action: .nextRide, face: reserved)
+        }
+    }
+
+    var canStamp: Bool {
+        stampedFace == nil && picker == nil && destination != nil
+    }
+
+    mutating func showOtherTickets() {
+        guard stampedFace == nil else { return }
+        picker = .otherTickets
+    }
+
+    mutating func showInstant() {
+        guard stampedFace == nil else { return }
+        picker = .instant
+    }
+
+    /// 一覧や入力欄だけを閉じる。到着画面は残る。
+    mutating func dismissPicker() {
+        picker = nil
+    }
+
+    mutating func selectNextRide() {
+        guard stampedFace == nil, let reserved else { return }
+        destination = ArrivalDestination(action: .nextRide, face: reserved)
+        picker = nil
+    }
+
+    mutating func selectOther(_ face: ArrivalTicketFace) {
+        guard stampedFace == nil, face.id != reserved?.id else { return }
+        destination = ArrivalDestination(action: .otherTicket, face: face)
+        picker = nil
+    }
+
+    mutating func selectInstant(_ face: ArrivalTicketFace) {
+        guard stampedFace == nil else { return }
+        destination = ArrivalDestination(action: .instantTicket, face: face)
+        picker = nil
+    }
+
+    /// 検札できるときだけ行き先を返す。発車はしない。
+    func stampSelection() -> ArrivalDestination? {
+        guard canStamp else { return nil }
+        return destination
+    }
+
+    mutating func markStamped() {
+        guard let destination else { return }
+        stampedFace = destination.face
+        picker = nil
+    }
+}
