@@ -416,7 +416,7 @@ struct HubView: View {
                     canBoard: canBoardGenerally,
                     boardDisabledReason: boardDisabledReason,
                     focusedTicketID: $focusedTicketID,
-                    hiddenTicketIDs: deckHiddenTicketIDs,
+                    hiddenTicketID: hubIssueEject?.ticketID,
                     isPuttingBack: isPuttingBack,
                     onFocusTicket: { focusTicket($0) },
                     onDismissFocus: { dismissTicketFocus() },
@@ -433,18 +433,6 @@ struct HubView: View {
             }
         }
         .padding(.top, TrainTheme.Space.sm)
-    }
-
-    /// Issue eject and the arrival present layer each own their ticket's zoom source.
-    private var deckHiddenTicketIDs: Set<UUID> {
-        var ids: Set<UUID> = []
-        if let id = hubIssueEject?.ticketID {
-            ids.insert(id)
-        }
-        if let id = ticketMotion.arrivalCoverTicketID {
-            ids.insert(id)
-        }
-        return ids
     }
 
     /// Overlay container stays mounted; this tracks whether a ticket is still the presented identity.
@@ -499,7 +487,6 @@ struct HubView: View {
                         canBoard: canBoardGenerally,
                         disabledReason: boardDisabledReason,
                         zoomNamespace: zoomNamespace,
-                        registersZoomSource: ticket.id != ticketMotion.arrivalCoverTicketID,
                         onDismiss: { dismissTicketFocus() },
                         onHoldDragEnded: { finishPresentDrag($0, ticket: ticket) },
                         onOpenDetail: { detailTicket = ticket },
@@ -709,13 +696,7 @@ struct HubView: View {
             }
             .buttonStyle(.borderedProminent)
             .tint(TrainTheme.rail)
-            .modifier(
-                PausedResumeZoomSource(
-                    ticketID: ticket.id,
-                    namespace: zoomNamespace,
-                    suppressedID: ticketMotion.arrivalCoverTicketID
-                )
-            )
+            .matchedTransitionSource(id: ticket.id, in: zoomNamespace)
             .disabled(!canBoardGenerally)
             .accessibilityHint(canBoardGenerally ? "停車中の切符を再開" : boardDisabledReason)
         }
@@ -764,20 +745,6 @@ struct HubView: View {
         let remaining = Int(session.remainingSeconds(at: .now).rounded())
         let prefix = remaining < 0 ? "超過 " : ""
         return prefix + ClockTime.mmss(remaining)
-    }
-}
-
-private struct PausedResumeZoomSource: ViewModifier {
-    let ticketID: UUID
-    let namespace: Namespace.ID
-    let suppressedID: UUID?
-
-    func body(content: Content) -> some View {
-        if ticketID == suppressedID {
-            content
-        } else {
-            content.matchedTransitionSource(id: ticketID, in: namespace)
-        }
     }
 }
 

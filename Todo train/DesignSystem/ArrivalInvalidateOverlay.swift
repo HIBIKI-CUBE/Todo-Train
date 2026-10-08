@@ -21,7 +21,6 @@ struct ArrivalInvalidateOverlay: View {
     var onLeadingBoard: (UUID) throws -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.focusZoomNamespace) private var focusZoomNamespace
     @Environment(SessionManager.self) private var sessionManager
     @Environment(TicketMotionBridge.self) private var ticketMotion
     @Namespace private var fallbackZoom
@@ -37,8 +36,9 @@ struct ArrivalInvalidateOverlay: View {
     @State private var impact: CGFloat = 0
     @State private var stampHaptic = 0
 
+    /// Focus を閉じる zoom とは別の namespace。同じ namespace に source を足すと到着の瞬間に落ちる。
     private var zoomNamespace: Namespace.ID {
-        focusZoomNamespace ?? fallbackZoom
+        fallbackZoom
     }
 
     private var arrival: (title: String, minutes: Int, punctuality: ArrivalPunctuality)? {
@@ -77,15 +77,6 @@ struct ArrivalInvalidateOverlay: View {
         .onAppear {
             refreshReservation()
         }
-        .onDisappear {
-            let id = deck.destination?.face.id
-            if ticketMotion.arrivalCoverTicketID == id {
-                ticketMotion.arrivalCoverTicketID = nil
-            }
-        }
-        .onChange(of: deck.destination?.face.id) { _, _ in
-            syncArrivalCover()
-        }
     }
 
     @ViewBuilder
@@ -119,7 +110,6 @@ struct ArrivalInvalidateOverlay: View {
                         minutes: event.minutes
                     )
                 )
-                syncArrivalCover()
             }
         }
     }
@@ -157,7 +147,6 @@ struct ArrivalInvalidateOverlay: View {
                     canBoard: deck.stampedFace != nil,
                     disabledReason: nil,
                     zoomNamespace: zoomNamespace,
-                    registersZoomSource: ticketMotion.arrivalCoverTicketID == ticket.id,
                     onDismiss: onClose,
                     onHoldDragEnded: { finishDepartureDrag($0, ticketID: ticket.id) },
                     onOpenDetail: {},
@@ -247,10 +236,7 @@ struct ArrivalInvalidateOverlay: View {
                 hand("別の切符") { deck.showOtherTickets() }
                 hand("即時切符") { deck.showInstant() }
                 if deck.reserved != nil, deck.destination?.action != .nextRide {
-                    hand("次の一本") {
-                        deck.selectNextRide()
-                        syncArrivalCover()
-                    }
+                    hand("次の一本") { deck.selectNextRide() }
                 }
             }
             if reduceMotion {
@@ -307,7 +293,6 @@ struct ArrivalInvalidateOverlay: View {
             List(otherFaces) { face in
                 Button(face.title) {
                     deck.selectOther(face)
-                    syncArrivalCover()
                 }
             }
             .navigationTitle("別の切符")
@@ -366,15 +351,6 @@ struct ArrivalInvalidateOverlay: View {
             )
         }
         deck.adoptReservation(reserved)
-        syncArrivalCover()
-    }
-
-    /// 行き先を変えた同じターンで、山の zoom source を外してから発車層が引き取る。
-    private func syncArrivalCover() {
-        let id = deck.destination?.face.id
-        if ticketMotion.arrivalCoverTicketID != id {
-            ticketMotion.arrivalCoverTicketID = id
-        }
     }
 
     private func runEntrance() {

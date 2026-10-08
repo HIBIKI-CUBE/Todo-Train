@@ -12,9 +12,6 @@ import SwiftUI
 final class TicketMotionBridge {
     /// Source id for `navigationTransition(.zoom)` on Focus cover.
     var zoomSourceID: UUID?
-    /// Ticket lifted on the arrival present layer.
-    /// Hub's deck and paused row must not register the same zoom source.
-    var arrivalCoverTicketID: UUID?
     /// Hide Focus without reverse-zoom so an interrupt ticket can be the next source.
     var suppressFocusCover = false
     /// Issued ticket playing on Hub/Content while Focus is suppressed.

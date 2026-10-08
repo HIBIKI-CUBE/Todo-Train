@@ -177,6 +177,8 @@ struct ContentView: View {
                             try sessionManager.boardFromArrivalSwipe(ticketID: ticketID)
                         }
                     )
+                    // fullScreenCover より後ろの overlay には、その手前の environment が届かない。
+                    .environment(ticketMotion)
                     .id(moment.id)
                 case .onTimeService:
                     if !isFocusPresented {
