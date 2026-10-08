@@ -9,13 +9,29 @@ import Foundation
 import SwiftData
 
 extension SessionManager {
-    /// 開いている切符のうち、次の一本として予約されている 1 枚。閉じた切符は予約なしと同じ。
+    /// 開いている切符のうち、まだ発車していない予約 1 枚。
+    /// 予約後にその切符で発車済みなら、到着画面では予約なし。記録自体は export に残す。
     func reservedNextTicket() -> Ticket? {
         openTicketsInHubOrder()
-            .filter(\.isReservedAsNextRide)
+            .filter { ticket in
+                guard ticket.isReservedAsNextRide else { return false }
+                return !hasBoardedSinceReservation(ticket)
+            }
             .max { lhs, rhs in
                 (lhs.reservedAt ?? .distantPast) < (rhs.reservedAt ?? .distantPast)
             }
+    }
+
+    /// 予約よりあとに発車した乗車、または予約よりあとに再乗車した区間がある。
+    func hasBoardedSinceReservation(_ ticket: Ticket) -> Bool {
+        guard let reservedAt = ticket.reservedAt else { return false }
+        return ticket.sessions.contains { session in
+            if session.startedAt >= reservedAt { return true }
+            if let segmentStartedAt = session.segmentStartedAt, segmentStartedAt >= reservedAt {
+                return true
+            }
+            return false
+        }
     }
 
     /// Hub の `sortOrder`。閉じた切符は含まない。
@@ -71,12 +87,6 @@ extension SessionManager {
         if changed {
             try save()
         }
-    }
-
-    /// その切符で発車したときに予約を外す。別の切符の予約は残す。
-    func releaseNextRideReservation(on ticket: Ticket) {
-        guard ticket.isReservedAsNextRide else { return }
-        clearReservationFields(ticket)
     }
 
     func clearReservationFields(_ ticket: Ticket) {

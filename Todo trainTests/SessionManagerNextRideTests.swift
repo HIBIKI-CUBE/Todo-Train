@@ -115,9 +115,8 @@ struct SessionManagerNextRideTests {
 
         try manager.arrive()
         try manager.board(ticket: reserved)
-        #expect(reserved.reservedAt == nil)
-        #expect(reserved.reservedFromRideId == nil)
-        #expect(reserved.reservedVia == nil)
+        #expect(reserved.reservedAt != nil)
+        #expect(reserved.reservedVia == .riding)
         #expect(manager.reservedNextTicket() == nil)
     }
 
@@ -136,7 +135,8 @@ struct SessionManagerNextRideTests {
 
         #expect(manager.phase == .running)
         #expect(manager.activeSession?.ticket?.id == reserved.id)
-        #expect(reserved.reservedAt == nil)
+        #expect(reserved.reservedAt != nil)
+        #expect(manager.reservedNextTicket() == nil)
     }
 
     @Test func passengerAboard_refusesReserveAndClear() throws {
