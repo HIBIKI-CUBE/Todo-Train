@@ -94,12 +94,14 @@ struct ArrivalInvalidateOverlay: View {
                         .padding(.horizontal, MarsTicketSpec.horizontalMargin)
                         .gesture(boardGesture)
                         .overlay {
-                            MarsTicketUsedMarks(
-                                punctuality: arrival.punctuality,
-                                stampSettled: impact
-                            )
-                            .padding(.horizontal, MarsTicketSpec.horizontalMargin)
-                            .opacity(Double(impact))
+                            if deck.stampedFace == nil {
+                                MarsTicketUsedMarks(
+                                    punctuality: arrival.punctuality,
+                                    stampSettled: impact
+                                )
+                                .padding(.horizontal, MarsTicketSpec.horizontalMargin)
+                                .opacity(Double(impact))
+                            }
                         }
                         .scaleEffect(1 - 0.012 * impact)
 
