@@ -9,7 +9,6 @@ import SwiftUI
 struct FocusView: View {
     @Environment(SessionManager.self) private var sessionManager
     @Environment(AppSettings.self) private var settings
-    @Environment(TransferCanvasPresenter.self) private var transferCanvas
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.verticalSizeClass) private var verticalSizeClass
@@ -19,6 +18,7 @@ struct FocusView: View {
     @State private var showExtendChips = false
     @State private var showPauseLimitSheet = false
     @State private var showInterruptIssue = false
+    @State private var showNextRideReserve = false
     @State private var pendingSwitchTicketID: UUID?
     @State private var errorMessage = ""
     @State private var showError = false
@@ -69,6 +69,10 @@ struct FocusView: View {
             QuickAddSheet(presentation: .focusInterrupt) { event in
                 boardIssuedInterrupt(event)
             }
+        }
+        .sheet(isPresented: $showNextRideReserve) {
+            NextRideReserveSheet()
+                .environment(sessionManager)
         }
         .alert("エラー", isPresented: $showError) {
             Button("OK", role: .cancel) {}
@@ -141,13 +145,16 @@ struct FocusView: View {
 
     private var headerStrip: some View {
         HStack(alignment: .center, spacing: TrainTheme.Space.sm) {
-            Text(title)
-                .font(.system(size: 18, weight: .semibold, design: .default))
-                .foregroundStyle(FocusPanel.ink)
-                .lineLimit(2)
-                .minimumScaleFactor(0.8)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityAddTraits(.isHeader)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.system(size: 18, weight: .semibold, design: .default))
+                    .foregroundStyle(FocusPanel.ink)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityAddTraits(.isHeader)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             if let label = headerStateLabel {
                 Text(label)
@@ -225,6 +232,7 @@ struct FocusView: View {
                 scheduledArrival: context.date.addingTimeInterval(remainingInterval),
                 predictedArrival: nil
             )
+            let reservedRide = showsNextRideReserve ? sessionManager.reservedNextTicket() : nil
 
             VStack(spacing: 0) {
                 FocusProgressBar(
@@ -254,7 +262,7 @@ struct FocusView: View {
                 .padding(.horizontal, 14)
                 .padding(.vertical, 12)
 
-                if !occupancy.rows.isEmpty {
+                if !occupancy.rows.isEmpty || reservedRide != nil {
                     VStack(alignment: .leading, spacing: 6) {
                         ForEach(occupancy.rows) { row in
                             OccupancyDestinationSign(
@@ -266,6 +274,14 @@ struct FocusView: View {
                                 action: row.id == occupancy.rows.first?.id
                                     ? occupancy.action : nil
                             )
+                        }
+                        if let reservedRide {
+                            Button {
+                                showNextRideReserve = true
+                            } label: {
+                                ReservedNextRideSign(title: reservedRide.title)
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
                     .padding(.horizontal, 14)
@@ -318,14 +334,15 @@ struct FocusView: View {
             } else {
                 FocusControlsView(
                     onPause: { run { try sessionManager.pause() } },
-                    onPartialDisembark: { partialDisembarkAndShowCanvas() },
+                    onReserve: { showNextRideReserve = true },
                     onArrive: { run { try sessionManager.arrive() } },
                     onExtendMenu: {
                         withAnimation(TrainTheme.Motion.soft) {
                             showExtendChips.toggle()
                         }
                     },
-                    onInterrupt: { showInterruptIssue = true }
+                    onInterrupt: { showInterruptIssue = true },
+                    showsReserve: showsNextRideReserve
                 )
             }
         }
@@ -337,6 +354,11 @@ struct FocusView: View {
 
     private var title: String {
         sessionManager.activeSession?.ticket?.title ?? "乗務中"
+    }
+
+    /// 乗客 aboard 中は予約欄を出さない。ボタン自体も予約した切符を示さない。
+    private var showsNextRideReserve: Bool {
+        !sessionManager.passengerChrome.locksDriving && sessionManager.fetchOpenPassengerRide() == nil
     }
 
     private var currentBudgetSeconds: TimeInterval {
@@ -510,20 +532,6 @@ struct FocusView: View {
         return (try? modelContext.fetch(descriptor))?.first
     }
 
-    private func partialDisembarkAndShowCanvas() {
-        guard let ticket = sessionManager.activeSession?.ticket else { return }
-        let sessionID = sessionManager.activeSession?.id
-        do {
-            // Enqueue before close: Focus fullScreenCover dismisses on phase change.
-            transferCanvas.enqueueAfterFocusDismiss(parent: ticket, sessionID: sessionID)
-            try sessionManager.partialDisembark()
-        } catch {
-            transferCanvas.clearPending()
-            errorMessage = error.localizedDescription
-            showError = true
-        }
-    }
-
     private func run(_ body: () throws -> Void) {
         do {
             try body()
@@ -531,6 +539,44 @@ struct FocusView: View {
             errorMessage = error.localizedDescription
             showError = true
         }
+    }
+}
+
+/// ダイヤの「次」とは別の行先。題名が主。見積もりの分は券面に残す。
+private struct ReservedNextRideSign: View {
+    var title: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Text("予約")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .frame(minWidth: 36)
+                .padding(.vertical, 4)
+                .background {
+                    RoundedRectangle(cornerRadius: 3, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.7), lineWidth: 1)
+                }
+                .padding(.top, 2)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.title3.weight(.medium))
+                    .tracking(StationSignMetrics.nameTracking(title, compact: false))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Rectangle()
+                    .fill(TrainTheme.rail.opacity(0.55))
+                    .frame(height: 4)
+                    .frame(maxWidth: .infinity)
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("予約 \(title)")
+        .accessibilityHint("予約欄を開く。乗車は始まらない")
     }
 }
 
@@ -545,7 +591,6 @@ struct FocusView: View {
     return FocusView()
         .environment(manager)
         .environment(AppSettings.shared)
-        .environment(TransferCanvasPresenter())
         .environment(TicketMotionBridge())
         .modelContainer(container)
 }

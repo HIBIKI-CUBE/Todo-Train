@@ -21,6 +21,9 @@ enum DeletionUndo {
         var dueDate: Date?
         var closedAt: Date?
         var closureKindRaw: String?
+        var reservedAt: Date?
+        var reservedFromRideId: UUID?
+        var reservedViaRaw: String?
         var tagIDs: [UUID]
         var sessions: [SessionRecord]
         var lineages: [LineageRecord]
@@ -37,6 +40,9 @@ enum DeletionUndo {
         var budgetSecondsAtStart: Int
         var outcomeRaw: String?
         var overtimeResolutionRaw: String?
+        var arrivalActionRaw: String?
+        var arrivalStampedAt: Date?
+        var startedFromRaw: String?
         var checkInOffsetSeconds: [Double]
         var checkInFiredCount: Int
         var pendingCheckInKindRaw: String?
@@ -93,6 +99,9 @@ enum DeletionUndo {
             dueDate: ticket.dueDate,
             closedAt: ticket.closedAt,
             closureKindRaw: ticket.closureKindRaw,
+            reservedAt: ticket.reservedAt,
+            reservedFromRideId: ticket.reservedFromRideId,
+            reservedViaRaw: ticket.reservedViaRaw,
             tagIDs: ticket.tags.map(\.id),
             sessions: ticket.sessions.map { captureSession($0) },
             lineages: lineages
@@ -111,6 +120,9 @@ enum DeletionUndo {
             budgetSecondsAtStart: session.budgetSecondsAtStart,
             outcomeRaw: session.outcomeRaw,
             overtimeResolutionRaw: session.overtimeResolutionRaw,
+            arrivalActionRaw: session.arrivalActionRaw,
+            arrivalStampedAt: session.arrivalStampedAt,
+            startedFromRaw: session.startedFromRaw,
             checkInOffsetSeconds: session.checkInOffsetSeconds,
             checkInFiredCount: session.checkInFiredCount,
             pendingCheckInKindRaw: session.pendingCheckInKindRaw,
@@ -168,6 +180,9 @@ enum DeletionUndo {
         ticket.dueDate = record.dueDate
         ticket.closedAt = record.closedAt
         ticket.closureKindRaw = record.closureKindRaw
+        ticket.reservedAt = record.reservedAt
+        ticket.reservedFromRideId = record.reservedFromRideId
+        ticket.reservedViaRaw = record.reservedViaRaw
         ticket.tags = record.tagIDs.compactMap { fetchTag($0, in: context) }
         for sessionRecord in record.sessions {
             restoreSession(sessionRecord, onto: ticket, into: context)
@@ -202,6 +217,11 @@ enum DeletionUndo {
         session.budgetSecondsAtStart = record.budgetSecondsAtStart
         session.outcomeRaw = record.outcomeRaw
         session.overtimeResolutionRaw = record.overtimeResolutionRaw
+        session.arrivalActionRaw = record.arrivalActionRaw
+        session.arrivalStampedAt = record.arrivalStampedAt
+        if let startedFromRaw = record.startedFromRaw {
+            session.startedFromRaw = startedFromRaw
+        }
         session.checkInOffsetSeconds = record.checkInOffsetSeconds
         session.checkInFiredCount = record.checkInFiredCount
         session.pendingCheckInKindRaw = record.pendingCheckInKindRaw

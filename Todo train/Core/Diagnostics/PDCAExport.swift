@@ -44,6 +44,9 @@ nonisolated enum PDCAExport {
         var estimatedSeconds: Int
         var tagCount: Int
         var rideCount: Int
+        var reservedAt: PDCANull<Date>
+        var reservedFromRideId: PDCANull<UUID>
+        var reservedVia: PDCANull<String>
     }
 
     struct RideRow: Encodable {
@@ -58,6 +61,9 @@ nonisolated enum PDCAExport {
         var overtimeResolution: PDCANull<String>
         var timetableHeld: Bool
         var checkInFiredCount: Int
+        var arrivalAction: PDCANull<String>
+        var arrivalStampedAt: PDCANull<Date>
+        var startedFrom: String
         /// 入る運行がなければキーごと省く。
         var serviceDayId: UUID?
     }
@@ -197,7 +203,10 @@ nonisolated enum PDCAExport {
                     closureKind: PDCANull(ticket.closureKind?.rawValue),
                     estimatedSeconds: ticket.estimatedSeconds,
                     tagCount: ticket.tags.count,
-                    rideCount: rideCountByTicket[ticket.id] ?? 0
+                    rideCount: rideCountByTicket[ticket.id] ?? 0,
+                    reservedAt: PDCANull(ticket.reservedAt),
+                    reservedFromRideId: PDCANull(ticket.reservedFromRideId),
+                    reservedVia: PDCANull(ticket.reservedVia?.rawValue)
                 )
             }
 
@@ -222,6 +231,9 @@ nonisolated enum PDCAExport {
                     overtimeResolution: PDCANull(session.overtimeResolution?.rawValue),
                     timetableHeld: session.timetableHeld,
                     checkInFiredCount: session.checkInFiredCount,
+                    arrivalAction: PDCANull(session.arrivalAction?.rawValue),
+                    arrivalStampedAt: PDCANull(session.arrivalStampedAt),
+                    startedFrom: session.startedFrom.rawValue,
                     serviceDayId: matchingServiceDayID(startedAt: session.startedAt, serviceDays: serviceDays)
                 )
             )

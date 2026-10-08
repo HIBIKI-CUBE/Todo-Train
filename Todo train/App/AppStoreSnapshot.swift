@@ -34,6 +34,9 @@ struct AppStoreSnapshot: Sendable {
         var dueDate: Date?
         var closedAt: Date?
         var closureKindRaw: String?
+        var reservedAt: Date?
+        var reservedFromRideId: UUID?
+        var reservedViaRaw: String?
         var tagIDs: [UUID]
     }
 
@@ -68,6 +71,9 @@ struct AppStoreSnapshot: Sendable {
         var budgetSecondsAtStart: Int
         var outcomeRaw: String?
         var overtimeResolutionRaw: String?
+        var arrivalActionRaw: String?
+        var arrivalStampedAt: Date?
+        var startedFromRaw: String?
         var checkInOffsetSeconds: [Double]
         var checkInFiredCount: Int
         var pendingCheckInKindRaw: String?
@@ -114,6 +120,9 @@ struct AppStoreSnapshot: Sendable {
                 dueDate: ticket.dueDate,
                 closedAt: ticket.closedAt,
                 closureKindRaw: ticket.closureKindRaw,
+                reservedAt: ticket.reservedAt,
+                reservedFromRideId: ticket.reservedFromRideId,
+                reservedViaRaw: ticket.reservedViaRaw,
                 tagIDs: ticket.tags.map(\.id)
             )
         }
@@ -151,6 +160,9 @@ struct AppStoreSnapshot: Sendable {
                 budgetSecondsAtStart: session.budgetSecondsAtStart,
                 outcomeRaw: session.outcomeRaw,
                 overtimeResolutionRaw: session.overtimeResolutionRaw,
+                arrivalActionRaw: session.arrivalActionRaw,
+                arrivalStampedAt: session.arrivalStampedAt,
+                startedFromRaw: session.startedFromRaw,
                 checkInOffsetSeconds: session.checkInOffsetSeconds,
                 checkInFiredCount: session.checkInFiredCount,
                 pendingCheckInKindRaw: session.pendingCheckInKindRaw,
@@ -216,6 +228,9 @@ struct AppStoreSnapshot: Sendable {
             ticket.dueDate = row.dueDate
             ticket.closedAt = row.closedAt
             ticket.closureKindRaw = row.closureKindRaw
+            ticket.reservedAt = row.reservedAt
+            ticket.reservedFromRideId = row.reservedFromRideId
+            ticket.reservedViaRaw = row.reservedViaRaw
             ticket.tags = row.tagIDs.compactMap { tagsByID[$0] }
             context.insert(ticket)
             ticketsByID[row.id] = ticket
@@ -263,6 +278,11 @@ struct AppStoreSnapshot: Sendable {
             session.budgetSecondsAtStart = row.budgetSecondsAtStart
             session.outcomeRaw = row.outcomeRaw
             session.overtimeResolutionRaw = row.overtimeResolutionRaw
+            session.arrivalActionRaw = row.arrivalActionRaw
+            session.arrivalStampedAt = row.arrivalStampedAt
+            if let startedFromRaw = row.startedFromRaw {
+                session.startedFromRaw = startedFromRaw
+            }
             session.checkInOffsetSeconds = row.checkInOffsetSeconds
             session.checkInFiredCount = row.checkInFiredCount
             session.pendingCheckInKindRaw = row.pendingCheckInKindRaw

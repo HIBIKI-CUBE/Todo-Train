@@ -23,6 +23,12 @@ final class WorkSession {
     var outcomeRaw: String?
     /// Raw value of `OvertimeResolution` when closed from overtime UI.
     var overtimeResolutionRaw: String?
+    /// Raw value of `ArrivalAction`. 検札前に閉じたときは nil。
+    var arrivalActionRaw: String?
+    /// 検札印を押した時刻。検札前に閉じたときは nil。
+    var arrivalStampedAt: Date?
+    /// Raw value of `RideStartOrigin`. 検札後の右スワイプだけ `arrivalSwipe`。
+    var startedFromRaw: String = RideStartOrigin.other.rawValue
 
     /// Elapsed-active offsets (seconds) for progress 車内放送.
     var checkInOffsetSeconds: [Double] = []
@@ -59,6 +65,16 @@ final class WorkSession {
         set { overtimeResolutionRaw = newValue?.rawValue }
     }
 
+    var arrivalAction: ArrivalAction? {
+        get { arrivalActionRaw.flatMap(ArrivalAction.init(rawValue:)) }
+        set { arrivalActionRaw = newValue?.rawValue }
+    }
+
+    var startedFrom: RideStartOrigin {
+        get { RideStartOrigin(rawValue: startedFromRaw) ?? .other }
+        set { startedFromRaw = newValue.rawValue }
+    }
+
     var isOpen: Bool { endedAt == nil }
     var isPaused: Bool { pausedAt != nil && endedAt == nil }
 
@@ -79,6 +95,9 @@ final class WorkSession {
         self.budgetSecondsAtStart = estimatedSecondsAtStart
         self.outcomeRaw = nil
         self.overtimeResolutionRaw = nil
+        self.arrivalActionRaw = nil
+        self.arrivalStampedAt = nil
+        self.startedFromRaw = RideStartOrigin.other.rawValue
         self.checkInOffsetSeconds = []
         self.checkInFiredCount = 0
         self.pendingCheckInKindRaw = nil
