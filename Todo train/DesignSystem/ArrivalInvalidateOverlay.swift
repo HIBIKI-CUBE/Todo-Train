@@ -6,6 +6,7 @@
 //  別の切符と即時切符は到着画面の上に重ね、閉じると到着画面に戻る。
 //
 
+import SwiftData
 import SwiftUI
 #if canImport(UIKit)
 import UIKit
