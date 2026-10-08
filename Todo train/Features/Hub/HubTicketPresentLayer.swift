@@ -26,6 +26,8 @@ struct HubTicketPresentLayer: View {
     let canBoard: Bool
     let disabledReason: String?
     var zoomNamespace: Namespace.ID
+    /// False while another view in this namespace still owns the same ticket id.
+    var registersZoomSource: Bool = true
     let onDismiss: () -> Void
     var onHoldDragEnded: (DragGesture.Value) -> TicketStackLayout.HoldRelease
     let onOpenDetail: () -> Void
@@ -183,7 +185,13 @@ struct HubTicketPresentLayer: View {
             anchor: .center,
             perspective: 0.65
         )
-        .matchedTransitionSource(id: ticket.id, in: zoomNamespace)
+        .modifier(
+            PresentZoomSource(
+                enabled: registersZoomSource,
+                ticketID: ticket.id,
+                namespace: zoomNamespace
+            )
+        )
         .allowsHitTesting(looksSettled)
         .modifier(
             PresentEditingMenu(
@@ -261,6 +269,20 @@ struct HubTicketPresentLayer: View {
                     }
                 }
             }
+    }
+}
+
+private struct PresentZoomSource: ViewModifier {
+    let enabled: Bool
+    let ticketID: UUID
+    let namespace: Namespace.ID
+
+    func body(content: Content) -> some View {
+        if enabled {
+            content.matchedTransitionSource(id: ticketID, in: namespace)
+        } else {
+            content
+        }
     }
 }
 

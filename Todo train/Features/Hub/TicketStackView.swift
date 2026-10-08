@@ -20,8 +20,8 @@ struct TicketStackView: View {
     let canBoard: Bool
     let boardDisabledReason: String?
     @Binding var focusedTicketID: UUID?
-    /// Real card stays in layout but invisible while the issue overlay is the traveling identity.
-    var hiddenTicketID: UUID? = nil
+    /// Real cards stay in layout but invisible while another layer is the traveling identity.
+    var hiddenTicketIDs: Set<UUID> = []
     var isPuttingBack: Bool = false
     var onFocusTicket: (UUID) -> Void
     var onDismissFocus: () -> Void
@@ -69,7 +69,7 @@ struct TicketStackView: View {
 
         return TicketDeckLayout() {
             ForEach(Array(visibleTickets.enumerated()), id: \.element.id) { index, ticket in
-                let isHidden = ticket.id == hiddenTicketID
+                let isHidden = hiddenTicketIDs.contains(ticket.id)
                 let isFocused = ticket.id == focusedTicketID
                 let peerFocused = dimPeers && !isFocused && !isHidden
                 let tilt = TicketStackLayout.tiltDegrees(index: index, count: visibleTickets.count)
