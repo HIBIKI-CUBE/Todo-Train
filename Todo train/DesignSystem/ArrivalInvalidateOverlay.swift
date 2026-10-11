@@ -509,6 +509,7 @@ struct ArrivalInvalidateOverlay: View {
             alreadyDone: session?.overtimeResolution == .alreadyDone,
             nextWasReserved: deck.reserved != nil,
             continuedFromStamp: session?.startedFrom == .arrivalSwipe
+                || session?.startedFrom == .passengerAlight
         )
     }
 
