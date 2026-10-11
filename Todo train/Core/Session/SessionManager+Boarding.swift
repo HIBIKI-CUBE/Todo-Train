@@ -46,7 +46,7 @@ extension SessionManager {
             }
         } catch {
             modelContext.delete(ticket)
-            try? modelContext.save()
+            _ = saveBestEffort()
             throw error
         }
     }

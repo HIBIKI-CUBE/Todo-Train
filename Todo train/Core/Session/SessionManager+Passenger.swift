@@ -23,17 +23,26 @@ extension SessionManager {
             now: now,
             deviceID: deviceIdentity.id
         )
-        modelContext.insert(PassengerRide(snapshot: snapshot))
+        let ride = PassengerRide(snapshot: snapshot)
+        modelContext.insert(ride)
+        let previousMemory = passengerMemory
         passengerMemory.offerAnchor = nil
         passengerMemory.offerAnchorIntervalID = nil
         passengerMemory.collapsedIntervalID = nil
-        try? save()
+        guard saveBestEffort() else {
+            modelContext.delete(ride)
+            passengerMemory = previousMemory
+            return
+        }
         reconcile(now: now)
     }
 
     func openEmergencyDoor(now: Date? = nil) {
         let now = now ?? clock.now
         guard let ride = fetchOpenPassengerRide() else { return }
+        let previousEndedAt = ride.endedAt
+        let previousReason = ride.endReason
+        let previousMemory = passengerMemory
         let opened = PassengerLane.emergency(ride: ride.snapshot, now: now)
         ride.endedAt = opened.ride.endedAt
         ride.endReason = .emergency
@@ -41,7 +50,12 @@ extension SessionManager {
         passengerMemory.offerAnchor = nil
         passengerMemory.offerAnchorIntervalID = nil
         passengerMemory.collapsedIntervalID = nil
-        try? save()
+        guard saveBestEffort() else {
+            ride.endedAt = previousEndedAt
+            ride.endReason = previousReason
+            passengerMemory = previousMemory
+            return
+        }
         reconcile(now: now)
     }
 
@@ -74,7 +88,7 @@ extension SessionManager {
                 changed = true
             }
         }
-        if changed { try? save() }
+        if changed { _ = saveBestEffort() }
 
         switch effect.notify {
         case .none:

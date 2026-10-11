@@ -732,7 +732,12 @@ struct HubView: View {
             try sessionManager.deleteTicket(ticket)
             undoCenter.offer(message: DeletionUndo.bannerMessage(ticketTitle: title)) {
                 withAnimation {
-                    try? sessionManager.restoreDeletedTicket(record)
+                    do {
+                        try sessionManager.restoreDeletedTicket(record)
+                    } catch {
+                        errorMessage = error.localizedDescription
+                        showError = true
+                    }
                 }
             }
         } catch {

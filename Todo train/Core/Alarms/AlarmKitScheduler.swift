@@ -267,11 +267,23 @@ final class AlarmKitScheduler: AlarmScheduling {
             switch alarm.state {
             case .paused:
                 if previous != .paused {
-                    try? manager.pauseFromAlarmKit()
+                    do {
+                        try manager.pauseFromAlarmKit()
+                    } catch {
+                        Self.log.error(
+                            "pauseFromAlarmKit failed for \(alarm.id.uuidString, privacy: .public): \(error.localizedDescription, privacy: .public)"
+                        )
+                    }
                 }
             case .countdown:
                 if previous == .paused {
-                    try? manager.resumeFromAlarmKit()
+                    do {
+                        try manager.resumeFromAlarmKit()
+                    } catch {
+                        Self.log.error(
+                            "resumeFromAlarmKit failed for \(alarm.id.uuidString, privacy: .public): \(error.localizedDescription, privacy: .public)"
+                        )
+                    }
                 }
             default:
                 break

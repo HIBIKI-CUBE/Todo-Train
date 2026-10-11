@@ -430,7 +430,12 @@ struct HistoryView: View {
                     )
                 ) {
                     withAnimation {
-                        try? sessionManager.restoreDeletedTicket(record)
+                        do {
+                            try sessionManager.restoreDeletedTicket(record)
+                        } catch {
+                            errorMessage = error.localizedDescription
+                            showError = true
+                        }
                     }
                 }
             } else {
@@ -443,7 +448,12 @@ struct HistoryView: View {
                     )
                 ) {
                     withAnimation {
-                        try? sessionManager.restoreDeletedSession(record)
+                        do {
+                            try sessionManager.restoreDeletedSession(record)
+                        } catch {
+                            errorMessage = error.localizedDescription
+                            showError = true
+                        }
                     }
                 }
             }

@@ -283,7 +283,11 @@ struct TicketDetailView: View {
             try sessionManager.deleteTicket(ticket)
             undoCenter.offer(message: DeletionUndo.bannerMessage(ticketTitle: title)) {
                 withAnimation {
-                    try? sessionManager.restoreDeletedTicket(record)
+                    do {
+                        try sessionManager.restoreDeletedTicket(record)
+                    } catch {
+                        undoCenter.restoreErrorMessage = error.localizedDescription
+                    }
                 }
             }
             dismiss()
@@ -311,7 +315,11 @@ struct TicketDetailView: View {
                     )
                 ) {
                     withAnimation {
-                        try? sessionManager.restoreDeletedTicket(record)
+                        do {
+                            try sessionManager.restoreDeletedTicket(record)
+                        } catch {
+                            undoCenter.restoreErrorMessage = error.localizedDescription
+                        }
                     }
                 }
                 dismiss()
@@ -325,7 +333,11 @@ struct TicketDetailView: View {
                     )
                 ) {
                     withAnimation {
-                        try? sessionManager.restoreDeletedSession(record)
+                    do {
+                        try sessionManager.restoreDeletedSession(record)
+                    } catch {
+                        undoCenter.restoreErrorMessage = error.localizedDescription
+                    }
                     }
                 }
             }

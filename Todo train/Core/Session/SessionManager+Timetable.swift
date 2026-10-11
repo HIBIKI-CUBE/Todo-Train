@@ -130,7 +130,7 @@ extension SessionManager {
             return
         }
         // Membership sees every calendar so hiding a calendar does not 通過.
-        persist(TimetableAdoption.refreshCalendarMembership(
+        let undo = persist(TimetableAdoption.refreshCalendarMembership(
             occurrences: fetched,
             membership: loadMembership()
         ))
@@ -138,14 +138,16 @@ extension SessionManager {
             TimetableAdoption.isEligible(occurrence)
                 && settings.isTimetableCalendarVisible(occurrence.calendarIdentifier)
         }
-        try? save()
+        guard saveBestEffort() else {
+            undo.revert(in: modelContext)
+            return
+        }
         lastScheduledEndBellFireAt = nil
         reconcile(now: now)
     }
 
     func adoptOccurrence(_ occurrence: CalendarOccurrence, scope: TimetableAdoptionScope) {
-        persist(TimetableAdoption.adoptOccurrence(occurrence, scope: scope, membership: loadMembership()))
-        try? save()
+        guard commitMembership(TimetableAdoption.adoptOccurrence(occurrence, scope: scope, membership: loadMembership())) else { return }
         lastScheduledEndBellFireAt = nil
         reconcile()
     }
@@ -157,8 +159,7 @@ extension SessionManager {
     }
 
     func unadopt(blockID: UUID, scope: TimetableAdoptionScope) {
-        persist(TimetableAdoption.unadopt(blockID: blockID, scope: scope, membership: loadMembership()))
-        try? save()
+        guard commitMembership(TimetableAdoption.unadopt(blockID: blockID, scope: scope, membership: loadMembership())) else { return }
         lastScheduledEndBellFireAt = nil
         reconcile()
     }
@@ -170,22 +171,20 @@ extension SessionManager {
     }
 
     func unadoptOccurrence(_ occurrence: CalendarOccurrence, scope: TimetableAdoptionScope) {
-        persist(TimetableAdoption.unadoptOccurrence(occurrence, scope: scope, membership: loadMembership()))
-        try? save()
+        guard commitMembership(TimetableAdoption.unadoptOccurrence(occurrence, scope: scope, membership: loadMembership())) else { return }
         lastScheduledEndBellFireAt = nil
         reconcile()
     }
 
     func adoptManualBlock(title: String, startsAt: Date, endsAt: Date) {
-        persist(
+        guard commitMembership(
             TimetableAdoption.adoptManual(
                 title: title.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? TimetableCopy.emptyManualTitle,
                 startsAt: startsAt,
                 endsAt: endsAt,
                 membership: loadMembership()
             )
-        )
-        try? save()
+        ) else { return }
         lastScheduledEndBellFireAt = nil
         reconcile()
     }
@@ -263,7 +262,10 @@ extension SessionManager {
                 protectionBoundary: protectionBoundary
             )
             modelContext.insert(guardModel)
-            try? save()
+            guard saveBestEffort() else {
+                modelContext.delete(guardModel)
+                return
+            }
             scheduleTimetableNotification(
                 guardID: guardModel.id,
                 blockID: blockID,
@@ -273,13 +275,21 @@ extension SessionManager {
             openGuard?.resolvedAt = now
             try? applyTimetableProtectionPause(at: pauseAt)
         case .resolve:
+            let previousResolved = openGuard?.resolvedAt
             openGuard?.resolvedAt = now
+            guard saveBestEffort() else {
+                openGuard?.resolvedAt = previousResolved
+                return
+            }
             cancelTimetableNotification(sessionID: openGuard?.sessionID ?? activeSession?.id)
-            try? save()
         case .invalidate:
+            let previousInvalidated = openGuard?.invalidatedAt
             openGuard?.invalidatedAt = now
+            guard saveBestEffort() else {
+                openGuard?.invalidatedAt = previousInvalidated
+                return
+            }
             cancelTimetableNotification(sessionID: openGuard?.sessionID ?? activeSession?.id)
-            try? save()
         }
     }
 
@@ -331,7 +341,7 @@ extension SessionManager {
         }
         if didChange {
             bumpCompanionSync()
-            try? save()
+            _ = saveBestEffort()
         }
     }
 
@@ -377,21 +387,24 @@ extension SessionManager {
         )
     }
 
-    private func persist(_ membership: TimetableMembership) {
+    @discardableResult
+    private func commitMembership(_ membership: TimetableMembership) -> Bool {
+        let undo = persist(membership)
+        guard saveBestEffort() else {
+            undo.revert(in: modelContext)
+            return false
+        }
+        return true
+    }
+
+    private func persist(_ membership: TimetableMembership) -> TimetablePersistUndo {
+        var undo = TimetablePersistUndo()
         let existingBlocks = fetchTimetableBlocks()
         let blocksByID = Dictionary(uniqueKeysWithValues: existingBlocks.map { ($0.id, $0) })
         for record in membership.blocks {
             if let model = blocksByID[record.id] {
-                model.title = record.title
-                model.startsAt = record.startsAt
-                model.endsAt = record.endsAt
-                model.source = record.source
-                model.adoptionScope = record.adoptionScope
-                model.isCancelled = record.isCancelled
-                model.needsReview = record.needsReview
-                model.calendarEventIdentifier = record.calendarEventIdentifier
-                model.calendarRecurrenceIdentifier = record.calendarRecurrenceIdentifier
-                model.occurrenceStartKey = record.occurrenceStartKey
+                undo.previousBlocks.append((model, TimetablePersistUndo.record(from: model)))
+                TimetablePersistUndo.apply(record, to: model)
             } else {
                 let model = TimetableBlock(
                     id: record.id,
@@ -407,6 +420,7 @@ extension SessionManager {
                 model.isCancelled = record.isCancelled
                 model.needsReview = record.needsReview
                 modelContext.insert(model)
+                undo.insertedBlocks.append(model)
             }
         }
 
@@ -414,10 +428,8 @@ extension SessionManager {
         let rulesByID = Dictionary(uniqueKeysWithValues: existingRules.map { ($0.id, $0) })
         for record in membership.rules {
             if let model = rulesByID[record.id] {
-                model.recurrenceIdentifier = record.recurrenceIdentifier
-                model.title = record.title
-                model.adopted = record.adopted
-                model.excludedOccurrenceStarts = record.excludedOccurrenceStarts
+                undo.previousRules.append((model, TimetablePersistUndo.record(from: model)))
+                TimetablePersistUndo.apply(record, to: model)
             } else {
                 let model = TimetableSeriesRule(
                     id: record.id,
@@ -427,7 +439,78 @@ extension SessionManager {
                 )
                 model.excludedOccurrenceStarts = record.excludedOccurrenceStarts
                 modelContext.insert(model)
+                undo.insertedRules.append(model)
             }
         }
+        return undo
+    }
+}
+
+/// Field snapshot for one `persist` call. A failed save reverts these models only.
+private struct TimetablePersistUndo {
+    var insertedBlocks: [TimetableBlock] = []
+    var insertedRules: [TimetableSeriesRule] = []
+    var previousBlocks: [(TimetableBlock, TimetableBlockRecord)] = []
+    var previousRules: [(TimetableSeriesRule, TimetableSeriesRecord)] = []
+
+    func revert(in context: ModelContext) {
+        for block in insertedBlocks {
+            context.delete(block)
+        }
+        for rule in insertedRules {
+            context.delete(rule)
+        }
+        for (model, record) in previousBlocks {
+            Self.apply(record, to: model)
+        }
+        for (model, record) in previousRules {
+            Self.apply(record, to: model)
+        }
+    }
+
+    static func record(from block: TimetableBlock) -> TimetableBlockRecord {
+        TimetableBlockRecord(
+            id: block.id,
+            title: block.title,
+            startsAt: block.startsAt,
+            endsAt: block.endsAt,
+            source: block.source,
+            adoptionScope: block.adoptionScope,
+            isCancelled: block.isCancelled,
+            needsReview: block.needsReview,
+            calendarEventIdentifier: block.calendarEventIdentifier,
+            calendarRecurrenceIdentifier: block.calendarRecurrenceIdentifier,
+            occurrenceStartKey: block.occurrenceStartKey
+        )
+    }
+
+    static func record(from rule: TimetableSeriesRule) -> TimetableSeriesRecord {
+        TimetableSeriesRecord(
+            id: rule.id,
+            recurrenceIdentifier: rule.recurrenceIdentifier,
+            title: rule.title,
+            adopted: rule.adopted,
+            excludedOccurrenceStarts: rule.excludedOccurrenceStarts
+        )
+    }
+
+    static func apply(_ record: TimetableBlockRecord, to model: TimetableBlock) {
+        model.title = record.title
+        model.startsAt = record.startsAt
+        model.endsAt = record.endsAt
+        model.source = record.source
+        model.adoptionScope = record.adoptionScope
+        model.isCancelled = record.isCancelled
+        model.needsReview = record.needsReview
+        model.calendarEventIdentifier = record.calendarEventIdentifier
+        model.calendarRecurrenceIdentifier = record.calendarRecurrenceIdentifier
+        model.occurrenceStartKey = record.occurrenceStartKey
+    }
+
+    static func apply(_ record: TimetableSeriesRecord, to model: TimetableSeriesRule) {
+        model.recurrenceIdentifier = record.recurrenceIdentifier
+        model.title = record.title
+        model.adopted = record.adopted
+        model.excludedOccurrenceStarts = record.excludedOccurrenceStarts
     }
 }

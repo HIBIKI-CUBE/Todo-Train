@@ -52,7 +52,7 @@ extension SessionManager {
             case .idle:
                 session.pendingCheckIn = nil
                 bumpCompanionSync()
-                try? save()
+                _ = saveBestEffort()
                 return
             case .none:
                 break
@@ -71,7 +71,7 @@ extension SessionManager {
             ) != nil else { return }
             session.checkInFiredCount += 1
             bumpCompanionSync()
-            try? save()
+            _ = saveBestEffort()
             reconcile(now: now)
             return
         }
@@ -115,7 +115,10 @@ extension SessionManager {
         )
         let fireAt = now.addingTimeInterval(delay)
         session.awayDueAt = fireAt
-        try? save()
+        guard saveBestEffort() else {
+            session.awayDueAt = nil
+            return
+        }
         if awayInterruptChannel == .localNotification {
             checkInNotifier.scheduleAway(
                 sessionID: session.id,
@@ -141,7 +144,7 @@ extension SessionManager {
             session.pendingCheckIn = nil
             changed = true
         }
-        if changed { try? save() }
+        if changed { _ = saveBestEffort() }
         checkInNotifier.cancel(sessionID: session.id)
         if !session.isPaused, session.remainingSeconds(at: now) > 0, ownsDeviceSideEffects(session) {
             refreshProgressCheckInNotifications(for: session, now: now)
@@ -186,7 +189,7 @@ extension SessionManager {
                 cancelAwayFireTask()
             }
             checkInHapticTick += 1
-            try? save()
+            _ = saveBestEffort()
         }
 
         switch action {
@@ -225,7 +228,7 @@ extension SessionManager {
             session.awayDueAt = nil
             cancelAwayFireTask()
             checkInNotifier.cancel(sessionID: session.id)
-            try? save()
+            _ = saveBestEffort()
             reconcile(now: now)
             return
         }
@@ -259,8 +262,12 @@ extension SessionManager {
             )
             guard let line = lines.first.map(Self.sanitizeCheckInLine), !line.isEmpty else { return }
             guard let current = self.activeSession, current.id == sessionID, current.isOpen else { return }
+            let previousLine = current.checkInPromptLine
             current.checkInPromptLine = line
-            try? self.save()
+            guard self.saveBestEffort() else {
+                current.checkInPromptLine = previousLine
+                return
+            }
             self.refreshProgressCheckInNotifications(for: current, now: self.clock.now)
         }
     }
@@ -298,7 +305,7 @@ extension SessionManager {
         session.awayDueAt = nil
         cancelAwayFireTask()
         checkInNotifier.cancel(sessionID: session.id)
-        try? save()
+        _ = saveBestEffort()
     }
 
     func refreshPendingCheckIn(_ session: WorkSession, now: Date) {
@@ -309,7 +316,7 @@ extension SessionManager {
                 session.awayDueAt = nil
                 cancelAwayFireTask()
                 checkInNotifier.cancel(sessionID: session.id)
-                try? save()
+                _ = saveBestEffort()
             }
             return
         }
@@ -319,7 +326,7 @@ extension SessionManager {
                 session.awayDueAt = nil
                 cancelAwayFireTask()
                 checkInNotifier.cancel(sessionID: session.id)
-                try? save()
+                _ = saveBestEffort()
             }
             return
         }
@@ -346,7 +353,7 @@ extension SessionManager {
             cancelAwayFireTask()
             checkInHapticTick += 1
             bumpCompanionSync()
-            try? save()
+            _ = saveBestEffort()
             return
         }
 

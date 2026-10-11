@@ -22,6 +22,8 @@ final class SessionManager {
     var needsServiceDayEndPrompt = false
 
     let modelContext: ModelContext
+    /// Tests set this so `save()` throws before the store write.
+    var saveErrorForTesting: Error?
     let clock: any SessionClock
     let calendar: Calendar
     let settings: AppSettings

@@ -51,6 +51,15 @@ struct ContentView: View {
         }
         .animation(TrainTheme.Motion.soft, value: passengerOfferMotion)
         .animation(.easeInOut(duration: 0.25), value: undoCenter.bannerMessage)
+        .errorAlert(
+            isPresented: Binding(
+                get: { undoCenter.restoreErrorMessage != nil },
+                set: { presented in
+                    if !presented { undoCenter.restoreErrorMessage = nil }
+                }
+            ),
+            message: undoCenter.restoreErrorMessage ?? ""
+        )
         .onAppear {
             if !didRecoverOnLaunch {
                 recoverOnLaunch()
