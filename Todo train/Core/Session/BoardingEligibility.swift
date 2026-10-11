@@ -52,6 +52,19 @@ enum BoardingEligibility: Equatable, Sendable {
         }
     }
 
+    /// Passenger and service-day failures. `board` throws these before it
+    /// adopts a running session or reports a closed ticket. A running ride
+    /// and the pause limit stay with the caller: adoption still heals a stale
+    /// phase, and resume ignores the cap.
+    func assertBeforeAdoptingRunningSession() throws {
+        switch self {
+        case .allowed, .blocked(.alreadyBoarding), .blocked(.pauseLimitReached):
+            return
+        case .blocked(let error):
+            throw error
+        }
+    }
+
     static func evaluate(
         isInService: Bool,
         needsServiceDayEnd: Bool,

@@ -12,17 +12,26 @@ import UIKit
 #endif
 
 extension SessionManager {
-    func ensureServiceAllowsBoarding(at now: Date) throws {
+    /// Refresh the open service day and the end-of-day flag without throwing.
+    /// `boardingEligibility` reads those flags, so they have to match the
+    /// store before the gate is consulted.
+    func syncServiceDayForBoarding(at now: Date) {
         let todayKey = ServiceDay.dayKey(for: now, calendar: calendar)
-
         guard let day = activeServiceDay ?? fetchOpenServiceDay(), day.isOpen else {
-            throw SessionError.noActiveService
+            needsServiceDayEndPrompt = false
+            return
         }
         activeServiceDay = day
+        needsServiceDayEndPrompt = day.calendarDayKey != todayKey
+    }
 
-        if day.calendarDayKey != todayKey {
-            needsServiceDayEndPrompt = true
+    func ensureServiceAllowsBoarding(at now: Date) throws {
+        syncServiceDayForBoarding(at: now)
+        if needsServiceDayEndPrompt {
             throw SessionError.serviceDayNeedsEnd
+        }
+        guard isInService else {
+            throw SessionError.noActiveService
         }
     }
 
