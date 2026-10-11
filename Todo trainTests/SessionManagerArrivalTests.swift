@@ -52,6 +52,25 @@ struct SessionManagerArrivalTests {
         #expect(next.sessions.isEmpty)
     }
 
+    @Test func recordArrivalStamp_withoutNextTicket_recordsTheStampOnly() throws {
+        let (manager, context, clock, _) = try SessionManagerFixtures.makeHarness()
+        try manager.startService()
+        let ticket = try SessionManagerFixtures.makeTicket(context, seconds: 600)
+        try manager.board(ticket: ticket)
+        let rideID = try #require(manager.activeSession?.id)
+        try manager.arrive()
+        clock.advance(by: 5)
+
+        try manager.recordArrivalStamp(sessionID: rideID, action: nil)
+
+        let ride = try #require(manager.fetchWorkSession(id: rideID))
+        #expect(ride.arrivalAction == nil)
+        #expect(ride.arrivalStampedAt == clock.now)
+        #expect(manager.phase == .idle)
+        #expect(manager.activeSession == nil)
+        #expect(manager.punctualityMoment?.arrivedSessionID == rideID)
+    }
+
     @Test func dismissWithoutStamp_keepsTheArrivalRecord() throws {
         let (manager, context, _, _) = try SessionManagerFixtures.makeHarness()
         try manager.startService()

@@ -10,7 +10,8 @@ import SwiftData
 
 extension SessionManager {
     /// 検札印。行き先と時刻だけを残し、次の乗車は始めない。
-    func recordArrivalStamp(sessionID: UUID, action: ArrivalAction, now: Date? = nil) throws {
+    /// `action == nil` は、次の切符を指名しないと決めて押した印。
+    func recordArrivalStamp(sessionID: UUID, action: ArrivalAction?, now: Date? = nil) throws {
         let now = now ?? clock.now
         guard let session = fetchWorkSession(id: sessionID), session.outcome == .arrived else {
             throw SessionError.noActiveSession

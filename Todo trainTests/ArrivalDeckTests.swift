@@ -26,7 +26,7 @@ struct ArrivalDeckTests {
         #expect(deck.reserved == nil)
         #expect(deck.destination == nil)
         #expect(!deck.canStamp)
-        #expect(deck.stampSelection() == nil)
+        #expect(deck.stampChoice() == nil)
     }
 
     @Test func otherAndInstant_enableStamp_andPickerDismissKeepsArrival() {
@@ -41,8 +41,7 @@ struct ArrivalDeckTests {
 
         deck.selectOther(other)
         #expect(deck.canStamp)
-        #expect(deck.stampSelection()?.action == .otherTicket)
-        #expect(deck.stampSelection()?.face.id == other.id)
+        #expect(deck.stampChoice() == .ticket(ArrivalDestination(action: .otherTicket, face: other)))
 
         deck.showInstant()
         #expect(!deck.canStamp)
@@ -51,17 +50,17 @@ struct ArrivalDeckTests {
         #expect(deck.canStamp)
 
         deck.selectInstant(instant)
-        #expect(deck.stampSelection()?.action == .instantTicket)
+        #expect(deck.stampChoice() == .ticket(ArrivalDestination(action: .instantTicket, face: instant)))
     }
 
     @Test func stamp_recordsTheChoice_andDoesNotClearItIntoARide() {
         var deck = ArrivalDeck(reserved: reserved)
-        let selection = deck.stampSelection()
-        #expect(selection?.action == .nextRide)
+        let selection = deck.stampChoice()
+        #expect(selection == .ticket(ArrivalDestination(action: .nextRide, face: reserved)))
         deck.markStamped()
         #expect(deck.stampedFace?.id == reserved.id)
         #expect(!deck.canStamp)
-        #expect(deck.stampSelection() == nil)
+        #expect(deck.stampChoice() == nil)
     }
 
     @Test func otherTicket_cannotBeTheReservedTicket() {
@@ -130,6 +129,42 @@ struct ArrivalDeckTests {
         deck.adoptReservation(reserved)
         #expect(deck.reserved?.id == replacement.id)
         #expect(deck.stampedFace?.id == other.id)
+    }
+
+    @Test func noNextTicket_enablesStampWithoutARide() {
+        var deck = ArrivalDeck(reserved: nil)
+        deck.selectNoNext()
+        #expect(deck.declinedNext)
+        #expect(deck.destination == nil)
+        #expect(deck.canStamp)
+        #expect(deck.stampChoice() == .noNextTicket)
+        deck.markStamped()
+        #expect(deck.didStamp)
+        #expect(deck.stampedFace == nil)
+        #expect(!deck.canStamp)
+        #expect(deck.boardTicketID(
+            translation: CGSize(width: 180, height: 0),
+            predictedEnd: CGSize(width: 220, height: 0),
+            leadingIsPositiveX: true
+        ) == nil)
+
+        var reservedDeck = ArrivalDeck(reserved: reserved)
+        reservedDeck.selectNoNext()
+        #expect(reservedDeck.stampChoice() == .noNextTicket)
+        reservedDeck.selectNextRide()
+        #expect(reservedDeck.declinedNext == false)
+        #expect(reservedDeck.destination?.action == .nextRide)
+    }
+
+    @Test func declinedChoice_survivesReservationRefresh() {
+        var deck = ArrivalDeck(reserved: reserved)
+        deck.selectNoNext()
+        let replacement = ArrivalTicketFace(id: UUID(), title: "差し替え", minutes: 20)
+        deck.adoptReservation(replacement)
+        #expect(deck.reserved?.id == replacement.id)
+        #expect(deck.declinedNext)
+        #expect(deck.destination == nil)
+        #expect(deck.stampChoice() == .noNextTicket)
     }
 
     @Test func choosingAnother_thenReturningToNextRide() {

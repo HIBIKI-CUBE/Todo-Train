@@ -19,6 +19,11 @@ struct ArrivalDestination: Equatable, Sendable {
     var face: ArrivalTicketFace
 }
 
+enum ArrivalStampChoice: Equatable, Sendable {
+    case ticket(ArrivalDestination)
+    case noNextTicket
+}
+
 /// 到着画面の中だけで持つ選択。ピッカーを閉じても到着画面は閉じない。
 struct ArrivalDeck: Equatable, Sendable {
     enum Picker: Equatable, Sendable {
@@ -28,9 +33,12 @@ struct ArrivalDeck: Equatable, Sendable {
 
     var reserved: ArrivalTicketFace?
     var destination: ArrivalDestination?
+    /// 次の切符を指名しない、と決めた。
+    var declinedNext = false
     var picker: Picker?
-    /// 検札後。この時点ではまだ発車していない。
+    /// 検札後。切符を指名していないときは nil。発車はまだしない。
     var stampedFace: ArrivalTicketFace?
+    var didStamp = false
 
     init(reserved: ArrivalTicketFace?) {
         self.reserved = reserved
@@ -40,16 +48,16 @@ struct ArrivalDeck: Equatable, Sendable {
     }
 
     var canStamp: Bool {
-        stampedFace == nil && picker == nil && destination != nil
+        !didStamp && picker == nil && (destination != nil || declinedNext)
     }
 
     mutating func showOtherTickets() {
-        guard stampedFace == nil else { return }
+        guard !didStamp else { return }
         picker = .otherTickets
     }
 
     mutating func showInstant() {
-        guard stampedFace == nil else { return }
+        guard !didStamp else { return }
         picker = .instant
     }
 
@@ -59,39 +67,58 @@ struct ArrivalDeck: Equatable, Sendable {
     }
 
     mutating func selectNextRide() {
-        guard stampedFace == nil, let reserved else { return }
+        guard !didStamp, let reserved else { return }
+        declinedNext = false
         destination = ArrivalDestination(action: .nextRide, face: reserved)
         picker = nil
     }
 
     mutating func selectOther(_ face: ArrivalTicketFace) {
-        guard stampedFace == nil, face.id != reserved?.id else { return }
+        guard !didStamp, face.id != reserved?.id else { return }
+        declinedNext = false
         destination = ArrivalDestination(action: .otherTicket, face: face)
         picker = nil
     }
 
     mutating func selectInstant(_ face: ArrivalTicketFace) {
-        guard stampedFace == nil else { return }
+        guard !didStamp else { return }
+        declinedNext = false
         destination = ArrivalDestination(action: .instantTicket, face: face)
         picker = nil
     }
 
-    /// 検札できるときだけ行き先を返す。発車はしない。
-    func stampSelection() -> ArrivalDestination? {
-        guard canStamp else { return nil }
-        return destination
-    }
-
-    mutating func markStamped() {
-        guard let destination else { return }
-        stampedFace = destination.face
+    /// 次の切符を指名しない。検札はできる。発車する券はない。
+    mutating func selectNoNext() {
+        guard !didStamp else { return }
+        destination = nil
+        declinedNext = true
         picker = nil
     }
 
-    /// 画面を開いたときに予約を読み直す。別の切符・即時切符を選んだあとは行き先を上書きしない。
+    /// 検札できるときだけ選択を返す。発車はしない。
+    func stampChoice() -> ArrivalStampChoice? {
+        guard canStamp else { return nil }
+        if let destination {
+            return .ticket(destination)
+        }
+        if declinedNext {
+            return .noNextTicket
+        }
+        return nil
+    }
+
+    mutating func markStamped() {
+        guard canStamp else { return }
+        didStamp = true
+        stampedFace = destination?.face
+        picker = nil
+    }
+
+    /// 画面を開いたときに予約を読み直す。別の切符・即時切符・予約なしを選んだあとは行き先を上書きしない。
     mutating func adoptReservation(_ face: ArrivalTicketFace?) {
-        guard stampedFace == nil else { return }
+        guard !didStamp else { return }
         reserved = face
+        if declinedNext { return }
         switch destination?.action {
         case .otherTicket, .instantTicket:
             return

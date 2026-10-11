@@ -17,7 +17,7 @@ struct ArrivalInvalidateOverlay: View {
     /// Cover is still up — start already settled so dismiss *is* the reveal (no second entrance).
     var skipEnter: Bool = false
     var onClose: () -> Void
-    var onStamp: (UUID, ArrivalAction) throws -> Void
+    var onStamp: (UUID, ArrivalAction?) throws -> Void
     var onLeadingBoard: (UUID) throws -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -35,6 +35,8 @@ struct ArrivalInvalidateOverlay: View {
     /// 0…1 ink on the arrived ticket.
     @State private var impact: CGFloat = 0
     @State private var stampHaptic = 0
+    @State private var choiceHaptic = 0
+    @State private var openHaptic = 0
 
     /// Focus を閉じる zoom とは別の namespace。同じ namespace に source を足すと到着の瞬間に落ちる。
     private var zoomNamespace: Namespace.ID {
@@ -110,6 +112,7 @@ struct ArrivalInvalidateOverlay: View {
                         minutes: event.minutes
                     )
                 )
+                choiceHaptic += 1
             }
         }
     }
@@ -174,25 +177,17 @@ struct ArrivalInvalidateOverlay: View {
             GeometryReader { geo in
                 let width = min(max(geo.size.width - 40, 120), 420)
                 let ticketHeight = MarsTicketSpec.height(forWidth: width)
-                let note: CGFloat = deck.destination == nil ? 36 : 0
-                let raw = ticketHeight + note + 110
-                let scale = min(1, (geo.size.height - 12) / max(raw, 1))
-
-                VStack(spacing: 18) {
-                    arrivedTicket(arrival: arrival)
-                        .frame(width: width, height: ticketHeight)
-                    if deck.destination == nil {
-                        Text("予約なし")
-                            .font(.title3.weight(.semibold))
-                            .foregroundStyle(.white)
-                            .frame(maxWidth: width, alignment: .leading)
-                            .accessibilityLabel("予約なし")
+                ScrollView {
+                    VStack(spacing: 12) {
+                        arrivedTicket(arrival: arrival)
+                            .frame(width: width, height: ticketHeight)
+                        choiceColumn(punctuality: arrival.punctuality)
+                            .frame(width: width, alignment: .leading)
                     }
-                    handColumn(punctuality: arrival.punctuality)
-                        .frame(width: width, alignment: .leading)
+                    .padding(.vertical, 8)
+                    .frame(maxWidth: .infinity, minHeight: geo.size.height)
                 }
-                .scaleEffect(scale, anchor: .center)
-                .frame(width: geo.size.width, height: geo.size.height)
+                .scrollBounceBehavior(.basedOnSize)
             }
         }
         .offset(y: (1 - enter) * 28)
@@ -230,35 +225,90 @@ struct ArrivalInvalidateOverlay: View {
         }
     }
 
-    private func handColumn(punctuality: ArrivalPunctuality) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(spacing: 22) {
-                hand("別の切符") { deck.showOtherTickets() }
-                hand("即時切符") { deck.showInstant() }
-                if deck.reserved != nil, deck.destination?.action != .nextRide {
-                    hand("次の一本") { deck.selectNextRide() }
+    private func choiceColumn(punctuality: ArrivalPunctuality) -> some View {
+        VStack(spacing: ArrivalChoiceMetrics.gap) {
+            VStack(spacing: ArrivalChoiceMetrics.gap) {
+                if let reserved = deck.reserved {
+                    ArrivalChoiceSign(
+                        index: "予約",
+                        title: reserved.title,
+                        selected: deck.destination?.action == .nextRide,
+                        hint: "この切符を次の一本にする。乗車は始まらない"
+                    ) {
+                        choose { deck.selectNextRide() }
+                    }
+                }
+                ArrivalChoiceSign(
+                    index: "別",
+                    title: titledChoice(action: .otherTicket, fallback: "別の切符"),
+                    selected: deck.destination?.action == .otherTicket,
+                    discloses: true,
+                    hint: "開いている切符の一覧"
+                ) {
+                    choose(feedback: .open) { deck.showOtherTickets() }
+                }
+                ArrivalChoiceSign(
+                    index: "即時",
+                    title: titledChoice(action: .instantTicket, fallback: "即時切符"),
+                    selected: deck.destination?.action == .instantTicket,
+                    discloses: true,
+                    hint: "新しい切符の発行"
+                ) {
+                    choose(feedback: .open) { deck.showInstant() }
+                }
+                ArrivalChoiceSign(
+                    index: "なし",
+                    title: "予約なし",
+                    selected: deck.declinedNext,
+                    hint: "次の切符は指名しない。乗車は始まらない"
+                ) {
+                    choose { deck.selectNoNext() }
                 }
             }
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("行き先")
+
             if reduceMotion {
-                hand("検札する") { commitStamp(punctuality: punctuality) }
-                    .disabled(!deck.canStamp)
-                    .opacity(deck.canStamp ? 1 : 0.4)
-                    .accessibilityHint(deck.canStamp ? "到着を締める" : "行き先が決まるまで押せません")
+                ArrivalDismissPlate(title: "検札する", hint: deck.canStamp ? "到着を締める" : "行き先が決まると押せる") {
+                    commitStamp(punctuality: punctuality)
+                }
+                .disabled(!deck.canStamp)
+                .opacity(deck.canStamp ? 1 : 0.4)
             }
-            hand("閉じる", action: onClose)
+            ArrivalDismissPlate(title: "閉じる", hint: "検札せずに戻る", action: onClose)
+                .padding(.top, 8)
             if !stampError.isEmpty {
                 Text(stampError)
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(TrainTheme.signalRed)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
+        .sensoryFeedback(.selection, trigger: choiceHaptic)
+        .sensoryFeedback(.impact(weight: .light), trigger: openHaptic)
     }
 
-    private func hand(_ title: String, action: @escaping () -> Void) -> some View {
-        Button(title, action: action)
-            .font(.system(size: 20, weight: .bold))
-            .foregroundStyle(.white)
-            .buttonStyle(.plain)
+    private func titledChoice(action: ArrivalAction, fallback: String) -> String {
+        guard deck.destination?.action == action, let title = deck.destination?.face.title else {
+            return fallback
+        }
+        return title
+    }
+
+    private enum ChoiceFeedback {
+        case selection
+        case open
+    }
+
+    private func choose(_ update: () -> Void, feedback: ChoiceFeedback = .selection) {
+        guard !deck.didStamp else { return }
+        update()
+        switch feedback {
+        case .selection:
+            choiceHaptic += 1
+        case .open:
+            openHaptic += 1
+        }
     }
 
     private func stampPress(punctuality: ArrivalPunctuality, diameter: CGFloat) -> some View {
@@ -279,13 +329,15 @@ struct ArrivalInvalidateOverlay: View {
                     .lineLimit(1)
             }
             .frame(width: diameter, height: diameter)
+            .frame(minWidth: ArrivalChoiceMetrics.hit, minHeight: ArrivalChoiceMetrics.hit)
+            .contentShape(Circle())
             .shadow(color: .black.opacity(0.28), radius: 4, y: 2)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(ArrivalStampButtonStyle(reduceMotion: reduceMotion))
         .disabled(!deck.canStamp)
         .opacity(deck.canStamp ? 1 : 0.45)
-        .accessibilityLabel("検札印")
-        .accessibilityHint(deck.canStamp ? "到着を締める" : "行き先が決まるまで押せません")
+        .accessibilityLabel("\(stampCenterLabel(punctuality))の検札印")
+        .accessibilityHint(deck.canStamp ? "到着を締める" : "行き先が決まると押せる")
     }
 
     private var otherTicketPicker: some View {
@@ -293,6 +345,7 @@ struct ArrivalInvalidateOverlay: View {
             List(otherFaces) { face in
                 Button(face.title) {
                     deck.selectOther(face)
+                    choiceHaptic += 1
                 }
             }
             .navigationTitle("別の切符")
@@ -382,13 +435,17 @@ struct ArrivalInvalidateOverlay: View {
     }
 
     private func commitStamp(punctuality: ArrivalPunctuality) {
-        guard let selection = deck.stampSelection() else { return }
+        guard let choice = deck.stampChoice() else { return }
         guard let sessionID = moment.arrivedSessionID else {
             stampError = "到着の記録が見つかりません"
             return
         }
+        let action: ArrivalAction? = switch choice {
+        case .ticket(let destination): destination.action
+        case .noNextTicket: nil
+        }
         do {
-            try onStamp(sessionID, selection.action)
+            try onStamp(sessionID, action)
         } catch {
             stampError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             return
@@ -396,9 +453,14 @@ struct ArrivalInvalidateOverlay: View {
         stampError = ""
         deck.markStamped()
         stampHaptic += 1
+        let returnsToHub = action == nil
         if reduceMotion {
             impact = 1
-            ceremonyVisible = false
+            if returnsToHub {
+                onClose()
+            } else {
+                ceremonyVisible = false
+            }
             return
         }
         withAnimation(MarsTicketSpec.ArrivalMotion.slam) {
@@ -407,8 +469,12 @@ struct ArrivalInvalidateOverlay: View {
             if punctuality == .onTime || punctuality == .early {
                 stampHaptic += 1
             }
-            withAnimation(MarsTicketSpec.ArrivalMotion.exit) {
-                ceremonyVisible = false
+            if returnsToHub {
+                onClose()
+            } else {
+                withAnimation(MarsTicketSpec.ArrivalMotion.exit) {
+                    ceremonyVisible = false
+                }
             }
         }
     }
@@ -418,7 +484,10 @@ struct ArrivalInvalidateOverlay: View {
         if let next = deck.destination?.face {
             return "\(head)。\(arrival.title)。次の一本 \(next.title)"
         }
-        return "\(head)。\(arrival.title)。予約なし"
+        if deck.declinedNext {
+            return "\(head)。\(arrival.title)。予約なし"
+        }
+        return "\(head)。\(arrival.title)"
     }
 
     private func announceIfNeeded(arrival: (title: String, minutes: Int, punctuality: ArrivalPunctuality)) {
@@ -490,6 +559,132 @@ struct MarsTicketUsedMarks: View {
         case .early: "早着"
         case .late, .notApplicable: "到着"
         }
+    }
+}
+
+/// HIG の最小タップ領域。行先票はこの高さより縮めない。
+private enum ArrivalChoiceMetrics {
+    static let hit: CGFloat = 44
+    static let gap: CGFloat = 8
+}
+
+/// 駅名標の一行。板と押下でボタンだと分かる。選択は番号欄の反転と線の太さで、色だけに頼らない。
+private struct ArrivalChoiceSign: View {
+    var index: String
+    var title: String
+    var selected: Bool
+    var discloses: Bool = false
+    var hint: String
+    var action: () -> Void
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        Button(action: action) {
+            HStack(alignment: .center, spacing: 8) {
+                Text(index)
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(selected ? Color.black : Color.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                    .frame(minWidth: 36, minHeight: 22)
+                    .padding(.vertical, 4)
+                    .padding(.horizontal, 2)
+                    .background {
+                        RoundedRectangle(cornerRadius: 3, style: .continuous)
+                            .fill(selected ? Color.white : Color.clear)
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 3, style: .continuous)
+                                    .strokeBorder(Color.white.opacity(selected ? 1 : 0.85), lineWidth: selected ? 1.5 : 1)
+                            }
+                    }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                        .font(.title3.weight(.medium))
+                        .tracking(StationSignMetrics.nameTracking(title, compact: false))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.72)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Rectangle()
+                        .fill(TrainTheme.rail.opacity(selected ? 1 : 0.55))
+                        .frame(height: selected ? 4 : 3)
+                }
+
+                if discloses {
+                    Image(systemName: "chevron.right")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.9))
+                        .accessibilityHidden(true)
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity, minHeight: ArrivalChoiceMetrics.hit, alignment: .leading)
+            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        }
+        .buttonStyle(ArrivalPlateButtonStyle(selected: selected, reduceMotion: reduceMotion))
+        .accessibilityLabel("\(index) \(title)")
+        .accessibilityHint(hint)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+}
+
+/// 行先ではない操作。同じ当たり判定で、路線帯は付けない。
+private struct ArrivalDismissPlate: View {
+    var title: String
+    var hint: String
+    var action: () -> Void
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        Button(title, action: action)
+            .font(.body.weight(.semibold))
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity, minHeight: ArrivalChoiceMetrics.hit)
+            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .buttonStyle(ArrivalPlateButtonStyle(selected: false, reduceMotion: reduceMotion))
+            .accessibilityHint(hint)
+    }
+}
+
+private struct ArrivalStampButtonStyle: ButtonStyle {
+    var reduceMotion: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(!reduceMotion && configuration.isPressed ? 0.94 : 1)
+            .opacity(configuration.isPressed ? 0.82 : 1)
+            .animation(reduceMotion ? nil : TrainTheme.Motion.pageSnap, value: configuration.isPressed)
+    }
+}
+
+private struct ArrivalPlateButtonStyle: ButtonStyle {
+    var selected: Bool
+    var reduceMotion: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(Color.white.opacity(plateOpacity(pressed: configuration.isPressed)))
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(
+                        Color.white.opacity(selected ? 1 : 0.62),
+                        lineWidth: selected ? 2 : 1
+                    )
+            }
+            .scaleEffect(!reduceMotion && configuration.isPressed ? 0.98 : 1)
+            .animation(reduceMotion ? nil : TrainTheme.Motion.pageSnap, value: configuration.isPressed)
+    }
+
+    private func plateOpacity(pressed: Bool) -> Double {
+        if pressed { return selected ? 0.38 : 0.26 }
+        return selected ? 0.18 : 0.10
     }
 }
 
