@@ -436,19 +436,21 @@ struct ArrivalInvalidateOverlay: View {
 
     private func commitStamp(punctuality: ArrivalPunctuality) {
         guard let choice = deck.stampChoice() else { return }
-        guard let sessionID = moment.arrivedSessionID else {
-            stampError = "到着の記録が見つかりません"
-            return
-        }
         let action: ArrivalAction? = switch choice {
         case .ticket(let destination): destination.action
         case .noNextTicket: nil
         }
-        do {
-            try onStamp(sessionID, action)
-        } catch {
-            stampError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-            return
+        if moment.recordsWorkSessionStamp {
+            guard let sessionID = moment.arrivedSessionID else {
+                stampError = "到着の記録が見つかりません"
+                return
+            }
+            do {
+                try onStamp(sessionID, action)
+            } catch {
+                stampError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                return
+            }
         }
         stampError = ""
         deck.markStamped()
