@@ -44,10 +44,24 @@ extension SessionManager {
 
     /// 検札後の券面を右スワイプしたときの発車。`issueAndBoard` は使わない。
     func boardFromArrivalSwipe(ticketID: UUID, now: Date? = nil) throws {
+        try boardNamedTicket(ticketID, now: now, startedFrom: .arrivalSwipe)
+    }
+
+    /// 乗客を降りたあとの検札で指名した券。投げたときだけ発車する。
+    func boardFromPassengerAlight(ticketID: UUID, now: Date? = nil) throws {
+        try boardNamedTicket(ticketID, now: now, startedFrom: .passengerAlight)
+        consumeArrivalCelebrations()
+    }
+
+    private func boardNamedTicket(
+        _ ticketID: UUID,
+        now: Date?,
+        startedFrom: RideStartOrigin
+    ) throws {
         guard let ticket = fetchTicket(id: ticketID), ticket.isOpen else {
             throw SessionError.ticketAlreadyClosed
         }
-        try board(ticket: ticket, now: now, startedFrom: .arrivalSwipe)
+        try board(ticket: ticket, now: now, startedFrom: startedFrom)
     }
 
     func fetchTicket(id: UUID) -> Ticket? {

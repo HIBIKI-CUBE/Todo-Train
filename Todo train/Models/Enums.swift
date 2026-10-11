@@ -125,5 +125,6 @@ enum ArrivalAction: String, Codable, Sendable, Equatable {
 /// その乗車がどこから始まったか。
 enum RideStartOrigin: String, Codable, Sendable, Equatable {
     case arrivalSwipe
+    case passengerAlight
     case other
 }

@@ -34,13 +34,21 @@ struct PunctualityMoment: Identifiable, Equatable, Sendable {
 
     let id: UUID
     let kind: Kind
-    /// 到着祝祭が締める乗車。定時運行の案内では nil。
+    /// 到着祝祭が締める乗車。定時運行の案内と、乗客を降りたあとの行き先では nil。
     let arrivedSessionID: UUID?
+    /// 乗客を降りたあとは、締めは PassengerRide に既にある。検札は次の切符の指名だけ。
+    let recordsWorkSessionStamp: Bool
 
-    init(id: UUID = UUID(), kind: Kind, arrivedSessionID: UUID? = nil) {
+    init(
+        id: UUID = UUID(),
+        kind: Kind,
+        arrivedSessionID: UUID? = nil,
+        recordsWorkSessionStamp: Bool = true
+    ) {
         self.id = id
         self.kind = kind
         self.arrivedSessionID = arrivedSessionID
+        self.recordsWorkSessionStamp = recordsWorkSessionStamp
     }
 
     /// Readable but not a sit-and-wait celebration. Keep in sync with overlay phases.

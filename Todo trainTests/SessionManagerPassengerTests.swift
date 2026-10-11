@@ -92,11 +92,25 @@ struct SessionManagerPassengerTests {
             Issue.record("expected the short ただいま")
             return
         }
+        #expect(manager.punctualityMoment == nil)
 
         clock.advance(by: PassengerLane.arrivedGreeting)
         manager.reconcile()
         #expect(manager.passengerChrome == .none)
         #expect(manager.phase == .paused)
+        let hand = try #require(manager.punctualityMoment)
+        #expect(hand.recordsWorkSessionStamp == false)
+        #expect(hand.arrivedSessionID == nil)
+        if case .arrival(let title, _, _, let punctuality) = hand.kind {
+            #expect(title == "週次")
+            #expect(punctuality == .notApplicable)
+        } else {
+            Issue.record("expected the arrival hand")
+        }
+        #expect(manager.activeSession?.arrivalAction == nil)
+        #expect(manager.activeSession?.arrivalStampedAt == nil)
+        manager.reconcile()
+        #expect(manager.punctualityQueue.count == 1)
     }
 
     @Test func manualPauseDoesNotSpendAnotherSlot() throws {
@@ -138,6 +152,7 @@ struct SessionManagerPassengerTests {
             Issue.record("expected to offer the same interval again")
             return
         }
+        #expect(manager.punctualityMoment?.recordsWorkSessionStamp == false)
         #expect(manager.fetchOpenPassengerRide() == nil)
 
         manager.boardPassenger()
@@ -158,6 +173,7 @@ struct SessionManagerPassengerTests {
         manager.reconcile()
         let ride = try #require(rides(context).first)
         #expect(ride.endReason == .cancelled)
+        #expect(manager.punctualityMoment == nil)
         #expect(manager.passengerChrome.locksDriving == false)
         #expect(manager.phase == .paused)
         try manager.resume()
@@ -239,6 +255,26 @@ struct SessionManagerPassengerTests {
             Issue.record("the soon band stays on the running ticket")
             return
         }
+    }
+
+    @Test func passengerAlightSwipeBoardsOnlyTheNamedTicket() throws {
+        let (manager, context, clock, _) = try SessionManagerFixtures.makeHarness(now: start)
+        try manager.startService()
+        _ = insertBlock(context, duration: 600)
+        manager.boardPassenger()
+        clock.advance(by: 600)
+        manager.reconcile()
+        #expect(manager.punctualityMoment == nil)
+        clock.advance(by: PassengerLane.arrivedGreeting)
+        manager.reconcile()
+        #expect(manager.punctualityMoment?.recordsWorkSessionStamp == false)
+
+        let ticket = try SessionManagerFixtures.makeTicket(context, title: "続き", seconds: 600)
+        try manager.boardFromPassengerAlight(ticketID: ticket.id)
+        #expect(manager.activeSession?.ticket?.id == ticket.id)
+        #expect(manager.activeSession?.startedFrom == .passengerAlight)
+        #expect(manager.phase == .running)
+        #expect(manager.punctualityMoment == nil)
     }
 
     private func clockAdvancePastDoor(_ manager: SessionManager) {

@@ -174,7 +174,11 @@ struct ContentView: View {
                             try sessionManager.recordArrivalStamp(sessionID: sessionID, action: action)
                         },
                         onLeadingBoard: { ticketID in
-                            try sessionManager.boardFromArrivalSwipe(ticketID: ticketID)
+                            if moment.recordsWorkSessionStamp {
+                                try sessionManager.boardFromArrivalSwipe(ticketID: ticketID)
+                            } else {
+                                try sessionManager.boardFromPassengerAlight(ticketID: ticketID)
+                            }
                         }
                     )
                     // fullScreenCover より後ろの overlay には、その手前の environment が届かない。

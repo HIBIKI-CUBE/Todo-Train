@@ -88,9 +88,51 @@ extension SessionManager {
         if passengerMemory != effect.memory {
             passengerMemory = effect.memory
         }
+        let previousChrome = passengerChrome
         if passengerChrome != effect.chrome {
             passengerChrome = effect.chrome
         }
+        presentNextTicketHandIfLeftGreeting(from: previousChrome, to: passengerChrome)
+    }
+
+    /// 「ただいま」かドア開放の挨拶が終わったときだけ、運転の到着と同じ行き先を出す。
+    /// 取消は挨拶を挟まず通常面へ戻るので、ここには来ない。
+    private func presentNextTicketHandIfLeftGreeting(
+        from previous: PassengerChrome,
+        to next: PassengerChrome
+    ) {
+        let ride: PassengerRideSnapshot
+        switch previous {
+        case .arrived(let snapshot), .doorOpened(let snapshot):
+            ride = snapshot
+        default:
+            return
+        }
+        switch next {
+        case .arrived, .doorOpened:
+            return
+        default:
+            break
+        }
+        let alreadyShowing = punctualityQueue.contains { moment in
+            !moment.recordsWorkSessionStamp
+        }
+        guard !alreadyShowing else { return }
+
+        let span = max(ride.intervalEnd.timeIntervalSince(ride.intervalStart), 60)
+        let actual = max((ride.endedAt ?? clock.now).timeIntervalSince(ride.boardedAt), 0)
+        enqueuePunctualityMoment(
+            PunctualityMoment(
+                kind: .arrival(
+                    title: ride.title,
+                    estimateSeconds: max(Int(span.rounded()), 60),
+                    actualSeconds: actual,
+                    punctuality: .notApplicable
+                ),
+                arrivedSessionID: nil,
+                recordsWorkSessionStamp: false
+            )
+        )
     }
 
     func fetchOpenPassengerRide() -> PassengerRide? {
