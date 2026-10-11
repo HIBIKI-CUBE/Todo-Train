@@ -19,6 +19,7 @@ extension SessionManager {
         defer {
             applyPassengerEffects(now: now)
             publishWidgetSnapshot(at: now)
+            refreshForegroundReconcileLoop()
         }
 
         if let day = activeServiceDay ?? fetchOpenServiceDay() {
@@ -151,6 +152,50 @@ extension SessionManager {
             }
         case .arrive, .extend:
             return nil
+        }
+    }
+
+    // MARK: - Foreground reconcile
+
+    /// App scene owns foreground; SessionManager owns the tick while riding.
+    func setForegroundReconcileActive(_ active: Bool) {
+        let changed = isForegroundForReconcile != active
+        isForegroundForReconcile = active
+        if active, changed {
+            reconcile()
+        } else {
+            refreshForegroundReconcileLoop()
+        }
+    }
+
+    var needsForegroundReconcileTick: Bool {
+        ForegroundReconcileScheduling.needsTick(
+            hasOpenRide: activeSession?.isOpen == true,
+            passengerChrome: passengerChrome
+        )
+    }
+
+    func refreshForegroundReconcileLoop() {
+        let shouldRun = isForegroundForReconcile
+            && needsForegroundReconcileTick
+            && clock is SystemSessionClock
+        if !shouldRun {
+            foregroundReconcileTask?.cancel()
+            foregroundReconcileTask = nil
+            return
+        }
+        guard foregroundReconcileTask == nil else { return }
+        foregroundReconcileTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(1))
+                guard !Task.isCancelled else { return }
+                guard let self else { return }
+                guard self.isForegroundForReconcile, self.needsForegroundReconcileTick else {
+                    self.foregroundReconcileTask = nil
+                    return
+                }
+                self.reconcile()
+            }
         }
     }
 

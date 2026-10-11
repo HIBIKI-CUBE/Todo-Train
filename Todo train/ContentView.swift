@@ -67,6 +67,7 @@ struct ContentView: View {
             } else {
                 sessionManager.reconcile()
             }
+            sessionManager.setForegroundReconcileActive(true)
             syncFocusPresentation()
             syncPassengerCover()
             companion.handleScenePhase(.active, sessionManager: sessionManager)
@@ -81,6 +82,8 @@ struct ContentView: View {
         }
         .onChange(of: scenePhase) { _, newPhase in
             companion.handleScenePhase(newPhase, sessionManager: sessionManager)
+            // SessionManager owns the 1 Hz reconcile tick while foreground + riding.
+            sessionManager.setForegroundReconcileActive(newPhase == .active)
             if newPhase == .active {
                 // Foreground: recompute Date-based phase only.
                 // Do not re-run recoverOnLaunch (would re-schedule cancelled end bells).

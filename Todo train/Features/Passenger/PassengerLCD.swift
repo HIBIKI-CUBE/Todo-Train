@@ -109,20 +109,6 @@ struct PassengerDoorCock: View {
     }
 }
 
-private struct PassengerClock: ViewModifier {
-    @Environment(SessionManager.self) private var sessionManager
-
-    func body(content: Content) -> some View {
-        content.task {
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(1))
-                if Task.isCancelled { return }
-                sessionManager.reconcile()
-            }
-        }
-    }
-}
-
 /// タブバー付属の一行。内容を押し上げる大きなバナーにはしない。
 /// `ContentView` が `showsHubOffer` のときだけタブ accessory に載せる。
 struct PassengerOfferInset: View {
@@ -132,12 +118,10 @@ struct PassengerOfferInset: View {
         switch sessionManager.passengerChrome {
         case .soon(let interval):
             PassengerHubSoon(interval: interval)
-                .modifier(PassengerClock())
         case .offer(let interval, let collapsed):
             PassengerHubOffer(interval: interval, collapsed: collapsed) {
                 sessionManager.boardPassenger()
             }
-            .modifier(PassengerClock())
         default:
             EmptyView()
         }
@@ -207,7 +191,6 @@ struct PassengerCabinCover: View {
                 PassengerLCDPalette.bezel.ignoresSafeArea()
             }
         }
-        .modifier(PassengerClock())
     }
 }
 

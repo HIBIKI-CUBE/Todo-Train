@@ -38,6 +38,10 @@ final class SessionManager {
 
     var awayFireTask: Task<Void, Never>?
     var idleWatchTask: Task<Void, Never>?
+    /// Foreground 1 Hz reconcile while a ride or passenger lane needs wall time.
+    var foregroundReconcileTask: Task<Void, Never>?
+    /// Set by the app scene; the loop itself only runs with `SystemSessionClock`.
+    var isForegroundForReconcile = false
     /// Avoid re-enqueueing the same idle banner on every `reconcile`.
     var idleLocalNotificationArmed = false
     #if canImport(UIKit)
