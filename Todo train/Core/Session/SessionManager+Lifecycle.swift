@@ -129,20 +129,26 @@ extension SessionManager {
         refreshOwnedDeviceSideEffects(now: now)
     }
 
-    /// Consume pause/resume handoff from Live Activity intents (app may have been killed).
+    /// Apply pause/resume handoff from Live Activity intents (app may have been killed).
+    /// Peeks first; consumes only after the session matches and the mutation succeeds.
+    /// Mismatch or failure leaves the queue so a later foreground/recover can retry.
     @discardableResult
     func applyPendingLiveActivityAction() -> FocusPendingActionKind? {
         guard let pending = FocusPendingActionStore.peek() else { return nil }
         switch pending.kind {
         case .pause, .resume:
-            _ = FocusPendingActionStore.consume()
             guard pending.sessionID == activeSession?.id else { return nil }
-            if pending.kind == .pause {
-                try? pauseFromAlarmKit()
-            } else {
-                try? resumeFromAlarmKit()
+            do {
+                if pending.kind == .pause {
+                    try pauseFromAlarmKit()
+                } else {
+                    try resumeFromAlarmKit()
+                }
+                _ = FocusPendingActionStore.consume()
+                return pending.kind
+            } catch {
+                return nil
             }
-            return pending.kind
         case .arrive, .extend:
             return nil
         }

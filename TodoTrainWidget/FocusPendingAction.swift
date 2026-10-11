@@ -55,8 +55,12 @@ enum SessionPauseRuntime {
 nonisolated enum FocusPendingActionStore {
     static let suiteKey = "focus.pendingAction"
 
+    /// Tests inject a private suite; production always uses the App Group.
+    nonisolated(unsafe) static var defaultsOverride: UserDefaults?
+
     static var defaults: UserDefaults? {
-        UserDefaults(suiteName: WidgetSnapshotStore.appGroupID)
+        if let defaultsOverride { return defaultsOverride }
+        return UserDefaults(suiteName: WidgetSnapshotStore.appGroupID)
     }
 
     static func enqueue(_ action: FocusPendingAction) {

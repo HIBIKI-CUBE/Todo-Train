@@ -61,7 +61,7 @@
 
 | ID | 所見 | 根拠 | 候補アクション |
 |----|------|------|----------------|
-| P1-9 | **LA/Widget handoff が sessionID 不一致でも consume される** | `SessionManager+Lifecycle.applyPendingLiveActivityAction`: pause/resume で先に `FocusPendingActionStore.consume()`、その後 `guard pending.sessionID == activeSession?.id`。不一致なら操作は捨てられキューも空 | **peek → 照合 → 成功時だけ consume**。stale session のテストを足す。着手第1候補 |
+| P1-9 | ~~**LA/Widget handoff が sessionID 不一致でも consume される**~~ | ~~pause/resume で先に consume~~ | **済**: peek → 照合 → 変異成功時だけ consume。Focus / ContentView の arrive 経路も同方針。`FocusPendingActionTests` 5 件 |
 | P1-3 | **到着など不可逆寄りの操作が `try?` で握りつぶされる** | `ContentView.applyPendingFocusAction` の `try? sessionManager.arrive()`。Hub / History / TicketDetail の restore も `try?`。AlarmKit の pause/resume も同様 | 少なくとも arrive / restore はログ or ユーザー向け失敗経路。LA deep-link 失敗を黙殺しない |
 | P1-10 | **`try? modelContext.save()` が SessionManager ホットパスに多い** | `+CheckIn` / `+Timetable` / `+IdleCabin` / `+Passenger` / `+DeviceSideEffects` など。失敗しても UI・通知・LA は進んだように見える | save 失敗を `reconcile` または明示エラーへ。ホットパスから `try? save` を減らす |
 | P1-11 | **`phase` / `activeSession` はメモリ上のキャッシュ** | `reconcile` が正を写す。Focus は `TimelineView` 1Hz で reconcile。Focus 非表示時の他経路で呼ばれないと `phase` が遅れ得る | 運行中は app 側の薄い reconcile スケジューラ（foreground + 乗車中）を正にし、View 所有の tick に依存しない |
@@ -92,7 +92,7 @@
 | P2-1 | **QR UI が iOS / Mac で二重** | `Features/Settings/QRViewfinderFrame.swift` と `TodoTrainCompanion/QRViewfinderFrame.swift`（現状同一）。`CompanionQRCodeView` は差分あり | 共有可能な描画を Package へ。プラットフォーム差だけ残す |
 | P2-2 | **Package deployment target がアプリより古い** | アプリ `IPHONEOS_DEPLOYMENT_TARGET = 27.0`、Packages は `.iOS(.v17)` | 意図的ならコメントで固定。でなければ 27 に揃えて「古い API が混入しない」制約にする |
 | P2-3 | ~~**`ServiceEndSheet` typealias 残骸**~~ | ~~`typealias ServiceEndSheet = ServiceShutdownCover`~~ | **済（本 PR）**: 参照ゼロのためファイル削除 |
-| P2-4 | ~~**未使用 `import CoreData`**~~ | ~~`ContentView.swift` のみ~~ | **済（本 PR）**: 削除 |
+| P2-4 | **`import CoreData` in ContentView** | `NSPersistentStoreRemoteChange` 購読に必要。未使用ではなかった | ゲート false のあいだ購読ごと狭めるなら P3-6 と一緒に |
 | P2-5 | **Worker 依存のドリフト** | `npm outdated`: wrangler 4.129→4.149、vitest 4→5、workers-types 日付遅れ、hono patch 遅れ。TS major は別判断 | patch/minor を定期追従。vitest 5 / typescript 7 は別 PR |
 | P2-6 | **CloudKit ゲートは正しく false だが、識別子と分岐が残存** | `CloudKitSync.isConfigured == false`、container id 文字列あり。`DeviceIdentifying` が同ファイル | ファイル分割（同期ゲート vs 端末 ID）。ゲート自体は契約どおり残す |
 | P2-7 | **UITests が Xcode テンプレのまま** | `Todo_trainUITests` は launch のみ | 主要導線の煙テスト少数、またはターゲット縮小。現状はノイズ |
@@ -130,9 +130,9 @@
 
 一度に全部やらない。**縦スライスで「削って緑を保つ」**。
 
-1. **~~即時・低リスク掃除~~** — P2-3 / P2-4 済（本 PR）。
-2. **LA handoff の consume 順（P1-9）+ テスト** — ユーザー操作が消える筋。最初の実装スライス向き。
-3. **副作用の失敗を見える化（P1-3 / P1-10）** — `arrive` / AlarmKit / `try? save`。
+1. **~~死 alias 掃除~~** — P2-3 済。
+2. **~~LA handoff の consume 順（P1-9）+ テスト~~** — 済（本 PR）。
+3. **副作用の失敗を見える化（P1-3 / P1-10）** — `try? save` ホットパス、AlarmKit。次の実装スライス。
 4. **発車可否の単一 API（P1-13）** — Hub と `board()` を同じ表に。
 5. **SessionManager から投影を剥がす（P1-1）+ reconcile スケジューラ（P1-11）** — 書き込み API は触らない。
 6. **クロスターゲット共有（P2-1 / P2-13）** — QR、Cockpit/Timer SPM。
@@ -151,7 +151,7 @@
 
 優先してコードリーディングを続けるなら:
 
-1. ~~LA handoff / pending action の消費順~~ → P1-9 として確定。実装スライスへ
+1. ~~LA handoff / pending action の消費順~~ → P1-9 済
 2. `SessionManager+DeviceSideEffects` / `recoverOnLaunch` / end-bell suppress の状態機械
 3. `CompanionSyncRuntime` ↔ `CompanionMacRuntime` の責務対称性
 4. SwiftData モデルの optional レガシーフィールド一覧（`boardedDeviceID` 以外）

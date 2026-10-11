@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SwiftData
+import CoreData
 import UIKit
 
 struct ContentView: View {
@@ -286,10 +287,15 @@ struct ContentView: View {
             _ = sessionManager.applyPendingLiveActivityAction()
             return
         }
-        guard let consumed = FocusPendingActionStore.consume() else { return }
-        guard consumed.sessionID == sessionManager.activeSession?.id else { return }
-        if consumed.kind == .arrive, sessionManager.phase != .overtime {
-            try? sessionManager.arrive()
+        // Arrive: keep queued on mismatch, overtime (Focus 3-choice), or failed mutation.
+        guard pending.kind == .arrive else { return }
+        guard pending.sessionID == sessionManager.activeSession?.id else { return }
+        guard sessionManager.phase != .overtime else { return }
+        do {
+            try sessionManager.arrive()
+            _ = FocusPendingActionStore.consume()
+        } catch {
+            // Keep queued for a later foreground pass.
         }
     }
 

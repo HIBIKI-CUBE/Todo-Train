@@ -480,26 +480,49 @@ struct FocusView: View {
 
     private func consumePendingActionIfNeeded() {
         guard !didConsumePendingAction else { return }
-        guard let action = FocusPendingActionStore.consume() else { return }
-        didConsumePendingAction = true
+        guard let action = FocusPendingActionStore.peek() else { return }
+        // Mismatch: leave queued (activeSession may still be recovering).
         guard action.sessionID == sessionManager.activeSession?.id else { return }
 
         switch action.kind {
         case .arrive:
-            // Overtime keeps the in-Focus 3-choice UI; running/paused arrive immediately.
-            if sessionManager.phase != .overtime {
-                run { try sessionManager.arrive() }
+            // Overtime keeps the in-Focus 3-choice UI; just clear the handoff once Focus is up.
+            if sessionManager.phase == .overtime {
+                _ = FocusPendingActionStore.consume()
+                didConsumePendingAction = true
+                return
+            }
+            applyPendingMutation {
+                try sessionManager.arrive()
             }
         case .extend:
+            _ = FocusPendingActionStore.consume()
+            didConsumePendingAction = true
             withAnimation(TrainTheme.Motion.soft) {
                 showExtendChips = true
             }
         case .pause:
             if sessionManager.phase == .running || sessionManager.phase == .overtime {
-                run { try sessionManager.pause() }
+                applyPendingMutation {
+                    try sessionManager.pause()
+                }
             }
         case .resume:
-            run { try sessionManager.resume() }
+            applyPendingMutation {
+                try sessionManager.resume()
+            }
+        }
+    }
+
+    /// Consume the App Group handoff only after the session mutation succeeds.
+    private func applyPendingMutation(_ body: () throws -> Void) {
+        do {
+            try body()
+            _ = FocusPendingActionStore.consume()
+            didConsumePendingAction = true
+        } catch {
+            errorMessage = error.localizedDescription
+            showError = true
         }
     }
 
