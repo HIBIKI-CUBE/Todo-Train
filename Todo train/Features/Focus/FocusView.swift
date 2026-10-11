@@ -486,40 +486,64 @@ struct FocusView: View {
 
         switch action.kind {
         case .arrive:
-            // Overtime keeps the in-Focus 3-choice UI; just clear the handoff once Focus is up.
-            if sessionManager.phase == .overtime {
-                _ = FocusPendingActionStore.consume()
-                didConsumePendingAction = true
+            switch ArriveHandoff.decision(
+                sessionMatches: true,
+                phase: sessionManager.phase,
+                focusIsPresented: true
+            ) {
+            case .leaveQueued:
                 return
-            }
-            applyPendingMutation {
-                try sessionManager.arrive()
+            case .consumeOnly:
+                // Overtime keeps the in-Focus 3-choice UI.
+                if FocusPendingActionStore.consumeIfMatches(action) {
+                    didConsumePendingAction = true
+                }
+            case .performArrive:
+                applyPendingMutation(action) {
+                    try sessionManager.arrive()
+                }
             }
         case .extend:
-            _ = FocusPendingActionStore.consume()
-            didConsumePendingAction = true
-            withAnimation(TrainTheme.Motion.soft) {
-                showExtendChips = true
+            if FocusPendingActionStore.consumeIfMatches(action) {
+                didConsumePendingAction = true
+                withAnimation(TrainTheme.Motion.soft) {
+                    showExtendChips = true
+                }
             }
         case .pause:
             if sessionManager.phase == .running || sessionManager.phase == .overtime {
-                applyPendingMutation {
+                applyPendingMutation(action) {
                     try sessionManager.pause()
+                }
+            } else if sessionManager.phase == .paused {
+                if FocusPendingActionStore.consumeIfMatches(action) {
+                    didConsumePendingAction = true
                 }
             }
         case .resume:
-            applyPendingMutation {
-                try sessionManager.resume()
+            if sessionManager.phase == .paused {
+                applyPendingMutation(action) {
+                    try sessionManager.resume()
+                }
+            } else if sessionManager.phase == .running || sessionManager.phase == .overtime {
+                if FocusPendingActionStore.consumeIfMatches(action) {
+                    didConsumePendingAction = true
+                }
             }
         }
     }
 
-    /// Consume the App Group handoff only after the session mutation succeeds.
-    private func applyPendingMutation(_ body: () throws -> Void) {
+    /// Consume the App Group handoff only after the session mutation succeeds,
+    /// and only if a newer handoff has not replaced the slot.
+    private func applyPendingMutation(
+        _ expected: FocusPendingAction,
+        _ body: () throws -> Void
+    ) {
         do {
             try body()
-            _ = FocusPendingActionStore.consume()
-            didConsumePendingAction = true
+            if FocusPendingActionStore.consumeIfMatches(expected) {
+                didConsumePendingAction = true
+            }
         } catch {
             errorMessage = error.localizedDescription
             showError = true

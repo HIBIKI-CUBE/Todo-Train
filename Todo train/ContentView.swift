@@ -94,8 +94,16 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: .NSPersistentStoreRemoteChange)) { _ in
             sessionManager.handleRemoteStoreChange()
         }
-        .onChange(of: sessionManager.phase) { _, _ in
+        .onChange(of: sessionManager.phase) { previous, _ in
+            if previous == .overtime {
+                dropShownOvertimeArrive()
+            }
             syncFocusPresentation()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: FocusPendingActionStore.didEnqueueNotification)) { _ in
+            applyPendingFocusAction()
+            syncFocusPresentation()
+            syncPassengerCover()
         }
         .onChange(of: sessionManager.passengerChrome) { _, _ in
             if !isFocusPresented {
@@ -146,6 +154,8 @@ struct ContentView: View {
                 promoteTransferCanvasAfterFocusDismiss()
             }
             if presented {
+                // Overtime arrive stays queued until this cover exists.
+                applyPendingFocusAction(focusIsPresented: true)
                 passengerCoverPresented = false
                 Task { @MainActor in
                     try? await Task.sleep(for: .milliseconds(500))
@@ -279,7 +289,8 @@ struct ContentView: View {
     }
 
     /// Handle LA deep-link actions that must run even when Focus is not yet presented (e.g. paused → 到着).
-    private func applyPendingFocusAction() {
+    private func applyPendingFocusAction(focusIsPresented: Bool? = nil) {
+        let focusIsPresented = focusIsPresented ?? isFocusPresented
         guard let pending = FocusPendingActionStore.peek() else { return }
         // Extend always needs Focus; leave the queue for FocusView.
         if pending.kind == .extend { return }
@@ -287,16 +298,36 @@ struct ContentView: View {
             _ = sessionManager.applyPendingLiveActivityAction()
             return
         }
-        // Arrive: keep queued on mismatch, overtime (Focus 3-choice), or failed mutation.
         guard pending.kind == .arrive else { return }
-        guard pending.sessionID == sessionManager.activeSession?.id else { return }
-        guard sessionManager.phase != .overtime else { return }
-        do {
-            try sessionManager.arrive()
-            _ = FocusPendingActionStore.consume()
-        } catch {
-            // Keep queued for a later foreground pass.
+        switch ArriveHandoff.decision(
+            sessionMatches: pending.sessionID == sessionManager.activeSession?.id,
+            phase: sessionManager.phase,
+            focusIsPresented: focusIsPresented
+        ) {
+        case .leaveQueued:
+            return
+        case .consumeOnly:
+            FocusPendingActionStore.consumeIfMatches(pending)
+        case .performArrive:
+            do {
+                try sessionManager.arrive()
+                FocusPendingActionStore.consumeIfMatches(pending)
+            } catch {
+                // Keep queued for a later foreground pass.
+            }
         }
+    }
+
+    /// Focus was already showing the overtime 3-choice. Drop a queued arrive
+    /// before a later running/launch pass can treat it as a fresh arrival.
+    private func dropShownOvertimeArrive() {
+        guard let pending = FocusPendingActionStore.peek() else { return }
+        guard ArriveHandoff.shouldDropOnLeavingOvertime(
+            kind: pending.kind,
+            sessionMatches: pending.sessionID == sessionManager.activeSession?.id,
+            focusWasPresented: isFocusPresented
+        ) else { return }
+        FocusPendingActionStore.consumeIfMatches(pending)
     }
 
     private func recoverOnLaunch() {

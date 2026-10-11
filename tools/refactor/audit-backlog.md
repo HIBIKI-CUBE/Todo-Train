@@ -61,7 +61,7 @@
 
 | ID | 所見 | 根拠 | 候補アクション |
 |----|------|------|----------------|
-| P1-9 | ~~**LA/Widget handoff が sessionID 不一致でも consume される**~~ | ~~pause/resume で先に consume~~ | **済**: peek → 照合 → 変異成功時だけ consume。Focus / ContentView の arrive 経路も同方針。`FocusPendingActionTests` 5 件 |
+| P1-9 | ~~**LA/Widget handoff が sessionID 不一致でも consume される**~~ | ~~pause/resume で先に consume~~ | **済**: peek → 照合 → 変異成功時だけ consume。超過の到着は Focus が既に出ているとき consume のみ（後から `arrive()` しない）。`FocusPendingActionTests` |
 | P1-3 | **到着など不可逆寄りの操作が握りつぶされる** | ContentView の LA arrive は失敗時キュー保持に変更済。Hub / History / TicketDetail の restore と AlarmKit の `try?` は残存 | restore / AlarmKit をログ or 明示失敗へ。次スライスで `try? save`（P1-10）とまとめてもよい |
 | P1-10 | **`try? modelContext.save()` が SessionManager ホットパスに多い** | `+CheckIn` / `+Timetable` / `+IdleCabin` / `+Passenger` / `+DeviceSideEffects` など。失敗しても UI・通知・LA は進んだように見える | save 失敗を `reconcile` または明示エラーへ。ホットパスから `try? save` を減らす |
 | P1-11 | **`phase` / `activeSession` はメモリ上のキャッシュ** | `reconcile` が正を写す。Focus は `TimelineView` 1Hz で reconcile。Focus 非表示時の他経路で呼ばれないと `phase` が遅れ得る | 運行中は app 側の薄い reconcile スケジューラ（foreground + 乗車中）を正にし、View 所有の tick に依存しない |

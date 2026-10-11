@@ -144,7 +144,7 @@ extension SessionManager {
                 } else {
                     try resumeFromAlarmKit()
                 }
-                _ = FocusPendingActionStore.consume()
+                FocusPendingActionStore.consumeIfMatches(pending)
                 return pending.kind
             } catch {
                 return nil

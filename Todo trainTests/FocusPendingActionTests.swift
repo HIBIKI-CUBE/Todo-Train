@@ -9,6 +9,7 @@ import Foundation
 import Testing
 @testable import Todo_train
 
+@Suite(.serialized)
 @MainActor
 struct FocusPendingActionTests {
     private func withIsolatedStore(_ body: () throws -> Void) rethrows {
@@ -126,5 +127,119 @@ struct FocusPendingActionTests {
             #expect(applied == nil)
             #expect(FocusPendingActionStore.peek()?.sessionID == orphan)
         }
+    }
+
+    @Test func consumeIfMatches_leavesANewerHandoff() throws {
+        try withIsolatedStore {
+            let first = FocusPendingAction(
+                kind: .pause,
+                sessionID: UUID(),
+                createdAt: Date(timeIntervalSince1970: 1)
+            )
+            let newer = FocusPendingAction(
+                kind: .arrive,
+                sessionID: UUID(),
+                createdAt: Date(timeIntervalSince1970: 2)
+            )
+            FocusPendingActionStore.enqueue(first)
+            FocusPendingActionStore.enqueue(newer)
+
+            #expect(FocusPendingActionStore.consumeIfMatches(first) == false)
+            #expect(FocusPendingActionStore.peek() == newer)
+            #expect(FocusPendingActionStore.consumeIfMatches(newer))
+            #expect(FocusPendingActionStore.peek() == nil)
+        }
+    }
+
+    @Test func overtimeArriveWhileFocusVisible_clearsBeforeALaterRunningPass() throws {
+        try withIsolatedStore {
+            let sessionID = UUID()
+            let arrive = FocusPendingAction(kind: .arrive, sessionID: sessionID, createdAt: .now)
+            FocusPendingActionStore.enqueue(arrive)
+
+            let whileShown = ArriveHandoff.decision(
+                sessionMatches: true,
+                phase: .overtime,
+                focusIsPresented: true
+            )
+            #expect(whileShown == .consumeOnly)
+            if whileShown == .consumeOnly {
+                FocusPendingActionStore.consumeIfMatches(arrive)
+            }
+
+            // Extend moves phase to running and Focus stays up. The queued arrive
+            // must already be gone, or this decision would land the ride.
+            let afterExtend = ArriveHandoff.decision(
+                sessionMatches: true,
+                phase: .running,
+                focusIsPresented: true
+            )
+            #expect(afterExtend == .performArrive)
+            #expect(FocusPendingActionStore.peek() == nil)
+        }
+    }
+
+    @Test func overtimeArriveBeforeFocus_staysUntilFocusIsPresented() throws {
+        try withIsolatedStore {
+            let arrive = FocusPendingAction(kind: .arrive, sessionID: UUID(), createdAt: .now)
+            FocusPendingActionStore.enqueue(arrive)
+
+            #expect(
+                ArriveHandoff.decision(
+                    sessionMatches: true,
+                    phase: .overtime,
+                    focusIsPresented: false
+                ) == .leaveQueued
+            )
+            #expect(FocusPendingActionStore.peek() == arrive)
+
+            #expect(
+                ArriveHandoff.decision(
+                    sessionMatches: true,
+                    phase: .overtime,
+                    focusIsPresented: true
+                ) == .consumeOnly
+            )
+            FocusPendingActionStore.consumeIfMatches(arrive)
+            #expect(FocusPendingActionStore.peek() == nil)
+        }
+    }
+
+    @Test func arriveHandoff_mismatchAndHiddenOvertimeStayQueued() {
+        #expect(
+            ArriveHandoff.decision(
+                sessionMatches: false,
+                phase: .overtime,
+                focusIsPresented: true
+            ) == .leaveQueued
+        )
+        #expect(
+            ArriveHandoff.decision(
+                sessionMatches: true,
+                phase: .running,
+                focusIsPresented: false
+            ) == .performArrive
+        )
+        #expect(
+            ArriveHandoff.shouldDropOnLeavingOvertime(
+                kind: .arrive,
+                sessionMatches: true,
+                focusWasPresented: true
+            )
+        )
+        #expect(
+            !ArriveHandoff.shouldDropOnLeavingOvertime(
+                kind: .arrive,
+                sessionMatches: true,
+                focusWasPresented: false
+            )
+        )
+        #expect(
+            !ArriveHandoff.shouldDropOnLeavingOvertime(
+                kind: .pause,
+                sessionMatches: true,
+                focusWasPresented: true
+            )
+        )
     }
 }
