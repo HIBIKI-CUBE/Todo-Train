@@ -159,6 +159,20 @@ final class SessionManager {
         guard let activeServiceDay, activeServiceDay.isOpen else { return false }
         return activeServiceDay.calendarDayKey == ServiceDay.dayKey(for: clock.now, calendar: calendar)
     }
+
+    /// Shared with Hub chrome. Uses the same running-session truth as `board()`.
+    var boardingEligibility: BoardingEligibility {
+        BoardingEligibility.evaluate(
+            isInService: isInService,
+            needsServiceDayEnd: needsServiceDayEndPrompt,
+            hasRunningRide: fetchRunningSession() != nil,
+            passengerLocksDriving: passengerChrome.locksDriving || fetchOpenPassengerRide() != nil,
+            canBoardNewRide: PauseLimitGuard.canBoardNewRide(
+                pausedCount: pausedCountTowardLimit,
+                limit: pauseLimit
+            )
+        )
+    }
 }
 
 extension SessionManager: SessionRidePausing {}

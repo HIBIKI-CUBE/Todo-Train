@@ -82,30 +82,16 @@ struct HubView: View {
         focusZoomNamespace ?? previewZoomNamespace
     }
 
+    private var boardingEligibility: BoardingEligibility {
+        sessionManager.boardingEligibility
+    }
+
     private var canBoardGenerally: Bool {
-        sessionManager.isInService
-            && sessionManager.phase != .running
-            && sessionManager.phase != .overtime
-            && !sessionManager.passengerChrome.locksDriving
+        boardingEligibility.allowsInteraction
     }
 
     private var boardDisabledReason: String {
-        if sessionManager.passengerChrome.locksDriving {
-            return PassengerCopy.drivingLocked
-        }
-        if sessionManager.needsServiceDayEndPrompt {
-            return "昨日の運行を終了してください"
-        }
-        if !sessionManager.isInService {
-            return "運行開始が必要です"
-        }
-        if sessionManager.phase == .running || sessionManager.phase == .overtime {
-            return "すでに走行中の切符があります"
-        }
-        if sessionManager.pausedCountTowardLimit >= sessionManager.pauseLimit {
-            return "停車が上限です。先に片付けるか、停車中から再乗車してください。"
-        }
-        return "発車できません"
+        boardingEligibility.disabledReason
     }
 
     private var isCompactHeight: Bool {
