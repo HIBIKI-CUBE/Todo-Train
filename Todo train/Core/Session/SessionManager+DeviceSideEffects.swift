@@ -127,6 +127,9 @@ extension SessionManager {
         guard saveBestEffort() else {
             session.pendingCheckIn = previousPending
             session.awayDueAt = previousAwayDue
+            if let previousAwayDue {
+                armAwayFire(at: previousAwayDue, sessionID: session.id)
+            }
             return
         }
         refreshLiveActivity(for: session, now: now, presentAwayAlert: presentAlert)

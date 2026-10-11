@@ -262,8 +262,12 @@ extension SessionManager {
             )
             guard let line = lines.first.map(Self.sanitizeCheckInLine), !line.isEmpty else { return }
             guard let current = self.activeSession, current.id == sessionID, current.isOpen else { return }
+            let previousLine = current.checkInPromptLine
             current.checkInPromptLine = line
-            guard self.saveBestEffort() else { return }
+            guard self.saveBestEffort() else {
+                current.checkInPromptLine = previousLine
+                return
+            }
             self.refreshProgressCheckInNotifications(for: current, now: self.clock.now)
         }
     }

@@ -95,6 +95,9 @@ extension SessionManager {
     }
 
     func save() throws {
+        if let saveErrorForTesting {
+            throw saveErrorForTesting
+        }
         try modelContext.save()
     }
 

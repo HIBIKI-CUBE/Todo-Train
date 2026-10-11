@@ -114,9 +114,13 @@ extension SessionManager {
             hasPending: false,
             seed: day.id
         ) {
+            let previousCabin = day.pendingCabin
             day.pendingCabin = .idle
+            guard saveBestEffort() else {
+                day.pendingCabin = previousCabin
+                return
+            }
             bumpCompanionSync()
-            _ = saveBestEffort()
             armIdleLocalNotification(serviceDayID: day.id, fireAt: now.addingTimeInterval(1))
             return
         }

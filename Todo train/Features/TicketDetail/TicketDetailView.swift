@@ -286,8 +286,7 @@ struct TicketDetailView: View {
                     do {
                         try sessionManager.restoreDeletedTicket(record)
                     } catch {
-                        errorMessage = error.localizedDescription
-                        showError = true
+                        undoCenter.restoreErrorMessage = error.localizedDescription
                     }
                 }
             }
@@ -319,8 +318,7 @@ struct TicketDetailView: View {
                         do {
                             try sessionManager.restoreDeletedTicket(record)
                         } catch {
-                            errorMessage = error.localizedDescription
-                            showError = true
+                            undoCenter.restoreErrorMessage = error.localizedDescription
                         }
                     }
                 }
@@ -335,12 +333,11 @@ struct TicketDetailView: View {
                     )
                 ) {
                     withAnimation {
-                        do {
-                            try sessionManager.restoreDeletedSession(record)
-                        } catch {
-                            errorMessage = error.localizedDescription
-                            showError = true
-                        }
+                    do {
+                        try sessionManager.restoreDeletedSession(record)
+                    } catch {
+                        undoCenter.restoreErrorMessage = error.localizedDescription
+                    }
                     }
                 }
             }
