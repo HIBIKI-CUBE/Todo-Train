@@ -34,7 +34,13 @@ struct ArrivalInvalidateOverlay: View {
     @State private var enter: CGFloat = 0
     /// 0…1 ink on the arrived ticket.
     @State private var impact: CGFloat = 0
-    @State private var stampHaptic = 0
+    @State private var stampSeated = false
+    @State private var ticketNudge: CGFloat = 0
+    @State private var phosphor: CGFloat = 0
+    @State private var praise = ArrivalPraise.plain
+    @State private var baseHaptic = 0
+    @State private var praiseHaptic = 0
+    @State private var stampGeneration = 0
     @State private var choiceHaptic = 0
     @State private var openHaptic = 0
 
@@ -192,7 +198,8 @@ struct ArrivalInvalidateOverlay: View {
         }
         .offset(y: (1 - enter) * 28)
         .opacity(Double(max(0, enter)))
-        .sensoryFeedback(.impact(weight: .heavy, intensity: 1.0), trigger: stampHaptic)
+        .sensoryFeedback(.impact(weight: .heavy, intensity: 1), trigger: baseHaptic)
+        .sensoryFeedback(.impact(flexibility: .rigid, intensity: 1), trigger: praiseHaptic)
         .onAppear {
             announceIfNeeded(arrival: arrival)
             runEntrance()
@@ -206,10 +213,20 @@ struct ArrivalInvalidateOverlay: View {
             content: MarsTicketContent(title: arrival.title, minutes: arrival.minutes),
             titleReveal: 1
         )
+        .offset(y: ticketNudge)
+        .overlay {
+            ArrivalStampPhosphor(
+                spread: praise.spread,
+                amount: phosphor,
+                color: phosphorColor
+            )
+            .allowsHitTesting(false)
+        }
         .overlay {
             MarsTicketUsedMarks(
                 punctuality: arrival.punctuality,
-                stampSettled: impact
+                stampSettled: impact,
+                innerRingSolid: praise.innerRingSolid
             )
             .opacity(impact > 0.01 ? 1 : 0)
             .allowsHitTesting(false)
@@ -219,7 +236,10 @@ struct ArrivalInvalidateOverlay: View {
                 GeometryReader { geo in
                     let diameter = min(geo.size.width, geo.size.height) * 0.36
                     stampPress(punctuality: arrival.punctuality, diameter: diameter)
-                        .position(x: geo.size.width * 0.7, y: geo.size.height * 0.62)
+                        .position(
+                            x: geo.size.width * 0.7,
+                            y: geo.size.height * 0.62
+                        )
                 }
             }
         }
@@ -257,8 +277,8 @@ struct ArrivalInvalidateOverlay: View {
                     choose(feedback: .open) { deck.showInstant() }
                 }
                 ArrivalChoiceSign(
-                    index: "なし",
-                    title: "予約なし",
+                    index: "おり",
+                    title: "おりる",
                     selected: deck.declinedNext,
                     hint: "次の切符は指名しない。乗車は始まらない"
                 ) {
@@ -317,7 +337,7 @@ struct ArrivalInvalidateOverlay: View {
             commitStamp(punctuality: punctuality)
         } label: {
             ZStack {
-                Circle().fill(Color.white)
+                Circle().fill(ink.opacity(0.08))
                 Circle().strokeBorder(ink, lineWidth: max(3, diameter * 0.045))
                 Circle()
                     .strokeBorder(ink.opacity(0.35), lineWidth: 1)
@@ -333,7 +353,7 @@ struct ArrivalInvalidateOverlay: View {
             .contentShape(Circle())
             .shadow(color: .black.opacity(0.28), radius: 4, y: 2)
         }
-        .buttonStyle(ArrivalStampButtonStyle(reduceMotion: reduceMotion))
+        .buttonStyle(ArrivalStampButtonStyle(reduceMotion: reduceMotion, seated: stampSeated))
         .disabled(!deck.canStamp)
         .opacity(deck.canStamp ? 1 : 0.45)
         .accessibilityLabel("\(stampCenterLabel(punctuality))の検札印")
@@ -422,7 +442,7 @@ struct ArrivalInvalidateOverlay: View {
         switch punctuality {
         case .early: MarsTicketSpec.stampPurple
         case .onTime: MarsTicketSpec.stampBlue
-        case .late, .notApplicable: MarsTicketSpec.stampBlue.opacity(0.9)
+        case .late, .notApplicable: MarsTicketSpec.stampBlue
         }
     }
 
@@ -454,27 +474,60 @@ struct ArrivalInvalidateOverlay: View {
         }
         stampError = ""
         deck.markStamped()
-        stampHaptic += 1
+        praise = praise(for: punctuality)
+        stampSeated = true
+        if praise.count > 0 {
+            praiseHaptic += 1
+        } else {
+            baseHaptic += 1
+        }
         let returnsToHub = action == nil
+        stampGeneration += 1
+        let generation = stampGeneration
         if reduceMotion {
             impact = 1
-            if returnsToHub {
-                onClose()
-            } else {
-                ceremonyVisible = false
-            }
+            phosphor = praise.count > 0 ? 1 : 0
+            scheduleHold(generation: generation, returnsToHub: returnsToHub)
             return
         }
         withAnimation(MarsTicketSpec.ArrivalMotion.slam) {
             impact = 1
+            phosphor = praise.count > 0 ? 1 : 0
+            ticketNudge = MarsTicketSpec.ArrivalMotion.nudgeAmplitude
         } completion: {
-            if punctuality == .onTime || punctuality == .early {
-                stampHaptic += 1
+            withAnimation(MarsTicketSpec.ArrivalMotion.slam) {
+                ticketNudge = 0
             }
+            scheduleHold(generation: generation, returnsToHub: returnsToHub)
+        }
+    }
+
+    private func praise(for punctuality: ArrivalPunctuality) -> ArrivalPraise {
+        let session = moment.arrivedSessionID.flatMap { sessionManager.fetchWorkSession(id: $0) }
+        return ArrivalPraise(
+            punctuality: punctuality,
+            alreadyDone: session?.overtimeResolution == .alreadyDone,
+            nextWasReserved: deck.reserved != nil,
+            continuedFromStamp: session?.startedFrom == .arrivalSwipe
+        )
+    }
+
+    private var phosphorColor: Color {
+        switch praise.ink {
+        case .onTime: MarsTicketSpec.stampBlue
+        case .early: MarsTicketSpec.stampPurple
+        case .arrival: TrainTheme.rail
+        }
+    }
+
+    private func scheduleHold(generation: Int, returnsToHub: Bool) {
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(MarsTicketSpec.ArrivalMotion.stampHoldMilliseconds))
+            guard generation == stampGeneration else { return }
             if returnsToHub {
                 onClose()
             } else {
-                withAnimation(MarsTicketSpec.ArrivalMotion.exit) {
+                withAnimation(reduceMotion ? nil : MarsTicketSpec.ArrivalMotion.exit) {
                     ceremonyVisible = false
                 }
             }
@@ -487,7 +540,7 @@ struct ArrivalInvalidateOverlay: View {
             return "\(head)。\(arrival.title)。次の一本 \(next.title)"
         }
         if deck.declinedNext {
-            return "\(head)。\(arrival.title)。予約なし"
+            return "\(head)。\(arrival.title)。おりる"
         }
         return "\(head)。\(arrival.title)"
     }
@@ -503,10 +556,15 @@ struct ArrivalInvalidateOverlay: View {
 struct MarsTicketUsedMarks: View {
     var punctuality: ArrivalPunctuality = .late
     var stampSettled: CGFloat = 1
+    var innerRingSolid: Bool = false
 
     var body: some View {
         GeometryReader { geo in
             let stampSize = min(geo.size.width, geo.size.height) * 0.28
+            let seat = CGPoint(
+                x: geo.size.width * 0.70,
+                y: geo.size.height * 0.62 + MarsTicketSpec.ArrivalMotion.travel
+            )
             ZStack(alignment: .topLeading) {
                 Circle()
                     .fill(Color.black.opacity(0.55 * stampSettled))
@@ -517,13 +575,10 @@ struct MarsTicketUsedMarks: View {
                     .offset(x: 10, y: geo.size.height * 0.42)
 
                 stampDisk(size: stampSize)
-                    .scaleEffect(0.72 + 0.28 * stampSettled)
+                    .scaleEffect(0.86 + 0.14 * stampSettled)
                     .opacity(Double(stampSettled))
-                    .offset(
-                        x: geo.size.width * 0.55,
-                        y: geo.size.height * 0.48
-                    )
                     .rotationEffect(.degrees(-12))
+                    .position(seat)
             }
         }
         .allowsHitTesting(false)
@@ -534,23 +589,18 @@ struct MarsTicketUsedMarks: View {
             switch punctuality {
             case .early: MarsTicketSpec.stampPurple
             case .onTime: MarsTicketSpec.stampBlue
-            case .late, .notApplicable: MarsTicketSpec.stampBlue.opacity(0.9)
+            case .late, .notApplicable: MarsTicketSpec.stampBlue
             }
         }()
         return ZStack {
             Circle()
-                .strokeBorder(ink.opacity(0.85), lineWidth: 2.2)
+                .strokeBorder(ink.opacity(0.9), lineWidth: 2.4)
             Circle()
-                .strokeBorder(ink.opacity(0.35), lineWidth: 0.8)
-                .padding(4)
-            VStack(spacing: 2) {
-                Text("ありがとうございます")
-                    .font(.system(size: 6, weight: .semibold, design: .default))
-                    .foregroundStyle(ink.opacity(0.8))
-                Text(stampCenterLabel)
-                    .font(MarsTicketSpec.stampFont())
-                    .foregroundStyle(ink)
-            }
+                .strokeBorder(ink.opacity(innerRingSolid ? 0.95 : 0.35), lineWidth: innerRingSolid ? 2.2 : 0.8)
+                .padding(size * 0.12)
+            Text(stampCenterLabel)
+                .font(MarsTicketSpec.stampFont())
+                .foregroundStyle(ink)
         }
         .frame(width: size, height: size)
     }
@@ -654,12 +704,47 @@ private struct ArrivalDismissPlate: View {
 
 private struct ArrivalStampButtonStyle: ButtonStyle {
     var reduceMotion: Bool
+    var seated: Bool
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .scaleEffect(!reduceMotion && configuration.isPressed ? 0.94 : 1)
-            .opacity(configuration.isPressed ? 0.82 : 1)
-            .animation(reduceMotion ? nil : TrainTheme.Motion.pageSnap, value: configuration.isPressed)
+            .offset(y: (!reduceMotion && (configuration.isPressed || seated)) ? MarsTicketSpec.ArrivalMotion.travel : 0)
+            .animation(
+                reduceMotion ? nil : MarsTicketSpec.ArrivalMotion.descend,
+                value: configuration.isPressed || seated
+            )
+    }
+}
+
+private struct ArrivalStampPhosphor: View {
+    var spread: ArrivalPraise.Spread
+    var amount: CGFloat
+    var color: Color
+
+    var body: some View {
+        GeometryReader { geo in
+            let seat = CGPoint(
+                x: geo.size.width * 0.70,
+                y: geo.size.height * 0.62 + MarsTicketSpec.ArrivalMotion.travel
+            )
+            let radius = spread == .paper
+                ? max(geo.size.width, geo.size.height)
+                : min(geo.size.width, geo.size.height) * 0.42
+            RadialGradient(
+                colors: [
+                    color.opacity(0.9 * amount),
+                    color.opacity(0.28 * amount),
+                    color.opacity(0)
+                ],
+                center: .center,
+                startRadius: 0,
+                endRadius: radius
+            )
+            .frame(width: radius * 2, height: radius * 2)
+            .position(seat)
+        }
+        .clipped()
+        .allowsHitTesting(false)
     }
 }
 
