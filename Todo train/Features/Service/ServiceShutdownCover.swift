@@ -20,6 +20,12 @@ struct ServiceShutdownCover: View {
     @State private var canvasLaunch: TransferCanvasLaunch?
     @State private var localError = ""
     @State private var showLocalError = false
+    @State private var prefaceHeight: CGFloat = 168
+    @State private var viewportHeight: CGFloat = 0
+    @State private var overviewSettled = false
+
+    private static let overviewID = "service-overview"
+    private static let minimumClockHeight: CGFloat = 220
 
     private var pausedSessions: [WorkSession] {
         sessionManager.pausedSessions
@@ -121,65 +127,159 @@ struct ServiceShutdownCover: View {
     }
 
     private func cabinBody(now: Date) -> some View {
-        let occupancy = occupancyInstrument(now: now)
-        return ScrollView {
-            VStack(spacing: 0) {
-                ServiceCabinInstruments(
-                    lamp: lamp,
-                    occupancyRows: occupancy.rows,
-                    occupancyMarks: occupancy.marks,
-                    dayText: dayText,
-                    now: now,
-                    statusText: statusText,
-                    paused: !pausedSessions.isEmpty,
-                    occupancyActionTitle: occupancy.actionTitle,
-                    occupancyAction: occupancy.action,
-                    facts: ServiceCabinSequence.dayFacts(in: daySessions)
-                )
+        GeometryReader { geo in
+            let clockHeight = max(Self.minimumClockHeight, geo.size.height - prefaceHeight)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(spacing: 0) {
+                        preface(now: now)
+                            .onGeometryChange(for: CGFloat.self) { proxy in
+                                proxy.size.height
+                            } action: { height in
+                                guard height > 1, abs(height - prefaceHeight) > 1 else { return }
+                                prefaceHeight = height
+                            }
 
-                if lamp >= .live {
-                    FocusControlDivider()
-                    ServiceCabinPanel(powered: true) {
-                        resultClock
-                            .allowsHitTesting(!poweringDown)
-                    }
-                }
+                        if lamp >= .live {
+                            FocusControlDivider()
+                            overviewClock(now: now, height: clockHeight)
+                                .id(Self.overviewID)
+                        }
 
-                if lamp >= .ready, !poweringDown {
-                    pausedBlock
-                    unlabeledBlock
-                    if !canConfirmEnd {
-                        FocusControlDivider()
-                        ServiceCabinPanel(powered: true) {
-                            Text(endBlockedReason)
-                                .font(.footnote)
-                                .foregroundStyle(FocusPanel.muted)
+                        if lamp >= .ready, !poweringDown {
+                            pausedBlock
+                            unlabeledBlock
+                            if !canConfirmEnd {
+                                FocusControlDivider()
+                                ServiceCabinPanel(powered: true) {
+                                    Text(endBlockedReason)
+                                        .font(.footnote)
+                                        .foregroundStyle(FocusPanel.muted)
+                                }
+                            }
                         }
                     }
                 }
+                .scrollIndicators(.hidden)
+                .onAppear { viewportHeight = geo.size.height }
+                .onChange(of: geo.size.height) { _, height in
+                    viewportHeight = height
+                }
+                .onChange(of: lamp) { _, newLamp in
+                    if newLamp < .live { overviewSettled = false }
+                }
+                .onChange(of: overviewSettled) { _, settled in
+                    guard settled else { return }
+                    let clock = max(Self.minimumClockHeight, viewportHeight - prefaceHeight)
+                    guard prefaceHeight + clock > viewportHeight + 8 else { return }
+                    if reduceMotion {
+                        proxy.scrollTo(Self.overviewID, anchor: .top)
+                    } else {
+                        withAnimation(ServiceCabinMotion.overviewPush) {
+                            proxy.scrollTo(Self.overviewID, anchor: .top)
+                        }
+                    }
+                }
+                .task(id: lamp >= .live) {
+                    await pushOverview()
+                }
             }
         }
-        .scrollIndicators(.hidden)
     }
 
-    private var resultClock: some View {
-        let layout = SessionTimeline.calendarDayLayout(
-            on: resultDay,
-            calendar: sessionManager.calendar
+    private func preface(now: Date) -> some View {
+        let occupancy = occupancyInstrument(now: now)
+        return ServiceCabinInstruments(
+            lamp: lamp,
+            occupancyRows: occupancy.rows,
+            occupancyMarks: occupancy.marks,
+            dayText: dayText,
+            now: now,
+            statusText: statusText,
+            paused: !pausedSessions.isEmpty,
+            occupancyActionTitle: occupancy.actionTitle,
+            occupancyAction: occupancy.action,
+            facts: ServiceCabinSequence.dayFacts(in: daySessions)
         )
-        return HistoryDayClockView(
-            sessions: daySessions,
-            day: resultDay,
-            sharedLayout: layout,
-            density: .compact,
-            showsGutter: true,
-            minHeight: 0,
-            onSelect: { _ in },
-            onDelete: { _ in },
-            strips: sessionManager.historyStrips(onDayKey: dayKey),
-            openEndedAt: sessionManager.clock.now
-        )
+    }
+
+    private func overviewClock(now: Date, height: CGFloat) -> some View {
+        let window = overviewWindow(now: now, height: height)
+        let layout = window.layout(calendar: sessionManager.calendar)
+        return ZStack {
+            HistoryDayClockView(
+                sessions: daySessions,
+                day: resultDay,
+                sharedLayout: layout,
+                density: .compact,
+                showsGutter: true,
+                minHeight: 0,
+                onSelect: { _ in },
+                onDelete: { _ in },
+                strips: sessionManager.historyStrips(onDayKey: dayKey),
+                openEndedAt: now,
+                hourLabelStride: ServiceCabinOverview.hourStride(pointsPerMinute: window.pointsPerMinute)
+            )
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        .frame(height: height)
+        .background(Color.black)
+        .clipped()
+        .allowsHitTesting(!poweringDown)
         .accessibilityLabel("今日の跡")
+        .animation(reduceMotion ? nil : ServiceCabinMotion.overviewPush, value: overviewSettled)
+    }
+
+    private func overviewWindow(now: Date, height: CGFloat) -> ServiceCabinOverviewWindow {
+        let calendar = sessionManager.calendar
+        let slack = HistoryDayClockView.topSlack
+        if reduceMotion || overviewSettled {
+            let dayStart = calendar.startOfDay(for: resultDay)
+            let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart)
+                ?? dayStart.addingTimeInterval(86_400)
+            let bounds = ServiceCabinOverview.serviceBounds(
+                startedAt: sessionManager.activeServiceDay?.startedAt,
+                now: now,
+                dayStart: dayStart,
+                dayEnd: dayEnd,
+                rides: rideBounds(now: now, dayStart: dayStart, dayEnd: dayEnd)
+            )
+            return ServiceCabinOverview.fitted(
+                bounds: bounds,
+                viewportHeight: height,
+                calendar: calendar,
+                slack: slack
+            )
+        }
+        return ServiceCabinOverview.fullDay(
+            on: resultDay,
+            viewportHeight: height,
+            calendar: calendar,
+            slack: slack
+        )
+    }
+
+    private func rideBounds(now: Date, dayStart: Date, dayEnd: Date) -> [(start: Date, end: Date)] {
+        daySessions.compactMap { session in
+            let end = min(dayEnd, session.endedAt ?? now)
+            let start = max(dayStart, session.startedAt)
+            guard end > start else { return nil }
+            return (start, end)
+        }
+    }
+
+    private func pushOverview() async {
+        guard lamp >= .live else { return }
+        if reduceMotion {
+            overviewSettled = true
+            return
+        }
+        overviewSettled = false
+        try? await Task.sleep(for: .milliseconds(520))
+        if Task.isCancelled { return }
+        withAnimation(ServiceCabinMotion.overviewPush) {
+            overviewSettled = true
+        }
     }
 
     @ViewBuilder

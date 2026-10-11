@@ -19,10 +19,19 @@ enum ServiceCabinLamp: Int, Comparable, CaseIterable, Sendable {
     }
 }
 
-enum ServiceCabinAnnunciator: String, CaseIterable, Sendable {
-    case service = "運行"
-    case occupancy = "占有"
-    case paused = "停車"
+enum ServiceCabinAnnunciator: CaseIterable, Sendable {
+    case service
+    case occupancy
+    case paused
+}
+
+/// What the occupancy lamp is actually saying.
+enum ServiceCabinTrackReading: Equatable, Sendable {
+    /// Something is on the line now (いま / 掲示).
+    case blocked
+    /// Only a later mark (次).
+    case scheduled
+    case clear
 }
 
 struct ServiceCabinConsistItem: Equatable, Sendable, Identifiable {
@@ -93,6 +102,54 @@ enum ServiceCabinSequence {
         case .occupancy: return hasOccupancy
         case .paused: return paused
         }
+    }
+
+    /// Test holds the alert word. After that cell settles, the lamp reads the live state.
+    static func annunciatorLegend(
+        _ id: ServiceCabinAnnunciator,
+        showsLiveReading: Bool,
+        serviceOn: Bool,
+        track: ServiceCabinTrackReading,
+        paused: Bool
+    ) -> String {
+        if !showsLiveReading {
+            switch id {
+            case .service: return "運行中"
+            case .occupancy: return "塞がり"
+            case .paused: return "停車中"
+            }
+        }
+        switch id {
+        case .service:
+            return serviceOn ? "運行中" : "運休"
+        case .occupancy:
+            switch track {
+            case .blocked: return "塞がり"
+            case .scheduled: return "予定"
+            case .clear: return "空き"
+            }
+        case .paused:
+            return paused ? "停車中" : "進行"
+        }
+    }
+
+    static func trackReading(
+        rows: [TimetableOccupancyRow],
+        marks: [TimetableOccupancyMark]
+    ) -> ServiceCabinTrackReading {
+        if rows.contains(where: { $0.kind == .occupying || $0.kind == .notice })
+            || marks.contains(where: \.isCurrent) {
+            return .blocked
+        }
+        if !rows.isEmpty || !marks.isEmpty {
+            return .scheduled
+        }
+        return .clear
+    }
+
+    /// `Array.move(fromOffsets:toOffset:)` so the row at `from` lands on `visualIndex`.
+    static func consistMoveOffset(from: Int, to visualIndex: Int) -> Int {
+        visualIndex > from ? visualIndex + 1 : visualIndex
     }
 
     static func secondsRailRest(

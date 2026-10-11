@@ -22,6 +22,7 @@ struct ServiceCabinInstruments: View {
     var additionalActionTitle: String? = nil
     var additionalAction: ((UUID) -> Void)? = nil
     var consistItems: [ServiceCabinConsistItem] = []
+    var onReorderConsist: (([UUID]) -> Void)? = nil
     var facts: [ServiceCabinDayFact] = []
     var clockHeight: CGFloat? = nil
     var expandsClock: Bool = false
@@ -36,6 +37,10 @@ struct ServiceCabinInstruments: View {
 
     private var hasOccupancy: Bool {
         !occupancyRows.isEmpty || !occupancyMarks.isEmpty || !additionalOccupancyRows.isEmpty
+    }
+
+    private var trackReading: ServiceCabinTrackReading {
+        ServiceCabinSequence.trackReading(rows: displayedOccupancyRows, marks: occupancyMarks)
     }
 
     private var usesHeroClock: Bool {
@@ -84,15 +89,6 @@ struct ServiceCabinInstruments: View {
         VStack(spacing: 0) {
             header
             FocusControlDivider()
-            ServiceCabinAnnunciators(
-                lamp: lamp,
-                serviceOn: lamp >= .live,
-                hasOccupancy: hasOccupancy,
-                paused: paused,
-                testCount: testCount,
-                settledCount: settledCount
-            )
-            FocusControlDivider()
             if usesHeroClock {
                 heroClock
                 FocusControlDivider()
@@ -135,12 +131,21 @@ struct ServiceCabinInstruments: View {
                     .minimumScaleFactor(0.6)
                     .multilineTextAlignment(.trailing)
             }
+            ServiceCabinAnnunciators(
+                lamp: lamp,
+                serviceOn: lamp >= .live,
+                hasOccupancy: hasOccupancy,
+                track: trackReading,
+                paused: paused,
+                testCount: testCount,
+                settledCount: settledCount
+            )
             if !usesHeroClock {
                 ServiceCabinSecondsRail(lamp: lamp, armed: clockArmed)
             }
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 14)
+        .padding(.vertical, 10)
         .background(FocusPanel.fill)
         .animation(reduceMotion ? nil : ServiceCabinMotion.clockLock, value: clockArmed)
         .accessibilityAddTraits(.isHeader)
@@ -239,35 +244,14 @@ struct ServiceCabinInstruments: View {
 
     @ViewBuilder
     private var consist: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            ForEach(Array(consistItems.enumerated()), id: \.element.id) { index, item in
-                HStack(alignment: .firstTextBaseline, spacing: 12) {
-                    Text(item.title)
-                        .font(.system(size: 17, weight: .medium, design: .default))
-                        .foregroundStyle(FocusPanel.ink.opacity(0.82))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    Text("\(item.minutes)分")
-                        .font(.system(size: 15, weight: .semibold, design: .default))
-                        .monospacedDigit()
-                        .foregroundStyle(FocusPanel.muted)
-                }
-                .opacity(index < revealedConsistCount ? 1 : 0)
-                .offset(y: index < revealedConsistCount ? 0 : 8)
-                .animation(
-                    reduceMotion ? nil : ServiceCabinMotion.rowIn,
-                    value: revealedConsistCount
-                )
-                .accessibilityElement(children: .combine)
-            }
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(FocusPanel.fill)
-        .allowsHitTesting(false)
-        .accessibilityLabel("編成")
+        ServiceCabinConsistList(
+            items: consistItems,
+            revealedCount: revealedConsistCount,
+            reduceMotion: reduceMotion,
+            showsGrip: onReorderConsist != nil && consistItems.count > 1,
+            canReorder: lamp >= .ready && onReorderConsist != nil && consistItems.count > 1,
+            onReorder: { ids in onReorderConsist?(ids) }
+        )
     }
 
     private var factsStrip: some View {
@@ -430,5 +414,134 @@ struct ServiceCabinInstruments: View {
         case .ready:
             return "切符へ"
         }
+    }
+}
+
+/// Open tickets in consist order. The grip reorders; the row itself still scrolls.
+private struct ServiceCabinConsistList: View {
+    var items: [ServiceCabinConsistItem]
+    var revealedCount: Int
+    var reduceMotion: Bool
+    var showsGrip: Bool
+    var canReorder: Bool
+    var onReorder: ([UUID]) -> Void
+
+    @State private var dragID: UUID?
+    @State private var dragOffset: CGFloat = 0
+    @State private var reorderTicks = 0
+
+    private let rowPitch: CGFloat = 40
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                row(item, index: index)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(FocusPanel.fill)
+        .accessibilityLabel("編成")
+        .sensoryFeedback(.selection, trigger: reorderTicks)
+        .onChange(of: items.map(\.id)) { _, _ in
+            dragID = nil
+            dragOffset = 0
+        }
+    }
+
+    private func row(_ item: ServiceCabinConsistItem, index: Int) -> some View {
+        let revealed = index < revealedCount
+        return HStack(alignment: .center, spacing: 8) {
+            Text(item.title)
+                .font(.system(size: 17, weight: .medium, design: .default))
+                .foregroundStyle(FocusPanel.ink.opacity(0.82))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Text("\(item.minutes)分")
+                .font(.system(size: 15, weight: .semibold, design: .default))
+                .monospacedDigit()
+                .foregroundStyle(FocusPanel.muted)
+            if showsGrip {
+                Image(systemName: "line.3.horizontal")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(FocusPanel.muted)
+                    .opacity(canReorder ? 1 : 0.35)
+                    .frame(width: 44, height: rowPitch)
+                    .contentShape(Rectangle())
+                    .highPriorityGesture(drag(item))
+                    .accessibilityHidden(true)
+                    .allowsHitTesting(canReorder)
+            }
+        }
+        .frame(height: rowPitch)
+        .opacity(revealed ? 1 : 0)
+        .offset(y: (revealed ? 0 : 8) + shift(for: index))
+        .zIndex(dragID == item.id ? 1 : 0)
+        .animation(reduceMotion ? nil : ServiceCabinMotion.rowIn, value: revealedCount)
+        .animation(dragID == nil && !reduceMotion ? ServiceCabinMotion.rowIn : nil, value: shift(for: index))
+        .accessibilityElement(children: .combine)
+        .accessibilityHint(canReorder ? "並べ替え" : "")
+        .accessibilityAction(named: "上へ") {
+            shiftItem(item.id, by: -1)
+        }
+        .accessibilityAction(named: "下へ") {
+            shiftItem(item.id, by: 1)
+        }
+    }
+
+    private func shift(for index: Int) -> CGFloat {
+        guard let dragID, let from = items.firstIndex(where: { $0.id == dragID }) else { return 0 }
+        if items[index].id == dragID { return dragOffset }
+        let target = visualIndex(from: from, offset: dragOffset)
+        if from < target, index > from, index <= target { return -rowPitch }
+        if target < from, index >= target, index < from { return rowPitch }
+        return 0
+    }
+
+    private func drag(_ item: ServiceCabinConsistItem) -> some Gesture {
+        DragGesture(minimumDistance: 6)
+            .onChanged { value in
+                guard let from = items.firstIndex(where: { $0.id == item.id }) else { return }
+                dragID = item.id
+                let maxUp = -CGFloat(from) * rowPitch
+                let maxDown = CGFloat(items.count - 1 - from) * rowPitch
+                dragOffset = min(max(value.translation.height, maxUp), maxDown)
+            }
+            .onEnded { _ in
+                guard let from = items.firstIndex(where: { $0.id == item.id }) else { return }
+                let target = visualIndex(from: from, offset: dragOffset)
+                guard target != from else {
+                    dragID = nil
+                    dragOffset = 0
+                    return
+                }
+                var ids = items.map(\.id)
+                ids.move(
+                    fromOffsets: IndexSet(integer: from),
+                    toOffset: ServiceCabinSequence.consistMoveOffset(from: from, to: target)
+                )
+                reorderTicks += 1
+                onReorder(ids)
+            }
+    }
+
+    private func shiftItem(_ id: UUID, by delta: Int) {
+        guard canReorder, let from = items.firstIndex(where: { $0.id == id }) else { return }
+        let target = min(max(from + delta, 0), items.count - 1)
+        guard target != from else { return }
+        var ids = items.map(\.id)
+        ids.move(
+            fromOffsets: IndexSet(integer: from),
+            toOffset: ServiceCabinSequence.consistMoveOffset(from: from, to: target)
+        )
+        reorderTicks += 1
+        onReorder(ids)
+    }
+
+    private func visualIndex(from: Int, offset: CGFloat) -> Int {
+        let delta = Int((offset / rowPitch).rounded())
+        return min(max(from + delta, 0), items.count - 1)
     }
 }
