@@ -74,7 +74,7 @@
 | P1-1 | **SessionManager が横断関心**（搭乗・ダイヤ・車内放送・LA/ベル副作用・乗客・削除 Undo 連携） | `Core/Session/SessionManager*.swift` 合計 ~2663 行、拡張 13。プロパティに UI 向け haptic tick / quiet message / passenger chrome が同居 | 副作用を `DeviceSideEffects` / Timetable / Passenger へさらに外向き化。クエリ系は既に `+Queries`。次は「書き込みコマンド」と「読み取り投影」の分離 |
 | P1-2 | **グローバル singleton + `AppRuntime` / `SessionPauseRuntime` 静的ハンドル** | `Todo_trainApp` が `AppRuntime.sessionManager` / `OvertimeNotifier.shared.sessionManager` / `SessionPauseRuntime.pauser` / `AlarmKitScheduler.shared.bind` を起動時に相互配線。`AppSettings.shared` / `ArrivalForecastStore.shared` も Environment と二重 | Intents / Alarm / LA 用に「起動後のファサード 1 箇所」に閉じ、View 側は Environment のみを正にする。テストでは shared を避けられる形へ |
 | P1-4 | **巨大 Feature / DesignSystem ファイル**（UI + 状態 + レイアウトが同居） | `CockpitInstrumentViews` 930 / `ArrivalInvalidateOverlay` 799 / `ApproachClearEngine` 792 / `HubView` 765 / `PassengerLCD` 602 / `FocusView` 596 など。ApproachClear 状態機械が `Features/` に居る | 純計算・状態機械を Core/Package へ。View は構成だけ。Widget 計器は既に `CockpitLayoutContractTests` があるので同じ型で切る |
-| P1-13 | **発車可否が Hub UI と `board()` で二重** | `HubView.canBoardGenerally` / `boardDisabledReason` vs `SessionManager.board` / `PauseLimitGuard` / `ensureServiceAllowsBoarding` | 単一の `BoardingEligibility`（または Queries API）を Hub と `board()` が共有 |
+| P1-13 | ~~**発車可否が Hub UI と `board()` で二重**~~ | ~~Hub と `board()` が別判定~~ | **済**: `BoardingEligibility` + `SessionManager.boardingEligibility`。Hub は `allowsInteraction` / `disabledReason`。`board()` は同一 gate。`BoardingEligibilityTests` |
 
 ### P1 — ライフサイクル・永続・テスト
 
@@ -133,8 +133,8 @@
 1. **~~死 alias 掃除~~** — P2-3 済。
 2. **~~LA handoff の consume 順（P1-9）+ テスト~~** — 済。
 3. **~~副作用の失敗を見える化（P1-3 / P1-10）~~** — `saveBestEffort` / restore alert / AlarmKit log 済。
-4. **発車可否の単一 API（P1-13）** — Hub と `board()` を同じ表に。次の実装スライス。
-5. **SessionManager から投影を剥がす（P1-1）+ reconcile スケジューラ（P1-11）** — 書き込み API は触らない。
+4. **~~発車可否の単一 API（P1-13）~~** — 済。
+5. **SessionManager から投影を剥がす（P1-1）+ reconcile スケジューラ（P1-11）** — 書き込み API は触らない。次の実装スライス。
 6. **クロスターゲット共有（P2-1 / P2-13）** — QR、Cockpit/Timer SPM。
 7. **テストで鎖（P1-8 / P2-8–11 / P2-17）** — リファクタ PR は純関数テストを先に足す。
 8. **依存更新は単独 PR（P2-5）** — アプリ本体と混ぜない。Dependabot high も別確認。

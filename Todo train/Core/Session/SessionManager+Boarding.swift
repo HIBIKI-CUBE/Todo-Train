@@ -57,8 +57,9 @@ extension SessionManager {
         startedFrom: RideStartOrigin = .other
     ) throws {
         let now = now ?? clock.now
-        try refusePassengerDriving()
+        // Keep service-day flag / activeServiceDay current before reading the shared gate.
         try ensureServiceAllowsBoarding(at: now)
+        let gate = boardingEligibility
 
         guard ticket.isOpen else {
             throw SessionError.ticketAlreadyClosed
@@ -71,18 +72,13 @@ extension SessionManager {
         }
 
         if let paused = openPausedSessions().first(where: { $0.ticket?.id == ticket.id }) {
+            try gate.assertCanBoardOrResume()
             activeSession = paused
             try resume(now: now)
             return
         }
 
-        guard PauseLimitGuard.canBoardNewRide(
-            pausedCount: pausedCountTowardLimit,
-            limit: settings.pauseLimit
-        ) else {
-            throw SessionError.pauseLimitReached
-        }
-
+        try gate.assertCanStartNewRide()
         try startNewSession(ticket: ticket, now: now, startedFrom: startedFrom)
     }
 
