@@ -14,6 +14,8 @@ from pathlib import Path
 from analyze import QUOTED, ending, plain_kind, sahen_label, sentences
 
 ROLES = Path(__file__).with_name("roles.tsv")
+# docs/03「使わない」と、切符の名前の言い換え
+BANNED = ("乗り換え", "インボックス", "区間完了", "コーチ", "ポイント", "ストリーク", "定時率", "XP", "タイトル")
 # docs/19: 乗客の面では切符の語を出さない
 PASSENGER_BANNED = ("切符", "発車", "停車", "再乗車", "途中下車", "発券", "マルス", "運転台", "乗り換え")
 # docs/02: 指図する案内・「して」の授業はしない
@@ -38,6 +40,9 @@ def problems(text: str, kind: str, role: str) -> list[str]:
     sents = sentences(t) or [t]
     ends = [ending(s) for s in sents]
     out = []
+    hit = [w for w in BANNED if w in t]
+    if hit:
+        out.append(f"用語表で使わない語がある（{'、'.join(hit)}）")
     if "polite" in ends and "plain" in ends:
         out.append("敬体と常体が混ざっている")
     if len(sents) >= 2 and any(e != "polite" for e in ends):

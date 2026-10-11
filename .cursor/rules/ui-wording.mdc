@@ -23,6 +23,7 @@ FocusControlButton(title: "もう終わってた")  // 運転台なのに口語
 FocusControlButton(title: "到着済み")        // 運転士の操作名
 .accessibilityHint("新しい切符を発行します")  // ヒントはいつもアプリの声
 CabinCopy.prompt = "まだ乗ってる？"          // 車内放送は口語の問いでよい。指図はしない
+TextField("題名", text: $title)             // 発券は端末の欄の名前。「行き先」に置き換えない
 ```
 
 日本語のリテラルを足したり変えたりしたら、必ず通す:
