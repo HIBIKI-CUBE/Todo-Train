@@ -78,6 +78,9 @@ struct PDCAExportTests {
         #expect(isNull(open["closureKind"]))
         #expect(number(open, "tagCount") == 0)
         #expect(number(open, "rideCount") == 0)
+        #expect(isNull(open["reservedAt"]))
+        #expect(isNull(open["reservedFromRideId"]))
+        #expect(isNull(open["reservedVia"]))
 
         let resumed = try #require(row(rides, id: fixture.resumedRideID))
         #expect(resumed["ticketId"] as? String == fixture.arrivedTicketID.uuidString)
@@ -90,6 +93,9 @@ struct PDCAExportTests {
         #expect(resumed["overtimeResolution"] as? String == "alreadyDone")
         #expect(resumed["timetableHeld"] as? Bool == true)
         #expect(number(resumed, "checkInFiredCount") == 2)
+        #expect(isNull(resumed["arrivalAction"]))
+        #expect(isNull(resumed["arrivalStampedAt"]))
+        #expect(resumed["startedFrom"] as? String == "other")
 
         let orphan = try #require(row(rides, id: fixture.orphanRideID))
         #expect(isNull(orphan["ticketId"]))
@@ -253,6 +259,41 @@ struct PDCAExportTests {
         let summary = try #require(object["passengerSummary"] as? [String: Any])
         #expect(Set(summary.keys) == PDCAContract.passengerSummaryKeys)
         #expect(number(summary, "aboardCount") == 0)
+    }
+
+    @Test func exportJSON_addsNextRideColumnsWithoutExperimentPhases() throws {
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let (manager, context, clock, _) = try SessionManagerFixtures.makeHarness(now: start)
+        try manager.startService()
+        let riding = try SessionManagerFixtures.makeTicket(context, title: "今", seconds: 600)
+        let next = try SessionManagerFixtures.makeTicket(context, title: "次", seconds: 900)
+        try manager.board(ticket: riding)
+        let arrivedID = try #require(manager.activeSession?.id)
+        try manager.reserveNextRide(ticket: next, via: .riding)
+        try manager.arrive()
+        clock.advance(by: 12)
+        try manager.recordArrivalStamp(sessionID: arrivedID, action: .nextRide)
+        try manager.boardFromArrivalSwipe(ticketID: next.id)
+        let nextRideID = try #require(manager.activeSession?.id)
+
+        let object = try jsonObject(try PDCAExport.jsonData(in: context, exportedAt: start))
+        #expect(object["experimentPhases"] == nil)
+        let tickets = try rows(object, "tickets")
+        let rides = try rows(object, "rides")
+        let reserved = try #require(row(tickets, id: next.id))
+        let arrived = try #require(row(rides, id: arrivedID))
+        let swiped = try #require(row(rides, id: nextRideID))
+
+        #expect(date(reserved, "reservedAt") == start)
+        #expect(reserved["reservedFromRideId"] as? String == arrivedID.uuidString)
+        #expect(reserved["reservedVia"] as? String == "riding")
+        #expect(arrived["arrivalAction"] as? String == "nextRide")
+        #expect(date(arrived, "arrivalStampedAt") == start.addingTimeInterval(12))
+        #expect(arrived["startedFrom"] as? String == "other")
+        #expect(arrived["outcome"] as? String == "arrived")
+        #expect(swiped["startedFrom"] as? String == "arrivalSwipe")
+        #expect(isNull(swiped["arrivalAction"]))
+        #expect(isNull(swiped["arrivalStampedAt"]))
     }
 }
 
@@ -589,11 +630,13 @@ private enum PDCAContract {
     static let ticketKeys: Set<String> = [
         "id", "createdAt", "dueDate", "closedAt", "closureKind",
         "estimatedSeconds", "tagCount", "rideCount",
+        "reservedAt", "reservedFromRideId", "reservedVia",
     ]
     static let rideKeys: Set<String> = [
         "id", "ticketId", "startedAt", "endedAt", "accumulatedActiveSeconds",
         "estimatedSecondsAtStart", "budgetSecondsAtStart", "outcome",
         "overtimeResolution", "timetableHeld", "checkInFiredCount",
+        "arrivalAction", "arrivalStampedAt", "startedFrom",
     ]
     static let pauseKeys: Set<String> = ["id", "rideId", "startedAt", "endedAt"]
     static let extensionKeys: Set<String> = ["id", "rideId", "addedSeconds", "createdAt"]

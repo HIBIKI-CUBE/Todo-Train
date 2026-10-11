@@ -34,10 +34,13 @@ struct PunctualityMoment: Identifiable, Equatable, Sendable {
 
     let id: UUID
     let kind: Kind
+    /// 到着祝祭が締める乗車。定時運行の案内では nil。
+    let arrivedSessionID: UUID?
 
-    init(id: UUID = UUID(), kind: Kind) {
+    init(id: UUID = UUID(), kind: Kind, arrivedSessionID: UUID? = nil) {
         self.id = id
         self.kind = kind
+        self.arrivedSessionID = arrivedSessionID
     }
 
     /// Readable but not a sit-and-wait celebration. Keep in sync with overlay phases.

@@ -31,6 +31,8 @@ struct HubTicketPresentLayer: View {
     let onOpenDetail: () -> Void
     let onBoard: () -> Void
     let onDelete: () -> Void
+    /// Hub の長押しメニュー。到着の発車層では投げと案内板だけにする。
+    var showsEditingMenu: Bool = true
 
     @Environment(SessionManager.self) private var sessionManager
     @State private var settled = false
@@ -183,13 +185,15 @@ struct HubTicketPresentLayer: View {
         )
         .matchedTransitionSource(id: ticket.id, in: zoomNamespace)
         .allowsHitTesting(looksSettled)
-        .contextMenu {
-            Button("詳細", action: onOpenDetail)
-            if canBoard {
-                Button("発車", action: onBoard)
-            }
-            Button("削除", role: .destructive, action: onDelete)
-        }
+        .modifier(
+            PresentEditingMenu(
+                enabled: showsEditingMenu,
+                canBoard: canBoard,
+                onOpenDetail: onOpenDetail,
+                onBoard: onBoard,
+                onDelete: onDelete
+            )
+        )
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         .offset(x: displayedPose.width, y: displayedPose.height)
         .gesture(looksSettled ? holdDrag : nil)
@@ -257,5 +261,27 @@ struct HubTicketPresentLayer: View {
                     }
                 }
             }
+    }
+}
+
+private struct PresentEditingMenu: ViewModifier {
+    var enabled: Bool
+    var canBoard: Bool
+    var onOpenDetail: () -> Void
+    var onBoard: () -> Void
+    var onDelete: () -> Void
+
+    func body(content: Content) -> some View {
+        if enabled {
+            content.contextMenu {
+                Button("詳細", action: onOpenDetail)
+                if canBoard {
+                    Button("発車", action: onBoard)
+                }
+                Button("削除", role: .destructive, action: onDelete)
+            }
+        } else {
+            content
+        }
     }
 }

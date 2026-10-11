@@ -166,9 +166,19 @@ struct ContentView: View {
             if let moment = sessionManager.punctualityMoment {
                 switch moment.kind {
                 case .arrival:
-                    ArrivalInvalidateOverlay(moment: moment, skipEnter: true) {
-                        sessionManager.consumePunctualityMoment()
-                    }
+                    ArrivalInvalidateOverlay(
+                        moment: moment,
+                        skipEnter: true,
+                        onClose: { sessionManager.consumePunctualityMoment() },
+                        onStamp: { sessionID, action in
+                            try sessionManager.recordArrivalStamp(sessionID: sessionID, action: action)
+                        },
+                        onLeadingBoard: { ticketID in
+                            try sessionManager.boardFromArrivalSwipe(ticketID: ticketID)
+                        }
+                    )
+                    // fullScreenCover より後ろの overlay には、その手前の environment が届かない。
+                    .environment(ticketMotion)
                     .id(moment.id)
                 case .onTimeService:
                     if !isFocusPresented {

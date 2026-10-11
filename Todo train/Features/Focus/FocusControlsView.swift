@@ -7,10 +7,11 @@ import SwiftUI
 
 struct FocusControlsView: View {
     let onPause: () -> Void
-    let onPartialDisembark: () -> Void
+    let onReserve: () -> Void
     let onArrive: () -> Void
     let onExtendMenu: () -> Void
     let onInterrupt: () -> Void
+    var showsReserve: Bool = true
 
     var body: some View {
         GeometryReader { geo in
@@ -70,18 +71,20 @@ struct FocusControlsView: View {
                     .accessibilityHint("新しい切符を発行し、今の切符を停車して発車します")
                     .frame(maxWidth: .infinity)
 
-                    FocusControlVerticalDivider()
+                    if showsReserve {
+                        FocusControlVerticalDivider()
 
-                    FocusControlButton(
-                        title: "途中下車",
-                        systemImage: "arrow.turn.up.right",
-                        fill: FocusPanel.fill,
-                        foreground: FocusPanel.muted,
-                        prominence: .tertiary,
-                        action: onPartialDisembark
-                    )
-                    .accessibilityHint("途中下車して乗り継ぎ切符を掃き出します")
-                    .frame(maxWidth: .infinity)
+                        FocusControlButton(
+                            title: "予約",
+                            systemImage: "bookmark",
+                            fill: FocusPanel.fill,
+                            foreground: FocusPanel.ink,
+                            prominence: .secondary,
+                            action: onReserve
+                        )
+                        .accessibilityHint("次の一本の予約欄を開く。乗車は始まらない")
+                        .frame(maxWidth: .infinity)
+                    }
                 }
                 .frame(height: row)
             }

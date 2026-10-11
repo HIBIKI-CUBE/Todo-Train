@@ -17,6 +17,12 @@ final class Ticket {
     var closedAt: Date?
     /// Raw value of `ClosureKind`
     var closureKindRaw: String?
+    /// 次の一本として予約した時刻。予約は乗車を始めない。未予約は nil。
+    var reservedAt: Date?
+    /// 予約したときに乗っていた乗車。
+    var reservedFromRideId: UUID?
+    /// Raw value of `ReservationVia`.
+    var reservedViaRaw: String?
 
     var tags: [Tag] = []
 
@@ -34,6 +40,13 @@ final class Ticket {
         set { closureKindRaw = newValue?.rawValue }
     }
 
+    var reservedVia: ReservationVia? {
+        get { reservedViaRaw.flatMap(ReservationVia.init(rawValue:)) }
+        set { reservedViaRaw = newValue?.rawValue }
+    }
+
+    var isReservedAsNextRide: Bool { reservedAt != nil }
+
     var isOpen: Bool { closedAt == nil }
 
     init(
@@ -50,6 +63,9 @@ final class Ticket {
         self.createdAt = createdAt
         self.closedAt = nil
         self.closureKindRaw = nil
+        self.reservedAt = nil
+        self.reservedFromRideId = nil
+        self.reservedViaRaw = nil
         self.tags = []
         self.sessions = []
         self.childLineages = []

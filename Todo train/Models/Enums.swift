@@ -69,6 +69,8 @@ enum SessionError: Error, Equatable, LocalizedError {
     case ticketAlreadyClosed
     case cannotDeleteOpenSession
     case passengerAboard
+    case cannotReserveCurrentRide
+    case emptyTicketTitle
 
     var errorDescription: String? {
         switch self {
@@ -98,6 +100,30 @@ enum SessionError: Error, Equatable, LocalizedError {
             "終了していないセッションは履歴から削除できません"
         case .passengerAboard:
             PassengerCopy.drivingLocked
+        case .cannotReserveCurrentRide:
+            "乗っている切符は次の一本に予約できません"
+        case .emptyTicketTitle:
+            "題名を入れてください"
         }
     }
+}
+
+/// 次の一本をどこで予約したか。予約は乗車を始めない。
+enum ReservationVia: String, Codable, Sendable, Equatable {
+    case boarding
+    case riding
+    case arrivalScreen
+}
+
+/// 検札印で締めた行き先。検札は発車ではない。
+enum ArrivalAction: String, Codable, Sendable, Equatable {
+    case nextRide
+    case otherTicket
+    case instantTicket
+}
+
+/// その乗車がどこから始まったか。
+enum RideStartOrigin: String, Codable, Sendable, Equatable {
+    case arrivalSwipe
+    case other
 }
