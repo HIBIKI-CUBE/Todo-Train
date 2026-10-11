@@ -576,7 +576,7 @@ private struct ReservedNextRideSign: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("予約 \(title)")
-        .accessibilityHint("予約欄を開く。乗車は始まらない")
+        .accessibilityHint("予約欄を開きます。乗車は始まりません。")
     }
 }
 

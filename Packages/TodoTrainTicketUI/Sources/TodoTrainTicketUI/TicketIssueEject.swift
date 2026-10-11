@@ -106,11 +106,11 @@ public struct TicketIssueEjectOverlay: View {
             scene(in: geo)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("発券。\(event.title)。\(event.minutes)分")
+        .accessibilityLabel("発券、\(event.title)、\(event.minutes)分")
         .accessibilityHint(
             finish == .zoomIntoFocus
-                ? "表示のあと自動で発車します。下にスワイプですぐ発車"
-                : "下にスワイプでデッキに収めます"
+                ? "表示のあと自動で発車します。下にスワイプするとすぐ発車します。"
+                : "下にスワイプするとデッキに収めます"
         )
         .accessibilityAction(.escape) {
             finishSequence()

@@ -15,7 +15,7 @@ struct OvertimeControlsView: View {
             let row = FocusControlLayout.equalRowHeight(total: geo.size.height, rows: 3)
             VStack(spacing: 0) {
                 FocusControlButton(
-                    title: "もう終わってた",
+                    title: "到着済み",
                     systemImage: "checkmark.circle.fill",
                     fill: TrainTheme.signalGreen,
                     foreground: .black,
@@ -28,7 +28,7 @@ struct OvertimeControlsView: View {
                 FocusControlDivider()
 
                 FocusControlButton(
-                    title: "ちょうど終わった",
+                    title: "いま到着",
                     systemImage: "flag.checkered",
                     fill: TrainTheme.signalGreen.opacity(0.82),
                     foreground: .black,
@@ -41,7 +41,7 @@ struct OvertimeControlsView: View {
                 FocusControlDivider()
 
                 FocusControlButton(
-                    title: "延長する",
+                    title: "延長",
                     systemImage: "plus",
                     fill: FocusPanel.fillRaised,
                     foreground: FocusPanel.ink,

@@ -63,7 +63,7 @@ enum ServiceCabinSequence {
     static let lampSettleHoldSeconds: TimeInterval = 0.24
     static let lampSettleStaggerSeconds: TimeInterval = 0.15
     static let morningNoticeLimit = 4
-    static let extendReasons = ["仕事が膨らんだ", "割り込みが入った", "まだかかる", "その他"]
+    static let extendReasons = ["作業増", "割り込み", "見積もり不足", "その他"]
 
     static func lamp(elapsed: TimeInterval, reduceMotion: Bool) -> ServiceCabinLamp {
         if reduceMotion { return .ready }

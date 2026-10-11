@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import TodoTrainSync
 
 struct CheckInControlsView: View {
     let prompt: String
@@ -17,7 +18,7 @@ struct CheckInControlsView: View {
             let row = FocusControlLayout.equalRowHeight(total: geo.size.height, rows: 3)
             VStack(spacing: 0) {
                 FocusControlButton(
-                    title: "まだこれ",
+                    title: CabinCopy.still,
                     systemImage: "tram.fill",
                     fill: TrainTheme.signalGreen,
                     foreground: .black,
@@ -44,7 +45,7 @@ struct CheckInControlsView: View {
                     FocusControlVerticalDivider()
 
                     FocusControlButton(
-                        title: "延長しそう",
+                        title: "延長",
                         systemImage: "plus",
                         fill: FocusPanel.fillRaised,
                         foreground: FocusPanel.ink,
@@ -59,7 +60,7 @@ struct CheckInControlsView: View {
                 FocusControlDivider()
 
                 FocusControlButton(
-                    title: "もう終わってた",
+                    title: "到着済み",
                     systemImage: "checkmark.circle.fill",
                     fill: TrainTheme.signalGreen.opacity(0.82),
                     foreground: .black,

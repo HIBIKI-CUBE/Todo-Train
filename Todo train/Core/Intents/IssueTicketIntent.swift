@@ -11,7 +11,7 @@ struct IssueTicketIntent: AppIntent {
     static var description = IntentDescription("Hub に新しい切符を追加します。発車はしません。")
     static var openAppWhenRun: Bool = false
 
-    @Parameter(title: "タイトル")
+    @Parameter(title: "題名")
     var title: String
 
     @Parameter(title: "見積もり（分）")
@@ -25,7 +25,7 @@ struct IssueTicketIntent: AppIntent {
     func perform() async throws -> some IntentResult & ProvidesDialog {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
-            return .result(dialog: "切符の名前を入力してください")
+            return .result(dialog: "題名を入れてください")
         }
 
         let container = try resolvedContainer()

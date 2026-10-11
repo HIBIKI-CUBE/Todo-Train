@@ -172,8 +172,8 @@ public struct MenuBarPresentation: Equatable, Sendable {
         switch error {
         case .pauseLimitReached: SyncCopy.pauseLimitReached
         case .noActiveService: "乗務なし"
-        case .sessionMismatch: "乗務が変わった"
-        case .decryptFailed: "送れなかった"
+        case .sessionMismatch: "乗務が変わりました"
+        case .decryptFailed: "送れませんでした"
         case .notPaused: SyncCopy.notPaused
         case .invalidPayload: SyncCopy.invalidPayload
         }

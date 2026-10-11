@@ -18,7 +18,7 @@ enum TimetableCopy {
     static let drawTime = "時刻を引く"
     static let pause = "停車"
     static let quiet = "会議中は走っていません"
-    static let atsFooter = "重なったら60秒で停車。閉じていても、次に開いたときその時刻へ戻す。"
+    static let atsFooter = "走行がダイヤに重なると、60秒で停車します。アプリを閉じていたときは、次に開いたときに重なった時刻へさかのぼって停車します。"
     static let calendarDenied = "カレンダーを読めません。設定から許可すると掲示が出ます。"
     static let emptyManualTitle = "枠"
     static let calendarFilter = "掲示するカレンダー"

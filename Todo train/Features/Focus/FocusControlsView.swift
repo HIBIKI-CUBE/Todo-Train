@@ -39,7 +39,7 @@ struct FocusControlsView: View {
                         prominence: .secondary,
                         action: onPause
                     )
-                    .accessibilityHint("セッションを停車し、Hub に戻ります。Live Activity から再乗車できます")
+                    .accessibilityHint("セッションを停車し、Hub に戻ります。Live Activity から再乗車できます。")
                     .frame(maxWidth: .infinity)
 
                     FocusControlVerticalDivider()
@@ -52,7 +52,7 @@ struct FocusControlsView: View {
                         prominence: .secondary,
                         action: onExtendMenu
                     )
-                    .accessibilityHint("見積もり時間を追加します。フォーカスは継続します")
+                    .accessibilityHint("見積もり時間を追加します。フォーカスは継続します。")
                     .frame(maxWidth: .infinity)
                 }
                 .frame(height: row)
@@ -82,7 +82,7 @@ struct FocusControlsView: View {
                             prominence: .secondary,
                             action: onReserve
                         )
-                        .accessibilityHint("次の一本の予約欄を開く。乗車は始まらない")
+                        .accessibilityHint("次の一本の予約欄を開きます。乗車は始まりません。")
                         .frame(maxWidth: .infinity)
                     }
                 }

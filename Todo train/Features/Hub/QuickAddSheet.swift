@@ -124,7 +124,7 @@ struct QuickAddSheet: View {
                 }
                 Button("キャンセル", role: .cancel) {}
             } message: {
-                Text("次に発行する切符の位置。連続追加のあいだ維持されます。")
+                Text("次に発行する切符の位置です。連続追加のあいだ維持されます。")
             }
             .sheet(isPresented: $showCustomEstimate) {
                 customEstimateSheet
@@ -155,7 +155,7 @@ struct QuickAddSheet: View {
     private var titleZone: some View {
         ComposingTextField(
             text: $title,
-            placeholder: "何をする？",
+            placeholder: "題名",
             focusNonce: titleFocusNonce,
             onSubmit: submitFromReturn
         )
@@ -251,7 +251,7 @@ struct QuickAddSheet: View {
                         .onLongPressGesture(minimumDuration: 0.45) {
                             showCustomEstimate = true
                         }
-                        .accessibilityHint("長押しで任意の分を入力")
+                        .accessibilityHint("長押しすると任意の分を入力できます")
                     Text("分")
                         .font(.title3.weight(.semibold))
                         .foregroundStyle(.secondary)
@@ -266,7 +266,7 @@ struct QuickAddSheet: View {
                         }
                         .font(.subheadline.weight(.semibold))
                         .tint(TrainTheme.rail)
-                        .accessibilityHint("オンでシートを開いたまま速く発行。オフで1枚発行して閉じ、Hubで切符を見せます")
+                        .accessibilityHint("オンにするとシートを開いたまま速く発行できます。オフにすると1枚発行して閉じ、Hub で切符を見せます。")
 
                         if didAddOnce {
                             Text("発行 \(addPulse)")
@@ -307,7 +307,7 @@ struct QuickAddSheet: View {
                         highlightedMinutes: highlightedEstimateMinutes
                     )
                 } footer: {
-                    Text("ゲージの停泊以外の分。連続追加のあいだ維持されます。")
+                    Text("ゲージの停泊以外の分です。連続追加のあいだ維持されます。")
                 }
             }
             .navigationTitle("任意の分")

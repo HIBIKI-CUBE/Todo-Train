@@ -39,7 +39,7 @@ struct ImaYaruFormView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            TextField("何をする？", text: $title)
+            TextField("題名", text: $title)
                 .textFieldStyle(.roundedBorder)
                 .focused($titleFocused)
                 .onSubmit(commit)
@@ -213,7 +213,7 @@ struct ImaYaruDispenseView: View {
         }
         .animation(.easeInOut(duration: 0.28), value: model.handingOff)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("発券。\(title)。\(minutes)分")
+        .accessibilityLabel("発券、\(title)、\(minutes)分")
         .onAppear {
             tryReveal()
         }

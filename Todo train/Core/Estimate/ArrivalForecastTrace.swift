@@ -23,7 +23,7 @@ enum ArrivalForecastOutcome: String, Equatable, Sendable {
         case .skippedNoSamples: "サンプル不足（モデルなし）"
         case .heuristicOnly: "Heuristic のみ"
         case .modelUnavailable: "モデル利用不可"
-        case .parseFailed: "構造が読めない"
+        case .parseFailed: "解析失敗"
         case .modelError: "モデルエラー"
         case .keptMedian: "中央値のまま"
         case .refined: "分数を調整"

@@ -89,9 +89,9 @@ enum SessionError: Error, Equatable, LocalizedError {
         case .notRunning:
             "走行中ではありません"
         case .pauseLimitReached:
-            "停車中の切符が上限です。先に片付けるか、停車中から再乗車してください"
+            "停車中の切符が上限です。先に片付けるか、停車中から再乗車してください。"
         case .cannotEndServiceWhileRunning:
-            "走行中は運行終了できません。先に停車または到着してください"
+            "走行中は運行終了できません。先に停車または到着してください。"
         case .unresolvedPausedTickets:
             "停車中の切符を途中下車または放棄してから運行終了してください"
         case .ticketAlreadyClosed:

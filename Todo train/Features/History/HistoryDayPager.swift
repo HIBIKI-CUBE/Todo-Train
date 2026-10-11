@@ -155,7 +155,7 @@ private struct HistoryDayInteractiveCanvas: View {
         .gesture(pagePan)
         .gesture(zoomPinch)
         .onAppear { haptics.prepare() }
-        .accessibilityHint("左右にスワイプで日付、横ピンチで1画面の日数")
+        .accessibilityHint("左右にスワイプすると日付を、横にピンチすると1画面の日数を変えます")
         .accessibilityValue("\(snappedDays)日表示")
         .accessibilityAction(named: "次の日") { shiftDay(1) }
         .accessibilityAction(named: "前の日") { shiftDay(-1) }

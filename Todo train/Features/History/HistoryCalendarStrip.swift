@@ -58,7 +58,7 @@ struct HistoryCalendarStrip: View {
                     .frame(maxWidth: .infinity)
             }
             .accessibilityLabel(monthTitle)
-            .accessibilityHint("カレンダーから日付を選ぶ")
+            .accessibilityHint("カレンダーから日付を選びます")
 
             Button {
                 shiftWeek(1)
