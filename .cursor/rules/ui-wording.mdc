@@ -1,0 +1,34 @@
+---
+description: 画面に出る日本語を書く・直すときの文体と、その門
+globs: **/*.swift
+alwaysApply: false
+---
+
+# 画面の文言
+
+判断は [docs/03-terminology.md](../../docs/03-terminology.md) の「用語表」と「文体」。ここは書き方の例と、書いたあとの確認だけ。
+
+```swift
+// ❌ LLM が日本語化した UI 文に多い形
+"iPhone に送った"
+"確定の時間切れ。自分に戻してもう一度。"
+Button("追加する") { … }
+.accessibilityHint("新しい切符の発行")
+
+// ✅ Apple の日本語 UI に寄せた形
+"iPhone に送りました"
+"確定の時間が切れました。画面を自分に戻すと、もう一度確定できます。"
+Button("追加") { … }
+.accessibilityHint("新しい切符を発行します")
+```
+
+利用者自身の声（車内放送への答え「まだやってる」など）は常体のままにし、`tools/wording/allow.tsv` に理由を書く。
+
+日本語のリテラルを足したり変えたりしたら、必ず通す:
+
+```bash
+cd tools/wording && pip install -r requirements.txt
+python extract_app.py > /tmp/app.jsonl && python check.py /tmp/app.jsonl
+```
+
+指摘を消すために `allow.tsv` へ逃がさない。足すのは意図した例外だけ。
