@@ -2,8 +2,8 @@
 //  ArrivalInvalidateOverlay.swift
 //  Todo train
 //
-//  奥から Hub、発車、灰色のぼかし、到着の検札。上から順に操作する。
-//  検札では発車しない。発車は検札のあと、Hub と同じ投げ。
+//  奥から Hub、発車、灰色のぼかし、到着の印。上から順に操作する。
+//  印では発車しない。発車は印のあと、Hub と同じ投げ。
 //
 
 import SwiftData
@@ -277,10 +277,10 @@ struct ArrivalInvalidateOverlay: View {
                     choose(feedback: .open) { deck.showInstant() }
                 }
                 ArrivalChoiceSign(
-                    index: "おり",
-                    title: "おりる",
+                    index: "終",
+                    title: "終着",
                     selected: deck.declinedNext,
-                    hint: "次の切符は指名しない。乗車は始まらない"
+                    hint: "次の切符は出さない。乗車は始まらない"
                 ) {
                     choose { deck.selectNoNext() }
                 }
@@ -289,13 +289,13 @@ struct ArrivalInvalidateOverlay: View {
             .accessibilityLabel("行き先")
 
             if reduceMotion {
-                ArrivalDismissPlate(title: "検札する", hint: deck.canStamp ? "到着を締める" : "行き先が決まると押せる") {
+                ArrivalDismissPlate(title: "到着を締める", hint: deck.canStamp ? "印を押して到着を締める" : "行き先が決まると押せる") {
                     commitStamp(punctuality: punctuality)
                 }
                 .disabled(!deck.canStamp)
                 .opacity(deck.canStamp ? 1 : 0.4)
             }
-            ArrivalDismissPlate(title: "閉じる", hint: "検札せずに戻る", action: onClose)
+            ArrivalDismissPlate(title: "閉じる", hint: "印を押さずに戻る", action: onClose)
                 .padding(.top, 8)
             if !stampError.isEmpty {
                 Text(stampError)
@@ -356,7 +356,7 @@ struct ArrivalInvalidateOverlay: View {
         .buttonStyle(ArrivalStampButtonStyle(reduceMotion: reduceMotion, seated: stampSeated))
         .disabled(!deck.canStamp)
         .opacity(deck.canStamp ? 1 : 0.45)
-        .accessibilityLabel("\(stampCenterLabel(punctuality))の検札印")
+        .accessibilityLabel("\(stampCenterLabel(punctuality))の印")
         .accessibilityHint(deck.canStamp ? "到着を締める" : "行き先が決まると押せる")
     }
 
@@ -540,7 +540,7 @@ struct ArrivalInvalidateOverlay: View {
             return "\(head)。\(arrival.title)。次の一本 \(next.title)"
         }
         if deck.declinedNext {
-            return "\(head)。\(arrival.title)。おりる"
+            return "\(head)。\(arrival.title)。終着"
         }
         return "\(head)。\(arrival.title)"
     }
