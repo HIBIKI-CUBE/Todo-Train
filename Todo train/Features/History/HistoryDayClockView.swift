@@ -21,6 +21,8 @@ struct HistoryDayClockView: View {
     var onDelete: (WorkSession) -> Void
     var strips: [DayClockStrip] = []
     var openEndedAt: Date? = nil
+    /// Overrides the density stride when the shutdown overview compresses a long window.
+    var hourLabelStride: Int? = nil
 
     @Environment(\.calendar) private var calendar
 
@@ -28,7 +30,11 @@ struct HistoryDayClockView: View {
         if let prepared {
             HStack(alignment: .top, spacing: 0) {
                 if showsGutter {
-                    HistoryTimeGutter(layout: prepared.layout, density: density)
+                    HistoryTimeGutter(
+                        layout: prepared.layout,
+                        density: density,
+                        hourLabelStride: hourLabelStride
+                    )
                 }
                 laneStack(layout: prepared.layout, rides: prepared.rides)
             }
@@ -413,11 +419,12 @@ private extension HistoryRideDensity {
 struct HistoryTimeGutter: View {
     let layout: DayClockLayout
     var density: HistoryRideDensity = .day
+    var hourLabelStride: Int? = nil
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
-            ForEach(layout.hourTicks, id: \.self) { tick in
-                if shouldLabel(tick) {
+            ForEach(Array(layout.hourTicks.enumerated()), id: \.element) { index, tick in
+                if shouldLabel(tick, index: index) {
                     Text(label(tick))
                         .font(density == .week ? Font.caption2.weight(.semibold).monospacedDigit() : Font.caption.weight(.semibold).monospacedDigit())
                         .foregroundStyle(.secondary)
@@ -430,7 +437,10 @@ struct HistoryTimeGutter: View {
         .accessibilityHidden(true)
     }
 
-    private func shouldLabel(_ tick: Date) -> Bool {
+    private func shouldLabel(_ tick: Date, index: Int) -> Bool {
+        if let hourLabelStride {
+            return index % max(hourLabelStride, 1) == 0
+        }
         let hour = Calendar.current.component(.hour, from: tick)
         return hour % density.hourLabelStride == 0
     }

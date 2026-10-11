@@ -17,6 +17,8 @@ enum ServiceCabinMotion {
     static let clockLock = Animation.spring(response: 0.48, dampingFraction: 0.78)
     static let lampClick = Animation.easeOut(duration: 0.09)
     static let rowIn = Animation.spring(response: 0.44, dampingFraction: 0.86)
+    /// Shutdown overview: compressed civil day pushes into the service window.
+    static let overviewPush = Animation.spring(response: 0.82, dampingFraction: 0.86)
 }
 
 struct ServiceCabinPanel<Content: View>: View {
@@ -35,27 +37,21 @@ struct ServiceCabinPanel<Content: View>: View {
     }
 }
 
-/// E233 計器モニタ: the label is the lamp. Click on, hold, then actual.
+/// Small state lamps. The word is the reading; the box lights when that reading is hot.
 struct ServiceCabinAnnunciators: View {
     var lamp: ServiceCabinLamp
     var serviceOn: Bool
     var hasOccupancy: Bool
+    var track: ServiceCabinTrackReading
     var paused: Bool
     var testCount: Int = ServiceCabinAnnunciator.allCases.count
     var settledCount: Int = ServiceCabinAnnunciator.allCases.count
 
     var body: some View {
-        HStack(spacing: 0) {
-            ForEach(Array(ServiceCabinAnnunciator.allCases.enumerated()), id: \.element) { index, id in
-                if index > 0 {
-                    FocusControlVerticalDivider()
-                }
+        HStack(spacing: 6) {
+            ForEach(Array(ServiceCabinAnnunciator.allCases.enumerated()), id: \.element) { _, id in
                 cell(id)
             }
-        }
-        .overlay {
-            Rectangle()
-                .strokeBorder(FocusPanel.hairline, lineWidth: FocusPanel.hairlineWidth)
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("表示灯")
@@ -71,14 +67,30 @@ struct ServiceCabinAnnunciators: View {
             testCount: testCount,
             settledCount: settledCount
         )
-        return Text(id.rawValue)
-            .font(.system(size: 12, weight: .semibold, design: .default))
-            .foregroundStyle(on ? FocusPanel.ink : FocusPanel.dim)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 9)
-            .background(on ? FocusPanel.fillRaised : Color.clear)
+        let legend = ServiceCabinSequence.annunciatorLegend(
+            id,
+            showsLiveReading: lamp >= .live && isSettled(id),
+            serviceOn: serviceOn,
+            track: track,
+            paused: paused
+        )
+        return Text(legend)
+            .font(.system(size: 11, weight: .semibold, design: .default))
+            .foregroundStyle(on ? FocusPanel.ink : FocusPanel.muted)
+            .lineLimit(1)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(on ? FocusPanel.fillRaised : Color.white.opacity(0.03))
+            .overlay {
+                Rectangle()
+                    .strokeBorder(
+                        on ? Color.white.opacity(0.55) : FocusPanel.hairline,
+                        lineWidth: FocusPanel.hairlineWidth
+                    )
+            }
             .animation(ServiceCabinMotion.lampClick, value: on)
-            .accessibilityLabel(id.rawValue)
+            .animation(ServiceCabinMotion.lampClick, value: legend)
+            .accessibilityLabel(legend)
             .accessibilityValue(lamp == .test || (lamp >= .live && !isSettled(id)) ? "試験" : (on ? "点灯" : "消灯"))
     }
 

@@ -11,6 +11,7 @@ import SwiftUI
 
 struct ServiceBootCover: View {
     @Environment(SessionManager.self) private var sessionManager
+    @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
@@ -78,6 +79,7 @@ struct ServiceBootCover: View {
                 sessionManager.adoptOccurrence(occurrence, scope: .occurrence)
             },
             consistItems: consistItems,
+            onReorderConsist: reorderConsist,
             clockHeight: clockHeight,
             expandsClock: !hasPrep,
             pinsLower: hasPrep
@@ -144,6 +146,16 @@ struct ServiceBootCover: View {
             return (rows, marks, TimetableCopy.adopt, { sessionManager.adoptCurrentNoticeThisTime() })
         }
         return (rows, marks, nil, nil)
+    }
+
+    private func reorderConsist(_ ids: [UUID]) {
+        let orders = TicketSortOrdering.normalizedOrders(forOrderedIDs: ids)
+        for ticket in allTickets where ticket.isOpen {
+            if let order = orders[ticket.id] {
+                ticket.sortOrder = order
+            }
+        }
+        try? modelContext.save()
     }
 
     private func runBoot() async {

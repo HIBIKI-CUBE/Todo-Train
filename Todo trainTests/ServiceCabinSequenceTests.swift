@@ -331,4 +331,156 @@ struct ServiceCabinExtensionTests {
         #expect(items.map(\.title) == ["先", "後"])
         #expect(items.map(\.minutes) == [1, 25])
     }
+
+    @Test func annunciatorLegend_holdsAlertWordsUntilLive() {
+        #expect(
+            ServiceCabinSequence.annunciatorLegend(
+                .occupancy,
+                showsLiveReading: false,
+                serviceOn: true,
+                track: .clear,
+                paused: false
+            ) == "塞がり"
+        )
+        #expect(
+            ServiceCabinSequence.annunciatorLegend(
+                .service,
+                showsLiveReading: true,
+                serviceOn: true,
+                track: .clear,
+                paused: false
+            ) == "運行中"
+        )
+        #expect(
+            ServiceCabinSequence.annunciatorLegend(
+                .service,
+                showsLiveReading: true,
+                serviceOn: false,
+                track: .clear,
+                paused: false
+            ) == "運休"
+        )
+        #expect(
+            ServiceCabinSequence.annunciatorLegend(
+                .paused,
+                showsLiveReading: true,
+                serviceOn: true,
+                track: .clear,
+                paused: false
+            ) == "進行"
+        )
+        #expect(
+            ServiceCabinSequence.annunciatorLegend(
+                .paused,
+                showsLiveReading: true,
+                serviceOn: true,
+                track: .clear,
+                paused: true
+            ) == "停車中"
+        )
+    }
+
+    @Test func trackReading_distinguishesNowAndLater() {
+        let now = TimetableOccupancyRow(
+            id: UUID(),
+            kind: .occupying,
+            clock: "10:00",
+            remainingMinutes: 20,
+            title: "週次",
+            spokenLine: "いま"
+        )
+        let later = TimetableOccupancyRow(
+            id: UUID(),
+            kind: .next,
+            clock: "15:00",
+            remainingMinutes: nil,
+            title: "歯医者",
+            spokenLine: "次"
+        )
+        #expect(ServiceCabinSequence.trackReading(rows: [now, later], marks: []) == .blocked)
+        #expect(ServiceCabinSequence.trackReading(rows: [later], marks: []) == .scheduled)
+        #expect(
+            ServiceCabinSequence.annunciatorLegend(
+                .occupancy,
+                showsLiveReading: true,
+                serviceOn: true,
+                track: .scheduled,
+                paused: false
+            ) == "予定"
+        )
+        #expect(ServiceCabinSequence.trackReading(rows: [], marks: []) == .clear)
+        #expect(
+            ServiceCabinSequence.annunciatorLegend(
+                .occupancy,
+                showsLiveReading: true,
+                serviceOn: true,
+                track: .clear,
+                paused: false
+            ) == "空き"
+        )
+    }
+
+    @Test func consistMoveOffset_landsOnVisualIndex() {
+        #expect(ServiceCabinSequence.consistMoveOffset(from: 0, to: 2) == 3)
+        #expect(ServiceCabinSequence.consistMoveOffset(from: 3, to: 1) == 1)
+        #expect(ServiceCabinSequence.consistMoveOffset(from: 1, to: 1) == 1)
+    }
+
+    @Test func overview_fitsServiceWindowAndNotMidnight() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let day = calendar.date(from: DateComponents(year: 2026, month: 10, day: 7))!
+        let start = day.addingTimeInterval(10 * 3600)
+        let now = day.addingTimeInterval(18 * 3600 + 30 * 60)
+        let dayEnd = day.addingTimeInterval(86_400)
+        let bounds = ServiceCabinOverview.serviceBounds(
+            startedAt: start,
+            now: now,
+            dayStart: day,
+            dayEnd: dayEnd,
+            rides: [(start: day.addingTimeInterval(15 * 3600), end: day.addingTimeInterval(16 * 3600))]
+        )
+        #expect(bounds.start > day)
+        #expect(bounds.end < dayEnd)
+        #expect(bounds.start < start)
+
+        let fitted = ServiceCabinOverview.fitted(
+            bounds: bounds,
+            viewportHeight: 420,
+            calendar: calendar,
+            slack: 10
+        )
+        #expect(fitted.start > day)
+        #expect(fitted.pointsPerMinute <= SessionTimeline.pointsPerMinute)
+        #expect(fitted.height + 10 <= 420 + 0.5)
+
+        let wide = ServiceCabinOverview.fullDay(on: day, viewportHeight: 420, calendar: calendar, slack: 10)
+        #expect(wide.start == day)
+        #expect(abs(wide.height + 10 - 420) < 1)
+        #expect(ServiceCabinOverview.hourStride(pointsPerMinute: wide.pointsPerMinute) > 1)
+    }
+
+    @Test func overview_shortServiceDoesNotExceedHistoryScale() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let day = calendar.date(from: DateComponents(year: 2026, month: 10, day: 7))!
+        let start = day.addingTimeInterval(9 * 3600)
+        let now = start.addingTimeInterval(20 * 60)
+        let bounds = ServiceCabinOverview.serviceBounds(
+            startedAt: start,
+            now: now,
+            dayStart: day,
+            dayEnd: day.addingTimeInterval(86_400),
+            rides: []
+        )
+        #expect(bounds.end.timeIntervalSince(bounds.start) >= ServiceCabinOverview.minimumSpan - 1)
+        let fitted = ServiceCabinOverview.fitted(
+            bounds: bounds,
+            viewportHeight: 800,
+            calendar: calendar,
+            slack: 10
+        )
+        #expect(abs(fitted.pointsPerMinute - SessionTimeline.pointsPerMinute) < 0.001)
+        #expect(fitted.height < 800)
+    }
 }
