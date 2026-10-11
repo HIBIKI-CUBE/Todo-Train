@@ -480,26 +480,73 @@ struct FocusView: View {
 
     private func consumePendingActionIfNeeded() {
         guard !didConsumePendingAction else { return }
-        guard let action = FocusPendingActionStore.consume() else { return }
-        didConsumePendingAction = true
+        guard let action = FocusPendingActionStore.peek() else { return }
+        // Mismatch: leave queued (activeSession may still be recovering).
         guard action.sessionID == sessionManager.activeSession?.id else { return }
 
         switch action.kind {
         case .arrive:
-            // Overtime keeps the in-Focus 3-choice UI; running/paused arrive immediately.
-            if sessionManager.phase != .overtime {
-                run { try sessionManager.arrive() }
+            switch ArriveHandoff.decision(
+                sessionMatches: true,
+                phase: sessionManager.phase,
+                focusIsPresented: true
+            ) {
+            case .leaveQueued:
+                return
+            case .consumeOnly:
+                // Overtime keeps the in-Focus 3-choice UI.
+                if FocusPendingActionStore.consumeIfMatches(action) {
+                    didConsumePendingAction = true
+                }
+            case .performArrive:
+                applyPendingMutation(action) {
+                    try sessionManager.arrive()
+                }
             }
         case .extend:
-            withAnimation(TrainTheme.Motion.soft) {
-                showExtendChips = true
+            if FocusPendingActionStore.consumeIfMatches(action) {
+                didConsumePendingAction = true
+                withAnimation(TrainTheme.Motion.soft) {
+                    showExtendChips = true
+                }
             }
         case .pause:
             if sessionManager.phase == .running || sessionManager.phase == .overtime {
-                run { try sessionManager.pause() }
+                applyPendingMutation(action) {
+                    try sessionManager.pause()
+                }
+            } else if sessionManager.phase == .paused {
+                if FocusPendingActionStore.consumeIfMatches(action) {
+                    didConsumePendingAction = true
+                }
             }
         case .resume:
-            run { try sessionManager.resume() }
+            if sessionManager.phase == .paused {
+                applyPendingMutation(action) {
+                    try sessionManager.resume()
+                }
+            } else if sessionManager.phase == .running || sessionManager.phase == .overtime {
+                if FocusPendingActionStore.consumeIfMatches(action) {
+                    didConsumePendingAction = true
+                }
+            }
+        }
+    }
+
+    /// Consume the App Group handoff only after the session mutation succeeds,
+    /// and only if a newer handoff has not replaced the slot.
+    private func applyPendingMutation(
+        _ expected: FocusPendingAction,
+        _ body: () throws -> Void
+    ) {
+        do {
+            try body()
+            if FocusPendingActionStore.consumeIfMatches(expected) {
+                didConsumePendingAction = true
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+            showError = true
         }
     }
 
