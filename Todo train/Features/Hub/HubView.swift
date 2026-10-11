@@ -103,7 +103,7 @@ struct HubView: View {
             return "すでに走行中の切符があります"
         }
         if sessionManager.pausedCountTowardLimit >= sessionManager.pauseLimit {
-            return "停車が上限です。先に片付けるか、停車中から再乗車してください"
+            return "停車が上限です。先に片付けるか、停車中から再乗車してください。"
         }
         return "発車できません"
     }
@@ -698,7 +698,7 @@ struct HubView: View {
             .tint(TrainTheme.rail)
             .matchedTransitionSource(id: ticket.id, in: zoomNamespace)
             .disabled(!canBoardGenerally)
-            .accessibilityHint(canBoardGenerally ? "停車中の切符を再開" : boardDisabledReason)
+            .accessibilityHint(canBoardGenerally ? "停車中の切符を再開します" : boardDisabledReason)
         }
         .padding(TrainTheme.Space.md)
         .background(TrainTheme.surface, in: RoundedRectangle(cornerRadius: TrainTheme.Radius.control, style: .continuous))

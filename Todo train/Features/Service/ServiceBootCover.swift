@@ -101,7 +101,7 @@ struct ServiceBootCover: View {
             )
             .font(.system(size: 20, weight: .bold, design: .default))
             .frame(height: 72)
-            .accessibilityHint("Hub に戻る。運行は始まっています")
+            .accessibilityHint("Hub に戻ります。運行は始まっています。")
         }
     }
 

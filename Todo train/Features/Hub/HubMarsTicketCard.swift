@@ -108,15 +108,20 @@ struct HubMarsTicketCard: View {
     }
 
     private var accessibilityHintText: String {
+        let reason = Self.sentence(disabledReason ?? "今は発車できません")
         if isLifted {
             return canBoard
-                ? "右に投げて発車。左または下、タップで戻す。詳細は長押しメニュー"
-                : "左または下、タップで戻す。\(disabledReason ?? "今は発車できません")。詳細は長押しメニュー"
+                ? "右に投げると発車し、左か下に投げるかタップすると戻せます。詳細は長押しメニューから開けます。"
+                : "\(reason)左か下に投げるかタップすると戻せます。詳細は長押しメニューから開けます。"
         }
         if canBoard {
-            return "ダブルタップでつまむ。発車と削除はアクションから。詳細は長押しメニュー"
+            return "ダブルタップでつまみます。発車と削除はアクションから、詳細は長押しメニューから選べます。"
         }
-        return "ダブルタップでつまむ。削除はアクションから。\(disabledReason ?? "今は発車できません")。詳細は長押しメニュー"
+        return "\(reason)ダブルタップでつまみます。削除はアクションから、詳細は長押しメニューから選べます。"
+    }
+
+    private static func sentence(_ text: String) -> String {
+        text.hasSuffix("。") ? text : text + "。"
     }
 
     @ViewBuilder

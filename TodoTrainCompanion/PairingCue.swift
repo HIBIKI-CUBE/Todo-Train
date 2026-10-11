@@ -16,13 +16,13 @@ enum PairingCue: Equatable {
     var message: String {
         switch self {
         case .established:
-            "つながった。この Mac だけが読める。"
+            "つながりました。この Mac だけが読めます。"
         case .authenticating:
             "Touch ID で確定"
         case .waitingPeer:
-            "読めた。iPhone を待っています"
+            "読み取りました。iPhone を待っています"
         case .captured:
-            "読めた"
+            "読み取りました"
         case .failed(let message):
             message
         case .scanning:

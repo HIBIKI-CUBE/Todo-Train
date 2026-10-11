@@ -91,7 +91,7 @@ struct MenuBarPresentationTests {
         #expect(sending.isSending)
         #expect(sending.canPause)
         #expect(!sending.canResume)
-        #expect(sending.popoverDetail == "iPhone に送った")
+        #expect(sending.popoverDetail == "iPhone に送りました")
 
         let failed = MenuBarPresentation.make(
             MenuBarInput(
@@ -118,7 +118,7 @@ struct MenuBarPresentationTests {
         #expect(view.canPause)
         #expect(!view.canResume)
         #expect(view.canReconnect)
-        #expect(view.popoverDetail == "リレーが切れた")
+        #expect(view.popoverDetail == "リレーが切れました")
     }
 
     @Test func disconnectedIdleOffersReconnect() {
@@ -131,7 +131,7 @@ struct MenuBarPresentationTests {
             )
         )
         #expect(view.canReconnect)
-        #expect(view.popoverDetail == "リレーが切れた")
+        #expect(view.popoverDetail == "リレーが切れました")
         #expect(!view.canPause)
     }
 
@@ -166,7 +166,7 @@ struct MenuBarPresentationTests {
         )
         #expect(sending.isSending)
         #expect(sending.canResume)
-        #expect(sending.popoverDetail == "iPhone に送った")
+        #expect(sending.popoverDetail == "iPhone に送りました")
 
         let failed = MenuBarPresentation.make(
             MenuBarInput(
@@ -177,6 +177,6 @@ struct MenuBarPresentationTests {
             )
         )
         #expect(failed.canResume)
-        #expect(failed.failureLine == "停車中ではない")
+        #expect(failed.failureLine == "停車中ではありません")
     }
 }

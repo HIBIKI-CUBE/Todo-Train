@@ -95,7 +95,7 @@ struct ApproachClearPanel: View {
         .buttonStyle(.plain)
         .disabled(finished)
         .accessibilityLabel("接近クリアランス")
-        .accessibilityHint("開く")
+        .accessibilityHint("開きます")
     }
 
     private var expandedBody: some View {

@@ -95,7 +95,7 @@ struct RideOverlayPresentationTests {
         )
         #expect(sending.isSending)
         #expect(sending.canPause)
-        #expect(sending.statusLine == "iPhone に送った")
+        #expect(sending.statusLine == "iPhone に送りました")
 
         let failed = RideOverlayPresentation.make(
             MenuBarInput(
@@ -148,7 +148,7 @@ struct RideOverlayPresentationTests {
         )
         #expect(view.isVisible)
         #expect(view.progress == 120.0 / 1500.0)
-        #expect(view.statusLine == "リレーが切れた")
+        #expect(view.statusLine == "リレーが切れました")
     }
 
     @Test func truncatesPeekTitle() {

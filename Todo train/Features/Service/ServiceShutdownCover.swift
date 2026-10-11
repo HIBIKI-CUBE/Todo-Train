@@ -120,7 +120,7 @@ struct ServiceShutdownCover: View {
                 )
                 .font(.system(size: 20, weight: .bold, design: .default))
                 .disabled(!canConfirmEnd)
-                .accessibilityHint(canConfirmEnd ? "盤を落として運行を終了する" : endBlockedReason)
+                .accessibilityHint(canConfirmEnd ? "盤を落として運行を終了します" : endBlockedReason)
             }
             .frame(height: 72)
         }

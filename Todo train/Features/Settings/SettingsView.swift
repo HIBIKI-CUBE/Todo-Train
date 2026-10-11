@@ -29,7 +29,7 @@ struct SettingsView: View {
             } header: {
                 Text("停車")
             } footer: {
-                Text("停車して置ける枚数です。上限に達すると新しい切符は発車できません。停車そのものはいつでもできます。再乗車もできます。")
+                Text("停車して置ける枚数です。上限に達すると新しい切符は発車できませんが、停車と再乗車はいつでもできます。")
             }
 
             Section {
@@ -44,7 +44,7 @@ struct SettingsView: View {
             } header: {
                 Text("フォーカス")
             } footer: {
-                Text("発車中かつ充電中のとき、自動ロックしません。車内放送は長い乗務の途中に短い問いを出します。アプリを他アプリへ離れたときは列車側で一度だけ知らせます。")
+                Text("発車中に充電していると、自動ロックしません。車内放送は長い乗務の途中に短い問いを出し、ほかのアプリへ離れたときは列車側で一度だけ知らせます。")
             }
             .onChange(of: settings.cabinAnnouncementsEnabled) { _, _ in
                 sessionManager.syncCabinAnnouncementsWithSettings()
@@ -69,7 +69,7 @@ struct SettingsView: View {
             } header: {
                 Text("終了ベル")
             } footer: {
-                Text("見積もり到達時に AlarmKit で強制通知します（Silent / Focus を突破）。StandBy のカウントダウン表示にも使います。停車中も Live Activity は残り、再乗車できます。別切符を発車すると切り替わります。2 時間置くと Live Activity だけ消え、切符は停車のままです。拒否された場合はローカル通知にフォールバックします。")
+                Text("見積もりに達すると、消音やフォーカス中でも AlarmKit で鳴らします（許可がないときは通常の通知になります）。StandBy のカウントダウンにも使い、停車中も 2 時間は Live Activity から再乗車できます。")
             }
             .onChange(of: settings.endBellEnabled) { _, _ in
                 sessionManager.syncEndBellWithSettings()
@@ -105,7 +105,7 @@ struct SettingsView: View {
             Section {
                 if runtime.isPaired {
                     LabeledContent("Mac") {
-                        Text(runtime.companionName ?? "つながっている")
+                        Text(runtime.companionName ?? "つながっています")
                     }
                     if let pairingShortID = runtime.pairingShortID {
                         LabeledContent("ペア") {
@@ -139,7 +139,7 @@ struct SettingsView: View {
             } header: {
                 Text("Mac")
             } footer: {
-                Text("画面を向けたその Mac だけが読めます。名前はペアしたときのコンピュータ名です。識別子が同じなら同じペアです。解除はこちらと Mac の設定のどちらからでもできます。")
+                Text("画面を向けた Mac だけが読めます。識別子が Mac 側と同じなら同じペアで、解除はどちらからでもできます。")
             }
 
             if settings.developerToolsUnlocked {
@@ -160,7 +160,7 @@ struct SettingsView: View {
                 } header: {
                     Text("開発者")
                 } footer: {
-                    Text("接近を常に出すは、このメニューを開いているあいだだけ盤を出します。遊んでも、戻ってきたときの報酬は減りません。予測の内部は、切符を持ち上げたときのオンデバイス予測です。日常の設定ではありません。")
+                    Text("「接近を常に出す」はこのメニューを開いているあいだだけ盤を出し、遊んでも戻ってきたときの報酬は減りません。「予測の内部」は、切符を持ち上げたときのオンデバイス予測の記録です。")
                 }
             }
         }

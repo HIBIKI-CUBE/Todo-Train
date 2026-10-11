@@ -406,7 +406,7 @@ struct ServiceCabinInstruments: View {
     private var accessibilityLabel: String {
         switch lamp {
         case .dark:
-            return "盤はまだ暗い"
+            return "盤はまだ消灯しています"
         case .test:
             return "表示灯試験"
         case .live:
@@ -482,7 +482,7 @@ private struct ServiceCabinConsistList: View {
         .animation(reduceMotion ? nil : ServiceCabinMotion.rowIn, value: revealedCount)
         .animation(dragID == nil && !reduceMotion ? ServiceCabinMotion.rowIn : nil, value: shift(for: index))
         .accessibilityElement(children: .combine)
-        .accessibilityHint(canReorder ? "並べ替え" : "")
+        .accessibilityHint(canReorder ? "アクションから並べ替えられます" : "")
         .accessibilityAction(named: "上へ") {
             shiftItem(item.id, by: -1)
         }

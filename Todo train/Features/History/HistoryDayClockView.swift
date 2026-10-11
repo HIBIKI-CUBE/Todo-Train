@@ -237,7 +237,7 @@ struct HistoryDayClockView: View {
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(SessionTimeline.spokenSummary(for: ride, timeFormatter: Self.timeFormatter))
-            .accessibilityHint("詳細を表示")
+            .accessibilityHint("詳細を表示します")
             .accessibilityAddTraits(.isButton)
             .accessibilityAction(named: "削除") {
                 onDelete(session)

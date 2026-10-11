@@ -28,7 +28,7 @@ struct TagManagerView: View {
     var body: some View {
         List {
             if tags.isEmpty {
-                Text("タグはまだありません。追加して切符に付けられます。先頭のタグが新規追加時の候補になります。")
+                Text("タグはまだありません。追加したタグは切符に付けられ、先頭のタグが新規追加時の候補になります。")
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(tags, id: \.id) { tag in

@@ -213,7 +213,7 @@ struct ImaYaruDispenseView: View {
         }
         .animation(.easeInOut(duration: 0.28), value: model.handingOff)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("発券。\(title)。\(minutes)分")
+        .accessibilityLabel("発券、\(title)、\(minutes)分")
         .onAppear {
             tryReveal()
         }

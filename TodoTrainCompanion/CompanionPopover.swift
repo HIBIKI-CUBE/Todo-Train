@@ -193,7 +193,7 @@ struct RelaySettingsView: View {
         .formStyle(.grouped)
         .frame(width: 420)
         .alert("連携を解除しますか？", isPresented: $confirmUnpair) {
-            Button("解除する", role: .destructive) {
+            Button("解除", role: .destructive) {
                 runtime.unpair()
                 CompanionSettingsOpener.close()
             }
