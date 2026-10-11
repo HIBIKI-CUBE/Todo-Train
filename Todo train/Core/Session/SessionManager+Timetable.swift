@@ -203,7 +203,7 @@ extension SessionManager {
     }
 
     func clearTimetableQuietMessage() {
-        timetableQuietMessage = nil
+        presentation.clearTimetableQuietMessage()
     }
 
     func openTimetableProtectionBoundary(for sessionID: UUID) -> Date? {

@@ -50,7 +50,7 @@ struct FocusView: View {
             }
         }
         .sensoryFeedback(.warning, trigger: overtimeHaptic)
-        .sensoryFeedback(.warning, trigger: sessionManager.checkInHapticTick)
+        .sensoryFeedback(.warning, trigger: sessionManager.presentation.checkInHapticTick)
         .sheet(isPresented: $showPauseLimitSheet, onDismiss: {
             pendingSwitchTicketID = nil
         }) {

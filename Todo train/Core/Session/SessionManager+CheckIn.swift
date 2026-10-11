@@ -188,7 +188,7 @@ extension SessionManager {
                 session.awayDueAt = nil
                 cancelAwayFireTask()
             }
-            checkInHapticTick += 1
+            presentation.noteCheckInHaptic()
             _ = saveBestEffort()
         }
 
@@ -351,7 +351,7 @@ extension SessionManager {
             session.pendingCheckIn = .progress
             session.awayDueAt = nil
             cancelAwayFireTask()
-            checkInHapticTick += 1
+            presentation.noteCheckInHaptic()
             bumpCompanionSync()
             _ = saveBestEffort()
             return

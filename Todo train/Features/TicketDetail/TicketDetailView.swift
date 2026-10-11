@@ -22,10 +22,7 @@ struct TicketDetailView: View {
     @State private var showPauseLimitSheet = false
 
     private var canBoard: Bool {
-        sessionManager.isInService
-            && sessionManager.phase != .running
-            && sessionManager.phase != .overtime
-            && ticket.isOpen
+        ticket.isOpen && sessionManager.boardingEligibility.allowsInteraction
     }
 
     private var isPaused: Bool {

@@ -191,7 +191,7 @@ struct ContentView: View {
                 .presentationDragIndicator(.visible)
         }
         .overlay {
-            if let moment = sessionManager.punctualityMoment {
+            if let moment = sessionManager.presentation.punctualityMoment {
                 switch moment.kind {
                 case .arrival:
                     ArrivalInvalidateOverlay(
@@ -223,7 +223,7 @@ struct ContentView: View {
             }
         }
         // Arrival haptic is driven by the invalidate gesture; service moment keeps a light success.
-        .sensoryFeedback(.success, trigger: sessionManager.punctualityHapticTick)
+        .sensoryFeedback(.success, trigger: sessionManager.presentation.punctualityHapticTick)
     }
 
     /// まもなく／申し出のときだけ付ける。空の `tabViewBottomAccessory` はタブ上に帯が残る。
