@@ -64,7 +64,7 @@
 | P1-9 | ~~**LA/Widget handoff が sessionID 不一致でも consume される**~~ | ~~pause/resume で先に consume~~ | **済**: peek → 照合 → 変異成功時だけ consume。超過の到着は Focus が既に出ているとき consume のみ（後から `arrive()` しない）。`FocusPendingActionTests` |
 | P1-3 | ~~**到着など不可逆寄りの操作が握りつぶされる**~~ | ContentView LA arrive はキュー保持済。restore / AlarmKit も対応 | **済（一部）**: Hub / History / TicketDetail の undo restore は `errorAlert`。AlarmKit pause/resume は Logger。`try? pause` 等の別経路は残存 |
 | P1-10 | ~~**`try? modelContext.save()` が SessionManager ホットパスに多い**~~ | ~~`try? save()` 散在~~ | **済（骨格）**: `saveBestEffort()` + ログ。着発は persist を戻してから return。away と ATS の通知は save 成功後。乗客の発車と非常ドアは save 成功後だけ reconcile。残りはログのみ |
-| P1-11 | **`phase` / `activeSession` はメモリ上のキャッシュ** | `reconcile` が正を写す。Focus は `TimelineView` 1Hz で reconcile。Focus 非表示時の他経路で呼ばれないと `phase` が遅れ得る | 運行中は app 側の薄い reconcile スケジューラ（foreground + 乗車中）を正にし、View 所有の tick に依存しない |
+| P1-11 | ~~**`phase` / `activeSession` はメモリ上のキャッシュ**~~ | ~~Focus `TimelineView` / PassengerClock が tick 所有~~ | **済**: `ForegroundReconcileScheduling` + `SessionManager` の foreground 1 Hz ループ（乗車中・乗客レーン）。`inactive` はループを維持し `background` だけ止める。`active` では `endAwayWatch` のあとで再開する。Focus / Passenger は表示用 Timeline のみ。`ForegroundReconcileSchedulingTests` |
 | P1-12 | **App Intent が二次 `ModelContext` で発券** | `IssueTicketIntent` が `ModelContext(container)` を新規作成して save。`SessionManager` の mainContext / Hub 表示と一時的にずれる | merge 挙動のテスト、または Intent も `AppRuntime` 経由の単一書き込み口へ |
 
 ### P1 — 境界と配線
@@ -134,10 +134,11 @@
 2. **~~LA handoff の consume 順（P1-9）+ テスト~~** — 済。
 3. **~~副作用の失敗を見える化（P1-3 / P1-10）~~** — `saveBestEffort` / restore alert / AlarmKit log 済。
 4. **~~発車可否の単一 API（P1-13）~~** — 済。
-5. **SessionManager から投影を剥がす（P1-1）+ reconcile スケジューラ（P1-11）** — 書き込み API は触らない。次の実装スライス。
-6. **クロスターゲット共有（P2-1 / P2-13）** — QR、Cockpit/Timer SPM。
-7. **テストで鎖（P1-8 / P2-8–11 / P2-17）** — リファクタ PR は純関数テストを先に足す。
-8. **依存更新は単独 PR（P2-5）** — アプリ本体と混ぜない。Dependabot high も別確認。
+5. ~~**reconcile スケジューラ（P1-11）**~~ — 済。
+6. **SessionManager から投影を剥がす（P1-1）** — 書き込み API は触らない。次の実装スライス。
+7. **クロスターゲット共有（P2-1 / P2-13）** — QR、Cockpit/Timer SPM。
+8. **テストで鎖（P1-8 / P2-8–11 / P2-17）** — リファクタ PR は純関数テストを先に足す。
+9. **依存更新は単独 PR（P2-5）** — アプリ本体と混ぜない。Dependabot high も別確認。
 
 やらない方がいいこと:
 

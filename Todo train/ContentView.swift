@@ -67,6 +67,9 @@ struct ContentView: View {
             } else {
                 sessionManager.reconcile()
             }
+            if foregroundReconcileWanted(for: scenePhase) {
+                sessionManager.setForegroundReconcileActive(true)
+            }
             syncFocusPresentation()
             syncPassengerCover()
             companion.handleScenePhase(.active, sessionManager: sessionManager)
@@ -81,13 +84,19 @@ struct ContentView: View {
         }
         .onChange(of: scenePhase) { _, newPhase in
             companion.handleScenePhase(newPhase, sessionManager: sessionManager)
+            // Inactive keeps the loop (the UI is still on screen). Background stops it
+            // before away is armed, so a due watch is not promoted into an alert.
+            if !foregroundReconcileWanted(for: newPhase) {
+                sessionManager.setForegroundReconcileActive(false)
+            }
             if newPhase == .active {
-                // Foreground: recompute Date-based phase only.
-                // Do not re-run recoverOnLaunch (would re-schedule cancelled end bells).
+                // Clear away before the rising-edge reconcile. Do not re-run
+                // recoverOnLaunch (would re-schedule cancelled end bells).
                 sessionManager.endAwayWatch()
                 applyPendingFocusAction()
                 syncFocusPresentation()
                 syncPassengerCover()
+                sessionManager.setForegroundReconcileActive(true)
             } else if newPhase == .background {
                 sessionManager.beginAwayWatch()
             }
@@ -339,6 +348,14 @@ struct ContentView: View {
         FocusPendingActionStore.consumeIfMatches(pending)
     }
 
+    /// Active starts the tick. Inactive keeps it. Background does not.
+    private func foregroundReconcileWanted(for phase: ScenePhase) -> Bool {
+        ForegroundReconcileScheduling.isForeground(
+            wasForeground: sessionManager.isForegroundForReconcile,
+            scene: ForegroundReconcileScheduling.Scene(phase)
+        )
+    }
+
     private func recoverOnLaunch() {
         do {
             try sessionManager.recoverOnLaunch()
@@ -347,6 +364,17 @@ struct ContentView: View {
         }
         applyPendingFocusAction()
         syncFocusPresentation()
+    }
+}
+
+private extension ForegroundReconcileScheduling.Scene {
+    init(_ phase: ScenePhase) {
+        switch phase {
+        case .active: self = .active
+        case .inactive: self = .inactive
+        case .background: self = .background
+        @unknown default: self = .background
+        }
     }
 }
 

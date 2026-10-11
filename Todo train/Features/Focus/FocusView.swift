@@ -203,7 +203,7 @@ struct FocusView: View {
                     .accessibilityValue(CockpitFormat.timerLabel(remaining: remaining))
             }
             .onChange(of: context.date) { _, _ in
-                sessionManager.reconcile()
+                // Phase / side effects tick from SessionManager's foreground reconcile.
                 handleOvertimeSound()
             }
         }
