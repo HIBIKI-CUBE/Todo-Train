@@ -1,0 +1,45 @@
+# 文言の門（docs/03-terminology.md「文体」）。
+#
+# python tools/wording/extract_app.py > app.jsonl && python tools/wording/check.py app.jsonl
+
+name: wording
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [develop, main]
+    paths:
+      - "**/*.swift"
+      - "tools/wording/**"
+      - ".github/workflows/wording.yml"
+  pull_request:
+    paths:
+      - "**/*.swift"
+      - "tools/wording/**"
+      - ".github/workflows/wording.yml"
+
+concurrency:
+  group: wording-${{ github.event.pull_request.number && format('pr-{0}', github.event.pull_request.number) || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: wording check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: tools/wording/requirements.txt
+      - run: pip install -r tools/wording/requirements.txt
+      - name: check.py
+        working-directory: tools/wording
+        run: |
+          python extract_app.py > "$RUNNER_TEMP/app.jsonl"
+          python check.py "$RUNNER_TEMP/app.jsonl"
