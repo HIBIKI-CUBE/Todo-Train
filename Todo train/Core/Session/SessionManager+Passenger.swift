@@ -27,7 +27,7 @@ extension SessionManager {
         passengerMemory.offerAnchor = nil
         passengerMemory.offerAnchorIntervalID = nil
         passengerMemory.collapsedIntervalID = nil
-        try? save()
+        _ = saveBestEffort()
         reconcile(now: now)
     }
 
@@ -41,7 +41,7 @@ extension SessionManager {
         passengerMemory.offerAnchor = nil
         passengerMemory.offerAnchorIntervalID = nil
         passengerMemory.collapsedIntervalID = nil
-        try? save()
+        _ = saveBestEffort()
         reconcile(now: now)
     }
 
@@ -74,7 +74,7 @@ extension SessionManager {
                 changed = true
             }
         }
-        if changed { try? save() }
+        if changed { _ = saveBestEffort() }
 
         switch effect.notify {
         case .none:

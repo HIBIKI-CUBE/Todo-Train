@@ -98,6 +98,19 @@ extension SessionManager {
         try modelContext.save()
     }
 
+    /// Non-throwing lifecycle paths use this instead of swallowing `save()` with `try?`.
+    /// Logs and returns false so callers can skip follow-on side effects that assume durability.
+    @discardableResult
+    func saveBestEffort(_ operation: StaticString = #function) -> Bool {
+        do {
+            try save()
+            return true
+        } catch {
+            SessionPersistenceLog.saveFailed(operation: operation, error: error)
+            return false
+        }
+    }
+
     func workSessions(onDayKey dayKey: String) -> [WorkSession] {
         guard let day = HistoryStats.date(from: dayKey, calendar: calendar) else { return [] }
         let start = calendar.startOfDay(for: day)
@@ -128,6 +141,6 @@ extension SessionManager {
     func setExtensionReason(_ reason: String?, on item: SessionExtension) {
         let trimmed = reason?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         item.reason = trimmed.isEmpty ? nil : trimmed
-        try? save()
+        _ = saveBestEffort()
     }
 }

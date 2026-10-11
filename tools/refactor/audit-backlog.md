@@ -62,8 +62,8 @@
 | ID | 所見 | 根拠 | 候補アクション |
 |----|------|------|----------------|
 | P1-9 | ~~**LA/Widget handoff が sessionID 不一致でも consume される**~~ | ~~pause/resume で先に consume~~ | **済**: peek → 照合 → 変異成功時だけ consume。超過の到着は Focus が既に出ているとき consume のみ（後から `arrive()` しない）。`FocusPendingActionTests` |
-| P1-3 | **到着など不可逆寄りの操作が握りつぶされる** | ContentView の LA arrive は失敗時キュー保持に変更済。Hub / History / TicketDetail の restore と AlarmKit の `try?` は残存 | restore / AlarmKit をログ or 明示失敗へ。次スライスで `try? save`（P1-10）とまとめてもよい |
-| P1-10 | **`try? modelContext.save()` が SessionManager ホットパスに多い** | `+CheckIn` / `+Timetable` / `+IdleCabin` / `+Passenger` / `+DeviceSideEffects` など。失敗しても UI・通知・LA は進んだように見える | save 失敗を `reconcile` または明示エラーへ。ホットパスから `try? save` を減らす |
+| P1-3 | ~~**到着など不可逆寄りの操作が握りつぶされる**~~ | ContentView LA arrive はキュー保持済。restore / AlarmKit も対応 | **済（一部）**: Hub / History / TicketDetail の undo restore は `errorAlert`。AlarmKit pause/resume は Logger。`try? pause` 等の別経路は残存 |
+| P1-10 | ~~**`try? modelContext.save()` が SessionManager ホットパスに多い**~~ | ~~`try? save()` 散在~~ | **済（骨格）**: `saveBestEffort()` + ログ。着発・away・ダイヤ採用など副作用前は `guard`。残りはログのみの箇所あり |
 | P1-11 | **`phase` / `activeSession` はメモリ上のキャッシュ** | `reconcile` が正を写す。Focus は `TimelineView` 1Hz で reconcile。Focus 非表示時の他経路で呼ばれないと `phase` が遅れ得る | 運行中は app 側の薄い reconcile スケジューラ（foreground + 乗車中）を正にし、View 所有の tick に依存しない |
 | P1-12 | **App Intent が二次 `ModelContext` で発券** | `IssueTicketIntent` が `ModelContext(container)` を新規作成して save。`SessionManager` の mainContext / Hub 表示と一時的にずれる | merge 挙動のテスト、または Intent も `AppRuntime` 経由の単一書き込み口へ |
 
@@ -131,9 +131,9 @@
 一度に全部やらない。**縦スライスで「削って緑を保つ」**。
 
 1. **~~死 alias 掃除~~** — P2-3 済。
-2. **~~LA handoff の consume 順（P1-9）+ テスト~~** — 済（本 PR）。
-3. **副作用の失敗を見える化（P1-3 / P1-10）** — `try? save` ホットパス、AlarmKit。次の実装スライス。
-4. **発車可否の単一 API（P1-13）** — Hub と `board()` を同じ表に。
+2. **~~LA handoff の consume 順（P1-9）+ テスト~~** — 済。
+3. **~~副作用の失敗を見える化（P1-3 / P1-10）~~** — `saveBestEffort` / restore alert / AlarmKit log 済。
+4. **発車可否の単一 API（P1-13）** — Hub と `board()` を同じ表に。次の実装スライス。
 5. **SessionManager から投影を剥がす（P1-1）+ reconcile スケジューラ（P1-11）** — 書き込み API は触らない。
 6. **クロスターゲット共有（P2-1 / P2-13）** — QR、Cockpit/Timer SPM。
 7. **テストで鎖（P1-8 / P2-8–11 / P2-17）** — リファクタ PR は純関数テストを先に足す。

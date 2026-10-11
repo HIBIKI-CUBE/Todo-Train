@@ -22,7 +22,7 @@ extension SessionManager {
         cancelIdleWatch()
         checkInNotifier.cancelIdle(serviceDayID: day.id)
         idleLocalNotificationArmed = false
-        try? save()
+        _ = saveBestEffort()
         refreshIdleCabin(now: now)
     }
 
@@ -46,7 +46,7 @@ extension SessionManager {
         if touch {
             day.lastCabinActivityAt = now
         }
-        try? save()
+        _ = saveBestEffort()
     }
 
     func consumeIdleCabinStill(now: Date) {
@@ -67,7 +67,7 @@ extension SessionManager {
         checkInNotifier.cancelIdle(serviceDayID: day.id)
         idleLocalNotificationArmed = false
         bumpCompanionSync()
-        try? save()
+        _ = saveBestEffort()
         refreshIdleCabin(now: now)
     }
 
@@ -80,7 +80,7 @@ extension SessionManager {
         if hasOpenRide() || fetchOpenPassengerRide() != nil {
             if day.pendingCabin == .idle {
                 day.pendingCabin = nil
-                try? save()
+                _ = saveBestEffort()
             }
             cancelIdleWatch()
             checkInNotifier.cancelIdle(serviceDayID: day.id)
@@ -90,7 +90,7 @@ extension SessionManager {
         guard settings.cabinAnnouncementsEnabled else {
             if day.pendingCabin == .idle {
                 day.pendingCabin = nil
-                try? save()
+                _ = saveBestEffort()
             }
             cancelIdleWatch()
             checkInNotifier.cancelIdle(serviceDayID: day.id)
@@ -116,7 +116,7 @@ extension SessionManager {
         ) {
             day.pendingCabin = .idle
             bumpCompanionSync()
-            try? save()
+            _ = saveBestEffort()
             armIdleLocalNotification(serviceDayID: day.id, fireAt: now.addingTimeInterval(1))
             return
         }

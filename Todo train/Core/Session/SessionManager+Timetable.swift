@@ -138,14 +138,14 @@ extension SessionManager {
             TimetableAdoption.isEligible(occurrence)
                 && settings.isTimetableCalendarVisible(occurrence.calendarIdentifier)
         }
-        try? save()
+        guard saveBestEffort() else { return }
         lastScheduledEndBellFireAt = nil
         reconcile(now: now)
     }
 
     func adoptOccurrence(_ occurrence: CalendarOccurrence, scope: TimetableAdoptionScope) {
         persist(TimetableAdoption.adoptOccurrence(occurrence, scope: scope, membership: loadMembership()))
-        try? save()
+        guard saveBestEffort() else { return }
         lastScheduledEndBellFireAt = nil
         reconcile()
     }
@@ -158,7 +158,7 @@ extension SessionManager {
 
     func unadopt(blockID: UUID, scope: TimetableAdoptionScope) {
         persist(TimetableAdoption.unadopt(blockID: blockID, scope: scope, membership: loadMembership()))
-        try? save()
+        guard saveBestEffort() else { return }
         lastScheduledEndBellFireAt = nil
         reconcile()
     }
@@ -171,7 +171,7 @@ extension SessionManager {
 
     func unadoptOccurrence(_ occurrence: CalendarOccurrence, scope: TimetableAdoptionScope) {
         persist(TimetableAdoption.unadoptOccurrence(occurrence, scope: scope, membership: loadMembership()))
-        try? save()
+        guard saveBestEffort() else { return }
         lastScheduledEndBellFireAt = nil
         reconcile()
     }
@@ -185,7 +185,7 @@ extension SessionManager {
                 membership: loadMembership()
             )
         )
-        try? save()
+        guard saveBestEffort() else { return }
         lastScheduledEndBellFireAt = nil
         reconcile()
     }
@@ -263,7 +263,10 @@ extension SessionManager {
                 protectionBoundary: protectionBoundary
             )
             modelContext.insert(guardModel)
-            try? save()
+            guard saveBestEffort() else {
+                modelContext.delete(guardModel)
+                return
+            }
             scheduleTimetableNotification(
                 guardID: guardModel.id,
                 blockID: blockID,
@@ -275,11 +278,11 @@ extension SessionManager {
         case .resolve:
             openGuard?.resolvedAt = now
             cancelTimetableNotification(sessionID: openGuard?.sessionID ?? activeSession?.id)
-            try? save()
+            _ = saveBestEffort()
         case .invalidate:
             openGuard?.invalidatedAt = now
             cancelTimetableNotification(sessionID: openGuard?.sessionID ?? activeSession?.id)
-            try? save()
+            _ = saveBestEffort()
         }
     }
 
@@ -331,7 +334,7 @@ extension SessionManager {
         }
         if didChange {
             bumpCompanionSync()
-            try? save()
+            _ = saveBestEffort()
         }
     }
 

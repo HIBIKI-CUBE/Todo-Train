@@ -120,9 +120,15 @@ extension SessionManager {
 
     func fireAwayInterrupt(_ session: WorkSession, now: Date, presentAlert: Bool) {
         cancelAwayFireTask()
+        let previousPending = session.pendingCheckIn
+        let previousAwayDue = session.awayDueAt
         session.awayDueAt = nil
         session.pendingCheckIn = .away
-        try? save()
+        guard saveBestEffort() else {
+            session.pendingCheckIn = previousPending
+            session.awayDueAt = previousAwayDue
+            return
+        }
         refreshLiveActivity(for: session, now: now, presentAwayAlert: presentAlert)
     }
 
