@@ -33,16 +33,18 @@
 
 ## 2. 調査サマリ
 
-全体印象: **Observation / NavigationStack / SwiftData versioned schema など近代的な骨格は既にある。** 負債の中心は「SessionManager と巨大 Feature View の集中」「singleton + AppRuntime の配線」「クロスターゲット重複」「副作用経路の `try?`」「Widget / Notifier のテストギャップ」。
+全体印象: **Observation / NavigationStack / SwiftData versioned schema など近代的な骨格は既にある。** 負債の中心は「SessionManager と巨大 Feature View の集中」「singleton + AppRuntime の配線」「クロスターゲット重複」「副作用経路の `try?`」「Widget / Notifier のテストギャップ」。契約違反級の P0（CloudKit 真実分岐など）は見つかっていない。
+
+深掘り（アーキテクチャ境界・バグ温床）で追加確定した論点: **`phase` / `activeSession` は DB のキャッシュ**、**LA handoff の consume 順**、**Hub と `board()` の発車可否重複**、**`try? save()` の広がり**、**Intent の二次 `ModelContext`**。
 
 ### 健全だった点
 
 - `ObservableObject` / `@Published` / `@StateObject` / `@EnvironmentObject` は **ゼロ**。`@Observable` + `.environment` に揃っている。
 - `NavigationView` なし。`NavigationStack` のみ。
 - 走行ドメインは `SessionManager` 拡張に分割済み（ファイル 13、合計 ~2.6k 行）。神クラス化の途中だが、無秩序な巨大 1 ファイルではない。
-- Sync は `TodoTrainSync` + Worker に切り出し済み。Ticket UI も `TodoTrainTicketUI` へ抽出済み（`TicketUIShim` で橋渡し）。
+- Sync は `TodoTrainSync` + Worker に切り出し済み。Ticket UI も `TodoTrainTicketUI` へ抽出済み（`TicketUIShim` で橋渡し）。Mac は snapshot 消費で SwiftData を持たない。
 - `AppSchema` V1→V3 と migration plan / rebuild 経路がある。
-- wording の CI 門がある。
+- wording の CI 門がある。Worker `src/` に `any` なし。
 
 ---
 
@@ -50,28 +52,38 @@
 
 優先度の目安:
 
-- **P0** — 契約違反・データ喪失・明らかな本番クラッシュ筋
+- **P0** — 契約違反・データ喪失・明らかな本番クラッシュ筋（今回なし）
 - **P1** — 間欠バグ / 回帰コスト大 / 境界侵食が進行中
 - **P2** — 重複・肥大・依存の古さ（計画的に削る）
 - **P3** — 掃除・整合・将来の余裕
+
+### P1 — バグ温床（先に鎖）
+
+| ID | 所見 | 根拠 | 候補アクション |
+|----|------|------|----------------|
+| P1-9 | **LA/Widget handoff が sessionID 不一致でも consume される** | `SessionManager+Lifecycle.applyPendingLiveActivityAction`: pause/resume で先に `FocusPendingActionStore.consume()`、その後 `guard pending.sessionID == activeSession?.id`。不一致なら操作は捨てられキューも空 | **peek → 照合 → 成功時だけ consume**。stale session のテストを足す。着手第1候補 |
+| P1-3 | **到着など不可逆寄りの操作が `try?` で握りつぶされる** | `ContentView.applyPendingFocusAction` の `try? sessionManager.arrive()`。Hub / History / TicketDetail の restore も `try?`。AlarmKit の pause/resume も同様 | 少なくとも arrive / restore はログ or ユーザー向け失敗経路。LA deep-link 失敗を黙殺しない |
+| P1-10 | **`try? modelContext.save()` が SessionManager ホットパスに多い** | `+CheckIn` / `+Timetable` / `+IdleCabin` / `+Passenger` / `+DeviceSideEffects` など。失敗しても UI・通知・LA は進んだように見える | save 失敗を `reconcile` または明示エラーへ。ホットパスから `try? save` を減らす |
+| P1-11 | **`phase` / `activeSession` はメモリ上のキャッシュ** | `reconcile` が正を写す。Focus は `TimelineView` 1Hz で reconcile。Focus 非表示時の他経路で呼ばれないと `phase` が遅れ得る | 運行中は app 側の薄い reconcile スケジューラ（foreground + 乗車中）を正にし、View 所有の tick に依存しない |
+| P1-12 | **App Intent が二次 `ModelContext` で発券** | `IssueTicketIntent` が `ModelContext(container)` を新規作成して save。`SessionManager` の mainContext / Hub 表示と一時的にずれる | merge 挙動のテスト、または Intent も `AppRuntime` 経由の単一書き込み口へ |
 
 ### P1 — 境界と配線
 
 | ID | 所見 | 根拠 | 候補アクション |
 |----|------|------|----------------|
 | P1-1 | **SessionManager が横断関心**（搭乗・ダイヤ・車内放送・LA/ベル副作用・乗客・削除 Undo 連携） | `Core/Session/SessionManager*.swift` 合計 ~2663 行、拡張 13。プロパティに UI 向け haptic tick / quiet message / passenger chrome が同居 | 副作用を `DeviceSideEffects` / Timetable / Passenger へさらに外向き化。クエリ系は既に `+Queries`。次は「書き込みコマンド」と「読み取り投影」の分離 |
-| P1-2 | **グローバル singleton + `AppRuntime` 静的ハンドル** | `Todo_trainApp` が `AppRuntime.sessionManager` / `OvertimeNotifier.shared.sessionManager` / `SessionPauseRuntime.pauser` / `AlarmKitScheduler.shared.bind` を起動時に相互配線。`AppSettings.shared` / `ArrivalForecastStore.shared` も Environment と二重 | Intents / Alarm / LA 用に「起動後のファサード 1 箇所」に閉じ、View 側は Environment のみを正にする。テストでは shared を避けられる形へ |
-| P1-3 | **到着など不可逆寄りの操作が `try?` で握りつぶされる** | `ContentView.applyPendingFocusAction` の `try? sessionManager.arrive()`。Hub / History / TicketDetail の restore も `try?`。AlarmKit の pause/resume も同様 | 少なくとも arrive / restore はログ or ユーザー向け失敗経路。LA deep-link 失敗を黙殺しない |
-| P1-4 | **巨大 Feature / DesignSystem ファイル**（UI + 状態 + レイアウトが同居） | `CockpitInstrumentViews` 930 / `ArrivalInvalidateOverlay` 799 / `ApproachClearEngine` 792 / `HubView` 765 / `PassengerLCD` 602 / `FocusView` 596 など | 純計算を Core/Package へ。View は構成だけ。Widget 計器は既に `CockpitLayoutContractTests` があるので同じ型で切る |
+| P1-2 | **グローバル singleton + `AppRuntime` / `SessionPauseRuntime` 静的ハンドル** | `Todo_trainApp` が `AppRuntime.sessionManager` / `OvertimeNotifier.shared.sessionManager` / `SessionPauseRuntime.pauser` / `AlarmKitScheduler.shared.bind` を起動時に相互配線。`AppSettings.shared` / `ArrivalForecastStore.shared` も Environment と二重 | Intents / Alarm / LA 用に「起動後のファサード 1 箇所」に閉じ、View 側は Environment のみを正にする。テストでは shared を避けられる形へ |
+| P1-4 | **巨大 Feature / DesignSystem ファイル**（UI + 状態 + レイアウトが同居） | `CockpitInstrumentViews` 930 / `ArrivalInvalidateOverlay` 799 / `ApproachClearEngine` 792 / `HubView` 765 / `PassengerLCD` 602 / `FocusView` 596 など。ApproachClear 状態機械が `Features/` に居る | 純計算・状態機械を Core/Package へ。View は構成だけ。Widget 計器は既に `CockpitLayoutContractTests` があるので同じ型で切る |
+| P1-13 | **発車可否が Hub UI と `board()` で二重** | `HubView.canBoardGenerally` / `boardDisabledReason` vs `SessionManager.board` / `PauseLimitGuard` / `ensureServiceAllowsBoarding` | 単一の `BoardingEligibility`（または Queries API）を Hub と `board()` が共有 |
 
-### P1 — バグ温床・ライフサイクル
+### P1 — ライフサイクル・永続・テスト
 
 | ID | 所見 | 根拠 | 候補アクション |
 |----|------|------|----------------|
 | P1-5 | **legacy `boardedDeviceID == nil` を自機扱い** | `SessionManager.ownsActiveRide` コメント。古いローカルデータの互換 | マイグレーションで埋める / 読み時に一度書き戻す期限を決める。永久互換にしない |
 | P1-6 | **ModelContainer 生成失敗は `fatalError`** | `Todo_trainApp.init` | 個人データ前提なら起動失敗 UI の方が安全な場合あり（少なくともエラー内容を残す） |
 | P1-7 | **未バージョン store の rebuild は破壊的フォールバック** | `AppModelContainer.rebuildPreservingData` — 失敗時に V1 として開き snapshot → 削除 → 復元 | 既にテストありそうだが、失敗モード（途中クラッシュ）の耐性を文書化・強化。監査ログを残す |
-| P1-8 | **Notifier / Alarm / LA / Companion runtime は OS 結合が強く、単体テストが薄い** | `CheckInNotifier` / `OvertimeNotifier` / `AlarmKitScheduler` / `CompanionSyncRuntime` に専用テストヒントなし（純プロトコルはある） | Fake を通したスケジュール決定の表テストを増やす。OS 呼び出しはアダプタの向こうへ |
+| P1-8 | **Notifier / Alarm / LA / Companion runtime は OS 結合が強く、単体テストが薄い** | `CheckInNotifier` / `OvertimeNotifier` / `AlarmKitScheduler` / `CompanionSyncRuntime` に専用テストヒントなし（純プロトコルはある）。`UNUserNotificationCenter.add` も完了ハンドラなし | Fake を通したスケジュール決定の表テストを増やす。OS 呼び出しはアダプタの向こうへ。スケジュール失敗を reconcile で検知 |
 
 ### P2 — 重複・整合・依存
 
@@ -84,6 +96,11 @@
 | P2-5 | **Worker 依存のドリフト** | `npm outdated`: wrangler 4.129→4.149、vitest 4→5、workers-types 日付遅れ、hono patch 遅れ。TS major は別判断 | patch/minor を定期追従。vitest 5 / typescript 7 は別 PR |
 | P2-6 | **CloudKit ゲートは正しく false だが、識別子と分岐が残存** | `CloudKitSync.isConfigured == false`、container id 文字列あり。`DeviceIdentifying` が同ファイル | ファイル分割（同期ゲート vs 端末 ID）。ゲート自体は契約どおり残す |
 | P2-7 | **UITests が Xcode テンプレのまま** | `Todo_trainUITests` は launch のみ | 主要導線の煙テスト少数、またはターゲット縮小。現状はノイズ |
+| P2-12 | **Hub 発車可否と `board()` の重複**（詳細は P1-13） | UI ヒントと throw が分岐し得る | P1-13 と同一スライスで潰す |
+| P2-13 | **Widget フォルダ例外で app ターゲットに Widget ソースを共有** | `project.pbxproj` の TodoTrainWidget → app exceptions。`FocusTimerPhase` 等 | Cockpit/Timer を SPM モジュール化し、fragile な target membership をやめる |
+| P2-14 | **Live Activity `update`/`end` が並列 Task** | `LiveActivityManaging` が `Task { await activity.update }` を連発 | 直列化 + 失敗ログ |
+| P2-15 | **UI 層で `Calendar.current` と注入 calendar が混在** | Hub の WorkHourBand、History の一部、MarsTicket 日付面 | `sessionManager.calendar` / `@Environment(\.calendar)` に揃える |
+| P2-16 | **ContentView がアプリライフサイクルの寄せ集め** | recover / focus cover / companion / away / remote store | `AppLifecycleCoordinator` へ切り出し（テストしやすくする） |
 
 ### P2 — テストギャップ（純関数優先）
 
@@ -93,6 +110,7 @@
 | P2-9 | `CompanionSnapBuilding` / Runtime の決定表 | ペア状態・scenePhase・suppress 通知 |
 | P2-10 | `EventKitCalendarBoard` のアダプタ境界 | Fit / Adoption / GuardLogic はテストあり。Board 実装の分岐を Fake 化 |
 | P2-11 | Widget: `FocusTimerPhase` / snapshot decode | LayoutContract 以外の表示モデル |
+| P2-17 | LA handoff / `IssueTicketIntent` | P1-9・P1-12 用の回帰テストが先 |
 
 ### P3 — 掃除・観測
 
@@ -101,8 +119,10 @@
 | P3-1 | Preview 内の `try!` 多用 | `#Preview` 専用ヘルパ（失敗時プレースホルダ）に寄せる |
 | P3-2 | GeometryReader 多用 | 必要なものは残す。ネストだけ削る（Hub / Arrival / Focus） |
 | P3-3 | `SWIFT_VERSION = 5.0` 表記 vs packages tools 6.0 | プロジェクト設定の意味を確認し、表記を実態に合わせる |
-| P3-4 | ApproachClear / Hub の UserDefaults キー | `AppSettings.Keys` と同様、キー定数を一箇所に |
+| P3-4 | ApproachClear / Hub / Companion の UserDefaults・通知 ID キー | `AppSettings.Keys` と同様、キー定数を一箇所に。`timetable.pause.` 接頭辞の散在も寄せる |
 | P3-5 | `.build` 成果物が Packages 配下に残る可能性 | gitignore / クリーン手順の確認（エージェント環境のノイズ源） |
+| P3-6 | CloudKit remote-change 購読がゲート false でも ContentView に残る | 死経路を狭めるかコメントで「将来用」と明示 |
+| P3-7 | Mac companion の pause/resume 配線の軽い重複 | `CompanionPopover` vs `CompanionRideOverlayController` |
 
 ---
 
@@ -110,18 +130,14 @@
 
 一度に全部やらない。**縦スライスで「削って緑を保つ」**。
 
-1. **即時・低リスク掃除（半日以内の粒度）**  
-   P2-4 未使用 import、P2-3 死 alias、P3 系のキー定数寄せ。
-2. **副作用の失敗を見える化**  
-   P1-3。`arrive` / AlarmKit / restore の `try?` を優先。
-3. **SessionManager から投影を剥がす**  
-   P1-1。まず「読み取り専用の overview / chrome」を別型へ。書き込み API は触らない。
-4. **クロスターゲット共有**  
-   P2-1 QR、Widget 計器モデルの Package 化。
-5. **テストで鎖をかける**  
-   P1-8 / P2-8–11。リファクタ PR は必ず純関数テストを先に足す。
-6. **依存更新は単独 PR**  
-   P2-5。アプリ本体と混ぜない。
+1. **~~即時・低リスク掃除~~** — P2-3 / P2-4 済（本 PR）。
+2. **LA handoff の consume 順（P1-9）+ テスト** — ユーザー操作が消える筋。最初の実装スライス向き。
+3. **副作用の失敗を見える化（P1-3 / P1-10）** — `arrive` / AlarmKit / `try? save`。
+4. **発車可否の単一 API（P1-13）** — Hub と `board()` を同じ表に。
+5. **SessionManager から投影を剥がす（P1-1）+ reconcile スケジューラ（P1-11）** — 書き込み API は触らない。
+6. **クロスターゲット共有（P2-1 / P2-13）** — QR、Cockpit/Timer SPM。
+7. **テストで鎖（P1-8 / P2-8–11 / P2-17）** — リファクタ PR は純関数テストを先に足す。
+8. **依存更新は単独 PR（P2-5）** — アプリ本体と混ぜない。Dependabot high も別確認。
 
 やらない方がいいこと:
 
@@ -135,9 +151,9 @@
 
 優先してコードリーディングを続けるなら:
 
-1. `SessionManager+DeviceSideEffects` / `recoverOnLaunch` / end-bell suppress の状態機械
-2. `CompanionSyncRuntime` ↔ `CompanionMacRuntime` の責務対称性
-3. `ApproachClearEngine` の Hub 密結合度
+1. ~~LA handoff / pending action の消費順~~ → P1-9 として確定。実装スライスへ
+2. `SessionManager+DeviceSideEffects` / `recoverOnLaunch` / end-bell suppress の状態機械
+3. `CompanionSyncRuntime` ↔ `CompanionMacRuntime` の責務対称性
 4. SwiftData モデルの optional レガシーフィールド一覧（`boardedDeviceID` 以外）
 5. Worker DO（pairing / directory）の型安全と `as unknown as` 箇所
 
