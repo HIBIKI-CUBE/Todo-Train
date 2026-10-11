@@ -41,7 +41,7 @@ python analyze.py /tmp/app.jsonl /tmp/ref.jsonl data/llm_in.jsonl data/llm_out.j
 - `llm vs pair` が +2 を超える（LLM 訳が同じ原文の人間訳より多い）
 - `app vs apple` が +2 を超える（このアプリが人間の文より多い）
 
-片方だけなら AI の癖とは言えない。アプリ独自の書き方として報告に留める。「過剰な語」の表は用語表（`docs/03-terminology.md`）の語を除いてから見る。
+運転台・盤・車内放送・乗客の文字は役の声なので、Apple から外れていても癖とは限らない。`--strings` で該当箇所の場面を見てから判断する。片方だけなら AI の癖とは言えない。アプリ独自の書き方として報告に留める。「過剰な語」の表は用語表（`docs/03-terminology.md`）の語を除いてから見る。
 
 **4. 直して門を通す**。`--strings` の出力から該当箇所を開き、[docs/03-terminology.md](../../../docs/03-terminology.md) の「文体」に沿って直す。
 
@@ -49,7 +49,7 @@ python analyze.py /tmp/app.jsonl /tmp/ref.jsonl data/llm_in.jsonl data/llm_out.j
 python extract_app.py > /tmp/app.jsonl && python check.py /tmp/app.jsonl
 ```
 
-利用者自身の声は直さず `allow.tsv` に理由を書く。テストが文言を固定していれば一緒に直す。
+直す前に、その文字列の場面で利用者が演じる役を「文体」の表で確かめる。Apple の文体に寄せるのはアプリの声の場面だけで、運転台や車内放送は役の声に直す。テストが文言を固定していれば一緒に直す。
 
 **5. 門を足す**。3 で根拠が立ち、例外が少なく機械で判定できる形だけ `check.py` に足す。足したら docs/03「文体」にも一行書き、過去の誤りを入れた JSON Lines で検出できることを確かめる。
 

@@ -8,21 +8,22 @@ alwaysApply: false
 
 判断は [docs/03-terminology.md](../../docs/03-terminology.md) の「用語表」と「文体」。ここは書き方の例と、書いたあとの確認だけ。
 
+書く前に、その画面で利用者が演じている役（係員・指令員・運転士・乗客など）を「文体」の表で決める。全体を一つの声にそろえない。
+
 ```swift
 // ❌ LLM が日本語化した UI 文に多い形
-"iPhone に送った"
-"確定の時間切れ。自分に戻してもう一度。"
-Button("追加する") { … }
+"iPhone に送った"                         // アプリの声なのに常体
+"確定の時間切れ。自分に戻してもう一度。"     // 体言止めの連なり
+FocusControlButton(title: "もう終わってた")  // 運転台なのに口語
 .accessibilityHint("新しい切符の発行")
 
-// ✅ Apple の日本語 UI に寄せた形
-"iPhone に送りました"
+// ✅ 役の声
+"iPhone に送りました"                      // アプリの声
 "確定の時間が切れました。画面を自分に戻すと、もう一度確定できます。"
-Button("追加") { … }
-.accessibilityHint("新しい切符を発行します")
+FocusControlButton(title: "到着済み")        // 運転士の操作名
+.accessibilityHint("新しい切符を発行します")  // ヒントはいつもアプリの声
+CabinCopy.prompt = "まだ乗ってる？"          // 車内放送は口語の問いでよい。指図はしない
 ```
-
-利用者自身の声（車内放送への答え「まだやってる」など）は常体のままにし、`tools/wording/allow.tsv` に理由を書く。
 
 日本語のリテラルを足したり変えたりしたら、必ず通す:
 
@@ -31,4 +32,4 @@ cd tools/wording && pip install -r requirements.txt
 python extract_app.py > /tmp/app.jsonl && python check.py /tmp/app.jsonl
 ```
 
-指摘を消すために `allow.tsv` へ逃がさない。足すのは意図した例外だけ。
+アプリの声と規則が違う役（車内放送・乗客）のファイルを足したら `tools/wording/roles.tsv` に書く。指摘を消すために役を付け替えない。
