@@ -155,7 +155,7 @@ struct QuickAddSheet: View {
     private var titleZone: some View {
         ComposingTextField(
             text: $title,
-            placeholder: "どちらまで？",
+            placeholder: "題名",
             focusNonce: titleFocusNonce,
             onSubmit: submitFromReturn
         )

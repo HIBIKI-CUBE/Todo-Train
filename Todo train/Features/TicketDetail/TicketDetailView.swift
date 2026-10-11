@@ -57,7 +57,7 @@ struct TicketDetailView: View {
         Form {
             Section("切符") {
                 if ticket.isOpen {
-                    TextField("タイトル", text: $ticket.title)
+                    TextField("題名", text: $ticket.title)
                     VStack(alignment: .leading, spacing: TrainTheme.Space.sm) {
                         Text("見積もり \(ticket.estimatedSeconds / 60) 分")
                             .font(.subheadline.weight(.medium))
