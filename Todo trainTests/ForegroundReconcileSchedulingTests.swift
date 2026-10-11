@@ -37,6 +37,72 @@ struct ForegroundReconcileSchedulingTests {
             )
         )
     }
+
+    @Test func shouldRunLoop_requiresForegroundWallClockAndAReason() {
+        let interval = PassengerInterval(
+            id: "i",
+            title: "案内",
+            startsAt: Date(timeIntervalSince1970: 0),
+            endsAt: Date(timeIntervalSince1970: 60),
+            source: .manualInterval,
+            isCancelled: false
+        )
+        #expect(
+            ForegroundReconcileScheduling.shouldRunLoop(
+                isForeground: true,
+                hasOpenRide: true,
+                passengerChrome: .none,
+                allowsWallClock: true
+            )
+        )
+        #expect(
+            ForegroundReconcileScheduling.shouldRunLoop(
+                isForeground: true,
+                hasOpenRide: false,
+                passengerChrome: .soon(interval),
+                allowsWallClock: true
+            )
+        )
+        #expect(
+            !ForegroundReconcileScheduling.shouldRunLoop(
+                isForeground: false,
+                hasOpenRide: true,
+                passengerChrome: .none,
+                allowsWallClock: true
+            )
+        )
+        #expect(
+            !ForegroundReconcileScheduling.shouldRunLoop(
+                isForeground: true,
+                hasOpenRide: true,
+                passengerChrome: .none,
+                allowsWallClock: false
+            )
+        )
+        #expect(
+            !ForegroundReconcileScheduling.shouldRunLoop(
+                isForeground: true,
+                hasOpenRide: false,
+                passengerChrome: .none,
+                allowsWallClock: true
+            )
+        )
+    }
+
+    @Test func scene_inactiveKeepsLoop_backgroundStops_activeStarts() {
+        #expect(
+            ForegroundReconcileScheduling.isForeground(wasForeground: true, scene: .inactive)
+        )
+        #expect(
+            !ForegroundReconcileScheduling.isForeground(wasForeground: false, scene: .inactive)
+        )
+        #expect(
+            !ForegroundReconcileScheduling.isForeground(wasForeground: true, scene: .background)
+        )
+        #expect(
+            ForegroundReconcileScheduling.isForeground(wasForeground: false, scene: .active)
+        )
+    }
 }
 
 @MainActor
@@ -67,7 +133,7 @@ struct ForegroundReconcileSessionTests {
         #expect(manager.foregroundReconcileTask == nil)
     }
 
-    @Test func setForegroundInactiveStopsIntentWithoutLoop() throws {
+    @Test func setForegroundFalseClearsIntentWithoutLoop() throws {
         let (manager, context, _, _) = try SessionManagerFixtures.makeHarness()
         try manager.startService()
         let ticket = try SessionManagerFixtures.makeTicket(context)

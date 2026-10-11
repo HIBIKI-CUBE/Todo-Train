@@ -158,6 +158,8 @@ extension SessionManager {
     // MARK: - Foreground reconcile
 
     /// App scene owns foreground; SessionManager owns the tick while riding.
+    /// The rising edge reconciles immediately. Clear a due away watch first
+    /// (`endAwayWatch`), or that reconcile promotes it into an alert.
     func setForegroundReconcileActive(_ active: Bool) {
         let changed = isForegroundForReconcile != active
         isForegroundForReconcile = active
@@ -176,9 +178,12 @@ extension SessionManager {
     }
 
     func refreshForegroundReconcileLoop() {
-        let shouldRun = isForegroundForReconcile
-            && needsForegroundReconcileTick
-            && clock is SystemSessionClock
+        let shouldRun = ForegroundReconcileScheduling.shouldRunLoop(
+            isForeground: isForegroundForReconcile,
+            hasOpenRide: activeSession?.isOpen == true,
+            passengerChrome: passengerChrome,
+            allowsWallClock: clock is SystemSessionClock
+        )
         if !shouldRun {
             foregroundReconcileTask?.cancel()
             foregroundReconcileTask = nil
