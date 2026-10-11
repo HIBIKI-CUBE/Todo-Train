@@ -278,9 +278,9 @@ struct ArrivalInvalidateOverlay: View {
                 }
                 ArrivalChoiceSign(
                     index: "終",
-                    title: "終着",
+                    title: "ここまで",
                     selected: deck.declinedNext,
-                    hint: "次の切符は出さない。乗車は始まらない"
+                    hint: "次の発車はしない"
                 ) {
                     choose { deck.selectNoNext() }
                 }
@@ -289,13 +289,13 @@ struct ArrivalInvalidateOverlay: View {
             .accessibilityLabel("行き先")
 
             if reduceMotion {
-                ArrivalDismissPlate(title: "到着を締める", hint: deck.canStamp ? "印を押して到着を締める" : "行き先が決まると押せる") {
+                ArrivalDismissPlate(title: "印を押す", hint: deck.canStamp ? "この到着が残る" : "行き先が決まると押せる") {
                     commitStamp(punctuality: punctuality)
                 }
                 .disabled(!deck.canStamp)
                 .opacity(deck.canStamp ? 1 : 0.4)
             }
-            ArrivalDismissPlate(title: "閉じる", hint: "印を押さずに戻る", action: onClose)
+            ArrivalDismissPlate(title: "閉じる", hint: "印は残さない", action: onClose)
                 .padding(.top, 8)
             if !stampError.isEmpty {
                 Text(stampError)
@@ -357,7 +357,7 @@ struct ArrivalInvalidateOverlay: View {
         .disabled(!deck.canStamp)
         .opacity(deck.canStamp ? 1 : 0.45)
         .accessibilityLabel("\(stampCenterLabel(punctuality))の印")
-        .accessibilityHint(deck.canStamp ? "到着を締める" : "行き先が決まると押せる")
+        .accessibilityHint(deck.canStamp ? "印を押す" : "行き先が決まると押せる")
     }
 
     private var otherTicketPicker: some View {
@@ -540,7 +540,7 @@ struct ArrivalInvalidateOverlay: View {
             return "\(head)。\(arrival.title)。次の一本 \(next.title)"
         }
         if deck.declinedNext {
-            return "\(head)。\(arrival.title)。終着"
+            return "\(head)。\(arrival.title)。ここまで"
         }
         return "\(head)。\(arrival.title)"
     }
