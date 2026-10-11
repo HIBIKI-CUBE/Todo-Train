@@ -182,14 +182,15 @@ public enum MarsTicketSpec {
         /// Brief ink readable beat before the same downward exit.
         public static let stampHoldMilliseconds = 320
         public static let exitMilliseconds = 420
-        /// Soft residual bob on the handle only (same family as enter).
+        /// Soft residual bob on the paper when the stamp seats.
         public static let nudgeAmplitude: CGFloat = 7
+        /// How far the stamp travels onto the paper. Small enough to miss if shorter.
+        public static let travel: CGFloat = 32
 
         public static let enter = Animation.easeOut(duration: Double(enterMilliseconds) / 1_000)
-        public static let invite = Animation.easeInOut(duration: 0.7)
+        public static let descend = Animation.easeIn(duration: 0.2)
         public static let slam = Animation.easeOut(duration: 0.14)
         public static let exit = Animation.easeIn(duration: Double(exitMilliseconds) / 1_000)
-        public static let arc = Animation.easeOut(duration: 0.2)
     }
 
     /// Shrink an oversized landing frame around its center; keep Mars aspect.
