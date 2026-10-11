@@ -61,5 +61,5 @@ public enum CabinCopy {
     public static let prompt = "まだ乗ってる？"
     /// Service is open but there is no ride.
     public static let idle = "運行は続いてる"
-    public static let still = "まだやってる"
+    public static let still = "続行"
 }

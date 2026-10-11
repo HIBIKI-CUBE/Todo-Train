@@ -39,7 +39,7 @@ struct ImaYaruFormView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            TextField("何をする？", text: $title)
+            TextField("どちらまで？", text: $title)
                 .textFieldStyle(.roundedBorder)
                 .focused($titleFocused)
                 .onSubmit(commit)

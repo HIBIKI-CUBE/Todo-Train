@@ -33,7 +33,7 @@ struct SettingsView: View {
             }
 
             Section {
-                Toggle("充電中は画面を消さない", isOn: Binding(
+                Toggle("充電中は画面をつけたまま", isOn: Binding(
                     get: { settings.keepAwakeWhileChargingInFocus },
                     set: { settings.keepAwakeWhileChargingInFocus = $0 }
                 ))

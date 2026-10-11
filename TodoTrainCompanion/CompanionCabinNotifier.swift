@@ -48,7 +48,6 @@ final class CompanionCabinNotifier: NSObject, UNUserNotificationCenterDelegate {
         delivered = true
         let content = UNMutableNotificationContent()
         content.title = prompt
-        content.body = CabinCopy.still
         content.sound = .default
         content.categoryIdentifier = Self.categoryIdentifier
         let request = UNNotificationRequest(

@@ -264,7 +264,7 @@ struct ServiceCabinExtensionTests {
         let ticket = try SessionManagerFixtures.makeTicket(context)
         try manager.board(ticket: ticket)
         try manager.extend(by: 300, reason: nil)
-        try manager.extend(by: 180, reason: "仕事が膨らんだ")
+        try manager.extend(by: 180, reason: "作業増")
 
         let session = try #require(manager.activeSession)
         let unlabeled = ServiceCabinSequence.unlabeledExtensions(in: [session])
@@ -299,7 +299,7 @@ struct ServiceCabinExtensionTests {
         arrived.outcome = .arrived
         context.insert(arrived)
         arrived.extensions.append(
-            SessionExtension(addedSeconds: 120, reason: "まだかかる", session: arrived)
+            SessionExtension(addedSeconds: 120, reason: "見積もり不足", session: arrived)
         )
 
         let partial = WorkSession(startedAt: .now, estimatedSecondsAtStart: 600, ticket: ticket)

@@ -210,7 +210,7 @@ final class CheckInNotifier: CheckInNotifying {
         )
         let still = UNNotificationAction(
             identifier: CheckInNotification.stillOnItAction,
-            title: "まだやってる",
+            title: CabinCopy.still,
             options: []
         )
         let progress = UNNotificationCategory(
@@ -297,7 +297,7 @@ final class CheckInNotifier: CheckInNotifying {
         enqueue(
             identifier: identifier,
             title: CabinCopy.idle,
-            body: CabinCopy.still,
+            body: "",
             fireAt: fireAt,
             categoryIdentifier: CheckInNotification.idleCategoryIdentifier
         )
