@@ -68,7 +68,15 @@ HMAC-SHA256(cfmKey, UTF-8("{pairingId}|{offerId}|mac"))
 
 ## Snap 平文
 
-フィールドは [fixtures/snap.json](fixtures/snap.json)。乗務なしは [fixtures/snap-idle.json](fixtures/snap-idle.json)（`sessionId` と他の乗務欄は `null`、`phase` は `idle`）。`serviceActive` / `cabinEnabled` / `checkInFiredCount` / `pendingCabin` は乗務なしでも載せる。欠ける旧 snap は `serviceActive=false`、`cabinEnabled=true`、`checkInFiredCount=0`、`pendingCabin=null`。`pendingCabin` は `progress` / `away` / `idle` / `null`。未知値は表示だけ無視。`idle` は運行中で乗務が無いとき。iPhone が立て、Mac は通知するだけ。`lastActivityAt` は載せない。
+フィールドは [fixtures/snap.json](fixtures/snap.json)。乗務なしは [fixtures/snap-idle.json](fixtures/snap-idle.json)（`sessionId` と他の乗務欄は `null`、`phase` は `idle`）。声掛けのある snap は [fixtures/snap-nudge.json](fixtures/snap-nudge.json)。`serviceActive` / `cabinEnabled` / `checkInFiredCount` / `pendingCabin` は乗務なしでも載せる。欠ける旧 snap は `serviceActive=false`、`cabinEnabled=true`、`checkInFiredCount=0`、`pendingCabin=null`。`pendingCabin` は `progress` / `away` / `idle` / `overrun` / `gap` / `null`。未知値は表示だけ無視。`idle` は運行中で乗務が無いとき。iPhone が立て、Mac は通知するだけ。1段目は既存の `progress`。`overrun` は見積もり時刻と引き継ぎ、`gap` は到着後の空白。旧 Mac は未知の `pendingCabin` を無視する。`lastActivityAt` は載せない。
+
+任意の `nudge` / `nudgePlan` / `reserved` は声掛け。欠けていても旧クライアントは無視する。値があるときだけ出す。欄が欠けた snap と、この欄を持つ snap の両方を、いまの型が読む。
+
+`nudge` はいま出ている声掛け。`id`、`kind`（`progress` / `overrun` / `gap`）、`stage`（`checkIn` / `approach` / `estimate` / `handoff1` / `handoff2` / `handoff3` / `gap1` / `gap2`）、`ringSurface`（`mac` / `iphone` / `none`）、`firedAt`（Unix 整数秒）。未知の `kind` / `stage` / `ringSurface` は文字列のまま残し、snap の復号は続ける。`ringSurface` に `watch` を足すのは #100。
+
+`nudgePlan` はまだ来ていない段の配列。各要素は `stage`、`fireAt`（Unix 整数秒）、`surface`（`ringSurface` と同じ語）、`rings`（鳴らすとき true）。
+
+`reserved` は到着後に発車できる切符。`ticketId`、`title`、`estimatedSeconds`。無ければキーを置かない。
 
 `estimatedSeconds` は当初見積ではなく **いまの予算（延長込み）**。iOS の `WorkSession.budgetSecondsAtStart` に対応する。
 
@@ -92,7 +100,11 @@ remaining      = estimatedSeconds - elapsedActive
 
 ## Cmd / ack 平文
 
-- cmd: [fixtures/cmd-pause.json](fixtures/cmd-pause.json) / [fixtures/cmd-resume.json](fixtures/cmd-resume.json) / [fixtures/cmd-still.json](fixtures/cmd-still.json) / [fixtures/cmd-issueAndBoard.json](fixtures/cmd-issueAndBoard.json)。`op` は `pause` / `resume` / `still` / `issueAndBoard`。知らない `op` は実行せず、ack の `error` を `unsupportedOp` にする。受信側はそこで落ちない。`still` はいまの車内放送 pending を消費する。`sessionId` は任意（乗務なし idle は `null`。例: [fixtures/cmd-still-nosession.json](fixtures/cmd-still-nosession.json)）。
+- cmd: [fixtures/cmd-pause.json](fixtures/cmd-pause.json) / [fixtures/cmd-resume.json](fixtures/cmd-resume.json) / [fixtures/cmd-still.json](fixtures/cmd-still.json) / [fixtures/cmd-issueAndBoard.json](fixtures/cmd-issueAndBoard.json) / [fixtures/cmd-answer-extend.json](fixtures/cmd-answer-extend.json) / [fixtures/cmd-boardReserved.json](fixtures/cmd-boardReserved.json) / [fixtures/cmd-presence.json](fixtures/cmd-presence.json)。`op` は `pause` / `resume` / `still` / `issueAndBoard` / `answer` / `boardReserved` / `presence`。`arrive` と `extend` は足さない。知らない `op` は実行せず、ack の `error` を `unsupportedOp` にする。受信側の約束が、その `op` を足した版（[enums.json](enums.json) の `opIntroduced`）より前のときも `unsupportedOp`。受信側はそこで落ちない。`still` はいまの車内放送 pending を消費する。`sessionId` は任意（乗務なし idle は `null`。例: [fixtures/cmd-still-nosession.json](fixtures/cmd-still-nosession.json)）。
+- `answer` は iPhone が出した声掛けへの返事。`nudgeId`、`choice`（`stillOnIt` / `willExtend` / `alreadyDone` / `paused`。export の `checkIns.answer` と同じ語）、`answeredOn`、任意の `addSeconds`。`addSeconds` は `willExtend` のときだけ置き、値は 300 / 600 / 900（5・10・15分）。それ以外は `invalidPayload`。`answeredOn` はいま `mac` だけ。未知の文字列は復号でき、適用は `invalidPayload`。`watch` を足すのは #100。`sessionId` がいまの乗務と違うときは `sessionMismatch`、`nudgeId` がいまの声掛けと違うときは `nudgeStale`（[fixtures/ack-nudgeStale.json](fixtures/ack-nudgeStale.json)）。新しい Mac は snap に `nudge` があるときだけ `answer` を送る。旧 iPhone は `nudge` を載せないので、この op を受けない。例: [fixtures/cmd-answer-extend.json](fixtures/cmd-answer-extend.json)（延長）、[fixtures/cmd-answer-arrive.json](fixtures/cmd-answer-arrive.json)（到着）。
+- `boardReserved` は予約の切符を発車する。`ticketId`、任意の `nudgeId`。`sessionId` は `null`。乗務中に受けたら `sessionMismatch`。`ticketId` が snap の `reserved.ticketId` と違えば `reservationChanged`。予約が無ければ `noReservation`。運行外は `noActiveService`。例: [fixtures/cmd-boardReserved.json](fixtures/cmd-boardReserved.json)。
+- `presence` は Mac の在席。`pipVisible` と `attending`。変化したときだけ送る。`sessionId` は `null`。後続は、この値で Mac の画面に出ているかを判断する。例: [fixtures/cmd-presence.json](fixtures/cmd-presence.json)。
+- リレーは `ct` を開かない。範囲が重なる名乗り（版を名乗らない端末と、いま入っている版 4 を含む）の cmd はそのまま通す。名乗りが `minReadable` を外れたときは、いままで通り 426 と `contractRange`。`unsupportedOp` は受信側の ack であり、リレーの HTTP エラーにはしない。
 - `issueAndBoard` はこの op のときだけ `title`（trim 後非空。母艦 `Ticket.title` に文字数上限は無い）と `estimatedSeconds`（60〜3600。1〜60分。5分刻み以外も可）を載せる。他の op ではこの 2 キーを置かない。`sessionId` は非乗務なら `null`、乗務中の割り込みならいまの乗務の id（不一致は `sessionMismatch`）。運行外は `noActiveService`。題名や秒が不正なら `invalidPayload`。成功 ack は `ok: true` のみ。切符 id は ack に載せない。結果は後続 snap。例: [fixtures/cmd-issueAndBoard.json](fixtures/cmd-issueAndBoard.json)（非乗務）、[fixtures/cmd-issueAndBoard-interrupt.json](fixtures/cmd-issueAndBoard-interrupt.json)（割り込み）。
 - ack 成功: [fixtures/ack-ok.json](fixtures/ack-ok.json)。`ok: true` のとき `error` キーは置かない。任意の `build` があるときだけ足す。無い ack はいままで通り。
 - ack 失敗: [fixtures/ack-pauseLimitReached.json](fixtures/ack-pauseLimitReached.json)。`error` は [enums.json](enums.json) のみ。タイトルは載せない。

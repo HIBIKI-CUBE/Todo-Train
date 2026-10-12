@@ -295,7 +295,7 @@ final class CompanionSyncRuntime {
                     try sessionManager.resume()
                 case .still:
                     sessionManager.acknowledgeCabinStill()
-                case .issueAndBoard, .unknown:
+                case .issueAndBoard, .answer, .boardReserved, .presence, .unknown:
                     break
                 }
             }

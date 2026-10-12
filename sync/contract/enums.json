@@ -1,8 +1,23 @@
 {
   "phase": ["idle", "running", "paused", "overtime"],
   "kind": ["snap", "cmd", "ack"],
-  "op": ["pause", "resume", "still", "issueAndBoard"],
-  "pendingCabin": ["progress", "away", "idle"],
+  "op": ["pause", "resume", "still", "issueAndBoard", "answer", "boardReserved", "presence"],
+  "opIntroduced": {
+    "pause": 3,
+    "resume": 3,
+    "still": 3,
+    "issueAndBoard": 3,
+    "answer": 5,
+    "boardReserved": 5,
+    "presence": 5
+  },
+  "pendingCabin": ["progress", "away", "idle", "overrun", "gap"],
+  "nudgeKind": ["progress", "overrun", "gap"],
+  "nudgeStage": ["checkIn", "approach", "estimate", "handoff1", "handoff2", "handoff3", "gap1", "gap2"],
+  "ringSurface": ["mac", "iphone", "none"],
+  "choice": ["stillOnIt", "willExtend", "alreadyDone", "paused"],
+  "answeredOn": ["mac"],
+  "extendPresetSeconds": [300, 600, 900],
   "error": [
     "pauseLimitReached",
     "noActiveService",
@@ -10,12 +25,21 @@
     "decryptFailed",
     "notPaused",
     "invalidPayload",
-    "unsupportedOp"
+    "unsupportedOp",
+    "nudgeStale",
+    "noReservation",
+    "reservationChanged"
   ],
   "notes": {
     "phase": "SessionPhase raw values. Unknown values: display conservatively, do not crash.",
-    "op": "pause, resume, still (consume the current cabin prompt), and issueAndBoard (issue a ticket and board it in one beat). Do not add arrive/extend. issueAndBoard carries title and estimatedSeconds; other ops omit those keys. Unknown op values decode as unknown and are not applied.",
-    "pendingCabin": "Current 車内放送 kind on snap. null when none. Unknown values: ignore for display. idle means service is open with no ride; iPhone sets it, Mac notifies only.",
-    "error": "Ack wire errors only. sessionMismatch and decryptFailed are wire-only (not SessionError cases). Map noActiveSession to noActiveService. Map SessionError.notPaused to notPaused. invalidPayload is issueAndBoard input (empty title or estimatedSeconds outside 60...3600). unsupportedOp means the receiver did not run an unknown op. Do not put the rest of SessionError on the wire."
+    "op": "pause, resume, still (consume the current cabin prompt), issueAndBoard (issue a ticket and board it in one beat), answer (reply to a nudge), boardReserved (board the reserved ticket), and presence (Mac pipVisible and attending, sent only when either changes). Do not add arrive/extend. issueAndBoard carries title and estimatedSeconds. answer carries nudgeId, choice, answeredOn, and addSeconds only for willExtend. boardReserved carries ticketId and optional nudgeId, with sessionId null. presence carries pipVisible and attending, with sessionId null. Other ops omit those keys. Unknown op values decode as unknown and are not applied. An op whose opIntroduced is above the receiver's contract is unsupportedOp.",
+    "pendingCabin": "Current 車内放送 kind on snap. null when none. Unknown values: ignore for display. idle means service is open with no ride; iPhone sets it, Mac notifies only. progress is stage 1. overrun is the estimate and handoffs. gap is the blank after arrival. Older Macs ignore unknown values.",
+    "nudgeKind": "nudge.kind. progress uses pendingCabin progress. overrun and gap match the pendingCabin values of the same name. Unknown values are kept and do not fail the snap.",
+    "nudgeStage": "nudge.stage and nudgePlan.stage. Ride stages match NudgeStage. gap1 and gap2 match NudgeGap. Unknown values are kept.",
+    "ringSurface": "nudge.ringSurface and nudgePlan.surface. none means the stage is shown and does not ring. Unknown values, including a future watch, are kept. #100 adds watch as a named value.",
+    "choice": "answer.choice. Same words as export checkIns.answer and CheckInAnswerKind. Unknown values decode and are invalidPayload.",
+    "answeredOn": "answer.answeredOn. Only mac is valid. The decoder keeps unknown strings so #100 can add watch without a decode failure. Any value other than mac is invalidPayload until then.",
+    "extendPresetSeconds": "answer.addSeconds, only when choice is willExtend. Anything else, including a missing value on willExtend or a value on another choice, is invalidPayload.",
+    "error": "Ack wire errors only. sessionMismatch and decryptFailed are wire-only (not SessionError cases). Map noActiveSession to noActiveService. Map SessionError.notPaused to notPaused. invalidPayload is issueAndBoard input (empty title or estimatedSeconds outside 60...3600) and answer input outside the extend presets. unsupportedOp means the receiver did not run an unknown op, or an op introduced after the receiver's contract. nudgeStale means the nudgeId is not the current nudge. noReservation means boardReserved arrived with no reserved ticket. reservationChanged means ticketId is not reserved.ticketId. Do not put the rest of SessionError on the wire."
   }
 }

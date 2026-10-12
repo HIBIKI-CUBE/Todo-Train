@@ -298,11 +298,23 @@ struct GoldenJSONTests {
         let json = try JSONSerialization.jsonObject(with: data) as! [String: Any]
         #expect(json["phase"] as? [String] == ["idle", "running", "paused", "overtime"])
         #expect(json["kind"] as? [String] == ["snap", "cmd", "ack"])
-        #expect(json["op"] as? [String] == ["pause", "resume", "still", "issueAndBoard"])
-        #expect(json["pendingCabin"] as? [String] == ["progress", "away", "idle"])
+        #expect(json["op"] as? [String] == [
+            "pause", "resume", "still", "issueAndBoard", "answer", "boardReserved", "presence",
+        ])
+        #expect(json["pendingCabin"] as? [String] == ["progress", "away", "idle", "overrun", "gap"])
+        #expect(json["nudgeKind"] as? [String] == NudgeKind.knownRawValues)
+        #expect(json["nudgeStage"] as? [String] == NudgeStageWire.knownRawValues)
+        #expect(json["ringSurface"] as? [String] == NudgeRingSurface.knownRawValues)
+        #expect(json["choice"] as? [String] == NudgeChoice.knownRawValues)
+        #expect(json["answeredOn"] as? [String] == NudgeAnsweredOn.knownRawValues)
+        #expect(json["extendPresetSeconds"] as? [Int] == [300, 600, 900])
+        let introduced = try #require(json["opIntroduced"] as? [String: Int])
+        for op in ["pause", "resume", "still", "issueAndBoard", "answer", "boardReserved", "presence"] {
+            #expect(introduced[op] == WireOp(rawValue: op).introducedIn)
+        }
         #expect(json["error"] as? [String] == [
             "pauseLimitReached", "noActiveService", "sessionMismatch", "decryptFailed", "notPaused",
-            "invalidPayload", "unsupportedOp",
+            "invalidPayload", "unsupportedOp", "nudgeStale", "noReservation", "reservationChanged",
         ])
     }
 }

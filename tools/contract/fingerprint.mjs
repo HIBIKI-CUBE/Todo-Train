@@ -21,6 +21,8 @@ const swiftWire = [
   "Packages/TodoTrainSync/Sources/TodoTrainSync/WireTypes.swift",
   "Packages/TodoTrainSync/Sources/TodoTrainSync/WireDTOs.swift",
   "Packages/TodoTrainSync/Sources/TodoTrainSync/WireBuildInfo.swift",
+  "Packages/TodoTrainSync/Sources/TodoTrainSync/NudgeWire.swift",
+  "Packages/TodoTrainSync/Sources/TodoTrainSync/CabinKind.swift",
 ];
 
 const workerWire = [
@@ -31,6 +33,7 @@ const workerWire = [
   "sync/worker/src/result.ts",
   "sync/worker/src/constants.ts",
   "sync/worker/src/contract-range.ts",
+  "sync/worker/src/op-support.ts",
 ];
 
 export function versionPath(root = repoRoot) {

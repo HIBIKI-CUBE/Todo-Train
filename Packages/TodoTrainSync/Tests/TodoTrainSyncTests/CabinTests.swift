@@ -97,6 +97,11 @@ struct CabinDeliveryTests {
     @Test func unknownKindIsIgnored() {
         #expect(CabinDelivery.surface(kind: .unknown("future"), hasRide: true) == .ignore)
     }
+
+    @Test func overrunAndGapStayQuietUntilTheirScreensExist() {
+        #expect(CabinDelivery.surface(kind: .overrun, hasRide: true) == .ignore)
+        #expect(CabinDelivery.surface(kind: .gap, hasRide: false) == .ignore)
+    }
 }
 
 @Suite("Cabin interrupt watch")
