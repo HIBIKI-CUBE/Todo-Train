@@ -46,4 +46,78 @@ struct SessionManagerInventoryTests {
         #expect(open.map(\.title) == ["先", "後"])
         #expect(second.ticket.sortOrder == open.last?.sortOrder)
     }
+
+    @Test func issue_writesIntoGivenMainContext() throws {
+        let container = try AppModelContainer.make(inMemory: true)
+        let settings = AppSettings.makeForTesting()
+        let issued = try InventoryTicketIssue.issue(
+            title: "  案内  ",
+            minutes: 25,
+            into: container.mainContext,
+            settings: settings
+        )
+
+        let fetched = try container.mainContext.fetch(FetchDescriptor<Ticket>())
+        #expect(fetched.contains { $0.id == issued.ticket.id })
+        #expect(issued.ticket.title == "案内")
+        #expect(settings.lastIssuedEstimateMinutes == 25)
+    }
+
+    @Test func resolve_prefersSessionManagerOverOpenContainer() throws {
+        let (manager, _, _, _) = try SessionManagerFixtures.makeHarness()
+        let container = try AppModelContainer.make(inMemory: true)
+        var made = false
+        let target = try InventoryIssueTarget.resolve(
+            sessionManager: manager,
+            modelContainer: container,
+            makeContainer: {
+                made = true
+                return try AppModelContainer.make(inMemory: true)
+            }
+        )
+        guard case .manager(let resolved) = target else {
+            Issue.record("起動中は SessionManager が書き込み口")
+            return
+        }
+        #expect(resolved === manager)
+        #expect(!made)
+    }
+
+    @Test func resolve_reusesOpenContainerMainContext() throws {
+        let container = try AppModelContainer.make(inMemory: true)
+        var made = false
+        let target = try InventoryIssueTarget.resolve(
+            sessionManager: nil,
+            modelContainer: container,
+            makeContainer: {
+                made = true
+                return try AppModelContainer.make(inMemory: true)
+            }
+        )
+        guard case .context(let context) = target else {
+            Issue.record("開いているコンテナの mainContext を使う")
+            return
+        }
+        #expect(context === container.mainContext)
+        #expect(!made)
+    }
+
+    @Test func resolve_makesContainerOnlyWhenNoneIsOpen() throws {
+        let made = try AppModelContainer.make(inMemory: true)
+        var calls = 0
+        let target = try InventoryIssueTarget.resolve(
+            sessionManager: nil,
+            modelContainer: nil,
+            makeContainer: {
+                calls += 1
+                return made
+            }
+        )
+        guard case .context(let context) = target else {
+            Issue.record("コンテナが無いときだけ作る")
+            return
+        }
+        #expect(calls == 1)
+        #expect(context === made.mainContext)
+    }
 }

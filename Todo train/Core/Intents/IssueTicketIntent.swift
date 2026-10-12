@@ -4,7 +4,6 @@
 //
 
 import AppIntents
-import SwiftData
 
 struct IssueTicketIntent: AppIntent {
     static var title: LocalizedStringResource = "切符を発行"
@@ -28,26 +27,23 @@ struct IssueTicketIntent: AppIntent {
             return .result(dialog: "題名を入れてください")
         }
 
-        // Prefer the running SessionManager so Hub's mainContext sees the insert.
-        // Never open a sibling `ModelContext(container)` beside that mainContext.
-        if let manager = AppRuntime.sessionManager {
-            let issued = try manager.issueInventoryTicket(title: trimmed, minutes: minutes)
-            return .result(dialog: "「\(issued.ticket.title)」を \(issued.minutes) 分で発行しました")
+        let issued: (ticket: Ticket, minutes: Int)
+        switch try InventoryIssueTarget.resolve(
+            sessionManager: AppRuntime.sessionManager,
+            modelContainer: AppRuntime.modelContainer,
+            makeContainer: { try AppModelContainer.make() }
+        ) {
+        case .manager(let manager):
+            issued = try manager.issueInventoryTicket(title: trimmed, minutes: minutes)
+        case .context(let context):
+            issued = try InventoryTicketIssue.issue(
+                title: trimmed,
+                minutes: minutes,
+                into: context,
+                settings: AppSettings.shared
+            )
         }
-
-        // Cold start (app not launched): one container, its mainContext only.
-        let container = try AppModelContainer.make()
-        let context = container.mainContext
-        let sessions = (try? context.fetch(FetchDescriptor<WorkSession>())) ?? []
-        let resolved = TicketIssuer.resolveMinutes(
-            requested: minutes,
-            sessions: sessions,
-            lastIssued: AppSettings.shared.lastIssuedEstimateMinutes
-        )
-        let ticket = try TicketIssuer.issue(title: trimmed, minutes: resolved, into: context)
-        AppSettings.shared.lastIssuedEstimateMinutes = resolved
-        ArrivalForecastStore.shared.prefetch(ticket: ticket, sessions: sessions, priority: .user)
-        return .result(dialog: "「\(ticket.title)」を \(resolved) 分で発行しました")
+        return .result(dialog: "「\(issued.ticket.title)」を \(issued.minutes) 分で発行しました")
     }
 }
 
