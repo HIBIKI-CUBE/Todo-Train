@@ -24,6 +24,8 @@ struct CompanionRideOverlayView: View {
     var onNudgeChoice: (NudgeChoice) -> Void
     var onExtendPreset: (Int) -> Void
     var onCancelExtend: () -> Void
+    var onBoardReserved: () -> Void
+    var onCloseGap: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -42,7 +44,11 @@ struct CompanionRideOverlayView: View {
             height: CGFloat(RideOverlayGeometry.cardSize.height)
         )
         .accessibilityElement(children: .contain)
-        .accessibilityLabel(presentation.title)
+        .accessibilityLabel(
+            presentation.showsArrivalGap
+                ? (presentation.nudgePrompt ?? CabinCopy.idle)
+                : presentation.title
+        )
         .accessibilityValue(accessibilityRemaining)
         .accessibilityAction(named: "出す") {
             if model.isTucked { onRestore() }
@@ -76,6 +82,12 @@ struct CompanionRideOverlayView: View {
         .accessibilityAction(named: CabinCopy.back) {
             if model.extendPicker { onCancelExtend() }
         }
+        .accessibilityAction(named: CabinCopy.board) {
+            if presentation.showsArrivalGap && presentation.canBoardReserved { onBoardReserved() }
+        }
+        .accessibilityAction(named: CabinCopy.close) {
+            if presentation.showsArrivalGap { onCloseGap() }
+        }
     }
 
     private var showsNudgeActions: Bool {
@@ -86,11 +98,13 @@ struct CompanionRideOverlayView: View {
         HStack(spacing: 0) {
             handle
             VStack(alignment: .leading, spacing: 0) {
-                if showsNudgeActions || model.extendPicker {
-                    nudgeColumn
-                } else {
-                    classicColumn
-                }
+            if presentation.showsArrivalGap {
+                gapColumn
+            } else if showsNudgeActions || model.extendPicker {
+                nudgeColumn
+            } else {
+                classicColumn
+            }
             }
         }
         .background(Color.black)
@@ -142,6 +156,63 @@ struct CompanionRideOverlayView: View {
             Spacer(minLength: 0)
             bottomRow
         }
+    }
+
+    /// Reserved face, or the idle line. No timetable preview.
+    private var gapColumn: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(presentation.holdLamp ? RideOverlayPalette.approach : Color.white.opacity(0.22))
+                    .frame(width: 8, height: 8)
+                    .accessibilityHidden(true)
+                Text(presentation.nudgePrompt ?? CabinCopy.idle)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.6)
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 8)
+            .frame(height: 36, alignment: .center)
+
+            if presentation.canBoardReserved, !presentation.title.isEmpty {
+                Text(presentation.title)
+                    .font(.system(size: 22, weight: .medium, design: .rounded))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.45)
+                    .padding(.horizontal, 12)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            } else {
+                Spacer(minLength: 0)
+            }
+
+            if let line = presentation.failureLine ?? (presentation.isSending ? presentation.statusLine : nil) {
+                Text(line)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.72))
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.8)
+                    .padding(.horizontal, 8)
+            }
+
+            gapChoices
+                .frame(height: 40)
+        }
+    }
+
+    private var gapChoices: some View {
+        let titles = presentation.canBoardReserved
+            ? [CabinCopy.board, CabinCopy.close]
+            : [CabinCopy.close]
+        return equalChoiceRow(titles)
+            .opacity(presentation.isSending ? 0.35 : 1)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(titles.joined(separator: " "))
+            .accessibilityHint(
+                presentation.canBoardReserved ? CabinCopy.boardHint : CabinCopy.closeGapHint
+            )
     }
 
     /// Question, instruments, then four equal answers.

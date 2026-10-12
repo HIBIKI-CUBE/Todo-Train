@@ -19,6 +19,7 @@ extension SessionManager {
         session.arrivalAction = action
         session.arrivalStampedAt = now
         try save()
+        syncArrivalGap(now: now)
     }
 
     /// 到着画面の即時切符。発行だけ行い、発車しない。

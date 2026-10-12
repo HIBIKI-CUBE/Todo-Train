@@ -27,8 +27,12 @@ enum NudgeSession {
 
     /// Stable id for one stage of one ride. No extra column.
     static func id(sessionID: UUID, stage: NudgeStage) -> UUID {
+        id(sessionID: sessionID, stageRaw: stage.rawValue)
+    }
+
+    static func id(sessionID: UUID, stageRaw: String) -> UUID {
         var hash: UInt64 = 14_695_981_039_346_656_037
-        let text = Data("\(sessionID.uuidString.lowercased())|\(stage.rawValue)".utf8)
+        let text = Data("\(sessionID.uuidString.lowercased())|\(stageRaw)".utf8)
         for byte in text {
             hash ^= UInt64(byte)
             hash &*= 1_099_511_628_211

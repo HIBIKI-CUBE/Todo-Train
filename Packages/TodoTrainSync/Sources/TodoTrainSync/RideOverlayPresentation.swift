@@ -63,6 +63,10 @@ public struct RideOverlayPresentation: Equatable, Sendable {
     public var holdLamp: Bool
     /// 「延長 +10（送信中）」 or the winning answer. Nil shows the remaining digits.
     public var instrumentCaption: String?
+    /// Arrival gap. The card is the reserved ticket, or the idle line. No next-task preview.
+    public var showsArrivalGap: Bool = false
+    /// Gap card can send `boardReserved`.
+    public var canBoardReserved: Bool = false
 
     public static let peekTitleLimit = 6
 
@@ -96,7 +100,13 @@ public struct RideOverlayPresentation: Equatable, Sendable {
         }
         switch snap.phase {
         case .idle, .unknown:
-            return .hidden
+            guard let gap = ArrivalGapChrome.make(
+                snap: snap,
+                cabinEnabled: input.cabinEnabledLocal && snap.cabinEnabled
+            ) else {
+                return .hidden
+            }
+            return gapPresentation(gap, input: input, bar: bar)
         case .paused, .running, .overtime:
             break
         }
@@ -173,6 +183,46 @@ public struct RideOverlayPresentation: Equatable, Sendable {
             showsNudgeChoices: nudge.showsChoices,
             holdLamp: nudge.holdLamp,
             instrumentCaption: nudge.instrumentCaption
+        )
+    }
+
+    /// Blank after arrival. One face or the idle line. Occupancy stays off this card.
+    private static func gapPresentation(
+        _ gap: ArrivalGapChrome,
+        input: MenuBarInput,
+        bar: MenuBarPresentation
+    ) -> RideOverlayPresentation {
+        let statusLine: String?
+        if input.connection == .disconnected {
+            statusLine = SyncCopy.relayDisconnected
+        } else if bar.isSending {
+            statusLine = SyncCopy.sentToIPhone
+        } else {
+            statusLine = nil
+        }
+        return RideOverlayPresentation(
+            isVisible: true,
+            title: gap.title,
+            remainingLabel: "",
+            progress: 0,
+            timerPhase: .cruise,
+            isOvertime: false,
+            isPaused: false,
+            canPause: false,
+            canResume: false,
+            isSending: bar.isSending,
+            failureLine: failureLine(input: input, bar: bar),
+            statusLine: statusLine,
+            peekTitle: gap.title.isEmpty ? "" : truncatedPeekTitle(gap.title),
+            cabinPrompt: nil,
+            occupancy: nil,
+            nextBlockLine: nil,
+            nudgePrompt: gap.prompt,
+            showsNudgeChoices: false,
+            holdLamp: gap.holdLamp,
+            instrumentCaption: nil,
+            showsArrivalGap: true,
+            canBoardReserved: gap.canBoard
         )
     }
 

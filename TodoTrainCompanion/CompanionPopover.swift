@@ -94,6 +94,15 @@ struct CompanionPopover: View {
                 .buttonStyle(.bordered)
             }
 
+            if view.canBoardReserved {
+                Button(CabinCopy.boardReserved) {
+                    Task { await runtime.sendBoardReserved() }
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(view.isSending)
+                .accessibilityHint(CabinCopy.boardHint)
+            }
+
             if runtime.canOfferImaYaru {
                 Button("いまやる") {
                     CompanionSettingsOpener.dismissPopover?()

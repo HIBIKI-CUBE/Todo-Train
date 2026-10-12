@@ -72,6 +72,8 @@ public struct MenuBarPresentation: Equatable, Sendable {
     public var popoverTitle: String
     public var popoverDetail: String
     public var failureLine: String?
+    /// Menu row while an arrival gap has a reserved ticket. The bar icon stays empty.
+    public var canBoardReserved: Bool = false
 
     public static let titleLimit = 10
 
@@ -111,10 +113,15 @@ public struct MenuBarPresentation: Equatable, Sendable {
 
         switch snap.phase {
         case .idle, .unknown:
+            let gap = ArrivalGapChrome.make(
+                snap: snap,
+                cabinEnabled: input.cabinEnabledLocal && snap.cabinEnabled
+            )
             return idle(
                 sending: sending,
                 failureLine: failureLine,
-                disconnected: input.connection == .disconnected
+                disconnected: input.connection == .disconnected,
+                canBoardReserved: gap?.canBoard == true
             )
         case .paused:
             let remaining = snap.remainingSeconds(at: input.now)
@@ -198,7 +205,8 @@ public struct MenuBarPresentation: Equatable, Sendable {
     private static func idle(
         sending: Bool,
         failureLine: String?,
-        disconnected: Bool
+        disconnected: Bool,
+        canBoardReserved: Bool = false
     ) -> MenuBarPresentation {
         MenuBarPresentation(
             barTitle: nil,
@@ -210,7 +218,8 @@ public struct MenuBarPresentation: Equatable, Sendable {
             isSending: sending,
             popoverTitle: "乗務なし",
             popoverDetail: disconnected ? SyncCopy.relayDisconnected : "乗務なし",
-            failureLine: failureLine
+            failureLine: failureLine,
+            canBoardReserved: canBoardReserved
         )
     }
 }

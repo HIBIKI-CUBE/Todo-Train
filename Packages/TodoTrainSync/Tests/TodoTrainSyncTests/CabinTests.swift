@@ -98,9 +98,12 @@ struct CabinDeliveryTests {
         #expect(CabinDelivery.surface(kind: .unknown("future"), hasRide: true) == .ignore)
     }
 
-    @Test func overrunAndGapStayQuietUntilTheirScreensExist() {
+    @Test func overrunStaysOffTheNotificationPath() {
         #expect(CabinDelivery.surface(kind: .overrun, hasRide: true) == .ignore)
-        #expect(CabinDelivery.surface(kind: .gap, hasRide: false) == .ignore)
+    }
+
+    @Test func arrivalGapUsesThePip() {
+        #expect(CabinDelivery.surface(kind: .gap, hasRide: false) == .pip)
     }
 }
 

@@ -253,6 +253,7 @@ struct HubView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: TrainTheme.Space.lg) {
                 VStack(alignment: .leading, spacing: TrainTheme.Space.lg) {
+                    arrivalGapBanner
                     serviceBlock
                     if !sessionManager.pausedSessions.isEmpty {
                         pausedBlock
@@ -276,6 +277,7 @@ struct HubView: View {
         HStack(alignment: .top, spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: TrainTheme.Space.md) {
+                    arrivalGapBanner
                     serviceBlock
                     if !sessionManager.pausedSessions.isEmpty {
                         pausedBlock
@@ -303,6 +305,23 @@ struct HubView: View {
     }
 
     // MARK: - Blocks
+
+    @ViewBuilder
+    private var arrivalGapBanner: some View {
+        if let state = sessionManager.arrivalGapBanner, !isFocusCoverPresented {
+            ArrivalGapBanner(state: state) {
+                do {
+                    try sessionManager.boardReservedFromHub()
+                } catch {
+                    errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                    showError = true
+                }
+            } onClose: {
+                sessionManager.dismissArrivalGap()
+            }
+            .padding(.horizontal, TrainTheme.Space.lg)
+        }
+    }
 
     private var serviceBlock: some View {
         VStack(alignment: .leading, spacing: TrainTheme.Space.sm) {

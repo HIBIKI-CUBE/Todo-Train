@@ -1,7 +1,7 @@
 {
-  "contract": 8,
+  "contract": 9,
   "minReadable": 3,
-  "fingerprint": "8abdfd80d6605b455299ec4f4fe7b0ba21201e67cc8f67889aeac7c68a6f1918",
+  "fingerprint": "aebd74efed4318f60bb5ce956c3c643f59a066faf75209b47df80b0a240f0eba",
   "history": [
     {
       "contract": 3,
@@ -32,6 +32,11 @@
       "contract": 8,
       "date": "2026-10-13",
       "note": "Mac PiP の声掛けの文言を足す。ワイヤの形は変えない"
+    },
+    {
+      "contract": 9,
+      "date": "2026-10-13",
+      "note": "到着後の空白の文言を足す。ワイヤの形は変えない"
     }
   ]
 }

@@ -84,6 +84,7 @@ extension SessionManager {
             return
         }
 
+        if dismissArrivalGapIfShowing(now: now) { return }
         consumeIdleCabinStill(now: now)
     }
 
