@@ -56,6 +56,13 @@ public struct RideOverlayPresentation: Equatable, Sendable {
     /// Occupancy as digits on the ride remaining fill. Spoken line stays on `nextBlockLine`.
     public var occupancy: RideOccupancyInstrument?
     public var nextBlockLine: String?
+    /// Dispatcher question when the snap carries a nudge. Nil on an older iPhone.
+    public var nudgePrompt: String?
+    public var showsNudgeChoices: Bool
+    /// Hold lamp for stage 1, and for stages 3...6 only on Mac's turn.
+    public var holdLamp: Bool
+    /// 「延長 +10（送信中）」 or the winning answer. Nil shows the remaining digits.
+    public var instrumentCaption: String?
 
     public static let peekTitleLimit = 6
 
@@ -75,7 +82,11 @@ public struct RideOverlayPresentation: Equatable, Sendable {
         peekTitle: "",
         cabinPrompt: nil,
         occupancy: nil,
-        nextBlockLine: nil
+        nextBlockLine: nil,
+        nudgePrompt: nil,
+        showsNudgeChoices: false,
+        holdLamp: false,
+        instrumentCaption: nil
     )
 
     public static func make(_ input: MenuBarInput) -> RideOverlayPresentation {
@@ -121,29 +132,47 @@ public struct RideOverlayPresentation: Equatable, Sendable {
             optimisticFiredCount: input.optimisticFiredCount,
             optimisticIdleConsumed: input.optimisticIdleConsumed
         )
-        let cabinPrompt = (cabin.showsPip && !bar.isSending) ? cabin.prompt : nil
+        let nudge = MacNudgeChrome.make(
+            snap: snap,
+            now: input.now,
+            cabinEnabled: input.cabinEnabledLocal && snap.cabinEnabled,
+            sendingExtendMinutes: bar.isSending ? input.sendingExtendMinutes : nil,
+            winnerLine: bar.isSending ? nil : input.nudgeWinnerLine
+        )
+        let cabinPrompt = nudge.showsChoices
+            ? nil
+            : ((cabin.showsPip && !bar.isSending) ? cabin.prompt : nil)
+        var phase = timerPhase(
+            remaining: remaining,
+            estimated: snap.estimatedSeconds,
+            overtime: bar.isOvertime
+        )
+        if nudge.forcesApproach, phase == .cruise {
+            phase = .approach
+        }
+        let failureLine = Self.failureLine(input: input, bar: bar)
 
         return RideOverlayPresentation(
             isVisible: true,
             title: title,
             remainingLabel: remainingLabel,
             progress: progress,
-            timerPhase: timerPhase(
-                remaining: remaining,
-                estimated: snap.estimatedSeconds,
-                overtime: bar.isOvertime
-            ),
+            timerPhase: phase,
             isOvertime: bar.isOvertime,
             isPaused: snap.phase == .paused,
             canPause: bar.canPause,
             canResume: bar.canResume,
             isSending: bar.isSending,
-            failureLine: bar.failureLine,
+            failureLine: failureLine,
             statusLine: statusLine,
             peekTitle: truncatedPeekTitle(title),
             cabinPrompt: cabinPrompt,
             occupancy: occupancyInstrument(snap: snap, now: input.now),
-            nextBlockLine: nextBlockLine(snap: snap, now: input.now)
+            nextBlockLine: nextBlockLine(snap: snap, now: input.now),
+            nudgePrompt: nudge.prompt,
+            showsNudgeChoices: nudge.showsChoices,
+            holdLamp: nudge.holdLamp,
+            instrumentCaption: nudge.instrumentCaption
         )
     }
 
@@ -295,6 +324,15 @@ public struct RideOverlayPresentation: Equatable, Sendable {
             return "\(prefix) \(clock) \(minutes)分 \(title)"
         }
         return "\(prefix) \(clock) \(title)"
+    }
+
+    /// `nudgeStale` names the winner on the instrument. The queue notice replaces a decrypt failure.
+    static func failureLine(input: MenuBarInput, bar: MenuBarPresentation) -> String? {
+        if let notice = input.transportNotice { return notice }
+        if input.nudgeWinnerLine != nil, case .failed(.nudgeStale) = input.outgoingPause {
+            return nil
+        }
+        return bar.failureLine
     }
 
     public static func progress(

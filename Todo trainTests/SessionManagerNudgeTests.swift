@@ -113,6 +113,28 @@ struct SessionManagerNudgeTests {
         #expect(manager.activeSession?.nudgeFiredStagesRaw.contains(NudgeStage.checkIn.rawValue) == true)
     }
 
+    @Test func macExtendStoresWorkingSecondsAtThatMoment() throws {
+        let (manager, context, clock, _) = try SessionManagerFixtures.makeHarness()
+        try manager.startService()
+        let ticket = try SessionManagerFixtures.makeTicket(context, seconds: 30 * 60)
+        try manager.board(ticket: ticket)
+        try manager.pause()
+        clock.advance(by: 80)
+        try manager.resume()
+        let offset = try #require(manager.activeSession?.checkInOffsets.first)
+        clock.advance(by: offset + 1)
+        manager.reconcile()
+        let ack = manager.applyNudgeCommand(answer(manager, choice: .willExtend, addSeconds: 600))
+        #expect(ack.ok == true)
+        let working = try #require(manager.activeSession?.extensions.first?.workingSeconds)
+        #expect(abs(working - (offset + 1)) < 2)
+
+        try manager.pause()
+        clock.advance(by: 60 * 60)
+        try manager.resume()
+        #expect(manager.activeSession?.extensions.first?.workingSeconds == working)
+    }
+
     @Test func standingPauseRecordsTheOpenNudge() throws {
         let manager = try rideAtCheckIn()
         try manager.pause()

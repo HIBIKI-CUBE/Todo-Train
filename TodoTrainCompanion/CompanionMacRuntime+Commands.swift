@@ -100,13 +100,72 @@ extension CompanionMacRuntime {
             )
             _ = try await client.postCmd(envelope)
         } catch {
-            outgoingPause = .failed(.decryptFailed)
-            lastStatus = userFacing(error)
+            noteCommandTransportFailure(error)
             if op == .still {
                 clearOptimisticCabin()
                 optimisticIdleConsumed = false
             }
         }
+    }
+
+    func sendNudgeAnswer(_ choice: NudgeChoice, addSeconds: Int? = nil) async {
+        guard snap?.nudge != nil else { return }
+        guard let sessionId = snap?.sessionId, let nudgeId = snap?.nudge?.id else { return }
+        if choice == .willExtend {
+            guard let addSeconds, NudgeCommandEvaluating.extendPresetSeconds.contains(addSeconds) else { return }
+        } else if addSeconds != nil {
+            return
+        }
+        if let blocked = ContractCompat.commandBlock(peer: peerContract, relay: relayContract, side: .mac) {
+            lastStatus = blocked
+            return
+        }
+        let cmdId = UUID()
+        guard let next = OutgoingPauseApplying.beginSending(cmdId: cmdId, current: outgoingPause) else {
+            return
+        }
+        outgoingPause = next
+        transportNotice = nil
+        staleWinner = false
+        nudgeWinnerLine = nil
+        answerEstimateBefore = snap?.estimatedSeconds
+        answerNudgeID = nudgeId
+        pendingExtendMinutes = choice == .willExtend ? (addSeconds ?? 0) / 60 : nil
+        do {
+            let command = CommandPlaintext(
+                id: cmdId,
+                op: .answer,
+                sessionId: sessionId,
+                at: now,
+                build: LocalWireBuild.current,
+                contract: ContractVersion.contract,
+                minReadable: ContractVersion.minReadable,
+                nudgeId: nudgeId,
+                choice: choice,
+                addSeconds: addSeconds,
+                answeredOn: .mac
+            )
+            try await post(command)
+        } catch {
+            pendingExtendMinutes = nil
+            noteCommandTransportFailure(error)
+        }
+    }
+
+    func post(_ command: CommandPlaintext) async throws {
+        let pairing = try requireSecrets()
+        let keys = try SyncCrypto.deriveKeys(masterKey: pairing.masterKey, pairingId: pairing.pairingId)
+        let client = try authedClient(pairing)
+        let rev = OutgoingPauseApplying.nextCommandRev(current: cmdRev)
+        cmdRev = rev
+        let envelope = try SyncCrypto.sealJSON(
+            command,
+            pairingId: pairing.pairingId,
+            kind: .cmd,
+            rev: rev,
+            encKey: keys.enc
+        )
+        _ = try await client.postCmd(envelope)
     }
 
     func sendIssueAndBoard(title: String, estimatedSeconds: Int) async {

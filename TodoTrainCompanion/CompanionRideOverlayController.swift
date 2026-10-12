@@ -19,6 +19,8 @@ final class CompanionRideOverlayController: NSObject {
     private var dragStart: NSRect?
     private var lastVisible = false
     private var lastCabinPrompt: String?
+    private var seenNudgeKeys: Set<String> = []
+    private var lastNudgeID: UUID?
 
     init(runtime: CompanionMacRuntime, defaults: UserDefaults = .standard) {
         self.runtime = runtime
@@ -41,7 +43,16 @@ final class CompanionRideOverlayController: NSObject {
                     guard let self else { return }
                     Task { await self.runtime.sendStill() }
                 },
-                onRestore: { [weak self] in self?.restoreFromPeek() }
+                onRestore: { [weak self] in self?.restoreFromPeek() },
+                onNudgeChoice: { [weak self] choice in
+                    self?.handleNudgeChoice(choice)
+                },
+                onExtendPreset: { [weak self] seconds in
+                    self?.sendExtend(seconds)
+                },
+                onCancelExtend: { [weak self] in
+                    self?.model.extendPicker = false
+                }
             )
         )
         hosting.safeAreaRegions = []
@@ -124,25 +135,47 @@ final class CompanionRideOverlayController: NSObject {
             return
         }
         let cabinAppeared = presentation.cabinPrompt != nil && lastCabinPrompt == nil
+        let nudgeID = runtime.snap?.nudge?.id
+        if nudgeID != lastNudgeID {
+            model.extendPicker = false
+            lastNudgeID = nudgeID
+        }
         model.presentation = presentation
         applyLayoutToChrome()
+        let ringing: (fresh: [MacNudgeRingCue], seen: Set<String>)
+        if runtime.cabinAnnouncementsEnabled, runtime.snap?.cabinEnabled != false {
+            ringing = MacNudgeRinging.cues(
+                sessionID: runtime.snap?.sessionId,
+                nudge: runtime.snap?.nudge,
+                plan: runtime.snap?.nudgePlan,
+                now: runtime.now,
+                seen: seenNudgeKeys
+            )
+        } else {
+            ringing = ([], seenNudgeKeys)
+        }
+        seenNudgeKeys = ringing.seen
+        model.edgeLamp = layout.isTucked && presentation.holdLamp
         let visible = presentation.isVisible
         if visible {
             if !lastVisible {
                 applyFrame(animated: false)
+            }
+            // orderOut のときだけ出す。前面化せず、作業中の窓のキーも取らない。
+            if !panel.isVisible {
                 panel.orderFrontRegardless()
             }
             if cabinAppeared {
                 model.hovering = false
-                if layout.isTucked {
-                    restoreFromPeek()
-                }
-                if !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
-                    NSSound(named: "Tink")?.play()
-                }
+            }
+            let chime = MacNudgeRinging.audible(ringing.fresh, tucked: layout.isTucked)
+                || (cabinAppeared && !layout.isTucked && runtime.snap?.nudge == nil)
+            if chime, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+                NSSound(named: "Tink")?.play()
             }
         } else {
             panel.orderOut(nil)
+            model.edgeLamp = false
         }
         lastVisible = visible
         lastCabinPrompt = presentation.cabinPrompt
@@ -184,6 +217,26 @@ final class CompanionRideOverlayController: NSObject {
               point.x >= Self.handleWidth else { return }
         let presentation = model.presentation
         if presentation.isSending { return }
+        if model.extendPicker {
+            switch choiceIndex(at: point) {
+            case 0: sendExtend(300)
+            case 1: sendExtend(600)
+            case 2: sendExtend(900)
+            case 3: model.extendPicker = false
+            default: break
+            }
+            return
+        }
+        if presentation.showsNudgeChoices {
+            switch choiceIndex(at: point) {
+            case 0: handleNudgeChoice(.stillOnIt)
+            case 1: handleNudgeChoice(.willExtend)
+            case 2: handleNudgeChoice(.alreadyDone)
+            case 3: handleNudgeChoice(.paused)
+            default: break
+            }
+            return
+        }
         if presentation.cabinPrompt != nil {
             let contentWidth = panel.frame.width - Self.handleWidth
             let x = point.x - Self.handleWidth
@@ -200,6 +253,31 @@ final class CompanionRideOverlayController: NSObject {
         } else if presentation.canPause {
             Task { await runtime.sendPause() }
         }
+    }
+
+    private func choiceIndex(at point: NSPoint) -> Int? {
+        let contentWidth = panel.frame.width - Self.handleWidth
+        guard contentWidth > 0 else { return nil }
+        let x = point.x - Self.handleWidth
+        guard x >= 0 else { return nil }
+        let index = Int(x / (contentWidth / 4))
+        return min(index, 3)
+    }
+
+    private func handleNudgeChoice(_ choice: NudgeChoice) {
+        guard !model.presentation.isSending else { return }
+        if choice == .willExtend {
+            model.extendPicker = true
+            return
+        }
+        model.extendPicker = false
+        Task { await runtime.sendNudgeAnswer(choice) }
+    }
+
+    private func sendExtend(_ seconds: Int) {
+        guard !model.presentation.isSending else { return }
+        model.extendPicker = false
+        Task { await runtime.sendNudgeAnswer(.willExtend, addSeconds: seconds) }
     }
 
     private func restoreFromPeek() {

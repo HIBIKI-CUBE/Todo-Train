@@ -13,6 +13,8 @@ public enum SyncCopy {
     public static let notPaused = "停車中ではありません"
     public static let invalidPayload = "題名か所要を送れません"
     public static let sentToIPhone = "iPhone に送りました"
+    /// The command queue on the relay rejected another command.
+    public static let fifoFull = "iPhone に届いていません。iPhone で Todo列車を開くと反映されます。"
     public static let waitingForIPhone = "iPhone を待っています"
     public static let iphoneNoReply = "iPhone から返事がありません"
     public static let iphoneConfirmReason = "画面を自分に戻して、この Mac との連携を確定します"
@@ -25,6 +27,8 @@ public enum SyncCopy {
             return notConnected
         case .confirmTimedOut:
             return confirmTimedOut
+        case .transport(_, let code) where code == "fifoFull":
+            return fifoFull
         case .transport(_, let code) where code == "pauseLimitReached":
             return pauseLimitReached
         case .transport(_, let code) where code == "notPaused":

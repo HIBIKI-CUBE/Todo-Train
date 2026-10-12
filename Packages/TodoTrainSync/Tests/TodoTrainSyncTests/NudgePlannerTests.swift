@@ -443,6 +443,25 @@ struct NudgeFreezeExtensionTests {
         #expect(!evaluation.plan.contains { $0.stage == .checkIn })
         #expect(evaluation.current != .checkIn)
     }
+
+    @Test func nilWorkingSecondsFallsBackToTheRideClock() {
+        // The same later pause is subtracted from the ride clock when the reading was not stored.
+        // 400 active seconds is still before the original 15 min stage 1, so that stage is placed again.
+        let extensionAt = start.addingTimeInterval(800)
+        let evaluation = NudgePlanner.evaluate(
+            rideInput(
+                estimatedSeconds: 30 * 60,
+                rideID: ride,
+                startedAt: start,
+                pausedAccumulated: 400,
+                extensions: [
+                    NudgeExtension(addedSeconds: 15 * 60, createdAt: extensionAt),
+                ],
+                now: start.addingTimeInterval(1_210)
+            )
+        )
+        #expect(evaluation.plan.contains { $0.stage == .checkIn })
+    }
 }
 
 @Suite("Nudge rings")

@@ -1,7 +1,7 @@
 {
-  "contract": 7,
+  "contract": 8,
   "minReadable": 3,
-  "fingerprint": "62d287a3c85cdb8667d4713c792c711233a3ec015d0de6b9161aad5ee6ce840a",
+  "fingerprint": "8abdfd80d6605b455299ec4f4fe7b0ba21201e67cc8f67889aeac7c68a6f1918",
   "history": [
     {
       "contract": 3,
@@ -27,6 +27,11 @@
       "contract": 7,
       "date": "2026-10-13",
       "note": "壊れた nudge・nudgePlan・reserved は捨てて snap を読む"
+    },
+    {
+      "contract": 8,
+      "date": "2026-10-13",
+      "note": "Mac PiP の声掛けの文言を足す。ワイヤの形は変えない"
     }
   ]
 }
