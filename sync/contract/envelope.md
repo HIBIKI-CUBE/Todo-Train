@@ -74,6 +74,8 @@ HMAC-SHA256(cfmKey, UTF-8("{pairingId}|{offerId}|mac"))
 
 任意の `nextBlockTitle` / `nextBlockStartsAt` / `nextBlockEndsAt` / `timetablePauseAt` は乗務中のいま、なければ次の占有（ダイヤまたは掲示）。欠けていても旧クライアントは無視する。Encode は値があるときだけ出す。時刻と分は Date からクライアントが床する。残り秒は送らない。一行だけ。Hub のいま＋次の二行は iPhone 側。
 
+任意の `build` は**その平文を書いた側**のビルド。`{ "sha", "dirty", "schema", "builtAt" }`。`sha` は 7 桁、`schema` はストアの版（`3.0.0`）、`builtAt` は ISO 8601。欠けていても旧側は無視する。値が無いときはキーごと省く。snap と ack を書くのは iPhone なので、そこでの `build` は iPhone のもの。Mac のビルドは cmd の任意 `build` に載せる（cmd は Mac → iPhone。ack のスロットは iPhone → Mac のままなので、Mac の SHA を ack に載せても iPhone には届かない）。
+
 購読者の残り（Date 計算。残り秒を送らない）:
 
 ```
@@ -90,5 +92,5 @@ remaining      = estimatedSeconds - elapsedActive
 
 - cmd: [fixtures/cmd-pause.json](fixtures/cmd-pause.json) / [fixtures/cmd-resume.json](fixtures/cmd-resume.json) / [fixtures/cmd-still.json](fixtures/cmd-still.json) / [fixtures/cmd-issueAndBoard.json](fixtures/cmd-issueAndBoard.json)。`op` は `pause` / `resume` / `still` / `issueAndBoard`。`still` はいまの車内放送 pending を消費する。`sessionId` は任意（乗務なし idle は `null`。例: [fixtures/cmd-still-nosession.json](fixtures/cmd-still-nosession.json)）。
 - `issueAndBoard` はこの op のときだけ `title`（trim 後非空。母艦 `Ticket.title` に文字数上限は無い）と `estimatedSeconds`（60〜3600。1〜60分。5分刻み以外も可）を載せる。他の op ではこの 2 キーを置かない。`sessionId` は非乗務なら `null`、乗務中の割り込みならいまの乗務の id（不一致は `sessionMismatch`）。運行外は `noActiveService`。題名や秒が不正なら `invalidPayload`。成功 ack は `ok: true` のみ。切符 id は ack に載せない。結果は後続 snap。例: [fixtures/cmd-issueAndBoard.json](fixtures/cmd-issueAndBoard.json)（非乗務）、[fixtures/cmd-issueAndBoard-interrupt.json](fixtures/cmd-issueAndBoard-interrupt.json)（割り込み）。
-- ack 成功: [fixtures/ack-ok.json](fixtures/ack-ok.json)。`ok: true` のとき `error` キーは置かない。
+- ack 成功: [fixtures/ack-ok.json](fixtures/ack-ok.json)。`ok: true` のとき `error` キーは置かない。任意の `build` があるときだけ足す。無い ack はいままで通り。
 - ack 失敗: [fixtures/ack-pauseLimitReached.json](fixtures/ack-pauseLimitReached.json)。`error` は [enums.json](enums.json) のみ。タイトルは載せない。

@@ -56,6 +56,10 @@ StandBy は Clock アプリ級の没入 UI ではない。ActivityKit は提案�
 
 アプリ内で Hub を隠すことはできる。ホーム / App Switcher / 他アプリの起動は止められない。仕様は **「アプリ内ではフォーカスを維持。OS では閉じ込めない」**。
 
+## 診断に出すビルド
+
+実機がどのコミットから作られたかは、設定と診断の書き出しで分かるようにする。書き出しの識別子 `todotrain.pdca.v0` は上げない。足すのはこのビルド（SHA、ブランチ、未コミットの変更、作られた時刻、ストアの版、マーケティング版）と、Mac から最後に受け取ったビルドだけである。題名は今まで通り出さない。ストアの版は `AppModelContainer` が開いているスキーマから取る。
+
 ## CloudKit / ADP
 
 SwiftData の私有同期は有料 Apple Developer Program の iCloud コンテナが要る。Personal Team に entitlement を足すと署名が失敗する。`@Attribute(.unique)` は CloudKit と両立しない。同期の土管は CloudKit にしない（[13](13-sync-mac-companion.md)）。
