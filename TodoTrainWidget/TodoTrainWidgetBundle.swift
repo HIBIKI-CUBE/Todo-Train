@@ -12,5 +12,10 @@ struct TodoTrainWidgetBundle: WidgetBundle {
         TodoTrainHomeWidget()
         TodoTrainSessionLiveActivity()
         TodoTrainAlarmLiveActivity()
+        BoardReservedRideControl()
+        ContinueRideControl()
+        PauseRideControl()
+        ResumeRideControl()
+        ArriveRideControl()
     }
 }

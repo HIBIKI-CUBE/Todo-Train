@@ -48,6 +48,8 @@ LA を消すこと ≠ 運行キャンセル。DB が本尊。
 
 StandBy は Clock アプリ級の没入 UI ではない。ActivityKit は提案ビューをスケールし、`activityBackgroundTint` を延長するだけ。箱型の黒オーバーレイで帯を小さく見せない。HIG どおり操作は原則 1 つ。
 
+AlarmKit のカウントダウン Live Activity を Watch のスマートスタックへ映すことは、文書に書いていない。WWDC25 #230 が Watch に出ると話しているのは、鳴ったあとの警報である。カウントダウンの置き場所として挙げているのはロック画面、ダイナミックアイランド、StandBy である。アプリが始めた Live Activity は `.small` を付けるとスマートスタック用になる。終着ベルのカウントダウンは AlarmKit が始める Live Activity で、同じ配置を使う。`.small` は、システムが映す場合の表示である。文書は、このカウントダウンがミラーの対象だとも、対象外だとも書いていない。
+
 ## Foundation Models / PCC
 
 オンデバイスは entitlement 不要。PCC は `com.apple.developer.private-cloud-compute` と日次クォータ。得意は短い構造化出力であり、汎用チャットボットではない。見積もりの骨格は Heuristic。発車前の到着予測は中央値を骨格に、オンデバイスで題名・開始時刻・見積と延長・早着を見て思考つきの構造化出力から分だけ調整する。思考は内部。
