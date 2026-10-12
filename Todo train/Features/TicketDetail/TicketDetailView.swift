@@ -25,6 +25,17 @@ struct TicketDetailView: View {
         ticket.isOpen && sessionManager.boardingEligibility.allowsInteraction
     }
 
+    /// 押せるときは操作の結果。押せないときは `board()` と同じ拒否文。
+    /// `allowed` の disabledReason（「発車できません」）は使わない。
+    private var boardAccessibilityHint: String {
+        if canBoard {
+            return isPaused
+                ? "停車中の切符を再開します"
+                : "この切符を発車し、フォーカスを開きます"
+        }
+        return sessionManager.boardingEligibility.disabledReason
+    }
+
     private var isPaused: Bool {
         sessionManager.pausedSessions.contains { $0.ticket?.id == ticket.id }
     }
@@ -203,6 +214,11 @@ struct TicketDetailView: View {
                         requestBoard()
                     }
                     .disabled(!canBoard)
+                    .accessibilityHint(boardAccessibilityHint)
+                } footer: {
+                    if !canBoard {
+                        Text(sessionManager.boardingEligibility.disabledReason)
+                    }
                 }
             }
 

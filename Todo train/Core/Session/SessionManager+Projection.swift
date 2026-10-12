@@ -2,15 +2,15 @@
 //  SessionManager+Projection.swift
 //  Todo train
 //
-//  Read-side projections for Hub / Focus / Intents. Write commands live in the
-//  other SessionManager+* files; this file only derives what the UI can show.
+//  Read-side projections for Hub / Focus. Write commands stay in the other
+//  SessionManager+* files. Chrome setters forward to SessionPresentation.
 //
 
 import Foundation
 
 extension SessionManager {
-    /// Compat accessors over `presentation` so existing call sites / tests keep compiling
-    /// while Views migrate to the projection object.
+    /// Forwards to `presentation`. Timetable and Boarding still assign these.
+    /// Migrated views read `presentation` directly. Tests read the getters.
     var punctualityQueue: [PunctualityMoment] {
         get { presentation.punctualityQueue }
         set { presentation.punctualityQueue = newValue }
