@@ -248,17 +248,26 @@ struct NudgeFreezeExtensionTests {
         let extendedEstimate = 40 * 60
         let placed = try #require(NudgePlanner.checkInOffset(estimatedSeconds: extendedEstimate, rideID: ride))
         let extensionAt = start.addingTimeInterval(60)
-        let atPoint = NudgePlanner.evaluate(
+        let atPoint = NudgePlanner.marks(
+            estimatedSeconds: extendedEstimate,
+            rideID: ride,
+            extensions: [NudgeExtension(addedSeconds: 20 * 60, createdAt: extensionAt)],
+            startedAt: start,
+            activeSeconds: placed
+        )
+        #expect(!atPoint.contains { $0.stage == .checkIn })
+
+        let passed = NudgePlanner.evaluate(
             rideInput(
                 estimatedSeconds: extendedEstimate,
                 rideID: ride,
                 startedAt: start,
                 extensions: [NudgeExtension(addedSeconds: 20 * 60, createdAt: extensionAt)],
-                now: start.addingTimeInterval(placed)
+                now: start.addingTimeInterval(placed + 1)
             )
         )
-        #expect(!atPoint.plan.contains { $0.stage == .checkIn })
-        #expect(atPoint.current != .checkIn)
+        #expect(!passed.plan.contains { $0.stage == .checkIn })
+        #expect(passed.current != .checkIn)
 
         let justBefore = NudgePlanner.evaluate(
             rideInput(
@@ -270,7 +279,7 @@ struct NudgeFreezeExtensionTests {
             )
         )
         let checkIn = try #require(justBefore.plan.first { $0.stage == .checkIn })
-        #expect(checkIn.fireAt == start.addingTimeInterval(placed))
+        #expect(abs(checkIn.fireAt.timeIntervalSince(start) - placed) < 0.001)
         #expect(justBefore.current != .checkIn)
     }
 

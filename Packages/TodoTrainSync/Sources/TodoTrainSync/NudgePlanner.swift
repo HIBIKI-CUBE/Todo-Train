@@ -416,7 +416,7 @@ public enum NudgePlanner: Sendable {
         var estimate = estimatedSeconds - ordered.reduce(0) { $0 + $1.addedSeconds }
         for item in ordered {
             if let offset = checkInOffset(estimatedSeconds: estimate, rideID: rideID),
-               let elapsed = activeSeconds(
+               let elapsed = sampledActiveSeconds(
                    at: item,
                    startedAt: startedAt,
                    pausedAccumulated: pausedAccumulated,
@@ -445,7 +445,7 @@ public enum NudgePlanner: Sendable {
     /// Active seconds at an extension. A recorded reading wins.
     /// Otherwise the ride clock subtracts completed pauses and passenger intervals,
     /// and an open pause or passenger interval freezes the sample only after it has started.
-    private static func activeSeconds(
+    private static func sampledActiveSeconds(
         at item: NudgeExtension,
         startedAt: Date?,
         pausedAccumulated: TimeInterval,
