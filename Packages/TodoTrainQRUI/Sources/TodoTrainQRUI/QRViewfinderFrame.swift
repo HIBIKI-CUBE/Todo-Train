@@ -1,12 +1,18 @@
 import SwiftUI
 
 /// Square QR finder corners. A wide rounded rect reads as a barcode window.
-struct QRViewfinderFrame: View {
-    var color: Color
-    var lineWidth: CGFloat = 4
-    var armRatio: CGFloat = 0.2
+public struct QRViewfinderFrame: View {
+    public var color: Color
+    public var lineWidth: CGFloat
+    public var armRatio: CGFloat
 
-    var body: some View {
+    public init(color: Color, lineWidth: CGFloat = 4, armRatio: CGFloat = 0.2) {
+        self.color = color
+        self.lineWidth = lineWidth
+        self.armRatio = armRatio
+    }
+
+    public var body: some View {
         GeometryReader { proxy in
             let side = min(proxy.size.width, proxy.size.height)
             let origin = CGPoint(

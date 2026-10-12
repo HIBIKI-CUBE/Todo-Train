@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import TodoTrainQRUI
 import TodoTrainSync
 
 struct CompanionPairingPane: View {
@@ -28,7 +29,13 @@ struct CompanionPairingPane: View {
                 VStack {
                     Spacer()
                     if let encoded = runtime.pairingQR?.encoded {
-                        CompanionQRCodeView(encoded: encoded, dimension: 148)
+                        CompanionQRCodeView(
+                            encoded: encoded,
+                            dimension: 148,
+                            chromePadding: 12,
+                            cornerRadius: 12,
+                            accessibilityLabel: "iPhone に向ける QR"
+                        )
                     }
                 }
                 .padding(16)
