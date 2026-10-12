@@ -66,7 +66,7 @@ struct SessionManagerPauseInputTests {
         let missing = command(session: session.id, pause: UUID(), sampled: 10, active: 10, promptedAt: nil, answer: nil)
         #expect(manager.applyPauseInputReport(missing).error == .invalidPayload)
 
-        let otherSession = command(session: UUID(), pause: pause.id, sampled: 10, active: 4, promptedAt: nil, answer: .none)
+        let otherSession = command(session: UUID(), pause: pause.id, sampled: 10, active: 4, promptedAt: nil, answer: nil)
         #expect(manager.applyPauseInputReport(otherSession).error == .sessionMismatch)
         #expect(pause.macSampledSeconds == 0)
         #expect(session.accumulatedActiveSeconds == ride)

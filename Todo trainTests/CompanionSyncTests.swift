@@ -113,7 +113,7 @@ struct CompanionSnapBuildingTests {
         #expect(withReason.pauseId == record.id)
         let object = try JSONSerialization.jsonObject(with: try jsonData(withReason)) as! [String: Any]
         #expect(object["pauseHeldBy"] as? String == "user")
-        #expect(object["pauseId"] as? String == record.id.canonicalLowercase)
+        #expect(object["pauseId"] as? String == record.id.uuidString.lowercased())
 
         let running = CompanionSnapBuilding.snap(
             rev: 4,

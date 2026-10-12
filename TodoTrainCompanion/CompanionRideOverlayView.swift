@@ -33,6 +33,10 @@ struct CompanionRideOverlayView: View {
     private var presentation: RideOverlayPresentation { model.presentation }
 
     var body: some View {
+        pauseAccess(cabinAccess(framed))
+    }
+
+    private var framed: some View {
         Group {
             if model.isTucked {
                 peek
@@ -51,50 +55,58 @@ struct CompanionRideOverlayView: View {
                 : presentation.title
         )
         .accessibilityValue(accessibilityRemaining)
-        .accessibilityAction(named: "出す") {
-            if model.isTucked { onRestore() }
-        }
-        .accessibilityAction(named: presentation.canResume ? "再乗車" : CabinCopy.pause) {
-            if showsNudgeActions && !model.extendPicker {
-                onNudgeChoice(.paused)
-            } else if !showsNudgeActions {
-                primaryAction()
+    }
+
+    private func cabinAccess<Content: View>(_ content: Content) -> some View {
+        content
+            .accessibilityAction(named: "出す") {
+                if model.isTucked { onRestore() }
             }
-        }
-        .accessibilityAction(named: CabinCopy.still) {
-            if presentation.cabinPrompt != nil { onStill() }
-            if showsNudgeActions && !model.extendPicker { onNudgeChoice(.stillOnIt) }
-        }
-        .accessibilityAction(named: CabinCopy.extend) {
-            if showsNudgeActions && !model.extendPicker { onNudgeChoice(.willExtend) }
-        }
-        .accessibilityAction(named: CabinCopy.arrived) {
-            if showsNudgeActions && !model.extendPicker { onNudgeChoice(.alreadyDone) }
-        }
-        .accessibilityAction(named: CabinCopy.extendFive) {
-            if model.extendPicker { onExtendPreset(300) }
-        }
-        .accessibilityAction(named: CabinCopy.extendTen) {
-            if model.extendPicker { onExtendPreset(600) }
-        }
-        .accessibilityAction(named: CabinCopy.extendFifteen) {
-            if model.extendPicker { onExtendPreset(900) }
-        }
-        .accessibilityAction(named: CabinCopy.back) {
-            if model.extendPicker { onCancelExtend() }
-        }
-        .accessibilityAction(named: CabinCopy.board) {
-            if presentation.showsArrivalGap && presentation.canBoardReserved { onBoardReserved() }
-        }
-        .accessibilityAction(named: CabinCopy.close) {
-            if presentation.showsArrivalGap { onCloseGap() }
-        }
-        .accessibilityAction(named: PauseInputCopy.resume) {
-            if presentation.pausePrompt != nil { onPausePrompt(.resume) }
-        }
-        .accessibilityAction(named: PauseInputCopy.keepPaused) {
-            if presentation.pausePrompt != nil { onPausePrompt(.keepPaused) }
-        }
+            .accessibilityAction(named: presentation.canResume ? "再乗車" : CabinCopy.pause) {
+                if showsNudgeActions && !model.extendPicker {
+                    onNudgeChoice(.paused)
+                } else if !showsNudgeActions {
+                    primaryAction()
+                }
+            }
+            .accessibilityAction(named: CabinCopy.still) {
+                if presentation.cabinPrompt != nil { onStill() }
+                if showsNudgeActions && !model.extendPicker { onNudgeChoice(.stillOnIt) }
+            }
+            .accessibilityAction(named: CabinCopy.extend) {
+                if showsNudgeActions && !model.extendPicker { onNudgeChoice(.willExtend) }
+            }
+            .accessibilityAction(named: CabinCopy.arrived) {
+                if showsNudgeActions && !model.extendPicker { onNudgeChoice(.alreadyDone) }
+            }
+    }
+
+    private func pauseAccess<Content: View>(_ content: Content) -> some View {
+        content
+            .accessibilityAction(named: CabinCopy.extendFive) {
+                if model.extendPicker { onExtendPreset(300) }
+            }
+            .accessibilityAction(named: CabinCopy.extendTen) {
+                if model.extendPicker { onExtendPreset(600) }
+            }
+            .accessibilityAction(named: CabinCopy.extendFifteen) {
+                if model.extendPicker { onExtendPreset(900) }
+            }
+            .accessibilityAction(named: CabinCopy.back) {
+                if model.extendPicker { onCancelExtend() }
+            }
+            .accessibilityAction(named: CabinCopy.board) {
+                if presentation.showsArrivalGap && presentation.canBoardReserved { onBoardReserved() }
+            }
+            .accessibilityAction(named: CabinCopy.close) {
+                if presentation.showsArrivalGap { onCloseGap() }
+            }
+            .accessibilityAction(named: PauseInputCopy.resume) {
+                if presentation.pausePrompt != nil { onPausePrompt(.resume) }
+            }
+            .accessibilityAction(named: PauseInputCopy.keepPaused) {
+                if presentation.pausePrompt != nil { onPausePrompt(.keepPaused) }
+            }
     }
 
     private var showsNudgeActions: Bool {
