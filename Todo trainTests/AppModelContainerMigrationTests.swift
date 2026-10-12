@@ -49,6 +49,8 @@ struct AppModelContainerMigrationTests {
     @Test func make_migratesUnversionedStoreWithoutLosingTickets() throws {
         let url = Self.temporaryStoreURL()
         defer { Self.removeStoreFiles(at: url) }
+        AppModelContainer.rebuildCount = 0
+
         try autoreleasepool {
             let v1Schema = Schema(versionedSchema: AppSchemaV1.self)
             let v1Container = try ModelContainer(
@@ -67,13 +69,17 @@ struct AppModelContainerMigrationTests {
             try v1Container.mainContext.save()
         }
 
+        let created = try Self.creationDate(of: url)
         let migrated = try AppModelContainer.make(storeURL: url)
+        #expect(AppModelContainer.rebuildCount == 0)
+        #expect(try Self.creationDate(of: url) == created)
         let tickets = try migrated.mainContext.fetch(FetchDescriptor<Ticket>())
         let sessions = try migrated.mainContext.fetch(FetchDescriptor<WorkSession>())
         #expect(tickets.map(\.title) == ["残す切符"])
         #expect(tickets.first?.estimatedSeconds == 900)
         #expect(sessions.count == 1)
         #expect(sessions.first?.ticket?.title == "残す切符")
+        try Self.expectNewColumnsAtDefaults(in: migrated.mainContext)
 
         let starts = Date(timeIntervalSince1970: 1_700_001_000)
         migrated.mainContext.insert(
@@ -96,8 +102,13 @@ struct AppModelContainerMigrationTests {
             at: url,
             schema: Schema(versionedSchema: AppSchemaV3.self)
         )
+        AppModelContainer.rebuildCount = 0
+        let created = try Self.creationDate(of: url)
         let migrated = try AppModelContainer.make(storeURL: url)
+        #expect(AppModelContainer.rebuildCount == 0)
+        #expect(try Self.creationDate(of: url) == created)
         try Self.expectPreserved(seeded, in: migrated.mainContext, keepsReservation: false)
+        try Self.expectNewColumnsAtDefaults(in: migrated.mainContext)
     }
 
     @Test func make_migratesFrozenV3_1WithoutRebuild() throws {
@@ -108,8 +119,13 @@ struct AppModelContainerMigrationTests {
             at: url,
             schema: Schema(versionedSchema: AppSchemaV3_1.self)
         )
+        AppModelContainer.rebuildCount = 0
+        let created = try Self.creationDate(of: url)
         let migrated = try AppModelContainer.make(storeURL: url)
+        #expect(AppModelContainer.rebuildCount == 0)
+        #expect(try Self.creationDate(of: url) == created)
         try Self.expectPreserved(seeded, in: migrated.mainContext, keepsReservation: true)
+        try Self.expectNewColumnsAtDefaults(in: migrated.mainContext)
     }
 
     /// PR #71 以後のビルドは版識別子 3.0.0 のまま V3_1 の列を書いた。
@@ -121,8 +137,11 @@ struct AppModelContainerMigrationTests {
             at: url,
             schema: Schema(versionedSchema: PostPR71LabeledV3.self)
         )
+        AppModelContainer.rebuildCount = 0
         let migrated = try AppModelContainer.make(storeURL: url)
+        #expect(AppModelContainer.rebuildCount == 0)
         try Self.expectPreserved(seeded, in: migrated.mainContext, keepsReservation: true)
+        try Self.expectNewColumnsAtDefaults(in: migrated.mainContext)
     }
 
     @Test func frozenV3_1HashesMatchThePostPR71Store() throws {
@@ -470,6 +489,27 @@ struct AppModelContainerMigrationTests {
         #expect(try context.fetch(FetchDescriptor<Todo_train.Tag>()).count == 1)
     }
 
+    private static func expectNewColumnsAtDefaults(in context: ModelContext) throws {
+        let sessions = try context.fetch(FetchDescriptor<WorkSession>())
+        #expect(!sessions.isEmpty)
+        for session in sessions {
+            #expect(session.nudgeFiredStagesRaw == [])
+            #expect(session.nudgePendingStageRaw == nil)
+            #expect(session.nudgeAnsweredAt == nil)
+            #expect(session.nudgeAnsweredOnRaw == nil)
+            #expect(session.checkInFraction == nil)
+        }
+        for pause in try context.fetch(FetchDescriptor<SessionPause>()) {
+            #expect(pause.heldByRaw == nil)
+            #expect(pause.pausedOnRaw == nil)
+            #expect(pause.heldByInferred == false)
+            #expect(pause.macSampledSeconds == 0)
+            #expect(pause.macActiveSeconds == 0)
+            #expect(pause.promptedAt == nil)
+            #expect(pause.promptAnswerRaw == nil)
+        }
+    }
+
     /// develop の PR #71 以後（列追加前）が書いた entity ハッシュ。
     private static let postPR71Hashes: [String: String] = [
         "PassengerRide": "7CjuVWddXGHHZ8qKN7K30l5QaX/hmUohYSZ8wo7TNz4=",
@@ -498,6 +538,11 @@ struct AppModelContainerMigrationTests {
     private static func temporaryStoreURL() -> URL {
         FileManager.default.temporaryDirectory
             .appending(path: "todo-train-schema-\(UUID().uuidString).store")
+    }
+
+    private static func creationDate(of url: URL) throws -> Date {
+        let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+        return try #require(attributes[.creationDate] as? Date)
     }
 
     private static func removeStoreFiles(at url: URL) {
