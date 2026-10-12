@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		F086C101302B4E710022EBAD /* AppModelContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F086D101302B4E710022EBAD /* AppModelContainer.swift */; };
 		F086C102302B4E710022EBAD /* AppSchema.swift in Sources */ = {isa = PBXBuildFile; fileRef = F086D102302B4E710022EBAD /* AppSchema.swift */; };
+		F086C122302B4E710022EBAD /* AppSchemaV4+Frozen.swift in Sources */ = {isa = PBXBuildFile; fileRef = F086D122302B4E710022EBAD /* AppSchemaV4+Frozen.swift */; };
 		F086C103302B4E710022EBAD /* AppStoreSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = F086D103302B4E710022EBAD /* AppStoreSnapshot.swift */; };
 		F086C104302B4E710022EBAD /* CloudKitSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = F086D104302B4E710022EBAD /* CloudKitSync.swift */; };
 		F086C105302B4E710022EBAD /* LocalWireBuild.swift in Sources */ = {isa = PBXBuildFile; fileRef = F086D105302B4E710022EBAD /* LocalWireBuild.swift */; };
@@ -92,6 +93,7 @@
 /* Begin PBXFileReference section */
 		F086D101302B4E710022EBAD /* AppModelContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Todo train/App/AppModelContainer.swift"; sourceTree = "<group>"; };
 		F086D102302B4E710022EBAD /* AppSchema.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Todo train/App/AppSchema.swift"; sourceTree = "<group>"; };
+		F086D122302B4E710022EBAD /* AppSchemaV4+Frozen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Todo train/App/AppSchemaV4+Frozen.swift"; sourceTree = "<group>"; };
 		F086D103302B4E710022EBAD /* AppStoreSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Todo train/App/AppStoreSnapshot.swift"; sourceTree = "<group>"; };
 		F086D104302B4E710022EBAD /* CloudKitSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Todo train/App/CloudKitSync.swift"; sourceTree = "<group>"; };
 		F086D105302B4E710022EBAD /* LocalWireBuild.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Todo train/Core/Diagnostics/LocalWireBuild.swift"; sourceTree = "<group>"; };
@@ -283,6 +285,7 @@
 			children = (
 				F086D101302B4E710022EBAD /* AppModelContainer.swift */,
 				F086D102302B4E710022EBAD /* AppSchema.swift */,
+				F086D122302B4E710022EBAD /* AppSchemaV4+Frozen.swift */,
 				F086D103302B4E710022EBAD /* AppStoreSnapshot.swift */,
 				F086D104302B4E710022EBAD /* CloudKitSync.swift */,
 				F086D105302B4E710022EBAD /* LocalWireBuild.swift */,
@@ -622,6 +625,7 @@
 				F086B212302B4E710022EBAD /* BuildInfo.swift in Sources */,
 				F086C101302B4E710022EBAD /* AppModelContainer.swift in Sources */,
 				F086C102302B4E710022EBAD /* AppSchema.swift in Sources */,
+				F086C122302B4E710022EBAD /* AppSchemaV4+Frozen.swift in Sources */,
 				F086C103302B4E710022EBAD /* AppStoreSnapshot.swift in Sources */,
 				F086C104302B4E710022EBAD /* CloudKitSync.swift in Sources */,
 				F086C105302B4E710022EBAD /* LocalWireBuild.swift in Sources */,
