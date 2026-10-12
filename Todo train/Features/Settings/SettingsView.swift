@@ -158,6 +158,14 @@ struct SettingsView: View {
                         .font(.footnote)
                         .foregroundStyle(TrainTheme.muted)
                 }
+                if let notice = BuildMismatch.notice(
+                    localSHA: BuildInfo.sha,
+                    peerSHA: runtime.peerBuild?.sha
+                ) {
+                    Text(notice)
+                        .font(.footnote)
+                        .foregroundStyle(TrainTheme.muted)
+                }
             } header: {
                 Text("Mac")
             } footer: {
@@ -219,7 +227,15 @@ struct SettingsView: View {
 
     private func exportDiagnosticData() {
         do {
-            let data = try PDCAExport.jsonData(in: modelContext)
+            let paired = runtime.peerBuild.map {
+                PDCAExport.PairedBuildRow(
+                    sha: $0.sha,
+                    dirty: $0.dirty,
+                    schema: $0.schema,
+                    builtAt: $0.builtAt
+                )
+            }
+            let data = try PDCAExport.jsonData(in: modelContext, pairedBuild: paired)
             let directory = FileManager.default.temporaryDirectory
                 .appendingPathComponent(UUID().uuidString, isDirectory: true)
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

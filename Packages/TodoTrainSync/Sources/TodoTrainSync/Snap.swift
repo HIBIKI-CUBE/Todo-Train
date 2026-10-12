@@ -19,6 +19,8 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
     public var nextBlockStartsAt: Int?
     public var nextBlockEndsAt: Int?
     public var timetablePauseAt: Int?
+    /// Sender's build. Absent on older iPhones.
+    public var build: WireBuildInfo?
 
     public init(
         rev: Int,
@@ -38,7 +40,8 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
         nextBlockTitle: String? = nil,
         nextBlockStartsAt: Int? = nil,
         nextBlockEndsAt: Int? = nil,
-        timetablePauseAt: Int? = nil
+        timetablePauseAt: Int? = nil,
+        build: WireBuildInfo? = nil
     ) {
         self.rev = rev
         self.sessionId = sessionId
@@ -58,13 +61,14 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
         self.nextBlockStartsAt = nextBlockStartsAt
         self.nextBlockEndsAt = nextBlockEndsAt
         self.timetablePauseAt = timetablePauseAt
+        self.build = build
     }
 
     enum CodingKeys: String, CodingKey {
         case rev, sessionId, ticketId, title, phase
         case startedAt, estimatedSeconds, pausedAccumulated, pausedAt, boardedDeviceID
         case serviceActive, cabinEnabled, checkInFiredCount, pendingCabin
-        case nextBlockTitle, nextBlockStartsAt, nextBlockEndsAt, timetablePauseAt
+        case nextBlockTitle, nextBlockStartsAt, nextBlockEndsAt, timetablePauseAt, build
     }
 
     public init(from decoder: Decoder) throws {
@@ -95,6 +99,7 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
         nextBlockStartsAt = try container.decodeIfPresent(Int.self, forKey: .nextBlockStartsAt)
         nextBlockEndsAt = try container.decodeIfPresent(Int.self, forKey: .nextBlockEndsAt)
         timetablePauseAt = try container.decodeIfPresent(Int.self, forKey: .timetablePauseAt)
+        build = try container.decodeIfPresent(WireBuildInfo.self, forKey: .build)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -117,6 +122,7 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
         try container.encodeIfPresent(nextBlockStartsAt, forKey: .nextBlockStartsAt)
         try container.encodeIfPresent(nextBlockEndsAt, forKey: .nextBlockEndsAt)
         try container.encodeIfPresent(timetablePauseAt, forKey: .timetablePauseAt)
+        try container.encodeIfPresent(build, forKey: .build)
     }
 
     /// Remaining seconds using the contract formula. Idle / missing fields → nil.

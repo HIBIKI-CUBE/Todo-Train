@@ -23,6 +23,8 @@ final class CompanionSyncRuntime {
     private(set) var companionName: String?
     private(set) var pairingShortID: String?
     private(set) var lastStatus: String?
+    /// Last build received from the Mac, inside a command.
+    private(set) var peerBuild: WireBuildInfo?
 
     init(
         secrets: any SecretStoring = KeychainSecretStore(),
@@ -36,6 +38,7 @@ final class CompanionSyncRuntime {
         self.defaults = defaults
         let stored = defaults.stringArray(forKey: Defaults.processedCmdIDs) ?? []
         self.processedCommandIDs = Set(stored.compactMap(UUID.init(uuidString:)))
+        self.peerBuild = PeerBuildStore.load(from: defaults)
         refreshPaired()
     }
 
@@ -77,6 +80,8 @@ final class CompanionSyncRuntime {
         snapRev = 0
         processedCommandIDs = []
         persistProcessed()
+        peerBuild = nil
+        PeerBuildStore.save(nil, to: defaults)
         refreshPaired()
         lastStatus = nil
     }
@@ -248,8 +253,12 @@ final class CompanionSyncRuntime {
             pairingId: pairingId,
             encKey: encKey
         )
+        if let build = command.build {
+            peerBuild = build
+            PeerBuildStore.save(build, to: defaults)
+        }
         if processedCommandIDs.contains(command.id) { return }
-        let ack: AckPlaintext
+        var ack: AckPlaintext
         if command.op == .issueAndBoard {
             ack = issueAndBoardAck(command, sessionManager: sessionManager)
         } else {
@@ -274,6 +283,7 @@ final class CompanionSyncRuntime {
             }
             ack = RemotePauseEvaluating.ack(decision: decision, commandId: command.id)
         }
+        ack.build = LocalWireBuild.current
         let ackEnvelope = try SyncCrypto.sealJSON(
             ack,
             pairingId: pairingId,
@@ -367,7 +377,7 @@ final class CompanionSyncRuntime {
             return sessionManager.openTimetableProtectionBoundary(for: session.id)
                 .map { Int($0.timeIntervalSince1970) }
         }
-        let plaintext = CompanionSnapBuilding.snap(
+        var plaintext = CompanionSnapBuilding.snap(
             rev: snapRev,
             phase: sessionManager.phase,
             session: sessionManager.activeSession,
@@ -380,6 +390,7 @@ final class CompanionSyncRuntime {
             nextBlockEndsAt: visible.map { Int($0.endsAt.timeIntervalSince1970) },
             timetablePauseAt: pauseAt
         )
+        plaintext.build = LocalWireBuild.current
         let envelope = try SyncCrypto.sealJSON(
             plaintext,
             pairingId: pairing.pairingId,

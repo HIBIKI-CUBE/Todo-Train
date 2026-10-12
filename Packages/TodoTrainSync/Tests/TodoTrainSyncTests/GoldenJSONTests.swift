@@ -147,6 +147,33 @@ struct GoldenJSONTests {
         #expect((again["id"] as? String)?.contains("A") == false)
     }
 
+    @Test func oldSnapWithoutBuildDecodes() throws {
+        let data = try ContractFixtures.data("fixtures/snap.json")
+        let decoded = try WireJSON.decoder().decode(SnapPlaintext.self, from: data)
+        #expect(decoded.build == nil)
+        let encoded = try WireJSON.encoder().encode(decoded)
+        let object = try JSONSerialization.jsonObject(with: encoded) as! [String: Any]
+        #expect(object["build"] == nil)
+    }
+
+    @Test func snapBuildRoundTripOmitsWhenNil() throws {
+        let build = WireBuildInfo(sha: "1047101", dirty: true, schema: "3.0.0", builtAt: "2026-10-12T16:20:00+09:00")
+        var snap = try WireJSON.decoder().decode(
+            SnapPlaintext.self,
+            from: ContractFixtures.data("fixtures/snap-idle.json")
+        )
+        #expect(snap.build == nil)
+        snap.build = build
+        let encoded = try WireJSON.encoder().encode(snap)
+        let again = try WireJSON.decoder().decode(SnapPlaintext.self, from: encoded)
+        #expect(again.build == build)
+        let object = try JSONSerialization.jsonObject(with: encoded) as! [String: Any]
+        let nested = try #require(object["build"] as? [String: Any])
+        #expect(nested["sha"] as? String == "1047101")
+        #expect(nested["dirty"] as? Bool == true)
+        #expect(nested["schema"] as? String == "3.0.0")
+    }
+
     @Test func ackOkOmitsErrorKey() throws {
         let data = try ContractFixtures.data("fixtures/ack-ok.json")
         let decoded = try WireJSON.decoder().decode(AckPlaintext.self, from: data)
@@ -158,6 +185,46 @@ struct GoldenJSONTests {
         #expect(object["ok"] as? Bool == true)
         #expect(object["error"] == nil)
         #expect(object.keys.sorted() == ["cmdId", "ok"])
+    }
+
+    @Test func ackWithoutBuildStaysCompatibleAndWithBuildRoundTrips() throws {
+        let old = try WireJSON.decoder().decode(
+            AckPlaintext.self,
+            from: ContractFixtures.data("fixtures/ack-ok.json")
+        )
+        #expect(old.build == nil)
+        let build = WireBuildInfo(sha: "abcdef1", dirty: false, schema: "3.0.0", builtAt: "2026-10-12T16:20:00+09:00")
+        let ack = AckPlaintext(cmdId: old.cmdId, ok: true, build: build)
+        let encoded = try WireJSON.encoder().encode(ack)
+        let object = try JSONSerialization.jsonObject(with: encoded) as! [String: Any]
+        #expect(object["error"] == nil)
+        #expect((object["build"] as? [String: Any])?["sha"] as? String == "abcdef1")
+        let again = try WireJSON.decoder().decode(AckPlaintext.self, from: encoded)
+        #expect(again == ack)
+    }
+
+    @Test func commandWithoutBuildOmitsKeyAndWithBuildRoundTrips() throws {
+        let old = try WireJSON.decoder().decode(
+            CommandPlaintext.self,
+            from: ContractFixtures.data("fixtures/cmd-pause.json")
+        )
+        #expect(old.build == nil)
+        let encodedOld = try WireJSON.encoder().encode(old)
+        let oldObject = try JSONSerialization.jsonObject(with: encodedOld) as! [String: Any]
+        #expect(oldObject["build"] == nil)
+
+        let build = WireBuildInfo(sha: "abcdef1", dirty: false, schema: "3.0.0", builtAt: "2026-10-12T16:20:00+09:00")
+        let command = CommandPlaintext(
+            id: old.id,
+            op: old.op,
+            sessionId: old.sessionId,
+            at: old.at,
+            build: build
+        )
+        let encoded = try WireJSON.encoder().encode(command)
+        let again = try WireJSON.decoder().decode(CommandPlaintext.self, from: encoded)
+        #expect(again.build == build)
+        #expect(again.title == nil)
     }
 
     @Test func ackPauseLimitRoundTrip() throws {

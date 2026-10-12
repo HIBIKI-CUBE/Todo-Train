@@ -203,6 +203,9 @@ extension CompanionMacRuntime {
 
     func applySnap(_ envelope: Envelope, pairingId: UUID, encKey: Data) throws {
         snap = try SyncCrypto.openJSON(SnapPlaintext.self, envelope: envelope, pairingId: pairingId, encKey: encKey)
+        if let build = snap?.build {
+            notePeerBuild(build)
+        }
         reconcileOptimisticCabin()
         if snap?.pendingCabin != .idle {
             optimisticIdleConsumed = false
@@ -212,11 +215,19 @@ extension CompanionMacRuntime {
 
     func applyAck(_ envelope: Envelope, pairingId: UUID, encKey: Data) throws {
         let ack = try SyncCrypto.openJSON(AckPlaintext.self, envelope: envelope, pairingId: pairingId, encKey: encKey)
+        if let build = ack.build {
+            notePeerBuild(build)
+        }
         outgoingPause = OutgoingPauseApplying.applyAck(ack, current: outgoingPause)
         issueBoardTrack = IssueBoardTracking.applyAck(ack, current: issueBoardTrack)
         if case .failed = outgoingPause {
             clearOptimisticCabin()
             optimisticIdleConsumed = false
         }
+    }
+
+    func notePeerBuild(_ build: WireBuildInfo) {
+        peerBuild = build
+        PeerBuildStore.save(build, to: defaults)
     }
 }

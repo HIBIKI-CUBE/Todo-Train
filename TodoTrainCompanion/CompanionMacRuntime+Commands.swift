@@ -78,7 +78,8 @@ extension CompanionMacRuntime {
                 id: cmdId,
                 op: op,
                 sessionId: sessionId,
-                at: now
+                at: now,
+                build: LocalWireBuild.current
             )
             let rev = OutgoingPauseApplying.nextCommandRev(current: cmdRev)
             cmdRev = rev
@@ -129,7 +130,8 @@ extension CompanionMacRuntime {
                 sessionId: prior,
                 at: now,
                 title: trimmed,
-                estimatedSeconds: estimatedSeconds
+                estimatedSeconds: estimatedSeconds,
+                build: LocalWireBuild.current
             )
             let rev = OutgoingPauseApplying.nextCommandRev(current: cmdRev)
             cmdRev = rev
