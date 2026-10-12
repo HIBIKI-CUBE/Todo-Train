@@ -7,6 +7,29 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		F086C101302B4E710022EBAD /* AppModelContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F086D101302B4E710022EBAD /* AppModelContainer.swift */; };
+		F086C102302B4E710022EBAD /* AppSchema.swift in Sources */ = {isa = PBXBuildFile; fileRef = F086D102302B4E710022EBAD /* AppSchema.swift */; };
+		F086C103302B4E710022EBAD /* AppStoreSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = F086D103302B4E710022EBAD /* AppStoreSnapshot.swift */; };
+		F086C104302B4E710022EBAD /* CloudKitSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = F086D104302B4E710022EBAD /* CloudKitSync.swift */; };
+		F086C105302B4E710022EBAD /* LocalWireBuild.swift in Sources */ = {isa = PBXBuildFile; fileRef = F086D105302B4E710022EBAD /* LocalWireBuild.swift */; };
+		F086C106302B4E710022EBAD /* StoreSchemaVersion.swift in Sources */ = {isa = PBXBuildFile; fileRef = F086D106302B4E710022EBAD /* StoreSchemaVersion.swift */; };
+		F086C107302B4E710022EBAD /* PassengerCopy.swift in Sources */ = {isa = PBXBuildFile; fileRef = F086D107302B4E710022EBAD /* PassengerCopy.swift */; };
+		F086C108302B4E710022EBAD /* PassengerLane.swift in Sources */ = {isa = PBXBuildFile; fileRef = F086D108302B4E710022EBAD /* PassengerLane.swift */; };
+		F086C109302B4E710022EBAD /* CheckInScheduling.swift in Sources */ = {isa = PBXBuildFile; fileRef = F086D109302B4E710022EBAD /* CheckInScheduling.swift */; };
+		F086C110302B4E710022EBAD /* Enums.swift in Sources */ = {isa = PBXBuildFile; fileRef = F086D110302B4E710022EBAD /* Enums.swift */; };
+		F086C111302B4E710022EBAD /* PassengerRide.swift in Sources */ = {isa = PBXBuildFile; fileRef = F086D111302B4E710022EBAD /* PassengerRide.swift */; };
+		F086C112302B4E710022EBAD /* ServiceDay.swift in Sources */ = {isa = PBXBuildFile; fileRef = F086D112302B4E710022EBAD /* ServiceDay.swift */; };
+		F086C113302B4E710022EBAD /* SessionExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = F086D113302B4E710022EBAD /* SessionExtension.swift */; };
+		F086C114302B4E710022EBAD /* SessionPause.swift in Sources */ = {isa = PBXBuildFile; fileRef = F086D114302B4E710022EBAD /* SessionPause.swift */; };
+		F086C115302B4E710022EBAD /* Tag.swift in Sources */ = {isa = PBXBuildFile; fileRef = F086D115302B4E710022EBAD /* Tag.swift */; };
+		F086C116302B4E710022EBAD /* TaskLineage.swift in Sources */ = {isa = PBXBuildFile; fileRef = F086D116302B4E710022EBAD /* TaskLineage.swift */; };
+		F086C117302B4E710022EBAD /* Ticket.swift in Sources */ = {isa = PBXBuildFile; fileRef = F086D117302B4E710022EBAD /* Ticket.swift */; };
+		F086C118302B4E710022EBAD /* TimetableBlock.swift in Sources */ = {isa = PBXBuildFile; fileRef = F086D118302B4E710022EBAD /* TimetableBlock.swift */; };
+		F086C119302B4E710022EBAD /* TimetableGuard.swift in Sources */ = {isa = PBXBuildFile; fileRef = F086D119302B4E710022EBAD /* TimetableGuard.swift */; };
+		F086C120302B4E710022EBAD /* TimetableSeriesRule.swift in Sources */ = {isa = PBXBuildFile; fileRef = F086D120302B4E710022EBAD /* TimetableSeriesRule.swift */; };
+		F086C121302B4E710022EBAD /* WorkSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = F086D121302B4E710022EBAD /* WorkSession.swift */; };
+		F086B211302B4E710022EBAD /* BuildInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = F086B201302B4E710022EBAD /* BuildInfo.swift */; };
+		F086B212302B4E710022EBAD /* BuildInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = F086B201302B4E710022EBAD /* BuildInfo.swift */; };
 		B6EE2E8C302B4E730022EBAD /* TodoTrainWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = B6EE2E80302B4E730022EBAD /* TodoTrainWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		C0DE1004302B4E730022EBAD /* TodoTrainSync in Frameworks */ = {isa = PBXBuildFile; productRef = C0DE1002302B4E730022EBAD /* TodoTrainSync */; };
 		C0DE1005302B4E730022EBAD /* TodoTrainSync in Frameworks */ = {isa = PBXBuildFile; productRef = C0DE1003302B4E730022EBAD /* TodoTrainSync */; };
@@ -67,12 +90,34 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		F086D101302B4E710022EBAD /* AppModelContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Todo train/App/AppModelContainer.swift"; sourceTree = "<group>"; };
+		F086D102302B4E710022EBAD /* AppSchema.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Todo train/App/AppSchema.swift"; sourceTree = "<group>"; };
+		F086D103302B4E710022EBAD /* AppStoreSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Todo train/App/AppStoreSnapshot.swift"; sourceTree = "<group>"; };
+		F086D104302B4E710022EBAD /* CloudKitSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Todo train/App/CloudKitSync.swift"; sourceTree = "<group>"; };
+		F086D105302B4E710022EBAD /* LocalWireBuild.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Todo train/Core/Diagnostics/LocalWireBuild.swift"; sourceTree = "<group>"; };
+		F086D106302B4E710022EBAD /* StoreSchemaVersion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Todo train/Core/Diagnostics/StoreSchemaVersion.swift"; sourceTree = "<group>"; };
+		F086D107302B4E710022EBAD /* PassengerCopy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Todo train/Core/Passenger/PassengerCopy.swift"; sourceTree = "<group>"; };
+		F086D108302B4E710022EBAD /* PassengerLane.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Todo train/Core/Passenger/PassengerLane.swift"; sourceTree = "<group>"; };
+		F086D109302B4E710022EBAD /* CheckInScheduling.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Todo train/Core/Session/CheckInScheduling.swift"; sourceTree = "<group>"; };
+		F086D110302B4E710022EBAD /* Enums.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Todo train/Models/Enums.swift"; sourceTree = "<group>"; };
+		F086D111302B4E710022EBAD /* PassengerRide.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Todo train/Models/PassengerRide.swift"; sourceTree = "<group>"; };
+		F086D112302B4E710022EBAD /* ServiceDay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Todo train/Models/ServiceDay.swift"; sourceTree = "<group>"; };
+		F086D113302B4E710022EBAD /* SessionExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Todo train/Models/SessionExtension.swift"; sourceTree = "<group>"; };
+		F086D114302B4E710022EBAD /* SessionPause.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Todo train/Models/SessionPause.swift"; sourceTree = "<group>"; };
+		F086D115302B4E710022EBAD /* Tag.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Todo train/Models/Tag.swift"; sourceTree = "<group>"; };
+		F086D116302B4E710022EBAD /* TaskLineage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Todo train/Models/TaskLineage.swift"; sourceTree = "<group>"; };
+		F086D117302B4E710022EBAD /* Ticket.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Todo train/Models/Ticket.swift"; sourceTree = "<group>"; };
+		F086D118302B4E710022EBAD /* TimetableBlock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Todo train/Models/TimetableBlock.swift"; sourceTree = "<group>"; };
+		F086D119302B4E710022EBAD /* TimetableGuard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Todo train/Models/TimetableGuard.swift"; sourceTree = "<group>"; };
+		F086D120302B4E710022EBAD /* TimetableSeriesRule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Todo train/Models/TimetableSeriesRule.swift"; sourceTree = "<group>"; };
+		F086D121302B4E710022EBAD /* WorkSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Todo train/Models/WorkSession.swift"; sourceTree = "<group>"; };
 		B6EE2E52302B4E710022EBAD /* Todo train.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Todo train.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		B6EE2E63302B4E730022EBAD /* Todo trainTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Todo trainTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		B6EE2E6D302B4E730022EBAD /* Todo trainUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Todo trainUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		B6EE2E80302B4E730022EBAD /* TodoTrainWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = TodoTrainWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		C0DE2101302B4E730022EBAD /* TodoTrainCompanion.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TodoTrainCompanion.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C0DE2102302B4E730022EBAD /* TodoTrainCompanionTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TodoTrainCompanionTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		F086B201302B4E710022EBAD /* BuildInfo.swift */ = {isa = PBXFileReference; explicitFileType = sourcecode.swift; name = BuildInfo.swift; path = BuildInfo.swift; sourceTree = DERIVED_FILE_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -207,6 +252,8 @@
 		B6EE2E49302B4E710022EBAD = {
 			isa = PBXGroup;
 			children = (
+				F086B201302B4E710022EBAD /* BuildInfo.swift */,
+				F086E101302B4E710022EBAD /* CompanionStoreSchema */,
 				B6EE2E54302B4E710022EBAD /* Todo train */,
 				B6EE2E81302B4E730022EBAD /* TodoTrainWidget */,
 				C0DE2110302B4E730022EBAD /* TodoTrainCompanion */,
@@ -228,6 +275,34 @@
 				C0DE2102302B4E730022EBAD /* TodoTrainCompanionTests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		F086E101302B4E710022EBAD /* CompanionStoreSchema */ = {
+			isa = PBXGroup;
+			children = (
+				F086D101302B4E710022EBAD /* AppModelContainer.swift */,
+				F086D102302B4E710022EBAD /* AppSchema.swift */,
+				F086D103302B4E710022EBAD /* AppStoreSnapshot.swift */,
+				F086D104302B4E710022EBAD /* CloudKitSync.swift */,
+				F086D105302B4E710022EBAD /* LocalWireBuild.swift */,
+				F086D106302B4E710022EBAD /* StoreSchemaVersion.swift */,
+				F086D107302B4E710022EBAD /* PassengerCopy.swift */,
+				F086D108302B4E710022EBAD /* PassengerLane.swift */,
+				F086D109302B4E710022EBAD /* CheckInScheduling.swift */,
+				F086D110302B4E710022EBAD /* Enums.swift */,
+				F086D111302B4E710022EBAD /* PassengerRide.swift */,
+				F086D112302B4E710022EBAD /* ServiceDay.swift */,
+				F086D113302B4E710022EBAD /* SessionExtension.swift */,
+				F086D114302B4E710022EBAD /* SessionPause.swift */,
+				F086D115302B4E710022EBAD /* Tag.swift */,
+				F086D116302B4E710022EBAD /* TaskLineage.swift */,
+				F086D117302B4E710022EBAD /* Ticket.swift */,
+				F086D118302B4E710022EBAD /* TimetableBlock.swift */,
+				F086D119302B4E710022EBAD /* TimetableGuard.swift */,
+				F086D120302B4E710022EBAD /* TimetableSeriesRule.swift */,
+				F086D121302B4E710022EBAD /* WorkSession.swift */,
+			);
+			name = CompanionStoreSchema;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -522,6 +597,7 @@
 		B6EE2E4E302B4E710022EBAD /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			files = (
+				F086B211302B4E710022EBAD /* BuildInfo.swift in Sources */,
 			);
 		};
 		B6EE2E5F302B4E730022EBAD /* Sources */ = {
@@ -542,6 +618,28 @@
 		C0DE2121302B4E730022EBAD /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			files = (
+				F086B212302B4E710022EBAD /* BuildInfo.swift in Sources */,
+				F086C101302B4E710022EBAD /* AppModelContainer.swift in Sources */,
+				F086C102302B4E710022EBAD /* AppSchema.swift in Sources */,
+				F086C103302B4E710022EBAD /* AppStoreSnapshot.swift in Sources */,
+				F086C104302B4E710022EBAD /* CloudKitSync.swift in Sources */,
+				F086C105302B4E710022EBAD /* LocalWireBuild.swift in Sources */,
+				F086C106302B4E710022EBAD /* StoreSchemaVersion.swift in Sources */,
+				F086C107302B4E710022EBAD /* PassengerCopy.swift in Sources */,
+				F086C108302B4E710022EBAD /* PassengerLane.swift in Sources */,
+				F086C109302B4E710022EBAD /* CheckInScheduling.swift in Sources */,
+				F086C110302B4E710022EBAD /* Enums.swift in Sources */,
+				F086C111302B4E710022EBAD /* PassengerRide.swift in Sources */,
+				F086C112302B4E710022EBAD /* ServiceDay.swift in Sources */,
+				F086C113302B4E710022EBAD /* SessionExtension.swift in Sources */,
+				F086C114302B4E710022EBAD /* SessionPause.swift in Sources */,
+				F086C115302B4E710022EBAD /* Tag.swift in Sources */,
+				F086C116302B4E710022EBAD /* TaskLineage.swift in Sources */,
+				F086C117302B4E710022EBAD /* Ticket.swift in Sources */,
+				F086C118302B4E710022EBAD /* TimetableBlock.swift in Sources */,
+				F086C119302B4E710022EBAD /* TimetableGuard.swift in Sources */,
+				F086C120302B4E710022EBAD /* TimetableSeriesRule.swift in Sources */,
+				F086C121302B4E710022EBAD /* WorkSession.swift in Sources */,
 			);
 		};
 		C0DE2124302B4E730022EBAD /* Sources */ = {

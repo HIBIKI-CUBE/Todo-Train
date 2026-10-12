@@ -5,6 +5,7 @@
 
 import SwiftUI
 import SwiftData
+import TodoTrainSync
 import UIKit
 
 struct SettingsView: View {
@@ -14,6 +15,8 @@ struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @State private var diagnosticExportError: String?
+    @State private var didCopyBuild = false
+    @State private var buildCopyGeneration = 0
 
     var body: some View {
         Form {
@@ -96,6 +99,25 @@ struct SettingsView: View {
                         .font(.footnote)
                         .foregroundStyle(.red)
                 }
+                LabeledContent(BuildInfoCopy.title) {
+                    Text(LocalWireBuild.line)
+                        .font(.body.monospaced())
+                        .multilineTextAlignment(.trailing)
+                }
+                .onLongPressGesture {
+                    copyBuildLine()
+                }
+                .accessibilityAction(named: "コピー") {
+                    copyBuildLine()
+                }
+                if didCopyBuild {
+                    Text(BuildInfoCopy.copied)
+                        .font(.footnote)
+                        .foregroundStyle(TrainTheme.muted)
+                }
+                Text(BuildInfoCopy.explanation)
+                    .font(.footnote)
+                    .foregroundStyle(TrainTheme.muted)
             } header: {
                 Text("診断")
             } footer: {
@@ -180,6 +202,18 @@ struct SettingsView: View {
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 }
                 .accessibilityHidden(true)
+        }
+    }
+
+    private func copyBuildLine() {
+        UIPasteboard.general.string = LocalWireBuild.line
+        buildCopyGeneration += 1
+        didCopyBuild = true
+        let generation = buildCopyGeneration
+        Task {
+            try? await Task.sleep(for: .seconds(2))
+            guard generation == buildCopyGeneration else { return }
+            didCopyBuild = false
         }
     }
 
