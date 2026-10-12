@@ -25,6 +25,10 @@ final class CompanionSyncRuntime {
     private(set) var lastStatus: String?
     /// Last build received from the Mac, inside a command.
     private(set) var peerBuild: WireBuildInfo?
+    /// Mac contract from a command. Nil until a command arrives.
+    private(set) var peerContract: ContractAnnouncement?
+    /// Relay contract from hello or hint.
+    private(set) var relayContract: ContractAnnouncement?
 
     init(
         secrets: any SecretStoring = KeychainSecretStore(),
@@ -39,6 +43,8 @@ final class CompanionSyncRuntime {
         let stored = defaults.stringArray(forKey: Defaults.processedCmdIDs) ?? []
         self.processedCommandIDs = Set(stored.compactMap(UUID.init(uuidString:)))
         self.peerBuild = PeerBuildStore.load(from: defaults)
+        self.peerContract = PeerContractStore.load(from: defaults, key: PeerContractStore.peerKey)
+        self.relayContract = PeerContractStore.load(from: defaults, key: PeerContractStore.relayKey)
         refreshPaired()
     }
 
@@ -82,6 +88,10 @@ final class CompanionSyncRuntime {
         persistProcessed()
         peerBuild = nil
         PeerBuildStore.save(nil, to: defaults)
+        peerContract = nil
+        relayContract = nil
+        PeerContractStore.save(nil, to: defaults, key: PeerContractStore.peerKey)
+        PeerContractStore.save(nil, to: defaults, key: PeerContractStore.relayKey)
         refreshPaired()
         lastStatus = nil
     }
@@ -139,9 +149,9 @@ final class CompanionSyncRuntime {
         }
         defer { Task { await connection.close() } }
         while !Task.isCancelled {
-            let frame: WSFrame
+            let incoming: WSIncoming
             do {
-                frame = try await connection.receive()
+                incoming = try await connection.receiveIncoming()
             } catch is CancellationError {
                 return
             } catch SyncError.invalidJSON {
@@ -151,13 +161,18 @@ final class CompanionSyncRuntime {
                 lastStatus = userFacing(error)
                 return
             }
-            do {
-                if frame.t == .cmd {
-                    try await handleCommandEnvelope(frame.envelope, sessionManager: sessionManager)
-                    try await pushSnap(sessionManager: sessionManager)
+            switch incoming {
+            case .hello(let announcement):
+                noteRelayContract(announcement)
+            case .frame(let frame):
+                do {
+                    if frame.t == .cmd {
+                        try await handleCommandEnvelope(frame.envelope, sessionManager: sessionManager)
+                        try await pushSnap(sessionManager: sessionManager)
+                    }
+                } catch {
+                    lastStatus = userFacing(error)
                 }
-            } catch {
-                lastStatus = userFacing(error)
             }
         }
     }
@@ -178,9 +193,11 @@ final class CompanionSyncRuntime {
                 case .ignore:
                     break
                 case .remember(let hint, let tag):
+                    noteRelayContract(hint.relayAnnouncement)
                     previous = hint
                     etag = tag
                 case .catchUp(let catchUp, let hint, let tag):
+                    noteRelayContract(hint.relayAnnouncement)
                     previous = hint
                     etag = tag
                     if catchUp.cmd {
@@ -257,6 +274,7 @@ final class CompanionSyncRuntime {
             peerBuild = build
             PeerBuildStore.save(build, to: defaults)
         }
+        notePeerContract(command.announcement)
         if processedCommandIDs.contains(command.id) { return }
         var ack: AckPlaintext
         if command.op == .issueAndBoard {
@@ -284,6 +302,8 @@ final class CompanionSyncRuntime {
             ack = RemotePauseEvaluating.ack(decision: decision, commandId: command.id)
         }
         ack.build = LocalWireBuild.current
+        ack.contract = ContractVersion.contract
+        ack.minReadable = ContractVersion.minReadable
         let ackEnvelope = try SyncCrypto.sealJSON(
             ack,
             pairingId: pairingId,
@@ -391,6 +411,8 @@ final class CompanionSyncRuntime {
             timetablePauseAt: pauseAt
         )
         plaintext.build = LocalWireBuild.current
+        plaintext.contract = ContractVersion.contract
+        plaintext.minReadable = ContractVersion.minReadable
         let envelope = try SyncCrypto.sealJSON(
             plaintext,
             pairingId: pairing.pairingId,
@@ -426,6 +448,16 @@ final class CompanionSyncRuntime {
     private func persistProcessed() {
         let kept = processedCommandIDs.prefix(32).map(\.uuidString)
         defaults.set(Array(kept), forKey: Defaults.processedCmdIDs)
+    }
+
+    private func notePeerContract(_ announcement: ContractAnnouncement) {
+        peerContract = announcement
+        PeerContractStore.save(announcement, to: defaults, key: PeerContractStore.peerKey)
+    }
+
+    private func noteRelayContract(_ announcement: ContractAnnouncement) {
+        relayContract = announcement
+        PeerContractStore.save(announcement, to: defaults, key: PeerContractStore.relayKey)
     }
 
     private func userFacing(_ error: Error) -> String {

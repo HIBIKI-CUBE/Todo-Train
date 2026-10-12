@@ -6,7 +6,8 @@ import { parseEnvelope } from "./envelope.ts";
 import { isPub32, isTokenHash32, isUuid } from "./ids.ts";
 import { jsonError, jsonOk, type HintBody, type RpcResult } from "./result.ts";
 import { confirmOverlapOk, isOfferExpired, offerExpiresAt } from "./time.ts";
-import { encodeWsFrame } from "./ws-frame.ts";
+import { CONTRACT, MIN_READABLE } from "./contract-version.ts";
+import { encodeHello, encodeWsFrame, parseHello } from "./ws-frame.ts";
 
 // 永続するのは ciphertext とメタだけ。ct / hmac / token をログに出さない。
 
@@ -68,6 +69,8 @@ function hintFrom(state: PairingState): HintBody {
     snapRev: state.snap?.rev ?? 0,
     ackRev: state.ack?.rev ?? 0,
     cmdCount: state.cmds.length,
+    contract: CONTRACT,
+    minReadable: MIN_READABLE,
   };
 }
 
@@ -295,8 +298,19 @@ export class PairingDurableObject extends DurableObject<unknown> {
     return new Response(null, { status: 101, webSocket: pair[0] });
   }
 
-  async webSocketMessage(_ws: WebSocket, _message: string | ArrayBuffer): Promise<void> {
-    // Clients do not send JSON WSFrame. RFC 6455 ping is handled by the runtime.
+  async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
+    // Snap/cmd/ack stay on HTTP. The first text frame is only the contract hello.
+    const text = typeof message === "string" ? message : new TextDecoder().decode(message);
+    if (!parseHello(text)) return;
+    const reply = encodeHello(CONTRACT, MIN_READABLE);
+    // Reply after this handler returns. A send on the same turn does not
+    // reach the peer in the test runtime, and production does not need it sooner.
+    await scheduler.wait(0);
+    try {
+      ws.send(reply);
+    } catch {
+      // The socket is already gone.
+    }
   }
 
   async webSocketClose(ws: WebSocket, code: number, reason: string, _wasClean: boolean): Promise<void> {

@@ -44,6 +44,10 @@ final class CompanionMacRuntime {
     var lastStatus: String?
     /// Last build received from the iPhone, inside a snap or ack.
     var peerBuild: WireBuildInfo?
+    /// iPhone contract from a snap or ack. Nil until one arrives.
+    var peerContract: ContractAnnouncement?
+    /// Relay contract from hello or hint.
+    var relayContract: ContractAnnouncement?
     var sentTimetablePauseAt: Int?
     var pairingPhase: PairingPhase = .idle
     var pairingQR: PairingURL?
@@ -96,6 +100,8 @@ final class CompanionMacRuntime {
         }
         self.imaYaruShortcut = ImaYaruShortcutStore.read(defaults)
         self.peerBuild = PeerBuildStore.load(from: defaults)
+        self.peerContract = PeerContractStore.load(from: defaults, key: PeerContractStore.peerKey)
+        self.relayContract = PeerContractStore.load(from: defaults, key: PeerContractStore.relayKey)
         refreshPaired()
         applyLoginItem()
         cabinNotifier.configure()

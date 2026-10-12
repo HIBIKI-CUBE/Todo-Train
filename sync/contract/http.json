@@ -15,7 +15,8 @@
     "hmacMismatch",
     "tokenHashMismatch",
     "revConflict",
-    "fifoFull"
+    "fifoFull",
+    "contractRange"
   ],
   "routes": [
     {
@@ -196,9 +197,10 @@
       "failure": [
         { "status": 400, "error": "invalid" },
         { "status": 401, "error": "unauthorized" },
-        { "status": 409, "error": "fifoFull" }
+        { "status": 409, "error": "fifoFull" },
+        { "status": 426, "error": "contractRange" }
       ],
-      "notes": "Subscriber. kind must be cmd. FIFO max constants.cmdFifoMax. Do not parse ct. Push t=cmd on WS. No client polling loop. Optional X-Pairing-Id skips directory lookup."
+      "notes": "Subscriber. kind must be cmd. FIFO max constants.cmdFifoMax. Do not parse ct. Push t=cmd on WS. No client polling loop. Optional X-Pairing-Id skips directory lookup. Optional X-TT-Contract is `<contract>;min=<minReadable>` (absent means v3). When the ranges do not overlap, 426 carries the relay contract and minReadable and the command is not queued. GET/PUT snap still succeed."
     },
     {
       "id": "getCmd",
@@ -283,7 +285,9 @@
         "body": {
           "snapRev": 42,
           "ackRev": 7,
-          "cmdCount": 1
+          "cmdCount": 1,
+          "contract": 4,
+          "minReadable": 3
         },
         "headers": {
           "ETag": "\"42-7-1\"",
@@ -292,7 +296,7 @@
       },
       "notModified": { "status": 304 },
       "failure": [{ "status": 404, "error": "notFound" }],
-      "notes": "Public revs only. pairingId is already on the QR. No Bearer, no ct. Unconfirmed pairings are 404. Clients watch this only while the WebSocket is down, then catch up with GET /v1/snap /ack /cmd. Not a connected-path polling loop."
+      "notes": "Public revs only, plus the relay contract and minReadable. pairingId is already on the QR. No Bearer, no ct. Unconfirmed pairings are 404. Clients watch this only while the WebSocket is down, then catch up with GET /v1/snap /ack /cmd. Not a connected-path polling loop. Response header X-TT-Contract repeats the relay version. A body without contract is a v3 relay."
     }
   ]
 }

@@ -11,6 +11,9 @@ public struct CommandPlaintext: Codable, Equatable, Sendable {
     public var estimatedSeconds: Int?
     /// Mac build. Commands are written by the Mac. Absent on older peers.
     public var build: WireBuildInfo?
+    /// Mac contract. Absent means v3.
+    public var contract: Int?
+    public var minReadable: Int?
 
     public init(
         id: UUID,
@@ -19,7 +22,9 @@ public struct CommandPlaintext: Codable, Equatable, Sendable {
         at: Int,
         title: String? = nil,
         estimatedSeconds: Int? = nil,
-        build: WireBuildInfo? = nil
+        build: WireBuildInfo? = nil,
+        contract: Int? = nil,
+        minReadable: Int? = nil
     ) {
         self.id = id
         self.op = op
@@ -33,10 +38,16 @@ public struct CommandPlaintext: Codable, Equatable, Sendable {
             self.estimatedSeconds = nil
         }
         self.build = build
+        self.contract = contract
+        self.minReadable = minReadable
+    }
+
+    public var announcement: ContractAnnouncement {
+        .resolved(contract: contract, minReadable: minReadable)
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, op, sessionId, at, title, estimatedSeconds, build
+        case id, op, sessionId, at, title, estimatedSeconds, build, contract, minReadable
     }
 
     public init(from decoder: Decoder) throws {
@@ -59,6 +70,8 @@ public struct CommandPlaintext: Codable, Equatable, Sendable {
             estimatedSeconds = nil
         }
         build = WireBuildInfo.decodeLenient(from: container, forKey: .build)
+        contract = ContractKeyDecoding.positiveInt(container, .contract)
+        minReadable = ContractKeyDecoding.positiveInt(container, .minReadable)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -72,5 +85,7 @@ public struct CommandPlaintext: Codable, Equatable, Sendable {
             try container.encode(estimatedSeconds ?? 0, forKey: .estimatedSeconds)
         }
         try container.encodeIfPresent(build, forKey: .build)
+        try container.encodeIfPresent(contract, forKey: .contract)
+        try container.encodeIfPresent(minReadable, forKey: .minReadable)
     }
 }

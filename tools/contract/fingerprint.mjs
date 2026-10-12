@@ -30,6 +30,7 @@ const workerWire = [
   "sync/worker/src/hint.ts",
   "sync/worker/src/result.ts",
   "sync/worker/src/constants.ts",
+  "sync/worker/src/contract-range.ts",
 ];
 
 export function versionPath(root = repoRoot) {

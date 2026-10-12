@@ -176,7 +176,7 @@ public struct MenuBarPresentation: Equatable, Sendable {
         case .decryptFailed: "送れませんでした"
         case .notPaused: SyncCopy.notPaused
         case .invalidPayload: SyncCopy.invalidPayload
-        case .unsupportedOp: "この操作は Mac のアプリを更新すると使えます。"
+        case .unsupportedOp: ContractCopy.unsupportedOp
         }
     }
 

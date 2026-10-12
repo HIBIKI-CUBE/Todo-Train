@@ -30,5 +30,9 @@
     "POST /v1/cmd → t=cmd to the iPhone connection",
     "PUT /v1/ack → t=ack to subscribers"
   ],
-  "notes": "Bearer on the HTTP Upgrade request identifies the pairing. Optional X-Pairing-Id (canonical UUID) skips the tokenHash directory lookup; the pairing Durable Object still checks SHA-256(writeToken). Do not invent a query-token scheme. Do not poll snap/cmd/ack while the socket is up. Clients do not send JSON WSFrame. RFC 6455 ping/pong is keepalive only and must not wake the Durable Object."
+  "hello": {
+    "client": { "t": "hello", "contract": 4, "minReadable": 3 },
+    "relay": { "t": "hello", "contract": 4, "minReadable": 3 }
+  },
+  "notes": "Bearer on the HTTP Upgrade request identifies the pairing. Optional X-Pairing-Id (canonical UUID) skips the tokenHash directory lookup; the pairing Durable Object still checks SHA-256(writeToken). Optional X-TT-Contract is `<contract>;min=<minReadable>`; absent means v3. The first client text frame is hello, and the relay answers with its own hello. A version outside the range does not close the socket and does not stop snap frames. Do not invent a query-token scheme. Do not poll snap/cmd/ack while the socket is up. Clients do not send JSON WSFrame for snap/cmd/ack. RFC 6455 ping/pong is keepalive only and must not wake the Durable Object."
 }

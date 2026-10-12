@@ -3,6 +3,8 @@ import { decodeB64u, encodeB64u } from "./b64.ts";
 import { isPub32, isTokenHash32, isUuid } from "./ids.ts";
 import type { RpcResult } from "./result.ts";
 import { unixSeconds } from "./time.ts";
+import { CONTRACT, MIN_READABLE } from "./contract-version.ts";
+import { contractRange, parseContractHeader } from "./contract-range.ts";
 import { hintHTTPResponse, readHintCache, storeHintCache } from "./hint.ts";
 
 type PairingRpc = {
@@ -46,6 +48,28 @@ function pairing(env: Env, pairingId: string): PairingRpc {
 
 function errorJson(status: number, error: string) {
   return Response.json({ error }, { status });
+}
+
+function contractRangeResponse() {
+  return Response.json(
+    { error: "contractRange", contract: CONTRACT, minReadable: MIN_READABLE },
+    {
+      status: 426,
+      headers: { "X-TT-Contract": `${CONTRACT};min=${MIN_READABLE}` },
+    },
+  );
+}
+
+/** Commands stop when the ranges do not overlap. Snaps are not refused here. */
+function commandContractGate(header: string | undefined): Response | null {
+  const parsed = parseContractHeader(header);
+  if (!parsed.ok) return errorJson(400, "invalid");
+  const range = contractRange(
+    { contract: CONTRACT, minReadable: MIN_READABLE },
+    parsed.announcement,
+  );
+  if (range === "ok") return null;
+  return contractRangeResponse();
 }
 
 function fromRpc(result: RpcResult): Response {
@@ -205,6 +229,8 @@ app.put("/v1/snap", async (c) => {
 app.post("/v1/cmd", async (c) => {
   const auth = await requirePairing(c.env, c.req.header("Authorization"), c.req.header(PAIRING_ID_HEADER));
   if (auth instanceof Response) return auth;
+  const gated = commandContractGate(c.req.header("X-TT-Contract"));
+  if (gated) return gated;
   const body = await readJson(c.req.raw);
   if (body === JSON_FAIL) return errorJson(400, "invalid");
   const result = await pairing(c.env, auth.pairingId).postCmd(body, auth.tokenHash);

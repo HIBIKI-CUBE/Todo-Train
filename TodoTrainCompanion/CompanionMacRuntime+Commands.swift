@@ -45,6 +45,10 @@ extension CompanionMacRuntime {
     }
 
     func sendRideCommand(_ op: WireOp) async {
+        if let blocked = ContractCompat.commandBlock(peer: peerContract, relay: relayContract, side: .mac) {
+            lastStatus = blocked
+            return
+        }
         switch op {
         case .pause:
             guard presentation.canPause, !presentation.isSending else { return }
@@ -79,7 +83,9 @@ extension CompanionMacRuntime {
                 op: op,
                 sessionId: sessionId,
                 at: now,
-                build: LocalWireBuild.current
+                build: LocalWireBuild.current,
+                contract: ContractVersion.contract,
+                minReadable: ContractVersion.minReadable
             )
             let rev = OutgoingPauseApplying.nextCommandRev(current: cmdRev)
             cmdRev = rev
@@ -102,6 +108,10 @@ extension CompanionMacRuntime {
     }
 
     func sendIssueAndBoard(title: String, estimatedSeconds: Int) async {
+        if let blocked = ContractCompat.commandBlock(peer: peerContract, relay: relayContract, side: .mac) {
+            lastStatus = blocked
+            return
+        }
         let trimmed = IssueAndBoardEvaluating.trimmedTitle(title)
         guard IssueAndBoardEvaluating.isValid(title: trimmed, estimatedSeconds: estimatedSeconds) else {
             issueBoardTrack = .failed(.invalidPayload)
@@ -131,7 +141,9 @@ extension CompanionMacRuntime {
                 at: now,
                 title: trimmed,
                 estimatedSeconds: estimatedSeconds,
-                build: LocalWireBuild.current
+                build: LocalWireBuild.current,
+                contract: ContractVersion.contract,
+                minReadable: ContractVersion.minReadable
             )
             let rev = OutgoingPauseApplying.nextCommandRev(current: cmdRev)
             cmdRev = rev

@@ -74,7 +74,9 @@ HMAC-SHA256(cfmKey, UTF-8("{pairingId}|{offerId}|mac"))
 
 任意の `nextBlockTitle` / `nextBlockStartsAt` / `nextBlockEndsAt` / `timetablePauseAt` は乗務中のいま、なければ次の占有（ダイヤまたは掲示）。欠けていても旧クライアントは無視する。Encode は値があるときだけ出す。時刻と分は Date からクライアントが床する。残り秒は送らない。一行だけ。Hub のいま＋次の二行は iPhone 側。
 
-任意の `build` は**その平文を書いた側**のビルド。`{ "sha", "dirty", "schema", "builtAt" }`。`sha` は 7 桁、`schema` はストアの版（`3.0.0`）、`builtAt` は ISO 8601。欠けていても旧側は無視する。値が無いときはキーごと省く。snap と ack を書くのは iPhone なので、そこでの `build` は iPhone のもの。Mac のビルドは cmd の任意 `build` に載せる（cmd は Mac → iPhone。ack のスロットは iPhone → Mac のままなので、Mac の SHA を ack に載せても iPhone には届かない）。
+任意の `build` は**その平文を書いた側**のビルド。`{ "sha", "dirty", "schema", "builtAt" }`。`sha` は 7 桁、`schema` はストアの版（`3.0.0`）、`builtAt` は ISO 8601。欠けていても旧側は無視する。項目が欠けた `build` オブジェクトも、その平文の復号は続け、`build` だけ捨てる。値が無いときはキーごと省く。snap と ack を書くのは iPhone なので、そこでの `build` は iPhone のもの。Mac のビルドは cmd の任意 `build` に載せる（cmd は Mac → iPhone。ack のスロットは iPhone → Mac のままなので、Mac の SHA を ack に載せても iPhone には届かない）。
+
+任意の `contract` と `minReadable` は、その平文を書いた側の約束の版。snap と ack は iPhone、cmd は Mac。キーが無い相手は版 3（`minReadable` も 3）とみなす。片方だけ、または整数でない値も版 3。リレーは `ct` を開かないので、この比較には加わらない。相手の `contract` が自分の `minReadable` 以上なら互換。相手のほうが新しいときは、知っている部分だけで続ける。相手が自分の `minReadable` を下回るときは、snap の読み取りは続け、操作の送信だけ止める。版のずれでは同期を切らない。
 
 購読者の残り（Date 計算。残り秒を送らない）:
 

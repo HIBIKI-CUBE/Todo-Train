@@ -8,7 +8,8 @@ export type ErrorCode =
   | "hmacMismatch"
   | "tokenHashMismatch"
   | "revConflict"
-  | "fifoFull";
+  | "fifoFull"
+  | "contractRange";
 
 export type JsonValue =
   | string
@@ -22,6 +23,8 @@ export type HintBody = {
   snapRev: number;
   ackRev: number;
   cmdCount: number;
+  contract: number;
+  minReadable: number;
 };
 
 export type RpcResult = {

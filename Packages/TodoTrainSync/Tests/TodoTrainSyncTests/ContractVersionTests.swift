@@ -49,4 +49,45 @@ struct ContractVersionTests {
         }
         #expect(read >= 11)
     }
+
+    @Test func missingAnnouncementIsLegacyAndPartialKeysDoNotFailTheSnap() throws {
+        let data = try ContractFixtures.data("fixtures/v3/snap.json")
+        let legacy = try WireJSON.decoder().decode(SnapPlaintext.self, from: data)
+        #expect(legacy.contract == nil)
+        #expect(legacy.announcement == .legacyPeer)
+        #expect(ContractCompat.evaluate(peer: legacy.announcement).maySendOperations)
+
+        var object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        object["contract"] = "4"
+        object["minReadable"] = 3
+        let partial = try JSONSerialization.data(withJSONObject: object)
+        let decoded = try WireJSON.decoder().decode(SnapPlaintext.self, from: partial)
+        #expect(decoded.title == legacy.title)
+        #expect(decoded.announcement == .legacyPeer)
+    }
+
+    @Test func commandBlockStopsOnlyOutsideTheRange() {
+        let local = ContractAnnouncement.current
+        #expect(ContractCompat.commandBlock(peer: .legacyPeer, relay: .legacyPeer, side: .iphone) == nil)
+        #expect(ContractCompat.evaluate(local: local, peer: ContractAnnouncement(contract: 9, minReadable: 3)) == .peerNewer)
+        #expect(ContractCompat.commandBlock(
+            peer: ContractAnnouncement(contract: 2, minReadable: 2),
+            relay: nil,
+            side: .iphone
+        ) == ContractCopy.macOlder)
+        #expect(ContractCompat.commandBlock(
+            peer: ContractAnnouncement(contract: 2, minReadable: 2),
+            relay: nil,
+            side: .mac
+        ) == ContractCopy.iphoneOlder)
+        #expect(ContractCompat.commandBlock(
+            peer: nil,
+            relay: ContractAnnouncement(contract: 2, minReadable: 2),
+            side: .mac
+        ) == ContractCopy.relayOlder)
+        #expect(ContractCompat.commandBlock(peer: nil, relay: nil, side: .mac) == nil)
+        #expect(ContractAnnouncement.parseHeader(nil) == .legacyPeer)
+        #expect(ContractAnnouncement.parseHeader("4;min=3") == .current)
+        #expect(ContractAnnouncement.parseHeader("soon") == nil)
+    }
 }

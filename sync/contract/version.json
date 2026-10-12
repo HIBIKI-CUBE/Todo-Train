@@ -1,7 +1,7 @@
 {
   "contract": 4,
   "minReadable": 3,
-  "fingerprint": "b3a07bd51df9c83883d314f2dff91561456db168eb49bdb98ae414cff0e739bd",
+  "fingerprint": "6fb4f6419bd716d619024439be4f3ccef54803e904508396ae5f1cd5add616ea",
   "history": [
     {
       "contract": 3,
@@ -11,7 +11,7 @@
     {
       "contract": 4,
       "date": "2026-10-12",
-      "note": "未知の op を受け、unsupportedOp を返す"
+      "note": "未知の op を受け、端末と relay が版を名乗る"
     }
   ]
 }

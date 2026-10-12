@@ -21,6 +21,9 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
     public var timetablePauseAt: Int?
     /// Sender's build. Absent on older iPhones.
     public var build: WireBuildInfo?
+    /// Sender's contract. Absent on peers that predate the announcement (those are v3).
+    public var contract: Int?
+    public var minReadable: Int?
 
     public init(
         rev: Int,
@@ -41,7 +44,9 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
         nextBlockStartsAt: Int? = nil,
         nextBlockEndsAt: Int? = nil,
         timetablePauseAt: Int? = nil,
-        build: WireBuildInfo? = nil
+        build: WireBuildInfo? = nil,
+        contract: Int? = nil,
+        minReadable: Int? = nil
     ) {
         self.rev = rev
         self.sessionId = sessionId
@@ -62,6 +67,12 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
         self.nextBlockEndsAt = nextBlockEndsAt
         self.timetablePauseAt = timetablePauseAt
         self.build = build
+        self.contract = contract
+        self.minReadable = minReadable
+    }
+
+    public var announcement: ContractAnnouncement {
+        .resolved(contract: contract, minReadable: minReadable)
     }
 
     enum CodingKeys: String, CodingKey {
@@ -69,6 +80,7 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
         case startedAt, estimatedSeconds, pausedAccumulated, pausedAt, boardedDeviceID
         case serviceActive, cabinEnabled, checkInFiredCount, pendingCabin
         case nextBlockTitle, nextBlockStartsAt, nextBlockEndsAt, timetablePauseAt, build
+        case contract, minReadable
     }
 
     public init(from decoder: Decoder) throws {
@@ -100,6 +112,8 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
         nextBlockEndsAt = try container.decodeIfPresent(Int.self, forKey: .nextBlockEndsAt)
         timetablePauseAt = try container.decodeIfPresent(Int.self, forKey: .timetablePauseAt)
         build = WireBuildInfo.decodeLenient(from: container, forKey: .build)
+        contract = ContractKeyDecoding.positiveInt(container, .contract)
+        minReadable = ContractKeyDecoding.positiveInt(container, .minReadable)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -123,6 +137,8 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
         try container.encodeIfPresent(nextBlockEndsAt, forKey: .nextBlockEndsAt)
         try container.encodeIfPresent(timetablePauseAt, forKey: .timetablePauseAt)
         try container.encodeIfPresent(build, forKey: .build)
+        try container.encodeIfPresent(contract, forKey: .contract)
+        try container.encodeIfPresent(minReadable, forKey: .minReadable)
     }
 
     /// Remaining seconds using the contract formula. Idle / missing fields → nil.
