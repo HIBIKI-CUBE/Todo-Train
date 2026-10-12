@@ -42,6 +42,7 @@ extension CompanionMacRuntime {
         hintTask = nil
         try? secrets.delete()
         snap = nil
+        snapConfirmedAt = nil
         peerBuild = nil
         PeerBuildStore.save(nil, to: defaults)
         peerContract = nil

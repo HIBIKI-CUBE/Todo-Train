@@ -35,6 +35,8 @@ final class CompanionMacRuntime {
     var companionName: String?
     var pairingShortID: String?
     var snap: SnapPlaintext?
+    /// When the relay last confirmed `snap`. A dropped relay leaves this behind.
+    var snapConfirmedAt: Date?
     var connection: ConnectionStatus = .disconnected
     var outgoingPause: OutgoingPauseState = .idle
     var issueBoardTrack: IssueBoardTrack = .idle

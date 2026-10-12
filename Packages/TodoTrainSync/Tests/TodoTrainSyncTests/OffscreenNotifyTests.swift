@@ -16,13 +16,35 @@ struct OffscreenNotifyTests {
     }
 
     private static func day(_ year: Int, _ month: Int, _ day: Int) -> Date {
+        moment(year, month, day, 12, 0)
+    }
+
+    private static func moment(_ year: Int, _ month: Int, _ day: Int, _ hour: Int, _ minute: Int) -> Date {
         var parts = DateComponents()
         parts.year = year
         parts.month = month
         parts.day = day
-        parts.hour = 12
+        parts.hour = hour
+        parts.minute = minute
         parts.timeZone = TimeZone(identifier: "Asia/Tokyo")
         return Calendar(identifier: .gregorian).date(from: parts)!
+    }
+
+    private func runningSnap(at now: Date, minutes: Int) throws -> SnapPlaintext {
+        var snap = try WireJSON.decoder().decode(
+            SnapPlaintext.self,
+            from: ContractFixtures.data("fixtures/snap.json")
+        )
+        snap.notifyOn = .mac
+        snap.notifyTurn = 0
+        snap.phase = .running
+        snap.startedAt = Int(now.timeIntervalSince1970)
+        snap.estimatedSeconds = minutes * 60
+        snap.pausedAccumulated = 0
+        snap.pausedAt = nil
+        snap.pendingCabin = nil
+        snap.notifyFireAt = nil
+        return snap
     }
 
     private func screens(
@@ -174,6 +196,10 @@ struct OffscreenNotifyTests {
         snap.notifyOn = .mac
         snap.notifyTurn = 0
         snap.phase = .running
+        snap.startedAt = Int(tuesday.timeIntervalSince1970)
+        snap.estimatedSeconds = 25 * 60
+        snap.pausedAccumulated = 0
+        snap.pausedAt = nil
         let hidden = MacOffscreenPlanning.requests(snap: snap, pipVisible: false, now: tuesday, calendar: tokyo)
         #expect(hidden.contains { $0.identifier == MacOffscreenPlanning.overtimeID })
         let pip = MacOffscreenPlanning.requests(snap: snap, pipVisible: true, now: tuesday, calendar: tokyo)
@@ -190,6 +216,105 @@ struct OffscreenNotifyTests {
         #expect(idle.map(\.identifier) == [MacOffscreenPlanning.idleID(turn: 1)])
         let quiet = MacOffscreenPlanning.requests(snap: snap, pipVisible: false, now: newYear, calendar: tokyo)
         #expect(quiet.isEmpty)
+    }
+
+    @Test func staleSnapClearsPendingSoThePhonePostsAlone() throws {
+        var snap = try runningSnap(at: tuesday, minutes: 25)
+        let fresh = MacOffscreenPlanning.requests(
+            snap: snap,
+            pipVisible: false,
+            now: tuesday,
+            snapAt: tuesday,
+            calendar: tokyo
+        )
+        #expect(fresh.map(\.identifier) == [MacOffscreenPlanning.overtimeID])
+        let dropped = tuesday.addingTimeInterval(MacOffscreenPlanning.snapStaleAfter + 1)
+        let stale = MacOffscreenPlanning.requests(
+            snap: snap,
+            pipVisible: false,
+            now: dropped,
+            snapAt: tuesday,
+            calendar: tokyo
+        )
+        #expect(stale.isEmpty)
+        let armed: Set<String> = [MacOffscreenPlanning.overtimeID, MacOffscreenPlanning.awayID]
+        #expect(MacOffscreenPlanning.identifiersToClear(armed: armed, requests: stale) == armed)
+        #expect(
+            MacOffscreenPlanning.identifiersToClear(armed: armed, requests: fresh)
+                == Set([MacOffscreenPlanning.awayID])
+        )
+        snap.notifyOn = .mac
+        let stillFresh = MacOffscreenPlanning.requests(
+            snap: snap,
+            pipVisible: false,
+            now: tuesday.addingTimeInterval(MacOffscreenPlanning.snapStaleAfter),
+            snapAt: tuesday,
+            calendar: tokyo
+        )
+        #expect(stillFresh.map(\.identifier) == [MacOffscreenPlanning.overtimeID])
+    }
+
+    @Test func weekdayAndHolidayUseTheFireInstant() throws {
+        let fridayNight = OffscreenNotifyTests.moment(2024, 1, 12, 23, 50)
+        let saturday = OffscreenNotifyTests.moment(2024, 1, 13, 0, 10)
+        let thursdayNight = OffscreenNotifyTests.moment(2024, 5, 2, 23, 50)
+        let constitutionDay = OffscreenNotifyTests.moment(2024, 5, 3, 0, 10)
+
+        let crossesSaturday = try runningSnap(at: fridayNight, minutes: 30)
+        let fridayOnly = MacOffscreenPlanning.requests(
+            snap: crossesSaturday,
+            pipVisible: false,
+            now: fridayNight,
+            snapAt: fridayNight,
+            calendar: tokyo
+        )
+        #expect(fridayOnly.isEmpty)
+
+        var staysFriday = try runningSnap(at: fridayNight, minutes: 5)
+        let onFriday = MacOffscreenPlanning.requests(
+            snap: staysFriday,
+            pipVisible: false,
+            now: fridayNight,
+            snapAt: fridayNight,
+            calendar: tokyo
+        )
+        #expect(onFriday.map(\.identifier) == [MacOffscreenPlanning.overtimeID])
+
+        staysFriday.notifyFireAt = Int(saturday.timeIntervalSince1970)
+        let awayOnSaturday = MacOffscreenPlanning.requests(
+            snap: staysFriday,
+            pipVisible: false,
+            now: fridayNight,
+            snapAt: fridayNight,
+            calendar: tokyo
+        )
+        #expect(awayOnSaturday.map(\.identifier) == [MacOffscreenPlanning.overtimeID])
+
+        let crossesHoliday = try runningSnap(at: thursdayNight, minutes: 30)
+        let holiday = MacOffscreenPlanning.requests(
+            snap: crossesHoliday,
+            pipVisible: false,
+            now: thursdayNight,
+            snapAt: thursdayNight,
+            calendar: tokyo
+        )
+        #expect(holiday.isEmpty)
+        #expect(!ReminderDay.allows(constitutionDay, calendar: tokyo))
+
+        var idle = try runningSnap(at: fridayNight, minutes: 5)
+        idle.phase = .idle
+        idle.sessionId = nil
+        idle.pendingCabin = nil
+        idle.notifyFireAt = Int(saturday.timeIntervalSince1970)
+        idle.notifyTurn = 1
+        let idleSaturday = MacOffscreenPlanning.requests(
+            snap: idle,
+            pipVisible: false,
+            now: fridayNight,
+            snapAt: fridayNight,
+            calendar: tokyo
+        )
+        #expect(idleSaturday.isEmpty)
     }
 
     @Test func olderSnapWithoutNotifyOnStillDecodes() throws {

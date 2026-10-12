@@ -8,6 +8,7 @@ extension CompanionMacRuntime {
             while !Task.isCancelled {
                 self?.now = Int(Date().timeIntervalSince1970)
                 self?.notePauseInputClock()
+                self?.confirmSnapWhileConnected()
                 self?.syncCabinNotification()
                 self?.maybeSendTimetablePause()
                 self?.refreshMacPresence()
@@ -135,11 +136,12 @@ extension CompanionMacRuntime {
                     result: result
                 ) {
                 case .ignore:
-                    break
+                    if result.notModified { confirmSnapFromRelay() }
                 case .remember(let hint, let tag):
                     noteRelayContract(hint.relayAnnouncement)
                     previous = hint
                     etag = tag
+                    confirmSnapFromRelay()
                 case .catchUp(let catchUp, let hint, let tag):
                     noteRelayContract(hint.relayAnnouncement)
                     previous = hint
@@ -154,6 +156,7 @@ extension CompanionMacRuntime {
                     if catchUp.ack, let envelope = try? await client.getAck() {
                         try applyAck(envelope, pairingId: pairing.pairingId, encKey: keys.enc)
                     }
+                    confirmSnapFromRelay()
                 case .stop:
                     return
                 }
@@ -211,8 +214,19 @@ extension CompanionMacRuntime {
         }
     }
 
+    func confirmSnapWhileConnected() {
+        guard connection == .connected, snap != nil else { return }
+        snapConfirmedAt = Date(timeIntervalSince1970: TimeInterval(now))
+    }
+
+    func confirmSnapFromRelay() {
+        guard snap != nil else { return }
+        snapConfirmedAt = Date()
+    }
+
     func applySnap(_ envelope: Envelope, pairingId: UUID, encKey: Data) throws {
         snap = try SyncCrypto.openJSON(SnapPlaintext.self, envelope: envelope, pairingId: pairingId, encKey: encKey)
+        snapConfirmedAt = Date()
         if let build = snap?.build {
             notePeerBuild(build)
         }

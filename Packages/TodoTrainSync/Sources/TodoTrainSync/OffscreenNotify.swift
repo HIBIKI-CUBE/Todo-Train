@@ -96,61 +96,92 @@ public struct MacOffscreenRequest: Equatable, Sendable {
 public enum MacOffscreenPlanning {
     public static let overtimeID = "todotrain.offscreen.overtime"
     public static let awayID = "todotrain.offscreen.away"
+    /// Drop pending notices after this long without a relay confirmation.
+    /// A live socket refreshes every second. Hint polling is every 5 seconds, so one
+    /// successful poll stays inside this window. A dropped relay does not.
+    public static let snapStaleAfter: TimeInterval = 8
 
     public static func idleID(turn: Int) -> String {
         "todotrain.offscreen.idle.\(turn)"
+    }
+
+    /// Identifiers Mac should take off the pending list. An empty plan clears every armed id.
+    public static func identifiersToClear(
+        armed: Set<String>,
+        requests: [MacOffscreenRequest]
+    ) -> Set<String> {
+        armed.subtracting(requests.map(\.identifier))
+    }
+
+    /// `nil` means the caller is not tracking freshness. A date older than `snapStaleAfter` is stale.
+    public static func isSnapStale(snapAt: Date?, now: Date) -> Bool {
+        guard let snapAt else { return false }
+        return now.timeIntervalSince(snapAt) > snapStaleAfter
     }
 
     public static func requests(
         snap: SnapPlaintext?,
         pipVisible: Bool,
         now: Date,
+        snapAt: Date? = nil,
         calendar: Calendar = .current
     ) -> [MacOffscreenRequest] {
         guard let snap, snap.notifyOn == .mac, !pipVisible else { return [] }
-        guard ReminderDay.allows(now, calendar: calendar) else { return [] }
+        guard !isSnapStale(snapAt: snapAt, now: now) else { return [] }
         let turn = snap.notifyTurn ?? 0
         guard (0..<NudgeThresholds.maxRings).contains(turn) else { return [] }
         let unix = Int(now.timeIntervalSince1970)
         switch snap.phase {
         case .running, .overtime:
-            return rideRequests(snap: snap, turn: turn, now: now, unix: unix)
+            return rideRequests(snap: snap, turn: turn, now: now, unix: unix, calendar: calendar)
         case .idle:
-            return idleRequests(snap: snap, turn: turn, now: now, unix: unix)
+            return idleRequests(snap: snap, turn: turn, now: now, unix: unix, calendar: calendar)
         case .paused, .unknown:
             return []
         }
+    }
+
+    /// Delivery is `fire` when that is more than a second away, and immediate otherwise.
+    /// Weekday and holiday use that delivery instant, not the moment the notice was planned.
+    static func deliversOnReminderDay(fire: Date, now: Date, calendar: Calendar) -> Bool {
+        let delivered = fire.timeIntervalSince(now) > 1 ? fire : now
+        return ReminderDay.allows(delivered, calendar: calendar)
     }
 
     private static func rideRequests(
         snap: SnapPlaintext,
         turn: Int,
         now: Date,
-        unix: Int
+        unix: Int,
+        calendar: Calendar
     ) -> [MacOffscreenRequest] {
         _ = turn
         var out: [MacOffscreenRequest] = []
         if let remaining = snap.remainingSeconds(at: unix), snap.phase == .overtime || remaining > 0 {
             let fire = remaining > 1 ? now.addingTimeInterval(TimeInterval(remaining)) : now
-            out.append(
-                MacOffscreenRequest(
-                    identifier: overtimeID,
-                    title: "Todo train",
-                    body: CabinCopy.overtimePassed(title: snap.title ?? ""),
-                    fireAt: fire
+            if deliversOnReminderDay(fire: fire, now: now, calendar: calendar) {
+                out.append(
+                    MacOffscreenRequest(
+                        identifier: overtimeID,
+                        title: "Todo train",
+                        body: CabinCopy.overtimePassed(title: snap.title ?? ""),
+                        fireAt: fire
+                    )
                 )
-            )
+            }
         }
         if snap.pendingCabin == .away || (snap.phase == .running && snap.notifyFireAt != nil) {
             let fire = snap.notifyFireAt.map { Date(timeIntervalSince1970: TimeInterval($0)) } ?? now
-            out.append(
-                MacOffscreenRequest(
-                    identifier: awayID,
-                    title: CabinCopy.prompt,
-                    body: snap.title ?? "",
-                    fireAt: fire
+            if deliversOnReminderDay(fire: fire, now: now, calendar: calendar) {
+                out.append(
+                    MacOffscreenRequest(
+                        identifier: awayID,
+                        title: CabinCopy.prompt,
+                        body: snap.title ?? "",
+                        fireAt: fire
+                    )
                 )
-            )
+            }
         }
         return out
     }
@@ -159,7 +190,8 @@ public enum MacOffscreenPlanning {
         snap: SnapPlaintext,
         turn: Int,
         now: Date,
-        unix: Int
+        unix: Int,
+        calendar: Calendar
     ) -> [MacOffscreenRequest] {
         guard snap.pendingCabin == .idle || snap.notifyFireAt != nil else { return [] }
         let fire: Date
@@ -168,6 +200,7 @@ public enum MacOffscreenPlanning {
         } else {
             fire = Date(timeIntervalSince1970: TimeInterval(snap.notifyFireAt ?? unix))
         }
+        guard deliversOnReminderDay(fire: fire, now: now, calendar: calendar) else { return [] }
         return [
             MacOffscreenRequest(
                 identifier: idleID(turn: turn),
