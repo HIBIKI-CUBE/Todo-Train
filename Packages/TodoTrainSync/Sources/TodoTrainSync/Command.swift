@@ -9,6 +9,8 @@ public struct CommandPlaintext: Codable, Equatable, Sendable {
     public var title: String?
     /// Present only for `issueAndBoard`. Seconds, not minutes. Other ops omit the key.
     public var estimatedSeconds: Int?
+    /// Mac build. Commands are written by the Mac. Absent on older peers.
+    public var build: WireBuildInfo?
 
     public init(
         id: UUID,
@@ -16,7 +18,8 @@ public struct CommandPlaintext: Codable, Equatable, Sendable {
         sessionId: UUID?,
         at: Int,
         title: String? = nil,
-        estimatedSeconds: Int? = nil
+        estimatedSeconds: Int? = nil,
+        build: WireBuildInfo? = nil
     ) {
         self.id = id
         self.op = op
@@ -29,10 +32,11 @@ public struct CommandPlaintext: Codable, Equatable, Sendable {
             self.title = nil
             self.estimatedSeconds = nil
         }
+        self.build = build
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, op, sessionId, at, title, estimatedSeconds
+        case id, op, sessionId, at, title, estimatedSeconds, build
     }
 
     public init(from decoder: Decoder) throws {
@@ -54,6 +58,7 @@ public struct CommandPlaintext: Codable, Equatable, Sendable {
             title = nil
             estimatedSeconds = nil
         }
+        build = try container.decodeIfPresent(WireBuildInfo.self, forKey: .build)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -66,5 +71,6 @@ public struct CommandPlaintext: Codable, Equatable, Sendable {
             try container.encode(title ?? "", forKey: .title)
             try container.encode(estimatedSeconds ?? 0, forKey: .estimatedSeconds)
         }
+        try container.encodeIfPresent(build, forKey: .build)
     }
 }

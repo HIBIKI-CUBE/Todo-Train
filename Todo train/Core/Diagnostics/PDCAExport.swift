@@ -15,6 +15,9 @@ nonisolated enum PDCAExport {
     struct Document: Encodable {
         var schema: String
         var exportedAt: Date
+        var build: BuildRow
+        /// 最後に Mac から受け取ったビルド。まだ無いときは null。
+        var pairedBuild: PDCANull<PairedBuildRow>
         var serviceDays: [ServiceDayRow]
         var tickets: [TicketRow]
         var rides: [RideRow]
@@ -26,6 +29,35 @@ nonisolated enum PDCAExport {
         var timetableGuards: [TimetableGuardRow]
         var passengerRides: [PassengerRideRow]
         var passengerSummary: PassengerSummaryRow
+    }
+
+    struct BuildRow: Encodable, Equatable {
+        var sha: String
+        var branch: String
+        var dirty: Bool
+        var builtAt: String
+        var schemaVersion: String
+        var marketingVersion: String
+
+        @MainActor
+        static var current: BuildRow {
+            let marketing = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
+            return BuildRow(
+                sha: BuildInfo.sha,
+                branch: BuildInfo.branch,
+                dirty: BuildInfo.dirty,
+                builtAt: BuildInfo.builtAt,
+                schemaVersion: StoreSchemaVersion.wire,
+                marketingVersion: marketing
+            )
+        }
+    }
+
+    struct PairedBuildRow: Encodable, Equatable {
+        var sha: String
+        var dirty: Bool
+        var schema: String
+        var builtAt: String
     }
 
     struct ServiceDayRow: Encodable {
@@ -146,14 +178,26 @@ nonisolated enum PDCAExport {
     }
 
     @MainActor
-    static func jsonData(in context: ModelContext, exportedAt: Date = .now) throws -> Data {
-        try encode(make(in: context, exportedAt: exportedAt))
+    static func jsonData(
+        in context: ModelContext,
+        exportedAt: Date = .now,
+        build: BuildRow? = nil,
+        pairedBuild: PairedBuildRow? = nil
+    ) throws -> Data {
+        try encode(make(in: context, exportedAt: exportedAt, build: build, pairedBuild: pairedBuild))
     }
 
     @MainActor
-    static func make(in context: ModelContext, exportedAt: Date = .now) throws -> Document {
+    static func make(
+        in context: ModelContext,
+        exportedAt: Date = .now,
+        build: BuildRow? = nil,
+        pairedBuild: PairedBuildRow? = nil
+    ) throws -> Document {
         make(
             exportedAt: exportedAt,
+            build: build,
+            pairedBuild: pairedBuild,
             serviceDays: try context.fetch(FetchDescriptor<ServiceDay>()),
             tickets: try context.fetch(FetchDescriptor<Ticket>()),
             sessions: try context.fetch(FetchDescriptor<WorkSession>()),
@@ -167,6 +211,8 @@ nonisolated enum PDCAExport {
     @MainActor
     static func make(
         exportedAt: Date,
+        build: BuildRow? = nil,
+        pairedBuild: PairedBuildRow? = nil,
         serviceDays: [ServiceDay],
         tickets: [Ticket],
         sessions: [WorkSession],
@@ -313,6 +359,8 @@ nonisolated enum PDCAExport {
         return Document(
             schema: schema,
             exportedAt: exportedAt,
+            build: build ?? .current,
+            pairedBuild: PDCANull(pairedBuild),
             serviceDays: serviceDayRows,
             tickets: ticketRows,
             rides: rideRows,

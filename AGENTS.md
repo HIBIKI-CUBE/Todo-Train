@@ -24,6 +24,7 @@
 - 型名は **`Ticket`**。走行の真実は **`WorkSession`（`endedAt == nil`）+ `SessionManager.reconcile()`**。
 - 同一切符の大幅書き換えはしない。残りは途中下車 → 乗り継ぎ。全日 LA は張らない。
 - 画面の文言は [docs/03-terminology.md](docs/03-terminology.md) の「文体」に従い、`tools/wording/check.py` を通す（CI `wording`）。
+- iOS アプリと Mac companion だけ `ENABLE_USER_SCRIPT_SANDBOXING = NO`。ビルド情報の Run Script が `.git` を読むためで、プロジェクト全体の YES は残す。
 
 ## Cloud Agent / Linux
 

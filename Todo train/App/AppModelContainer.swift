@@ -9,6 +9,8 @@ import SwiftData
 enum AppModelContainer {
     static let schema = Schema(versionedSchema: AppSchemaV3.self)
 
+    // Mac は schema の版だけを読む。工場は mainContext を使うので iOS に残す。
+    #if os(iOS)
     static func make(inMemory: Bool = false, storeURL: URL? = nil) throws -> ModelContainer {
         let configuration = configuration(schema: schema, inMemory: inMemory, storeURL: storeURL)
         do {
@@ -84,4 +86,5 @@ enum AppModelContainer {
             try fileManager.removeItem(at: extra)
         }
     }
+    #endif
 }

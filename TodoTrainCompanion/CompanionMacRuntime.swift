@@ -42,6 +42,8 @@ final class CompanionMacRuntime {
     var suppressRideOverlay = false
     var now = Int(Date().timeIntervalSince1970)
     var lastStatus: String?
+    /// Last build received from the iPhone, inside a snap or ack.
+    var peerBuild: WireBuildInfo?
     var sentTimetablePauseAt: Int?
     var pairingPhase: PairingPhase = .idle
     var pairingQR: PairingURL?
@@ -93,6 +95,7 @@ final class CompanionMacRuntime {
             self.cabinAnnouncementsEnabled = defaults.bool(forKey: Defaults.cabinEnabled)
         }
         self.imaYaruShortcut = ImaYaruShortcutStore.read(defaults)
+        self.peerBuild = PeerBuildStore.load(from: defaults)
         refreshPaired()
         applyLoginItem()
         cabinNotifier.configure()

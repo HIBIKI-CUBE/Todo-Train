@@ -9,7 +9,9 @@
 
 import Foundation
 import SwiftData
+#if canImport(UIKit)
 import UIKit
+#endif
 
 enum CloudKitSync {
     static let containerIdentifier = "iCloud.dev.hibiki-cube.Todo-train"
@@ -60,6 +62,10 @@ struct FixedDeviceIdentity: DeviceIdentifying {
 
 enum LocalDeviceID {
     static var current: String {
+        #if os(iOS)
         UIDevice.current.identifierForVendor?.uuidString ?? "unknown-device"
+        #else
+        "unknown-device"
+        #endif
     }
 }

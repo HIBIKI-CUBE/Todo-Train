@@ -68,6 +68,11 @@ enum CompanionStatusItemRightClick {
         menu.autoenablesItems = false
         let target = CompanionStatusItemMenuActions.shared
 
+        let build = NSMenuItem(title: LocalWireBuild.line, action: nil, keyEquivalent: "")
+        build.isEnabled = false
+        menu.addItem(build)
+        menu.addItem(.separator())
+
         let settings = NSMenuItem(
             title: "設定…",
             action: #selector(CompanionStatusItemMenuActions.openSettings(_:)),

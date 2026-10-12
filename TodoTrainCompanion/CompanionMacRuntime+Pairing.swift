@@ -42,6 +42,8 @@ extension CompanionMacRuntime {
         hintTask = nil
         try? secrets.delete()
         snap = nil
+        peerBuild = nil
+        PeerBuildStore.save(nil, to: defaults)
         outgoingPause = .idle
         issueBoardTrack = .idle
         suppressRideOverlay = false
