@@ -62,7 +62,7 @@ extension CompanionMacRuntime {
             guard presentation.canResume, !presentation.isSending else { return }
         case .still:
             guard !presentation.isSending else { return }
-        case .issueAndBoard, .answer, .boardReserved, .presence, .unknown:
+        case .issueAndBoard, .answer, .boardReserved, .presence, .pauseInputReport, .unknown:
             return
         }
         let sessionId: UUID?
@@ -72,7 +72,7 @@ extension CompanionMacRuntime {
             sessionId = id
         case .still:
             sessionId = snap?.sessionId
-        case .issueAndBoard, .answer, .boardReserved, .presence, .unknown:
+        case .issueAndBoard, .answer, .boardReserved, .presence, .pauseInputReport, .unknown:
             return
         }
         let cmdId = UUID()

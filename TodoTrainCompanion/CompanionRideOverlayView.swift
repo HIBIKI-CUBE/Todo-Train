@@ -26,12 +26,17 @@ struct CompanionRideOverlayView: View {
     var onCancelExtend: () -> Void
     var onBoardReserved: () -> Void
     var onCloseGap: () -> Void
+    var onPausePrompt: (PausePromptAnswer) -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var presentation: RideOverlayPresentation { model.presentation }
 
     var body: some View {
+        pauseAccess(cabinAccess(framed))
+    }
+
+    private var framed: some View {
         Group {
             if model.isTucked {
                 peek
@@ -50,44 +55,58 @@ struct CompanionRideOverlayView: View {
                 : presentation.title
         )
         .accessibilityValue(accessibilityRemaining)
-        .accessibilityAction(named: "出す") {
-            if model.isTucked { onRestore() }
-        }
-        .accessibilityAction(named: presentation.canResume ? "再乗車" : CabinCopy.pause) {
-            if showsNudgeActions && !model.extendPicker {
-                onNudgeChoice(.paused)
-            } else if !showsNudgeActions {
-                primaryAction()
+    }
+
+    private func cabinAccess<Content: View>(_ content: Content) -> some View {
+        content
+            .accessibilityAction(named: "出す") {
+                if model.isTucked { onRestore() }
             }
-        }
-        .accessibilityAction(named: CabinCopy.still) {
-            if presentation.cabinPrompt != nil { onStill() }
-            if showsNudgeActions && !model.extendPicker { onNudgeChoice(.stillOnIt) }
-        }
-        .accessibilityAction(named: CabinCopy.extend) {
-            if showsNudgeActions && !model.extendPicker { onNudgeChoice(.willExtend) }
-        }
-        .accessibilityAction(named: CabinCopy.arrived) {
-            if showsNudgeActions && !model.extendPicker { onNudgeChoice(.alreadyDone) }
-        }
-        .accessibilityAction(named: CabinCopy.extendFive) {
-            if model.extendPicker { onExtendPreset(300) }
-        }
-        .accessibilityAction(named: CabinCopy.extendTen) {
-            if model.extendPicker { onExtendPreset(600) }
-        }
-        .accessibilityAction(named: CabinCopy.extendFifteen) {
-            if model.extendPicker { onExtendPreset(900) }
-        }
-        .accessibilityAction(named: CabinCopy.back) {
-            if model.extendPicker { onCancelExtend() }
-        }
-        .accessibilityAction(named: CabinCopy.board) {
-            if presentation.showsArrivalGap && presentation.canBoardReserved { onBoardReserved() }
-        }
-        .accessibilityAction(named: CabinCopy.close) {
-            if presentation.showsArrivalGap { onCloseGap() }
-        }
+            .accessibilityAction(named: presentation.canResume ? "再乗車" : CabinCopy.pause) {
+                if showsNudgeActions && !model.extendPicker {
+                    onNudgeChoice(.paused)
+                } else if !showsNudgeActions {
+                    primaryAction()
+                }
+            }
+            .accessibilityAction(named: CabinCopy.still) {
+                if presentation.cabinPrompt != nil { onStill() }
+                if showsNudgeActions && !model.extendPicker { onNudgeChoice(.stillOnIt) }
+            }
+            .accessibilityAction(named: CabinCopy.extend) {
+                if showsNudgeActions && !model.extendPicker { onNudgeChoice(.willExtend) }
+            }
+            .accessibilityAction(named: CabinCopy.arrived) {
+                if showsNudgeActions && !model.extendPicker { onNudgeChoice(.alreadyDone) }
+            }
+    }
+
+    private func pauseAccess<Content: View>(_ content: Content) -> some View {
+        content
+            .accessibilityAction(named: CabinCopy.extendFive) {
+                if model.extendPicker { onExtendPreset(300) }
+            }
+            .accessibilityAction(named: CabinCopy.extendTen) {
+                if model.extendPicker { onExtendPreset(600) }
+            }
+            .accessibilityAction(named: CabinCopy.extendFifteen) {
+                if model.extendPicker { onExtendPreset(900) }
+            }
+            .accessibilityAction(named: CabinCopy.back) {
+                if model.extendPicker { onCancelExtend() }
+            }
+            .accessibilityAction(named: CabinCopy.board) {
+                if presentation.showsArrivalGap && presentation.canBoardReserved { onBoardReserved() }
+            }
+            .accessibilityAction(named: CabinCopy.close) {
+                if presentation.showsArrivalGap { onCloseGap() }
+            }
+            .accessibilityAction(named: PauseInputCopy.resume) {
+                if presentation.pausePrompt != nil { onPausePrompt(.resume) }
+            }
+            .accessibilityAction(named: PauseInputCopy.keepPaused) {
+                if presentation.pausePrompt != nil { onPausePrompt(.keepPaused) }
+            }
     }
 
     private var showsNudgeActions: Bool {
@@ -100,6 +119,8 @@ struct CompanionRideOverlayView: View {
             VStack(alignment: .leading, spacing: 0) {
             if presentation.showsArrivalGap {
                 gapColumn
+            } else if presentation.pausePrompt != nil {
+                pausePromptColumn
             } else if showsNudgeActions || model.extendPicker {
                 nudgeColumn
             } else {
@@ -213,6 +234,37 @@ struct CompanionRideOverlayView: View {
             .accessibilityHint(
                 presentation.canBoardReserved ? CabinCopy.boardHint : CabinCopy.closeGapHint
             )
+    }
+
+    /// Same question row as the nudge, then two answers.
+    private var pausePromptColumn: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(presentation.holdLamp ? RideOverlayPalette.approach : Color.white.opacity(0.22))
+                    .frame(width: 8, height: 8)
+                    .accessibilityHidden(true)
+                Text(presentation.pausePrompt ?? PauseInputCopy.questionBare)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.55)
+                    .accessibilityHint(PauseInputCopy.questionHint)
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 8)
+            .frame(height: 36, alignment: .center)
+
+            nudgeInstrument
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            equalChoiceRow([PauseInputCopy.resume, PauseInputCopy.keepPaused])
+                .frame(height: 40)
+                .opacity(presentation.isSending ? 0.35 : 1)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("\(PauseInputCopy.resume) \(PauseInputCopy.keepPaused)")
+                .accessibilityHint("\(PauseInputCopy.resumeHint) \(PauseInputCopy.keepPausedHint)")
+        }
     }
 
     /// Question, instruments, then four equal answers.
@@ -370,6 +422,7 @@ struct CompanionRideOverlayView: View {
         model.hovering
             && !model.isTucked
             && presentation.cabinPrompt == nil
+            && presentation.pausePrompt == nil
             && (presentation.canPause || presentation.canResume)
     }
 

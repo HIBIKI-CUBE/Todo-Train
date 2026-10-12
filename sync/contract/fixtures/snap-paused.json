@@ -13,5 +13,8 @@
   "cabinEnabled": true,
   "checkInFiredCount": 0,
   "pendingCabin": null,
-  "pauseHeldBy": "user"
+  "pauseHeldBy": "user",
+  "pauseId": "44444444-4444-4444-8444-444444444444",
+  "macSampledSeconds": 300,
+  "macActiveSeconds": 270
 }

@@ -7,6 +7,7 @@ extension CompanionMacRuntime {
         tickTask = Task { [weak self] in
             while !Task.isCancelled {
                 self?.now = Int(Date().timeIntervalSince1970)
+                self?.notePauseInputClock()
                 self?.syncCabinNotification()
                 self?.maybeSendTimetablePause()
                 self?.refreshMacPresence()
@@ -218,6 +219,7 @@ extension CompanionMacRuntime {
         if let snap {
             notePeerContract(snap.announcement)
         }
+        notePauseInputClock()
         reconcileOptimisticCabin()
         if snap?.pendingCabin != .idle {
             optimisticIdleConsumed = false
@@ -282,6 +284,7 @@ extension CompanionMacRuntime {
     func notePeerContract(_ announcement: ContractAnnouncement) {
         peerContract = announcement
         PeerContractStore.save(announcement, to: defaults, key: PeerContractStore.peerKey)
+        flushPauseInputReports()
     }
 
     func noteRelayContract(_ announcement: ContractAnnouncement) {

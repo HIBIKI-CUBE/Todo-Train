@@ -379,7 +379,7 @@ public enum NudgeCommandEvaluating {
             )
         case .presence:
             return evaluatePresence(command)
-        case .pause, .resume, .still, .issueAndBoard, .unknown:
+        case .pause, .resume, .still, .issueAndBoard, .pauseInputReport, .unknown:
             return .accept
         }
     }
