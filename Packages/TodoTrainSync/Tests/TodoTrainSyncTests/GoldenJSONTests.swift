@@ -255,6 +255,16 @@ struct GoldenJSONTests {
         #expect(again.title == nil)
     }
 
+    @Test func ackUnsupportedOpRoundTrip() throws {
+        let data = try ContractFixtures.data("fixtures/ack-unsupportedOp.json")
+        let decoded = try WireJSON.decoder().decode(AckPlaintext.self, from: data)
+        #expect(!decoded.ok)
+        #expect(decoded.error == .unsupportedOp)
+        let encoded = try WireJSON.encoder().encode(decoded)
+        let again = try WireJSON.decoder().decode(AckPlaintext.self, from: encoded)
+        #expect(again == decoded)
+    }
+
     @Test func ackPauseLimitRoundTrip() throws {
         let data = try ContractFixtures.data("fixtures/ack-pauseLimitReached.json")
         let decoded = try WireJSON.decoder().decode(AckPlaintext.self, from: data)
@@ -292,7 +302,7 @@ struct GoldenJSONTests {
         #expect(json["pendingCabin"] as? [String] == ["progress", "away", "idle"])
         #expect(json["error"] as? [String] == [
             "pauseLimitReached", "noActiveService", "sessionMismatch", "decryptFailed", "notPaused",
-            "invalidPayload",
+            "invalidPayload", "unsupportedOp",
         ])
     }
 }

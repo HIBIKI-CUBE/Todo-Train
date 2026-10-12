@@ -1,12 +1,17 @@
 {
-  "contract": 3,
+  "contract": 4,
   "minReadable": 3,
-  "fingerprint": "a90119636a92eede92e4c3b3bfe6411268efdcb55c8f344ebfaff907c1f8fd48",
+  "fingerprint": "b3a07bd51df9c83883d314f2dff91561456db168eb49bdb98ae414cff0e739bd",
   "history": [
     {
       "contract": 3,
       "date": "2026-10-12",
       "note": "いまの約束を版 3 として登録する"
+    },
+    {
+      "contract": 4,
+      "date": "2026-10-12",
+      "note": "未知の op を受け、unsupportedOp を返す"
     }
   ]
 }

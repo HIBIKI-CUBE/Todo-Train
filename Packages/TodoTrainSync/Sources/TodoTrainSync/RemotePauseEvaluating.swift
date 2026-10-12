@@ -6,6 +6,7 @@ public enum RemotePauseDecision: Equatable, Sendable {
     case pauseLimitReached
     case noActiveService
     case notPaused
+    case unsupportedOp
 
     public var shouldApply: Bool { self == .apply }
 
@@ -16,6 +17,7 @@ public enum RemotePauseDecision: Equatable, Sendable {
         case .pauseLimitReached: .pauseLimitReached
         case .noActiveService: .noActiveService
         case .notPaused: .notPaused
+        case .unsupportedOp: .unsupportedOp
         }
     }
 }
@@ -53,6 +55,8 @@ public enum RemotePauseEvaluating {
         case .issueAndBoard:
             // Host applies this op itself. Never treat it as pause/resume/still.
             return .noActiveService
+        case .unknown:
+            return .unsupportedOp
         }
     }
 
@@ -63,7 +67,7 @@ public enum RemotePauseEvaluating {
         switch decision {
         case .apply:
             AckPlaintext(cmdId: commandId, ok: true)
-        case .sessionMismatch, .pauseLimitReached, .noActiveService, .notPaused:
+        case .sessionMismatch, .pauseLimitReached, .noActiveService, .notPaused, .unsupportedOp:
             AckPlaintext(cmdId: commandId, ok: false, error: decision.wireError)
         }
     }

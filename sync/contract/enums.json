@@ -9,12 +9,13 @@
     "sessionMismatch",
     "decryptFailed",
     "notPaused",
-    "invalidPayload"
+    "invalidPayload",
+    "unsupportedOp"
   ],
   "notes": {
     "phase": "SessionPhase raw values. Unknown values: display conservatively, do not crash.",
-    "op": "pause, resume, still (consume the current cabin prompt), and issueAndBoard (issue a ticket and board it in one beat). Do not add arrive/extend. issueAndBoard carries title and estimatedSeconds; other ops omit those keys.",
+    "op": "pause, resume, still (consume the current cabin prompt), and issueAndBoard (issue a ticket and board it in one beat). Do not add arrive/extend. issueAndBoard carries title and estimatedSeconds; other ops omit those keys. Unknown op values decode as unknown and are not applied.",
     "pendingCabin": "Current 車内放送 kind on snap. null when none. Unknown values: ignore for display. idle means service is open with no ride; iPhone sets it, Mac notifies only.",
-    "error": "Ack wire errors only. sessionMismatch and decryptFailed are wire-only (not SessionError cases). Map noActiveSession to noActiveService. Map SessionError.notPaused to notPaused. invalidPayload is issueAndBoard input (empty title or estimatedSeconds outside 60...3600). Do not put the rest of SessionError on the wire."
+    "error": "Ack wire errors only. sessionMismatch and decryptFailed are wire-only (not SessionError cases). Map noActiveSession to noActiveService. Map SessionError.notPaused to notPaused. invalidPayload is issueAndBoard input (empty title or estimatedSeconds outside 60...3600). unsupportedOp means the receiver did not run an unknown op. Do not put the rest of SessionError on the wire."
   }
 }
