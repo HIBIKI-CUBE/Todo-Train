@@ -158,6 +158,20 @@ struct AppModelContainerMigrationTests {
         #expect(hashes == Self.postPR71Hashes)
     }
 
+    @Test func rebuildPreservesTimetableAndPassengerRide() throws {
+        let url = Self.temporaryStoreURL()
+        defer { Self.removeStoreFiles(at: url) }
+        let seeded = try Self.seed(
+            .v3,
+            at: url,
+            schema: Schema(versionedSchema: AppSchemaV3.self)
+        )
+        AppModelContainer.rebuildCount = 0
+        let rebuilt = try AppModelContainer.rebuildForTesting(at: url)
+        #expect(AppModelContainer.rebuildCount == 1)
+        try Self.expectPreserved(seeded, in: rebuilt.mainContext, keepsReservation: false)
+    }
+
     private enum Era {
         case v3
         case v3_1

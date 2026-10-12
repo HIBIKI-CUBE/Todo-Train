@@ -91,23 +91,26 @@ enum AppModelContainer {
         return sqlite3_step(statement) == SQLITE_ROW
     }
 
-    /// 未バージョンの既存 store は V1 として開ける。中身を移して現行スキーマで開き直す。
-    private static func rebuildPreservingData(after _: Error, storeURL: URL) throws -> ModelContainer {
+    #if DEBUG
+    /// 試験から作り直しだけを通す。
+    static func rebuildForTesting(at storeURL: URL) throws -> ModelContainer {
+        try rebuildPreservingData(after: CocoaError(.fileReadCorruptFile), storeURL: storeURL)
+    }
+    #endif
+
+    /// 移行できない store は、読める版で中身を移して現行スキーマで開き直す。
+    private static func rebuildPreservingData(after migrationError: Error, storeURL: URL) throws -> ModelContainer {
         #if DEBUG
         rebuildCount += 1
         #endif
-        let snapshot: AppStoreSnapshot = try autoreleasepool {
-            let v1Schema = Schema(versionedSchema: AppSchemaV1.self)
-            let v1Configuration = ModelConfiguration(
-                schema: v1Schema,
-                url: storeURL,
-                cloudKitDatabase: .none
-            )
-            let v1Container = try ModelContainer(for: v1Schema, configurations: [v1Configuration])
-            return try AppStoreSnapshot.capture(from: v1Container.mainContext)
+        let snapshot: AppStoreSnapshot
+        do {
+            snapshot = try capturePreserving(at: storeURL)
+        } catch {
+            throw migrationError
         }
         try removeStoreFiles(at: storeURL)
-        let v2Configuration = ModelConfiguration(
+        let configuration = ModelConfiguration(
             schema: schema,
             url: storeURL,
             cloudKitDatabase: CloudKitSync.isConfigured
@@ -117,11 +120,65 @@ enum AppModelContainer {
         let container = try ModelContainer(
             for: schema,
             migrationPlan: AppMigrationPlan.self,
-            configurations: [v2Configuration]
+            configurations: [configuration]
         )
         snapshot.restore(into: container.mainContext)
         try container.mainContext.save()
         return container
+    }
+
+    private static func capturePreserving(at storeURL: URL) throws -> AppStoreSnapshot {
+        let readers = [StoreReader.v3_1, .v3, .v2, .v1]
+        var lastError: Error?
+        for reader in readers {
+            do {
+                return try autoreleasepool {
+                    let readerSchema = Schema(versionedSchema: reader.schema)
+                    let configuration = ModelConfiguration(
+                        schema: readerSchema,
+                        url: storeURL,
+                        cloudKitDatabase: .none
+                    )
+                    let container = try ModelContainer(for: readerSchema, configurations: [configuration])
+                    return try snapshot(of: reader, from: container.mainContext)
+                }
+            } catch {
+                lastError = error
+            }
+        }
+        throw lastError ?? CocoaError(.fileReadCorruptFile)
+    }
+
+    private enum StoreReader {
+        case v3_1
+        case v3
+        case v2
+        case v1
+
+        var schema: any VersionedSchema.Type {
+            switch self {
+            case .v3_1: AppSchemaV3_1.self
+            case .v3: AppSchemaV3.self
+            case .v2: AppSchemaV2.self
+            case .v1: AppSchemaV1.self
+            }
+        }
+    }
+
+    private static func snapshot(
+        of reader: StoreReader,
+        from context: ModelContext
+    ) throws -> AppStoreSnapshot {
+        switch reader {
+        case .v3_1:
+            try AppStoreSnapshot.captureV3_1(from: context)
+        case .v3:
+            try AppStoreSnapshot.captureV3(from: context)
+        case .v2:
+            try AppStoreSnapshot.captureV2(from: context)
+        case .v1:
+            try AppStoreSnapshot.captureV1(from: context)
+        }
     }
 
     private static func removeStoreFiles(at url: URL) throws {
