@@ -27,6 +27,8 @@
 - 同期の約束の版の正本は `sync/contract/version.json` だけ。Swift の定数と Worker はここを写す。
 - 足すだけ（任意キー、新しい op、新しい enum）は `contract` だけ上げる。古い側が誤読する変更（意味の変更、必須化、削除）は `minReadable` も上げる。
 - 版の更新は `cd sync/worker && npm run contract:bump -- --note "一行"`。
+- SwiftData の `@Model` に保存される宣言（名前・型・既定値・`@Attribute`・`@Relationship`）を変えたら、AppSchema に新しい版と移行段を足し、`node tools/schema/fingerprint.mjs --write` で `Todo train/App/AppSchema.fingerprint` を更新する。`@Transient`・計算プロパティ・メソッドは指紋に入らない。
+- 最新より前の版の型（`AppSchemaV3`・`AppSchemaV3_1` など）は書き換えない。検査は `node tools/schema/guard.mjs`（CI `contract-guard` の schema fingerprint）。
 - スキーマや約束を変える PR は [docs/21-device-overwrite.md](docs/21-device-overwrite.md) の実機確認を通す。
 - 画面の文言は [docs/03-terminology.md](docs/03-terminology.md) の「文体」に従い、`tools/wording/check.py` を通す（CI `wording`）。
 - iOS アプリと Mac companion だけ `ENABLE_USER_SCRIPT_SANDBOXING = NO`。ビルド情報の Run Script が `.git` を読むためで、プロジェクト全体の YES は残す。
