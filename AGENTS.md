@@ -17,6 +17,7 @@
 - Mac の役割 → [docs/14-mac-companion-ux.md](docs/14-mac-companion-ux.md)
 - カレンダーの体験摩擦 → [docs/17-calendar-experience.md](docs/17-calendar-experience.md)
 - Hub 接近クリアランス → [docs/approach-clear/](docs/approach-clear/) + Issue #61
+- スキーマや約束を変えたあとの実機確認 → [docs/21-device-overwrite.md](docs/21-device-overwrite.md)
 
 ## 作業時の原則
 
@@ -26,6 +27,7 @@
 - 同期の約束の版の正本は `sync/contract/version.json` だけ。Swift の定数と Worker はここを写す。
 - 足すだけ（任意キー、新しい op、新しい enum）は `contract` だけ上げる。古い側が誤読する変更（意味の変更、必須化、削除）は `minReadable` も上げる。
 - 版の更新は `cd sync/worker && npm run contract:bump -- --note "一行"`。
+- スキーマや約束を変える PR は [docs/21-device-overwrite.md](docs/21-device-overwrite.md) の実機確認を通す。
 - 画面の文言は [docs/03-terminology.md](docs/03-terminology.md) の「文体」に従い、`tools/wording/check.py` を通す（CI `wording`）。
 - iOS アプリと Mac companion だけ `ENABLE_USER_SCRIPT_SANDBOXING = NO`。ビルド情報の Run Script が `.git` を読むためで、プロジェクト全体の YES は残す。
 
