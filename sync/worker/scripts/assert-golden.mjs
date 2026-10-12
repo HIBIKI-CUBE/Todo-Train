@@ -36,4 +36,19 @@ if (JSON.stringify(localConstants) !== JSON.stringify(constants)) {
   throw new Error("src/constants.json drifted from sync/contract/constants.json");
 }
 
+const version = JSON.parse(readFileSync(join(contractRoot, "version.json"), "utf8"));
+const contractSource = readFileSync(join(workerRoot, "src/contract-version.ts"), "utf8");
+if (!Number.isInteger(version.contract) || !Number.isInteger(version.minReadable)) {
+  throw new Error("version.json contract and minReadable must be integers");
+}
+if (version.minReadable > version.contract) {
+  throw new Error("minReadable is above contract");
+}
+if (!contractSource.includes("../../contract/version.json")) {
+  throw new Error("worker must import sync/contract/version.json");
+}
+if (!contractSource.includes("version.contract") || !contractSource.includes("version.minReadable")) {
+  throw new Error("worker contract version must come from version.json");
+}
+
 console.log("assert-golden: contract bytes and constants match");

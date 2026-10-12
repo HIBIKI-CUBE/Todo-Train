@@ -1,0 +1,12 @@
+{
+  "contract": 3,
+  "minReadable": 3,
+  "fingerprint": "23bee4b8c60f095bfae40f69d5ba4a607aea6767f320224e199fa0b5ee094f73",
+  "history": [
+    {
+      "contract": 3,
+      "date": "2026-10-12",
+      "note": "いまの約束を版 3 として登録する"
+    }
+  ]
+}

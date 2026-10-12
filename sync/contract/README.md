@@ -19,6 +19,7 @@ Worker は `ct` を JSON.parse しない。平文フィクスチャと AES-GCM �
 | [envelope.md](envelope.md) | encoding、AAD、HKDF、エンベロープ、残り計算 |
 | [enums.json](enums.json) | `phase` / `kind` / `op` / `error` / `pendingCabin` |
 | [constants.json](constants.json) | offer TTL、confirm 窓、cmd FIFO |
+| [version.json](version.json) | 約束の版。`contract` / `minReadable` / 指紋 / history。Swift と Worker はここを写す |
 | [fixtures/snap.json](fixtures/snap.json) | 走行中 snap 平文 |
 | [fixtures/snap-idle.json](fixtures/snap-idle.json) | 乗務なし snap 平文 |
 | [fixtures/cmd-pause.json](fixtures/cmd-pause.json) | `op: pause` 平文 |
