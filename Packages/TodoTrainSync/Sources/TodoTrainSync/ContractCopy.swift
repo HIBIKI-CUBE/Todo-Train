@@ -13,3 +13,36 @@ public enum ContractCopy {
         "この iPhone は約束 \(iphone) 版、Mac は約束 \(mac) 版です。"
     }
 }
+
+/// Where the contract notice goes. In range, only the diagnostic line. Out of range, the Mac section and the Mac menu.
+public struct ContractPresentation: Equatable, Sendable {
+    public var diagnostic: String?
+    public var guidance: [String]
+
+    public static let quiet = ContractPresentation(diagnostic: nil, guidance: [])
+
+    public init(diagnostic: String? = nil, guidance: [String] = []) {
+        self.diagnostic = diagnostic
+        self.guidance = guidance
+    }
+
+    public static func make(
+        local: ContractAnnouncement = .current,
+        peer: ContractAnnouncement?,
+        relay: ContractAnnouncement?,
+        side: ContractSide
+    ) -> ContractPresentation {
+        if let block = ContractCompat.commandBlock(local: local, peer: peer, relay: relay, side: side) {
+            var lines: [String] = []
+            if let peer {
+                let iphone = side == .iphone ? local.contract : peer.contract
+                let mac = side == .iphone ? peer.contract : local.contract
+                lines.append(ContractCopy.versions(iphone: iphone, mac: mac))
+            }
+            lines.append(block)
+            return ContractPresentation(guidance: lines)
+        }
+        guard peer != nil else { return .quiet }
+        return ContractPresentation(diagnostic: ContractCopy.aligned)
+    }
+}

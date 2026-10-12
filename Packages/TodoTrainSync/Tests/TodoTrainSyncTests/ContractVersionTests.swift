@@ -90,4 +90,57 @@ struct ContractVersionTests {
         #expect(ContractAnnouncement.parseHeader("4;min=3") == .current)
         #expect(ContractAnnouncement.parseHeader("soon") == nil)
     }
+
+    @Test func presentationStaysQuietUntilAPeerArrivesAndSpeaksOnlyOnTheDiagnosticLineWhenInRange() {
+        #expect(ContractPresentation.make(peer: nil, relay: nil, side: .iphone) == .quiet)
+        #expect(ContractPresentation.make(peer: nil, relay: .current, side: .mac) == .quiet)
+        let aligned = ContractPresentation.make(peer: .legacyPeer, relay: .legacyPeer, side: .iphone)
+        #expect(aligned.diagnostic == ContractCopy.aligned)
+        #expect(aligned.guidance.isEmpty)
+        let newer = ContractPresentation.make(
+            peer: ContractAnnouncement(contract: 9, minReadable: 3),
+            relay: nil,
+            side: .mac
+        )
+        #expect(newer.diagnostic == ContractCopy.aligned)
+        #expect(newer.guidance.isEmpty)
+    }
+
+    @Test func presentationNamesWhoToUpdateWhenOutsideTheRange() {
+        let macOld = ContractPresentation.make(
+            peer: ContractAnnouncement(contract: 2, minReadable: 2),
+            relay: nil,
+            side: .iphone
+        )
+        #expect(macOld.diagnostic == nil)
+        #expect(macOld.guidance == [
+            ContractCopy.versions(iphone: ContractVersion.contract, mac: 2),
+            ContractCopy.macOlder,
+        ])
+        let iphoneOld = ContractPresentation.make(
+            peer: ContractAnnouncement(contract: 2, minReadable: 2),
+            relay: nil,
+            side: .mac
+        )
+        #expect(iphoneOld.guidance == [
+            ContractCopy.versions(iphone: 2, mac: ContractVersion.contract),
+            ContractCopy.iphoneOlder,
+        ])
+        let relayOld = ContractPresentation.make(
+            peer: nil,
+            relay: ContractAnnouncement(contract: 2, minReadable: 2),
+            side: .iphone
+        )
+        #expect(relayOld.guidance == [ContractCopy.relayOlder])
+        let selfOld = ContractPresentation.make(
+            local: ContractAnnouncement(contract: 3, minReadable: 3),
+            peer: ContractAnnouncement(contract: 4, minReadable: 4),
+            relay: nil,
+            side: .iphone
+        )
+        #expect(selfOld.guidance == [
+            ContractCopy.versions(iphone: 3, mac: 4),
+            ContractCopy.iphoneOlder,
+        ])
+    }
 }
