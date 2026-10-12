@@ -8,7 +8,8 @@ extension CompanionMacRuntime {
             CompanionOffscreenNotify.requests(
                 snap: snap,
                 pipVisible: pipVisible,
-                now: Date(timeIntervalSince1970: TimeInterval(now))
+                now: Date(timeIntervalSince1970: TimeInterval(now)),
+                snapAt: snapConfirmedAt
             )
         )
     }

@@ -39,8 +39,7 @@ final class CompanionCabinNotifier: NSObject, UNUserNotificationCenterDelegate {
     }
 
     func apply(_ requests: [MacOffscreenRequest]) {
-        let ids = Set(requests.map(\.identifier))
-        let stale = Set(armedFire.keys).subtracting(ids)
+        let stale = MacOffscreenPlanning.identifiersToClear(armed: Set(armedFire.keys), requests: requests)
         if !stale.isEmpty {
             let list = Array(stale)
             center.removePendingNotificationRequests(withIdentifiers: list)
