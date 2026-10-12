@@ -41,6 +41,7 @@ struct Todo_trainApp: App {
             _sessionManager = State(initialValue: manager)
             AppRuntime.modelContainer = container
             AppRuntime.sessionManager = manager
+            WatchSessionBridge.shared.activate()
             #if canImport(AlarmKit)
             AlarmKitScheduler.shared.bind(sessionManager: manager)
             #endif

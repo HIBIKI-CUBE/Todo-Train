@@ -279,39 +279,7 @@ final class CompanionSyncRuntime {
         }
         notePeerContract(command.announcement)
         if processedCommandIDs.contains(command.id) { return }
-        var ack: AckPlaintext
-        if command.op == .issueAndBoard {
-            ack = issueAndBoardAck(command, sessionManager: sessionManager)
-        } else if command.op == .pauseInputReport {
-            ack = sessionManager.applyPauseInputReport(command)
-        } else if command.op == .answer || command.op == .boardReserved || command.op == .presence {
-            ack = sessionManager.applyNudgeCommand(command)
-        } else {
-            var decision = RemotePauseEvaluating.evaluate(
-                openSessionId: sessionManager.activeSession?.id,
-                pausedCount: sessionManager.pausedCountTowardLimit,
-                pauseLimit: sessionManager.pauseLimit,
-                isPaused: sessionManager.activeSession?.isPaused == true,
-                command: command
-            )
-            if decision.shouldApply {
-                switch command.op {
-                case .pause:
-                    do {
-                        try sessionManager.applyCompanionPause(command)
-                    } catch is CompanionPauseRejection {
-                        decision = .invalidPayload
-                    }
-                case .resume:
-                    try sessionManager.resume()
-                case .still:
-                    sessionManager.acknowledgeCabinStill()
-                case .issueAndBoard, .answer, .boardReserved, .presence, .pauseInputReport, .unknown:
-                    break
-                }
-            }
-            ack = RemotePauseEvaluating.ack(decision: decision, commandId: command.id)
-        }
+        var ack = try CompanionCommandApplying.apply(command, sessionManager: sessionManager)
         ack.build = LocalWireBuild.current
         ack.contract = ContractVersion.contract
         ack.minReadable = ContractVersion.minReadable
@@ -335,53 +303,6 @@ final class CompanionSyncRuntime {
         }
     }
 
-    private func issueAndBoardAck(
-        _ command: CommandPlaintext,
-        sessionManager: SessionManager
-    ) -> AckPlaintext {
-        let openSessionId: UUID? = {
-            guard let session = sessionManager.activeSession,
-                  session.isOpen,
-                  sessionManager.phase != .idle
-            else { return nil }
-            return session.id
-        }()
-        let decision = IssueAndBoardEvaluating.evaluate(
-            serviceActive: sessionManager.activeServiceDay?.isOpen == true,
-            openSessionId: openSessionId,
-            command: command
-        )
-        switch decision {
-        case .board:
-            do {
-                try sessionManager.issueAndBoard(
-                    title: command.title ?? "",
-                    estimatedSeconds: command.estimatedSeconds ?? 0
-                )
-                return IssueAndBoardEvaluating.ack(decision: .board, commandId: command.id)
-            } catch let error as SessionError {
-                return AckPlaintext(cmdId: command.id, ok: false, error: wireError(for: error))
-            } catch {
-                return AckPlaintext(cmdId: command.id, ok: false, error: .invalidPayload)
-            }
-        case .noActiveService, .sessionMismatch, .invalidPayload:
-            return IssueAndBoardEvaluating.ack(decision: decision, commandId: command.id)
-        }
-    }
-
-    /// Passenger lock and a stale service day have no dedicated wire code.
-    /// Both refuse boarding, so Mac sees `noActiveService` instead of a silent drop.
-    private func wireError(for error: SessionError) -> WireError {
-        switch error {
-        case .noActiveService, .serviceDayNeedsEnd, .passengerAboard:
-            .noActiveService
-        case .pauseLimitReached:
-            .pauseLimitReached
-        default:
-            .invalidPayload
-        }
-    }
-
     private func pushSnap(sessionManager: SessionManager) async throws {
         guard let pairing = try secrets.load() else { return }
         let keys = try SyncCrypto.deriveKeys(masterKey: pairing.masterKey, pairingId: pairing.pairingId)
@@ -402,38 +323,12 @@ final class CompanionSyncRuntime {
     ) async throws {
         snapRev += 1
         let now = Date()
-        let nudge = sessionManager.nudgeSnapFields(now: now)
-        let fit = sessionManager.timetableFit()
-        let visible = fit.visibleOccupancy
-        let pauseAt = sessionManager.activeSession.flatMap { session -> Int? in
-            guard session.isOpen, !session.isPaused else { return nil }
-            return sessionManager.openTimetableProtectionBoundary(for: session.id)
-                .map { Int($0.timeIntervalSince1970) }
-        }
-        var plaintext = CompanionSnapBuilding.snap(
+        let plaintext = RideWireSnap.make(
+            sessionManager: sessionManager,
+            settings: settings,
             rev: snapRev,
-            phase: sessionManager.phase,
-            session: sessionManager.activeSession,
-            now: now,
-            serviceActive: sessionManager.activeServiceDay?.isOpen == true,
-            cabinEnabled: settings.cabinAnnouncementsEnabled,
-            pendingCabin: sessionManager.activeServiceDay?.pendingCabin?.cabin,
-            nextBlockTitle: visible?.title,
-            nextBlockStartsAt: visible.map { Int($0.startsAt.timeIntervalSince1970) },
-            nextBlockEndsAt: visible.map { Int($0.endsAt.timeIntervalSince1970) },
-            timetablePauseAt: pauseAt,
-            nudge: nudge.nudge,
-            nudgePlan: nudge.plan,
-            reserved: nudge.reserved,
-            openPendingCabin: nudge.pendingCabin
+            now: now
         )
-        plaintext.build = LocalWireBuild.current
-        plaintext.contract = ContractVersion.contract
-        plaintext.minReadable = ContractVersion.minReadable
-        let assignment = sessionManager.offscreenAssignment(now: now)
-        plaintext.notifyOn = assignment.on
-        plaintext.notifyTurn = assignment.turn
-        plaintext.notifyFireAt = assignment.fireAt
         let envelope = try SyncCrypto.sealJSON(
             plaintext,
             pairingId: pairing.pairingId,

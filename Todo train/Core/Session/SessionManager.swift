@@ -15,7 +15,7 @@ import UIKit
 @MainActor
 final class SessionManager {
     var phase: SessionPhase = .idle
-    /// Bumps when the open ride changes so the Mac companion can push a snap.
+    /// Bumps when the open ride changes so the Mac companion and the Watch can push a snap.
     var companionSyncTick: Int = 0
     var activeServiceDay: ServiceDay?
     var activeSession: WorkSession?

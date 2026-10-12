@@ -66,6 +66,10 @@ AlarmKit のカウントダウン Live Activity を Watch のスマートスタ�
 
 SwiftData の私有同期は有料 Apple Developer Program の iCloud コンテナが要る。Personal Team に entitlement を足すと署名が失敗する。`@Attribute(.unique)` は CloudKit と両立しない。同期の土管は CloudKit にしない（[13](13-sync-mac-companion.md)）。
 
+## Personal Team の本数
+
+無料の Apple ID は、1 端末 3 本（AltStore がその 1 本を使う）と、7 日 10 個の App ID（同じ Apple ID の AltStore と枠を分ける）。Xcode の自動署名もその 10 個から引く。iCloud とプッシュは有料の Program が要るので、Watch の同期には使わない。最初の実機署名でどの ID が 1 個増えるかは [23](23-watch.md)。
+
 ## カレンダーと ATS
 
 EventKit は **掲示** であり、所属の正ではない。ダイヤにした枠だけがダイヤ。終日と辞退は対象外。掲示するカレンダーはユーザーが選ぶ。選んでいないカレンダーは図表に出さない。隠してもダイヤは消さない。

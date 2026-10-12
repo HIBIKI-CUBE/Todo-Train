@@ -7,6 +7,8 @@
 走行 / 停車の真実は open な `WorkSession`（`endedAt == nil`）と `SessionManager.reconcile()`。  
 `Timer`・Live Activity・通知に経過時間の正を置かない。UI の 1 秒 tick は表示専用。
 
+Watch は正本にしない。写しを表示し、答えは iPhone に渡す。ストアも iCloud も持たない（[23](23-watch.md)）。
+
 Live Activity を消しても、運行とセッションは DB が本尊。  
 定時も車内放送もスコアにしない。判定は Date と当初見積もり。
 
