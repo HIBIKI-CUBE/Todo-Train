@@ -237,6 +237,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = B6EE2E74302B4E730022EBAD /* Build configuration list for PBXNativeTarget "Todo train" */;
 			buildPhases = (
+				F086B101302B4E710022EBAD /* Generate BuildInfo */,
 				B6EE2E4E302B4E710022EBAD /* Sources */,
 				B6EE2E4F302B4E710022EBAD /* Frameworks */,
 				B6EE2E50302B4E710022EBAD /* Resources */,
@@ -333,6 +334,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = C0DE2160302B4E730022EBAD /* Build configuration list for PBXNativeTarget "TodoTrainCompanion" */;
 			buildPhases = (
+				F086B102302B4E710022EBAD /* Generate BuildInfo */,
 				C0DE2121302B4E730022EBAD /* Sources */,
 				C0DE2120302B4E730022EBAD /* Frameworks */,
 				C0DE2122302B4E730022EBAD /* Resources */,
@@ -473,6 +475,49 @@
 		};
 /* End PBXResourcesBuildPhase section */
 
+/* Begin PBXShellScriptBuildPhase section */
+		F086B101302B4E710022EBAD /* Generate BuildInfo */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Generate BuildInfo";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/BuildInfo.swift",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${SRCROOT}/tools/build-info/generate.sh\"\n";
+		};
+		F086B102302B4E710022EBAD /* Generate BuildInfo */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Generate BuildInfo";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/BuildInfo.swift",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${SRCROOT}/tools/build-info/generate.sh\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
 		B6EE2E4E302B4E710022EBAD /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
@@ -540,6 +585,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = NPSM864R9U;
 				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Todo train/Info.plist";
 				INFOPLIST_KEY_NSCameraUsageDescription = "画面を Mac に向けたとき、机の QR を読むために前面カメラを使います。";
@@ -578,6 +624,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = NPSM864R9U;
 				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Todo train/Info.plist";
 				INFOPLIST_KEY_NSCameraUsageDescription = "画面を Mac に向けたとき、机の QR を読むために前面カメラを使います。";
@@ -883,6 +930,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = NPSM864R9U;
 				ENABLE_APP_SANDBOX = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
@@ -925,6 +973,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = NPSM864R9U;
 				ENABLE_APP_SANDBOX = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
