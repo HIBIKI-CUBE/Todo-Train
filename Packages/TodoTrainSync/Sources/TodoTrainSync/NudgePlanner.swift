@@ -56,14 +56,18 @@ public enum NudgeStage: String, Sendable, Equatable, Codable, CaseIterable {
     }
 }
 
-/// One recorded extension. A non-empty history drops stage 1 and rebuilds stages 2...6.
+/// One recorded extension. Pass the full history; stage 1 is judged on the estimate before each entry.
 public struct NudgeExtension: Sendable, Equatable {
     public var addedSeconds: Int
     public var createdAt: Date
+    /// Active seconds at `createdAt`. Nil derives them from the ride clock.
+    /// A pause that ends after this extension is still in the accumulated total, so record the reading here.
+    public var workingSeconds: TimeInterval?
 
-    public init(addedSeconds: Int, createdAt: Date) {
+    public init(addedSeconds: Int, createdAt: Date, workingSeconds: TimeInterval? = nil) {
         self.addedSeconds = addedSeconds
         self.createdAt = createdAt
+        self.workingSeconds = workingSeconds
     }
 }
 
@@ -252,15 +256,41 @@ public enum NudgePlanner: Sendable {
         return TimeInterval(estimatedSeconds) * fraction
     }
 
+    /// Working-second marks for the current estimate. Stages 2...6 follow that estimate.
+    /// Stage 1 is the seeded point in `NudgeThresholds.checkInBand` when the estimate is above 10 minutes.
+    /// The same ride id and salt keep that point stable.
+    /// An extension before the point then in effect has been reached moves stage 1 once onto the new estimate.
+    /// Once active seconds have reached that point, a later extension does not place it again.
+    /// A moved point at or before `activeSeconds` is omitted, so it does not fire late.
     public static func marks(
         estimatedSeconds: Int,
         rideID: UUID,
-        extensions: [NudgeExtension] = []
+        extensions: [NudgeExtension] = [],
+        startedAt: Date? = nil,
+        activeSeconds: TimeInterval? = nil,
+        pausedAccumulated: TimeInterval = 0,
+        pausedAt: Date? = nil,
+        isPaused: Bool = false,
+        passengerAccumulated: TimeInterval = 0,
+        passengerSince: Date? = nil,
+        isPassenger: Bool = false
     ) -> [NudgeStageMark] {
         let estimate = TimeInterval(estimatedSeconds)
         guard estimate > 0 else { return [] }
         var marks: [NudgeStageMark] = []
-        if extensions.isEmpty, let checkIn = checkInOffset(estimatedSeconds: estimatedSeconds, rideID: rideID) {
+        if let checkIn = placedCheckInOffset(
+            estimatedSeconds: estimatedSeconds,
+            rideID: rideID,
+            extensions: extensions,
+            startedAt: startedAt,
+            activeSeconds: activeSeconds,
+            pausedAccumulated: pausedAccumulated,
+            pausedAt: pausedAt,
+            isPaused: isPaused,
+            passengerAccumulated: passengerAccumulated,
+            passengerSince: passengerSince,
+            isPassenger: isPassenger
+        ) {
             marks.append(NudgeStageMark(stage: .checkIn, offset: checkIn))
         }
         let approach = max(0, estimate - approachRemaining(estimatedSeconds: estimatedSeconds))
@@ -286,7 +316,15 @@ public enum NudgePlanner: Sendable {
         let marks = marks(
             estimatedSeconds: input.estimatedSeconds,
             rideID: input.rideID,
-            extensions: input.extensions
+            extensions: input.extensions,
+            startedAt: input.startedAt,
+            activeSeconds: elapsed,
+            pausedAccumulated: input.pausedAccumulated,
+            pausedAt: input.pausedAt,
+            isPaused: input.isPaused,
+            passengerAccumulated: input.passengerAccumulated,
+            passengerSince: input.passengerSince,
+            isPassenger: input.isPassenger
         )
         let current = marks.last { $0.offset <= elapsed }?.stage
         let foreground = foregroundSet(input.foreground)
@@ -351,6 +389,85 @@ public enum NudgePlanner: Sendable {
         }
         let excluded = input.pausedAccumulated + input.passengerAccumulated
         return max(0, end.timeIntervalSince(input.startedAt) - excluded)
+    }
+
+    /// Stage 1 for this ride, or nil when it does not run.
+    /// With no extensions the seeded offset stays, including after it has passed, so `current` can name it.
+    /// With extensions, a point that had not been reached moves once onto the new estimate.
+    /// A moved point at or before the live active second is omitted.
+    private static func placedCheckInOffset(
+        estimatedSeconds: Int,
+        rideID: UUID,
+        extensions: [NudgeExtension],
+        startedAt: Date?,
+        activeSeconds: TimeInterval?,
+        pausedAccumulated: TimeInterval,
+        pausedAt: Date?,
+        isPaused: Bool,
+        passengerAccumulated: TimeInterval,
+        passengerSince: Date?,
+        isPassenger: Bool
+    ) -> TimeInterval? {
+        let ordered = extensions.sorted { $0.createdAt < $1.createdAt }
+        if ordered.isEmpty {
+            return checkInOffset(estimatedSeconds: estimatedSeconds, rideID: rideID)
+        }
+
+        var estimate = estimatedSeconds - ordered.reduce(0) { $0 + $1.addedSeconds }
+        for item in ordered {
+            if let offset = checkInOffset(estimatedSeconds: estimate, rideID: rideID),
+               let elapsed = sampledActiveSeconds(
+                   at: item,
+                   startedAt: startedAt,
+                   pausedAccumulated: pausedAccumulated,
+                   pausedAt: pausedAt,
+                   isPaused: isPaused,
+                   passengerAccumulated: passengerAccumulated,
+                   passengerSince: passengerSince,
+                   isPassenger: isPassenger
+               ),
+               elapsed >= offset
+            {
+                return nil
+            }
+            estimate += item.addedSeconds
+        }
+
+        guard let placed = checkInOffset(estimatedSeconds: estimatedSeconds, rideID: rideID) else {
+            return nil
+        }
+        if let activeSeconds, placed <= activeSeconds {
+            return nil
+        }
+        return placed
+    }
+
+    /// Active seconds at an extension. A recorded reading wins.
+    /// Otherwise the ride clock subtracts completed pauses and passenger intervals,
+    /// and an open pause or passenger interval freezes the sample only after it has started.
+    private static func sampledActiveSeconds(
+        at item: NudgeExtension,
+        startedAt: Date?,
+        pausedAccumulated: TimeInterval,
+        pausedAt: Date?,
+        isPaused: Bool,
+        passengerAccumulated: TimeInterval,
+        passengerSince: Date?,
+        isPassenger: Bool
+    ) -> TimeInterval? {
+        if let workingSeconds = item.workingSeconds {
+            return workingSeconds
+        }
+        guard let startedAt else { return nil }
+        var end = item.createdAt
+        if isPaused || pausedAt != nil, let pausedAt, pausedAt <= item.createdAt {
+            end = min(end, pausedAt)
+        }
+        if isPassenger, let passengerSince, passengerSince <= item.createdAt {
+            end = min(end, passengerSince)
+        }
+        let excluded = pausedAccumulated + passengerAccumulated
+        return max(0, end.timeIntervalSince(startedAt) - excluded)
     }
 
     private static func scaled(
