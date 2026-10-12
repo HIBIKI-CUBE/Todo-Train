@@ -28,8 +28,16 @@ struct IssueTicketIntent: AppIntent {
             return .result(dialog: "題名を入れてください")
         }
 
-        let container = try resolvedContainer()
-        let context = ModelContext(container)
+        // Prefer the running SessionManager so Hub's mainContext sees the insert.
+        // Never open a sibling `ModelContext(container)` beside that mainContext.
+        if let manager = AppRuntime.sessionManager {
+            let issued = try manager.issueInventoryTicket(title: trimmed, minutes: minutes)
+            return .result(dialog: "「\(issued.ticket.title)」を \(issued.minutes) 分で発行しました")
+        }
+
+        // Cold start (app not launched): one container, its mainContext only.
+        let container = try AppModelContainer.make()
+        let context = container.mainContext
         let sessions = (try? context.fetch(FetchDescriptor<WorkSession>())) ?? []
         let resolved = TicketIssuer.resolveMinutes(
             requested: minutes,
@@ -39,16 +47,7 @@ struct IssueTicketIntent: AppIntent {
         let ticket = try TicketIssuer.issue(title: trimmed, minutes: resolved, into: context)
         AppSettings.shared.lastIssuedEstimateMinutes = resolved
         ArrivalForecastStore.shared.prefetch(ticket: ticket, sessions: sessions, priority: .user)
-        AppRuntime.sessionManager?.noteCabinActivity()
         return .result(dialog: "「\(ticket.title)」を \(resolved) 分で発行しました")
-    }
-
-    @MainActor
-    private func resolvedContainer() throws -> ModelContainer {
-        if let container = AppRuntime.modelContainer {
-            return container
-        }
-        return try AppModelContainer.make()
     }
 }
 

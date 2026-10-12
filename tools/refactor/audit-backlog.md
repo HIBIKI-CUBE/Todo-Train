@@ -65,7 +65,7 @@
 | P1-3 | ~~**到着など不可逆寄りの操作が握りつぶされる**~~ | ContentView LA arrive はキュー保持済。restore / AlarmKit も対応 | **済（一部）**: Hub / History / TicketDetail の undo restore は `errorAlert`。AlarmKit pause/resume は Logger。`try? pause` 等の別経路は残存 |
 | P1-10 | ~~**`try? modelContext.save()` が SessionManager ホットパスに多い**~~ | ~~`try? save()` 散在~~ | **済（骨格）**: `saveBestEffort()` + ログ。着発は persist を戻してから return。away と ATS の通知は save 成功後。乗客の発車と非常ドアは save 成功後だけ reconcile。残りはログのみ |
 | P1-11 | ~~**`phase` / `activeSession` はメモリ上のキャッシュ**~~ | ~~Focus `TimelineView` / PassengerClock が tick 所有~~ | **済**: `ForegroundReconcileScheduling` + `SessionManager` の foreground 1 Hz ループ（乗車中・乗客レーン）。`inactive` はループを維持し `background` だけ止める。`active` では `endAwayWatch` のあとで再開する。Focus / Passenger は表示用 Timeline のみ。`ForegroundReconcileSchedulingTests` |
-| P1-12 | **App Intent が二次 `ModelContext` で発券** | `IssueTicketIntent` が `ModelContext(container)` を新規作成して save。`SessionManager` の mainContext / Hub 表示と一時的にずれる | merge 挙動のテスト、または Intent も `AppRuntime` 経由の単一書き込み口へ |
+| P1-12 | ~~**App Intent が二次 `ModelContext` で発券**~~ | ~~`ModelContext(container)` を新規作成~~ | **済**: `SessionManager.issueInventoryTicket` が正。Intent は `AppRuntime.sessionManager` 経由。冷起動だけ `container.mainContext`。`SessionManagerInventoryTests` |
 
 ### P1 — 境界と配線
 
@@ -110,7 +110,7 @@
 | P2-9 | `CompanionSnapBuilding` / Runtime の決定表 | ペア状態・scenePhase・suppress 通知 |
 | P2-10 | `EventKitCalendarBoard` のアダプタ境界 | Fit / Adoption / GuardLogic はテストあり。Board 実装の分岐を Fake 化 |
 | P2-11 | Widget: `FocusTimerPhase` / snapshot decode | LayoutContract 以外の表示モデル |
-| P2-17 | LA handoff / `IssueTicketIntent` | P1-9・P1-12 用の回帰テストが先 |
+| P2-17 | LA handoff / `IssueTicketIntent` | P1-9・P1-12 済。残りは Intent の冷起動経路の煙テスト |
 
 ### P3 — 掃除・観測
 
@@ -137,8 +137,9 @@
 5. ~~**reconcile スケジューラ（P1-11）**~~ — 済。
 6. ~~**SessionManager から投影を剥がす（P1-1）第一スライス**~~ — `SessionPresentation` + `+Projection` 済。残りは passenger chrome / DeviceSideEffects。
 7. **クロスターゲット共有（P2-1 / P2-13）** — QR、Cockpit/Timer SPM。次の実装スライス候補。
-8. **テストで鎖（P1-8 / P2-8–11 / P2-17）** / **Intent 単一書き込み口（P1-12）** — リファクタ PR は純関数テストを先に足す。
-9. **依存更新は単独 PR（P2-5）** — アプリ本体と混ぜない。Dependabot high も別確認。
+8. ~~**Intent 単一書き込み口（P1-12）**~~ — 済。
+9. **テストで鎖（P1-8 / P2-8–11 / P2-17）** — リファクタ PR は純関数テストを先に足す。
+10. **依存更新は単独 PR（P2-5）** — アプリ本体と混ぜない。Dependabot high も別確認。
 
 やらない方がいいこと:
 
