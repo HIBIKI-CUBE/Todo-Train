@@ -99,7 +99,7 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
         nextBlockStartsAt = try container.decodeIfPresent(Int.self, forKey: .nextBlockStartsAt)
         nextBlockEndsAt = try container.decodeIfPresent(Int.self, forKey: .nextBlockEndsAt)
         timetablePauseAt = try container.decodeIfPresent(Int.self, forKey: .timetablePauseAt)
-        build = try container.decodeIfPresent(WireBuildInfo.self, forKey: .build)
+        build = WireBuildInfo.decodeLenient(from: container, forKey: .build)
     }
 
     public func encode(to encoder: Encoder) throws {

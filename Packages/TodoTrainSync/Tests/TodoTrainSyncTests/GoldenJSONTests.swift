@@ -156,6 +156,34 @@ struct GoldenJSONTests {
         #expect(object["build"] == nil)
     }
 
+    @Test func partialBuildIsIgnoredAndSnapStillDecodes() throws {
+        let fixtures = [
+            "fixtures/snap.json",
+            "fixtures/ack-ok.json",
+            "fixtures/cmd-pause.json",
+        ]
+        for relative in fixtures {
+            let original = try ContractFixtures.data(relative)
+            var object = try #require(JSONSerialization.jsonObject(with: original) as? [String: Any])
+            object["build"] = ["sha": "abc"]
+            let data = try JSONSerialization.data(withJSONObject: object)
+            switch relative {
+            case "fixtures/snap.json":
+                let snap = try WireJSON.decoder().decode(SnapPlaintext.self, from: data)
+                #expect(snap.build == nil)
+                #expect(snap.title == "週次レポート")
+            case "fixtures/ack-ok.json":
+                let ack = try WireJSON.decoder().decode(AckPlaintext.self, from: data)
+                #expect(ack.build == nil)
+                #expect(ack.ok)
+            default:
+                let command = try WireJSON.decoder().decode(CommandPlaintext.self, from: data)
+                #expect(command.build == nil)
+                #expect(command.op == .pause)
+            }
+        }
+    }
+
     @Test func snapBuildRoundTripOmitsWhenNil() throws {
         let build = WireBuildInfo(sha: "1047101", dirty: true, schema: "3.0.0", builtAt: "2026-10-12T16:20:00+09:00")
         var snap = try WireJSON.decoder().decode(

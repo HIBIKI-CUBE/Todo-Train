@@ -58,7 +58,7 @@ public struct CommandPlaintext: Codable, Equatable, Sendable {
             title = nil
             estimatedSeconds = nil
         }
-        build = try container.decodeIfPresent(WireBuildInfo.self, forKey: .build)
+        build = WireBuildInfo.decodeLenient(from: container, forKey: .build)
     }
 
     public func encode(to encoder: Encoder) throws {

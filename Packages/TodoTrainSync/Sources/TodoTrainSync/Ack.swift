@@ -30,7 +30,7 @@ public struct AckPlaintext: Codable, Equatable, Sendable {
         cmdId = parsed
         ok = try container.decode(Bool.self, forKey: .ok)
         error = try container.decodeIfPresent(WireError.self, forKey: .error)
-        build = try container.decodeIfPresent(WireBuildInfo.self, forKey: .build)
+        build = WireBuildInfo.decodeLenient(from: container, forKey: .build)
     }
 
     public func encode(to encoder: Encoder) throws {
