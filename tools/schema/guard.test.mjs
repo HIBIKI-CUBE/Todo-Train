@@ -4,12 +4,13 @@ import {
   declarationsIn,
   fingerprintFromSources,
   fingerprintOf,
+  frozenBodiesChanged,
   latestSchema,
   modelSources,
   readAppSchema,
   readFingerprint,
 } from "./fingerprint.mjs";
-import { MODEL_CHANGED, judge } from "./guard.mjs";
+import { FROZEN_CHANGED, MODEL_CHANGED, judge } from "./guard.mjs";
 
 const v4 = { name: "AppSchemaV4", version: "4.0.0" };
 
@@ -295,6 +296,52 @@ test("いまのモデルは保存される列だけを拾う", () => {
   assert.match(session, /var nudgeFiredStagesRaw: \[String\] = \[\]/);
   assert.doesNotMatch(session, /isOpen|elapsedSeconds|func /);
   assert.match(byName.get("SessionPause").join("\n"), /var heldByRaw: String\?/);
+});
+
+test("凍結した版の型を書き換えると落ちる", () => {
+  const source = readAppSchema();
+  assert.equal(frozenBodiesChanged(source, source), false);
+
+  const color = source.replace(
+    'var colorHex: String = "#888888"',
+    'var colorHex: String = "#000000"',
+  );
+  assert.notEqual(color, source);
+  assert.equal(frozenBodiesChanged(source, color), true);
+
+  const v31 = source.replace(
+    "var startedFromRaw: String = RideStartOrigin.other.rawValue",
+    'var startedFromRaw: String = ""',
+  );
+  assert.notEqual(v31, source);
+  assert.equal(frozenBodiesChanged(source, v31), true);
+
+  const v1 = source.replace("Schema.Version(1, 0, 0)", "Schema.Version(1, 0, 1)");
+  assert.equal(frozenBodiesChanged(source, v1), true);
+
+  const current = source.replace(
+    "enum AppSchemaV4: VersionedSchema {\n    static var versionIdentifier: Schema.Version { Schema.Version(4, 0, 0) }",
+    "enum AppSchemaV4: VersionedSchema {\n    static var versionIdentifier: Schema.Version { Schema.Version(4, 0, 0) } // x",
+  );
+  assert.notEqual(current, source);
+  assert.equal(frozenBodiesChanged(source, current), false);
+
+  const migration = source.replace(
+    "予約と検札の列を足す。既定値があるので軽量で足りる。",
+    "予約と検札の列を足す。",
+  );
+  assert.notEqual(migration, source);
+  assert.equal(frozenBodiesChanged(source, migration), false);
+
+  const head = { ...v4, fingerprint: "aaa" };
+  assert.deepEqual(
+    judge({ computed: "aaa", head, latest: v4, base: head, frozenChanged: true }),
+    [FROZEN_CHANGED],
+  );
+  assert.deepEqual(
+    judge({ computed: "bbb", head, latest: v4, base: head, frozenChanged: true }),
+    [MODEL_CHANGED, FROZEN_CHANGED],
+  );
 });
 
 test("指紋の計算は 1 秒以内", () => {

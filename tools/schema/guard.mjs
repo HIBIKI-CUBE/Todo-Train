@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // 指紋が AppSchema.fingerprint と合うこと、
-// base より指紋が変わったのに版が上がっていなければ落とすこと。
+// base より指紋が変わったのに版が上がっていなければ落とすこと、
+// base にある凍結した版の型が変わっていれば落とすこと。
 
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -8,6 +9,7 @@ import { resolve } from "node:path";
 import {
   compareVersion,
   fingerprintOf,
+  frozenBodiesChanged,
   latestSchema,
   readAppSchema,
   readFingerprint,
@@ -15,8 +17,9 @@ import {
 
 export const MODEL_CHANGED =
   "モデルが変わりました。AppSchema に新しい版を足し、移行段を書いてください";
+export const FROZEN_CHANGED = "凍結した版の型が変わっている";
 
-export function judge({ computed, head, latest, base }) {
+export function judge({ computed, head, latest, base, frozenChanged }) {
   const errors = [];
   const hashMismatch = !head || head.fingerprint !== computed;
   const notPaired = !head || head.name !== latest.name || head.version !== latest.version;
@@ -27,6 +30,7 @@ export function judge({ computed, head, latest, base }) {
     && compareVersion(head.version, base.version) <= 0,
   );
   if (hashMismatch || notPaired || versionNotRaised) errors.push(MODEL_CHANGED);
+  if (frozenChanged) errors.push(FROZEN_CHANGED);
   return errors;
 }
 
@@ -39,14 +43,26 @@ function commitExists(sha) {
   return git(["cat-file", "-e", `${sha}^{commit}`]).status === 0;
 }
 
-function readFingerprintAt(ref) {
-  const result = git(["show", `${ref}:Todo train/App/AppSchema.fingerprint`]);
+function show(ref, path) {
+  const result = git(["show", `${ref}:${path}`]);
   if (result.status !== 0) return null;
+  return result.stdout;
+}
+
+function readFingerprintAt(ref) {
+  const text = show(ref, "Todo train/App/AppSchema.fingerprint");
+  if (text == null) return null;
   try {
-    return JSON.parse(result.stdout);
+    return JSON.parse(text);
   } catch {
     return null;
   }
+}
+
+function frozenChangedSince(ref) {
+  const baseSource = show(ref, "Todo train/App/AppSchema.swift");
+  if (baseSource == null) return false;
+  return frozenBodiesChanged(baseSource, readAppSchema());
 }
 
 function readHead() {
@@ -63,7 +79,8 @@ function main() {
   const latest = latestSchema(readAppSchema());
   const baseSha = process.env.BASE_SHA;
   const base = commitExists(baseSha) ? readFingerprintAt(baseSha) : null;
-  const errors = judge({ computed, head, latest, base });
+  const frozenChanged = commitExists(baseSha) ? frozenChangedSince(baseSha) : false;
+  const errors = judge({ computed, head, latest, base, frozenChanged });
   if (errors.length > 0) {
     for (const error of errors) console.error(error);
     console.error(`computed ${computed}`);

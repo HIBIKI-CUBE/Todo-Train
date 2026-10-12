@@ -438,6 +438,20 @@ export function latestSchema(source) {
   return schemas.reduce((best, item) => (compareVersion(item.version, best.version) > 0 ? item : best));
 }
 
+// base にある最新より前の版（V3、V3_1 など）。最新の版の enum は、次の版を足すときに書き換わる。
+export function frozenBodiesChanged(baseSource, headSource) {
+  const baseSchemas = versionedSchemas(baseSource);
+  if (baseSchemas.length === 0) return false;
+  const latest = latestSchema(baseSource);
+  const headByName = new Map(versionedSchemas(headSource).map((item) => [item.name, item]));
+  for (const item of baseSchemas) {
+    if (item.name === latest.name) continue;
+    const head = headByName.get(item.name);
+    if (!head || head.body !== item.body) return true;
+  }
+  return false;
+}
+
 export function readFingerprint(root = repoRoot) {
   return JSON.parse(readFileSync(fingerprintPath(root), "utf8"));
 }

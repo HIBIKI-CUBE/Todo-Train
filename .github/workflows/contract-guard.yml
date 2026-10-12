@@ -1,4 +1,4 @@
-# 約束の指紋と、凍結した fixtures。SwiftData の指紋。全 PR で見る。
+# 約束の指紋と、凍結した fixtures。SwiftData の指紋と、凍結した版の型。全 PR で見る。
 # 止めるのはここ。PR テンプレートのチェックは補助。
 
 name: contract-guard
