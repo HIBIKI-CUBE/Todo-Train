@@ -110,8 +110,10 @@ struct CompanionSnapBuildingTests {
             cabinEnabled: true
         )
         #expect(withReason.pauseHeldBy == .user)
+        #expect(withReason.pauseId == record.id)
         let object = try JSONSerialization.jsonObject(with: try jsonData(withReason)) as! [String: Any]
         #expect(object["pauseHeldBy"] as? String == "user")
+        #expect(object["pauseId"] as? String == record.id.canonicalLowercase)
 
         let running = CompanionSnapBuilding.snap(
             rev: 4,
@@ -122,8 +124,10 @@ struct CompanionSnapBuildingTests {
             cabinEnabled: true
         )
         #expect(running.pauseHeldBy == nil)
+        #expect(running.pauseId == nil)
         let runningObject = try JSONSerialization.jsonObject(with: try jsonData(running)) as! [String: Any]
         #expect(runningObject["pauseHeldBy"] == nil)
+        #expect(runningObject["pauseId"] == nil)
     }
 
     private func jsonData(_ snap: SnapPlaintext) throws -> Data {

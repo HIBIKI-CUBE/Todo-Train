@@ -75,7 +75,8 @@ enum CompanionSnapBuilding {
             nudge: nudge,
             nudgePlan: nudgePlan,
             reserved: reserved,
-            pauseHeldBy: pauseHeldBy ?? Self.openPauseHeldBy(session: session, phase: phase)
+            pauseHeldBy: pauseHeldBy ?? Self.openPauseHeldBy(session: session, phase: phase),
+            pauseId: Self.openPauseId(session: session, phase: phase)
         )
     }
 
@@ -83,6 +84,12 @@ enum CompanionSnapBuilding {
     static func openPauseHeldBy(session: WorkSession, phase: SessionPhase) -> PauseHeldBy? {
         guard phase == .paused else { return nil }
         return session.pauses.first { $0.endedAt == nil }?.heldBy
+    }
+
+    /// The open pause. Running, idle, and overtime omit it.
+    static func openPauseId(session: WorkSession, phase: SessionPhase) -> UUID? {
+        guard phase == .paused else { return nil }
+        return session.pauses.first { $0.endedAt == nil }?.id
     }
 
     static func idle(

@@ -31,6 +31,8 @@ public struct MenuBarInput: Equatable, Sendable {
     public var nudgeWinnerLine: String?
     /// Relay rejected the command. Shown instead of a decrypt failure.
     public var transportNotice: String?
+    /// Pause question already decided by the Mac ledger. Nil hides it.
+    public var pausePromptLine: String?
 
     public init(
         pairing: PairingStatus,
@@ -43,7 +45,8 @@ public struct MenuBarInput: Equatable, Sendable {
         optimisticIdleConsumed: Bool = false,
         sendingExtendMinutes: Int? = nil,
         nudgeWinnerLine: String? = nil,
-        transportNotice: String? = nil
+        transportNotice: String? = nil,
+        pausePromptLine: String? = nil
     ) {
         self.pairing = pairing
         self.snap = snap
@@ -56,6 +59,7 @@ public struct MenuBarInput: Equatable, Sendable {
         self.sendingExtendMinutes = sendingExtendMinutes
         self.nudgeWinnerLine = nudgeWinnerLine
         self.transportNotice = transportNotice
+        self.pausePromptLine = pausePromptLine
     }
 }
 

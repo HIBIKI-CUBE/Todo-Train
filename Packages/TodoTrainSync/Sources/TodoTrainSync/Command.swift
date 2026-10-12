@@ -30,6 +30,16 @@ public struct CommandPlaintext: Codable, Equatable, Sendable {
     public var attending: Bool?
     /// `pause` only. Absent on older Macs. `user` and `timetable` are applied; other values are `invalidPayload`.
     public var heldBy: PauseHeldBy?
+    /// `pauseInputReport` only. The open pause on the snap.
+    public var pauseId: UUID?
+    /// `pauseInputReport` only. Seconds the Mac was able to look. Never below `macActiveSeconds`.
+    public var macSampledSeconds: Double?
+    /// `pauseInputReport` only. Seconds whose 30 second bucket had input inside 60 seconds.
+    public var macActiveSeconds: Double?
+    /// `pauseInputReport` only. Unix seconds when the pause question was shown.
+    public var promptedAt: Int?
+    /// `pauseInputReport` only. Absent when the question was not shown.
+    public var promptAnswer: PausePromptAnswer?
 
     public init(
         id: UUID,
@@ -48,7 +58,12 @@ public struct CommandPlaintext: Codable, Equatable, Sendable {
         ticketId: UUID? = nil,
         pipVisible: Bool? = nil,
         attending: Bool? = nil,
-        heldBy: PauseHeldBy? = nil
+        heldBy: PauseHeldBy? = nil,
+        pauseId: UUID? = nil,
+        macSampledSeconds: Double? = nil,
+        macActiveSeconds: Double? = nil,
+        promptedAt: Int? = nil,
+        promptAnswer: PausePromptAnswer? = nil
     ) {
         self.id = id
         self.op = op
@@ -67,6 +82,11 @@ public struct CommandPlaintext: Codable, Equatable, Sendable {
         self.pipVisible = nil
         self.attending = nil
         self.heldBy = nil
+        self.pauseId = nil
+        self.macSampledSeconds = nil
+        self.macActiveSeconds = nil
+        self.promptedAt = nil
+        self.promptAnswer = nil
         switch op {
         case .issueAndBoard:
             self.title = title
@@ -84,6 +104,12 @@ public struct CommandPlaintext: Codable, Equatable, Sendable {
             self.attending = attending
         case .pause:
             self.heldBy = heldBy
+        case .pauseInputReport:
+            self.pauseId = pauseId
+            self.macSampledSeconds = macSampledSeconds
+            self.macActiveSeconds = macActiveSeconds
+            self.promptedAt = promptedAt
+            self.promptAnswer = promptAnswer
         case .resume, .still, .unknown:
             break
         }
@@ -97,6 +123,7 @@ public struct CommandPlaintext: Codable, Equatable, Sendable {
         case id, op, sessionId, at, title, estimatedSeconds, build, contract, minReadable
         case nudgeId, choice, addSeconds, answeredOn, ticketId, pipVisible, attending
         case heldBy
+        case pauseId, macSampledSeconds, macActiveSeconds, promptedAt, promptAnswer
     }
 
     public init(from decoder: Decoder) throws {
@@ -121,6 +148,11 @@ public struct CommandPlaintext: Codable, Equatable, Sendable {
         pipVisible = nil
         attending = nil
         heldBy = nil
+        pauseId = nil
+        macSampledSeconds = nil
+        macActiveSeconds = nil
+        promptedAt = nil
+        promptAnswer = nil
         switch op {
         case .issueAndBoard:
             title = try container.decodeIfPresent(String.self, forKey: .title)
@@ -138,6 +170,12 @@ public struct CommandPlaintext: Codable, Equatable, Sendable {
             attending = try container.decodeIfPresent(Bool.self, forKey: .attending)
         case .pause:
             heldBy = try container.decodeIfPresent(PauseHeldBy.self, forKey: .heldBy)
+        case .pauseInputReport:
+            pauseId = try container.decodeLowercaseUUIDIfPresent(.pauseId)
+            macSampledSeconds = try container.decodeIfPresent(Double.self, forKey: .macSampledSeconds)
+            macActiveSeconds = try container.decodeIfPresent(Double.self, forKey: .macActiveSeconds)
+            promptedAt = try container.decodeIfPresent(Int.self, forKey: .promptedAt)
+            promptAnswer = try container.decodeIfPresent(PausePromptAnswer.self, forKey: .promptAnswer)
         case .resume, .still, .unknown:
             break
         }
@@ -173,6 +211,12 @@ public struct CommandPlaintext: Codable, Equatable, Sendable {
             try container.encodeIfPresent(attending, forKey: .attending)
         case .pause:
             try container.encodeIfPresent(heldBy, forKey: .heldBy)
+        case .pauseInputReport:
+            try container.encodeIfPresentLowercaseUUID(pauseId, forKey: .pauseId)
+            try container.encodeIfPresent(macSampledSeconds, forKey: .macSampledSeconds)
+            try container.encodeIfPresent(macActiveSeconds, forKey: .macActiveSeconds)
+            try container.encodeIfPresent(promptedAt, forKey: .promptedAt)
+            try container.encodeIfPresent(promptAnswer, forKey: .promptAnswer)
         case .resume, .still, .unknown:
             break
         }

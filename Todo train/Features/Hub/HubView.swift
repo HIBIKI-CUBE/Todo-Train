@@ -12,6 +12,7 @@ struct HubView: View {
     @Environment(SessionManager.self) private var sessionManager
     @Environment(\.modelContext) private var modelContext
     @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @Environment(\.scenePhase) private var scenePhase
     @Environment(DeletionUndoCenter.self) private var undoCenter
 
     @Query(sort: \Ticket.sortOrder) private var allTickets: [Ticket]
@@ -690,6 +691,18 @@ struct HubView: View {
                         .font(TrainTheme.TypeScale.meta())
                         .foregroundStyle(TrainTheme.signalAmber)
                         .monospacedDigit()
+                    if scenePhase == .active, let pausedAt = session.pausedAt {
+                        TimelineView(.periodic(from: .now, by: 1)) { timeline in
+                            if let label = PauseInputCopy.gauge(
+                                elapsed: timeline.date.timeIntervalSince(pausedAt)
+                            ) {
+                                Text(label)
+                                    .font(TrainTheme.TypeScale.meta())
+                                    .foregroundStyle(TrainTheme.signalAmber)
+                                    .monospacedDigit()
+                            }
+                        }
+                    }
                     SignalBadge(kind: .paused)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)

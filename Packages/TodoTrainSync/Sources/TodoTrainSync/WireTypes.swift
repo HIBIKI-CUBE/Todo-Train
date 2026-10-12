@@ -33,6 +33,8 @@ public enum WireOp: Sendable, Equatable {
     case boardReserved
     /// Mac `pipVisible` and `attending`. Sent only when either changes.
     case presence
+    /// Mac samples of input during one pause. Last write for that `pauseId` wins.
+    case pauseInputReport
     case unknown(String)
 
     /// Contract that introduced this op. Unknown ops have no version.
@@ -40,6 +42,7 @@ public enum WireOp: Sendable, Equatable {
         switch self {
         case .pause, .resume, .still, .issueAndBoard: 3
         case .answer, .boardReserved, .presence: 5
+        case .pauseInputReport: 12
         case .unknown: nil
         }
     }
@@ -53,6 +56,7 @@ public enum WireOp: Sendable, Equatable {
         case .answer: "answer"
         case .boardReserved: "boardReserved"
         case .presence: "presence"
+        case .pauseInputReport: "pauseInputReport"
         case .unknown(let value): value
         }
     }
@@ -66,6 +70,7 @@ public enum WireOp: Sendable, Equatable {
         case "answer": self = .answer
         case "boardReserved": self = .boardReserved
         case "presence": self = .presence
+        case "pauseInputReport": self = .pauseInputReport
         default: self = .unknown(rawValue)
         }
     }

@@ -23,6 +23,7 @@ const swiftWire = [
   "Packages/TodoTrainSync/Sources/TodoTrainSync/WireBuildInfo.swift",
   "Packages/TodoTrainSync/Sources/TodoTrainSync/NudgeWire.swift",
   "Packages/TodoTrainSync/Sources/TodoTrainSync/PauseHeldBy.swift",
+  "Packages/TodoTrainSync/Sources/TodoTrainSync/PauseInput.swift",
   "Packages/TodoTrainSync/Sources/TodoTrainSync/CabinKind.swift",
 ];
 

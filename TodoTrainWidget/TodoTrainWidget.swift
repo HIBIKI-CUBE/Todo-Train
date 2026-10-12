@@ -26,7 +26,7 @@ struct TodoTrainProvider: TimelineProvider {
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<TodoTrainEntry>) -> Void) {
-        if WidgetOffscreen.delivers(.overtime) {
+        if WidgetPauseInput.showsQuestion() || WidgetOffscreen.delivers(.overtime) {
             completion(Timeline(entries: [], policy: .never))
             return
         }

@@ -282,6 +282,8 @@ final class CompanionSyncRuntime {
         var ack: AckPlaintext
         if command.op == .issueAndBoard {
             ack = issueAndBoardAck(command, sessionManager: sessionManager)
+        } else if command.op == .pauseInputReport {
+            ack = sessionManager.applyPauseInputReport(command)
         } else if command.op == .answer || command.op == .boardReserved || command.op == .presence {
             ack = sessionManager.applyNudgeCommand(command)
         } else {
@@ -304,7 +306,7 @@ final class CompanionSyncRuntime {
                     try sessionManager.resume()
                 case .still:
                     sessionManager.acknowledgeCabinStill()
-                case .issueAndBoard, .answer, .boardReserved, .presence, .unknown:
+                case .issueAndBoard, .answer, .boardReserved, .presence, .pauseInputReport, .unknown:
                     break
                 }
             }

@@ -1,5 +1,6 @@
 # ファイル<TAB>役。check.py の規則が「アプリの声」と違う役だけ書く。役そのものは docs/03-terminology.md「文体」。
 Packages/TodoTrainSync/Sources/TodoTrainSync/CabinKind.swift	車内放送
+Packages/TodoTrainSync/Sources/TodoTrainSync/PauseInput.swift	車内放送
 Todo train/Core/Session/CheckInScheduling.swift	車内放送
 Todo train/Core/Passenger/*	乗客
 Todo train/Features/Passenger/*	乗客

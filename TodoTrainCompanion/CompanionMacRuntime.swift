@@ -57,6 +57,9 @@ final class CompanionMacRuntime {
     var nudgeWinnerLine: String?
     var transportNotice: String?
     var screenLocked = false
+    var pauseInput = PauseInputEngine()
+    var pausePromptLine: String?
+    var pendingPauseReports: [UUID: PauseInputReport] = [:]
     var lastPresence: MacPresenceSample?
     var presenceInFlight = false
     var presenceObservers: [NSObjectProtocol] = []
@@ -140,7 +143,8 @@ final class CompanionMacRuntime {
             optimisticIdleConsumed: optimisticIdleConsumed,
             sendingExtendMinutes: pendingExtendMinutes,
             nudgeWinnerLine: nudgeWinnerLine,
-            transportNotice: transportNotice
+            transportNotice: transportNotice,
+            pausePromptLine: pausePromptLine
         )
     }
 

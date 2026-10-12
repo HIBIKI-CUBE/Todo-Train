@@ -60,6 +60,9 @@ final class CompanionRideOverlayController: NSObject {
                 onCloseGap: { [weak self] in
                     guard let self else { return }
                     Task { await self.runtime.sendStill() }
+                },
+                onPausePrompt: { [weak self] choice in
+                    self?.runtime.answerPausePrompt(choice)
                 }
             )
         )
@@ -260,6 +263,17 @@ final class CompanionRideOverlayController: NSObject {
                 }
             } else {
                 Task { await runtime.sendStill() }
+            }
+            return
+        }
+        if presentation.pausePrompt != nil {
+            let contentWidth = panel.frame.width - Self.handleWidth
+            let x = point.x - Self.handleWidth
+            guard x >= 0 else { return }
+            if x < contentWidth / 2 {
+                runtime.answerPausePrompt(.resume)
+            } else {
+                runtime.answerPausePrompt(.keepPaused)
             }
             return
         }

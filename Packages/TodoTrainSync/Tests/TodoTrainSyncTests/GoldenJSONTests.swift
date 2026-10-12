@@ -91,21 +91,27 @@ struct GoldenJSONTests {
         )
         #expect(paused.phase == .paused)
         #expect(paused.pauseHeldBy == .user)
+        #expect(paused.pauseId == UUID(uuidString: "44444444-4444-4444-8444-444444444444"))
         let pausedObject = try JSONSerialization.jsonObject(with: try WireJSON.encoder().encode(paused)) as! [String: Any]
         #expect(pausedObject["pauseHeldBy"] as? String == "user")
+        #expect(pausedObject["pauseId"] as? String == "44444444-4444-4444-8444-444444444444")
 
         let running = try WireJSON.decoder().decode(
             SnapPlaintext.self,
             from: ContractFixtures.data("fixtures/snap.json")
         )
         #expect(running.pauseHeldBy == nil)
+        #expect(running.pauseId == nil)
         let runningObject = try JSONSerialization.jsonObject(with: try WireJSON.encoder().encode(running)) as! [String: Any]
         #expect(runningObject["pauseHeldBy"] == nil)
+        #expect(runningObject["pauseId"] == nil)
 
         var leaked = running
         leaked.pauseHeldBy = .timetable
+        leaked.pauseId = UUID(uuidString: "44444444-4444-4444-8444-444444444444")
         let leakedObject = try JSONSerialization.jsonObject(with: try WireJSON.encoder().encode(leaked)) as! [String: Any]
         #expect(leakedObject["pauseHeldBy"] == nil)
+        #expect(leakedObject["pauseId"] == nil)
     }
 
     @Test func cmdIssueAndBoardRoundTripOmitsNothingRequired() throws {
@@ -337,6 +343,7 @@ struct GoldenJSONTests {
         #expect(json["kind"] as? [String] == ["snap", "cmd", "ack"])
         #expect(json["op"] as? [String] == [
             "pause", "resume", "still", "issueAndBoard", "answer", "boardReserved", "presence",
+            "pauseInputReport",
         ])
         #expect(json["pendingCabin"] as? [String] == ["progress", "away", "idle", "overrun", "gap"])
         #expect(json["nudgeKind"] as? [String] == NudgeKind.knownRawValues)
@@ -348,8 +355,9 @@ struct GoldenJSONTests {
         #expect(json["extendPresetSeconds"] as? [Int] == [300, 600, 900])
         #expect(json["heldBy"] as? [String] == PauseHeldBy.knownRawValues)
         #expect(json["pauseCommandHeldBy"] as? [String] == PauseHeldBy.pauseCommandRawValues)
+        #expect(json["promptAnswer"] as? [String] == PausePromptAnswer.knownRawValues)
         let introduced = try #require(json["opIntroduced"] as? [String: Int])
-        for op in ["pause", "resume", "still", "issueAndBoard", "answer", "boardReserved", "presence"] {
+        for op in ["pause", "resume", "still", "issueAndBoard", "answer", "boardReserved", "presence", "pauseInputReport"] {
             #expect(introduced[op] == WireOp(rawValue: op).introducedIn)
         }
         #expect(json["error"] as? [String] == [

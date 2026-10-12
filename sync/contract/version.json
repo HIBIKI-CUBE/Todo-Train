@@ -1,7 +1,7 @@
 {
-  "contract": 11,
+  "contract": 12,
   "minReadable": 3,
-  "fingerprint": "424a9f5ca87833938a8e452269938cb4871307af9789dd85700601cb712cff2c",
+  "fingerprint": "553ca16e5e0e9690721f4798820d06f1c510ccfa48e0f67a898e59701a1ae123",
   "history": [
     {
       "contract": 3,
@@ -47,6 +47,11 @@
       "contract": 11,
       "date": "2026-10-13",
       "note": "画面の外の通知先 notifyOn を足す"
+    },
+    {
+      "contract": 12,
+      "date": "2026-10-13",
+      "note": "停車中の入力 pauseInputReport と snap の pauseId を足す"
     }
   ]
 }

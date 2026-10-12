@@ -67,6 +67,8 @@ public struct RideOverlayPresentation: Equatable, Sendable {
     public var showsArrivalGap: Bool = false
     /// Gap card can send `boardReserved`.
     public var canBoardReserved: Bool = false
+    /// 「停車のまま？」. Nil when this pause is not asking.
+    public var pausePrompt: String? = nil
 
     public static let peekTitleLimit = 6
 
@@ -149,9 +151,10 @@ public struct RideOverlayPresentation: Equatable, Sendable {
             sendingExtendMinutes: bar.isSending ? input.sendingExtendMinutes : nil,
             winnerLine: bar.isSending ? nil : input.nudgeWinnerLine
         )
-        let cabinPrompt = nudge.showsChoices
-            ? nil
-            : ((cabin.showsPip && !bar.isSending) ? cabin.prompt : nil)
+        let pausePrompt = input.pausePromptLine
+        let cabinPrompt = pausePrompt == nil && !nudge.showsChoices && cabin.showsPip && !bar.isSending
+            ? cabin.prompt
+            : nil
         var phase = timerPhase(
             remaining: remaining,
             estimated: snap.estimatedSeconds,
@@ -179,10 +182,11 @@ public struct RideOverlayPresentation: Equatable, Sendable {
             cabinPrompt: cabinPrompt,
             occupancy: occupancyInstrument(snap: snap, now: input.now),
             nextBlockLine: nextBlockLine(snap: snap, now: input.now),
-            nudgePrompt: nudge.prompt,
-            showsNudgeChoices: nudge.showsChoices,
-            holdLamp: nudge.holdLamp,
-            instrumentCaption: nudge.instrumentCaption
+            nudgePrompt: pausePrompt == nil ? nudge.prompt : nil,
+            showsNudgeChoices: pausePrompt == nil && nudge.showsChoices,
+            holdLamp: nudge.holdLamp || pausePrompt != nil,
+            instrumentCaption: nudge.instrumentCaption,
+            pausePrompt: pausePrompt
         )
     }
 
