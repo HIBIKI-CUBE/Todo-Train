@@ -61,9 +61,7 @@ struct CheckInAnswerRecord: Codable, Equatable, Sendable {
 
 enum CheckInCopy {
     static func fallback(title: String) -> String {
-        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty { return "まだこれ？" }
-        return "まだ『\(trimmed)』？"
+        CabinCopy.question(title: title)
     }
 
     static let away = CabinCopy.prompt

@@ -9,6 +9,7 @@ extension CompanionMacRuntime {
                 self?.now = Int(Date().timeIntervalSince1970)
                 self?.syncCabinNotification()
                 self?.maybeSendTimetablePause()
+                self?.refreshMacPresence()
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
             }
         }
@@ -69,6 +70,7 @@ extension CompanionMacRuntime {
         } else if RelayPresence.shouldResume(wasIdle: wasIdle, isIdle: presence.isIdle) {
             startListening()
         }
+        refreshMacPresence()
     }
 
     func suppressRelay() {
@@ -220,6 +222,11 @@ extension CompanionMacRuntime {
         if snap?.pendingCabin != .idle {
             optimisticIdleConsumed = false
         }
+        if staleWinner, let current = snap?.nudge?.id, current != answerNudgeID {
+            staleWinner = false
+            nudgeWinnerLine = nil
+        }
+        refreshStaleWinner()
         syncCabinNotification()
     }
 
@@ -229,12 +236,42 @@ extension CompanionMacRuntime {
             notePeerBuild(build)
         }
         notePeerContract(ack.announcement)
+        let inFlight: UUID?
+        if case .sending(let id) = outgoingPause { inFlight = id } else { inFlight = nil }
         outgoingPause = OutgoingPauseApplying.applyAck(ack, current: outgoingPause)
         issueBoardTrack = IssueBoardTracking.applyAck(ack, current: issueBoardTrack)
-        if case .failed = outgoingPause {
+        guard ack.cmdId == inFlight else { return }
+        transportNotice = nil
+        pendingExtendMinutes = nil
+        if ack.ok {
+            staleWinner = false
+            nudgeWinnerLine = nil
+        } else if ack.error == .nudgeStale {
+            staleWinner = true
+            clearOptimisticCabin()
+            optimisticIdleConsumed = false
+            refreshStaleWinner()
+        } else {
             clearOptimisticCabin()
             optimisticIdleConsumed = false
         }
+    }
+
+    func refreshStaleWinner() {
+        guard staleWinner, let snap else { return }
+        nudgeWinnerLine = MacNudgeReceipt.winnerLine(snap: snap, estimateBefore: answerEstimateBefore)
+    }
+
+    func noteCommandTransportFailure(_ error: Error) {
+        if let sync = error as? SyncError, case .transport(_, let code) = sync, code == "fifoFull" {
+            outgoingPause = .idle
+            pendingExtendMinutes = nil
+            transportNotice = SyncCopy.fifoFull
+            lastStatus = SyncCopy.fifoFull
+            return
+        }
+        outgoingPause = .failed(.decryptFailed)
+        lastStatus = userFacing(error)
     }
 
     func notePeerBuild(_ build: WireBuildInfo) {

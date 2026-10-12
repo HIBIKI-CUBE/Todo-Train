@@ -25,6 +25,12 @@ public struct MenuBarInput: Equatable, Sendable {
     public var cabinEnabledLocal: Bool
     public var optimisticFiredCount: Int
     public var optimisticIdleConsumed: Bool
+    /// Minutes of an extend answer that is still in flight.
+    public var sendingExtendMinutes: Int?
+    /// Winning answer after `nudgeStale`. Nil while our own answer is in flight.
+    public var nudgeWinnerLine: String?
+    /// Relay rejected the command. Shown instead of a decrypt failure.
+    public var transportNotice: String?
 
     public init(
         pairing: PairingStatus,
@@ -34,7 +40,10 @@ public struct MenuBarInput: Equatable, Sendable {
         outgoingPause: OutgoingPauseState = .idle,
         cabinEnabledLocal: Bool = true,
         optimisticFiredCount: Int = 0,
-        optimisticIdleConsumed: Bool = false
+        optimisticIdleConsumed: Bool = false,
+        sendingExtendMinutes: Int? = nil,
+        nudgeWinnerLine: String? = nil,
+        transportNotice: String? = nil
     ) {
         self.pairing = pairing
         self.snap = snap
@@ -44,6 +53,9 @@ public struct MenuBarInput: Equatable, Sendable {
         self.cabinEnabledLocal = cabinEnabledLocal
         self.optimisticFiredCount = optimisticFiredCount
         self.optimisticIdleConsumed = optimisticIdleConsumed
+        self.sendingExtendMinutes = sendingExtendMinutes
+        self.nudgeWinnerLine = nudgeWinnerLine
+        self.transportNotice = transportNotice
     }
 }
 

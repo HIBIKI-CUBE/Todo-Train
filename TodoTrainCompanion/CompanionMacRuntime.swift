@@ -49,6 +49,17 @@ final class CompanionMacRuntime {
     /// Relay contract from hello or hint.
     var relayContract: ContractAnnouncement?
     var sentTimetablePauseAt: Int?
+    /// Extend answer in flight, in minutes. Nil for the other three answers.
+    var pendingExtendMinutes: Int?
+    var answerEstimateBefore: Int?
+    var answerNudgeID: UUID?
+    var staleWinner = false
+    var nudgeWinnerLine: String?
+    var transportNotice: String?
+    var screenLocked = false
+    var lastPresence: MacPresenceSample?
+    var presenceInFlight = false
+    var presenceObservers: [NSObjectProtocol] = []
     var pairingPhase: PairingPhase = .idle
     var pairingQR: PairingURL?
     var pairingCue: PairingCue = .scanning
@@ -109,6 +120,7 @@ final class CompanionMacRuntime {
             Task { await self?.sendStill() }
         }
         startTicking()
+        startScreenLockObservation()
         if isPaired {
             startListening()
         }
@@ -125,7 +137,10 @@ final class CompanionMacRuntime {
             outgoingPause: outgoingPause,
             cabinEnabledLocal: cabinAnnouncementsEnabled,
             optimisticFiredCount: optimisticFiredCount,
-            optimisticIdleConsumed: optimisticIdleConsumed
+            optimisticIdleConsumed: optimisticIdleConsumed,
+            sendingExtendMinutes: pendingExtendMinutes,
+            nudgeWinnerLine: nudgeWinnerLine,
+            transportNotice: transportNotice
         )
     }
 
