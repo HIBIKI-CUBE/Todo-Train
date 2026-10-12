@@ -93,7 +93,7 @@ extension SessionManager {
         let remaining = session.remainingSeconds(at: now)
         let title = session.ticket?.title ?? "切符"
         let deadline = now.addingTimeInterval(remaining)
-        let awayPrompt = (!session.isPaused && session.pendingCheckIn == .away) ? CheckInCopy.away : nil
+        let instrument = nudgeInstrument(for: session, now: now, remaining: remaining)
         liveActivityManager.startOrUpdate(
             LiveActivitySessionContent(
                 sessionID: session.id,
@@ -103,9 +103,11 @@ extension SessionManager {
                 budgetSeconds: session.budgetSecondsAtStart,
                 isPaused: session.isPaused,
                 pausedAt: session.pausedAt,
-                checkInPrompt: awayPrompt,
+                checkInPrompt: instrument.prompt,
                 alertTitle: presentAwayAlert ? CheckInCopy.away : nil,
-                alertBody: presentAwayAlert ? title : nil
+                alertBody: presentAwayAlert ? title : nil,
+                instrumentPhaseRaw: instrument.phaseRaw,
+                promptKeepsTimerColor: instrument.keepsTimerColor
             )
         )
     }

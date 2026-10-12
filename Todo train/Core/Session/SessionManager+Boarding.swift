@@ -203,6 +203,9 @@ extension SessionManager {
             pausedOn: pausedOn,
             heldByInferred: heldByInferred
         )
+        if pausedOn == .iphone, heldBy == .user, !timetableHeld {
+            recordStandingPauseAnswer(on: session, now: now)
+        }
         session.timetableHeld = timetableHeld
         if timetableHeld {
             timetableQuietMessage = TimetableCopy.quiet
@@ -360,6 +363,7 @@ extension SessionManager {
         guard seconds > 0 else { return }
 
         let added = Int(seconds.rounded())
+        let working = nudgeWorkingSeconds(for: session, now: now)
         session.budgetSecondsAtStart += added
         noteCabinActivity(now: now, clearPendingIdle: true)
         bumpCompanionSync()
@@ -367,9 +371,11 @@ extension SessionManager {
             addedSeconds: added,
             reason: reason?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
             createdAt: now,
+            workingSeconds: working,
             session: session
         )
         modelContext.insert(record)
+        fillWillExtendStamp(on: session, addSeconds: added)
         suppressedEndBellSessionIDs.remove(session.id)
         try save()
         reconcile(now: now)

@@ -19,8 +19,16 @@ extension SessionManager {
             throw SessionError.noActiveSession
         }
         guard session.pendingCheckIn != nil else { return }
+        guard uiCanAnswer(session: session) else { return }
 
-        consumePendingCheckIn(session, answer: answer, now: now)
+        let stamp = uiNudgeStamp(session: session)
+        consumePendingCheckIn(
+            session,
+            answer: answer,
+            now: now,
+            nudgeID: stamp?.0,
+            answeredOn: stamp == nil ? nil : "iphone"
+        )
         session.awayDueAt = nil
         noteCabinActivity(now: now, clearPendingIdle: true)
         bumpCompanionSync()
@@ -61,7 +69,7 @@ extension SessionManager {
             guard !session.isPaused, session.remainingSeconds(at: now) > CheckInScheduling.overtimeGuardSeconds else {
                 return
             }
-            let elapsed = session.elapsedSeconds(at: now)
+            let elapsed = nudgeWorkingSeconds(for: session, now: now)
             guard CheckInScheduling.dueProgressOffset(
                 offsets: session.checkInOffsets,
                 firedCount: session.checkInFiredCount,
@@ -239,15 +247,22 @@ extension SessionManager {
     // MARK: - Check-in
 
     func applyCheckInSchedule(to session: WorkSession, title: String, estimatedSeconds: Int) {
-        session.checkInOffsetSeconds = CheckInScheduling.offsets(
-            estimatedSeconds: estimatedSeconds,
-            seed: session.id
-        )
+        if let offset = NudgePlanner.checkInOffset(estimatedSeconds: estimatedSeconds, rideID: session.id) {
+            session.checkInOffsetSeconds = [offset]
+            session.checkInFraction = offset / TimeInterval(max(estimatedSeconds, 1))
+        } else {
+            session.checkInOffsetSeconds = []
+            session.checkInFraction = nil
+        }
         session.checkInFiredCount = 0
         session.pendingCheckInKindRaw = nil
         session.awayDueAt = nil
         session.checkInPromptLine = CheckInCopy.fallback(title: title)
         session.checkInAnswersJSON = "[]"
+        session.nudgeFiredStagesRaw = []
+        session.nudgePendingStageRaw = nil
+        session.nudgeAnsweredAt = nil
+        session.nudgeAnsweredOnRaw = nil
     }
 
     func requestCheckInPrompt(for session: WorkSession, title: String, estimatedMinutes: Int) {
@@ -285,16 +300,35 @@ extension SessionManager {
     func consumePendingCheckIn(
         _ session: WorkSession,
         answer: CheckInAnswerKind,
-        now: Date
+        now: Date,
+        nudgeID: String? = nil,
+        addSeconds: Int? = nil,
+        answeredOn: String? = nil
     ) {
         guard let kind = session.pendingCheckIn else { return }
         var answers = session.checkInAnswers
-        answers.append(CheckInAnswerRecord(kind: kind, answer: answer, answeredAt: now))
+        answers.append(
+            CheckInAnswerRecord(
+                kind: kind,
+                answer: answer,
+                answeredAt: now,
+                nudgeID: nudgeID,
+                addSeconds: addSeconds,
+                answeredOn: answeredOn
+            )
+        )
         session.checkInAnswers = answers
+        if nudgeID != nil {
+            session.nudgeAnsweredAt = now
+            session.nudgeAnsweredOnRaw = answeredOn
+        }
         if kind == .progress {
             session.checkInFiredCount += 1
         }
         session.pendingCheckIn = nil
+        if nudgeID != nil, visibleNudgeStage(session) == nil {
+            session.nudgePendingStageRaw = nil
+        }
     }
 
     func skipPendingCheckInForOvertime(_ session: WorkSession) {
@@ -340,23 +374,6 @@ extension SessionManager {
             return
         }
 
-        let elapsed = session.elapsedSeconds(at: now)
-        if CheckInScheduling.dueProgressOffset(
-            offsets: session.checkInOffsets,
-            firedCount: session.checkInFiredCount,
-            elapsedSeconds: elapsed,
-            remainingSeconds: remaining,
-            hasPending: false
-        ) != nil {
-            session.pendingCheckIn = .progress
-            session.awayDueAt = nil
-            cancelAwayFireTask()
-            presentation.noteCheckInHaptic()
-            bumpCompanionSync()
-            _ = saveBestEffort()
-            return
-        }
-
         if let due = session.awayDueAt, due <= now {
             fireAwayInterrupt(session, now: now, presentAlert: true)
         }
@@ -375,7 +392,7 @@ extension SessionManager {
             checkInNotifier.cancel(sessionID: session.id)
             return
         }
-        if suppressProgressLocalNotifications {
+        if suppressProgressLocalNotifications || iphoneSceneActive {
             checkInNotifier.cancelProgress(sessionID: session.id)
             return
         }

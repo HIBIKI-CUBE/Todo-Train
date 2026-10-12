@@ -279,6 +279,8 @@ final class CompanionSyncRuntime {
         var ack: AckPlaintext
         if command.op == .issueAndBoard {
             ack = issueAndBoardAck(command, sessionManager: sessionManager)
+        } else if command.op == .answer || command.op == .boardReserved || command.op == .presence {
+            ack = sessionManager.applyNudgeCommand(command)
         } else {
             var decision = RemotePauseEvaluating.evaluate(
                 openSessionId: sessionManager.activeSession?.id,
@@ -394,6 +396,8 @@ final class CompanionSyncRuntime {
         client: SyncHTTPClient
     ) async throws {
         snapRev += 1
+        let now = Date()
+        let nudge = sessionManager.nudgeSnapFields(now: now)
         let fit = sessionManager.timetableFit()
         let visible = fit.visibleOccupancy
         let pauseAt = sessionManager.activeSession.flatMap { session -> Int? in
@@ -405,14 +409,18 @@ final class CompanionSyncRuntime {
             rev: snapRev,
             phase: sessionManager.phase,
             session: sessionManager.activeSession,
-            now: Date(),
+            now: now,
             serviceActive: sessionManager.activeServiceDay?.isOpen == true,
             cabinEnabled: settings.cabinAnnouncementsEnabled,
             pendingCabin: sessionManager.activeServiceDay?.pendingCabin?.cabin,
             nextBlockTitle: visible?.title,
             nextBlockStartsAt: visible.map { Int($0.startsAt.timeIntervalSince1970) },
             nextBlockEndsAt: visible.map { Int($0.endsAt.timeIntervalSince1970) },
-            timetablePauseAt: pauseAt
+            timetablePauseAt: pauseAt,
+            nudge: nudge.nudge,
+            nudgePlan: nudge.plan,
+            reserved: nudge.reserved,
+            openPendingCabin: nudge.pendingCabin
         )
         plaintext.build = LocalWireBuild.current
         plaintext.contract = ContractVersion.contract

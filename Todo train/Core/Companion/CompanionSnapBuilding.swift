@@ -23,14 +23,19 @@ enum CompanionSnapBuilding {
         nextBlockStartsAt: Int? = nil,
         nextBlockEndsAt: Int? = nil,
         timetablePauseAt: Int? = nil,
-        pauseHeldBy: PauseHeldBy? = nil
+        pauseHeldBy: PauseHeldBy? = nil,
+        nudge: WireNudge? = nil,
+        nudgePlan: [WireNudgePlanItem]? = nil,
+        reserved: WireReservedTicket? = nil,
+        openPendingCabin: CabinKind? = nil
     ) -> SnapPlaintext {
         guard let session, session.isOpen, phase != .idle else {
             return idle(
                 rev: rev,
                 serviceActive: serviceActive,
                 cabinEnabled: cabinEnabled,
-                pendingCabin: pendingCabin
+                pendingCabin: pendingCabin,
+                reserved: reserved
             )
         }
         let started = Int(session.startedAt.timeIntervalSince1970)
@@ -60,11 +65,14 @@ enum CompanionSnapBuilding {
             serviceActive: serviceActive,
             cabinEnabled: cabinEnabled,
             checkInFiredCount: session.checkInFiredCount,
-            pendingCabin: session.pendingCheckIn?.cabin,
+            pendingCabin: openPendingCabin ?? session.pendingCheckIn?.cabin,
             nextBlockTitle: nextBlockTitle,
             nextBlockStartsAt: nextBlockStartsAt,
             nextBlockEndsAt: nextBlockEndsAt,
             timetablePauseAt: timetablePauseAt,
+            nudge: nudge,
+            nudgePlan: nudgePlan,
+            reserved: reserved,
             pauseHeldBy: pauseHeldBy ?? Self.openPauseHeldBy(session: session, phase: phase)
         )
     }
@@ -79,7 +87,8 @@ enum CompanionSnapBuilding {
         rev: Int,
         serviceActive: Bool,
         cabinEnabled: Bool,
-        pendingCabin: CabinKind? = nil
+        pendingCabin: CabinKind? = nil,
+        reserved: WireReservedTicket? = nil
     ) -> SnapPlaintext {
         SnapPlaintext(
             rev: rev,
@@ -95,7 +104,8 @@ enum CompanionSnapBuilding {
             serviceActive: serviceActive,
             cabinEnabled: cabinEnabled,
             checkInFiredCount: 0,
-            pendingCabin: pendingCabin
+            pendingCabin: pendingCabin,
+            reserved: reserved
         )
     }
 }

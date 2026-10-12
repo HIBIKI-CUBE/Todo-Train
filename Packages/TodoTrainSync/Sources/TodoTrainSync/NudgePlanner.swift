@@ -351,6 +351,22 @@ public enum NudgePlanner: Sendable {
         )
     }
 
+    /// Who would ring this stage for the given foreground. Display stages and the AlarmKit bell do not ring.
+    public static func ring(
+        stage: NudgeStage,
+        on input: NudgeRideInput,
+        deviceOrder: [NudgeSurface] = NudgeThresholds.deviceOrder
+    ) -> (surface: NudgeSurface, rings: Bool) {
+        let foreground = foregroundSet(input.foreground)
+        let column = ringColumn(deviceOrder, foreground: foreground, macAttending: input.macAttending)
+        return assignment(
+            stage: stage,
+            column: column,
+            alarmKitEndBell: input.alarmKitEndBell,
+            foreground: foreground
+        )
+    }
+
     /// gap1 at +3 minutes on the first device, gap2 at +6 minutes on the other. Two gaps, then nothing.
     public static func gaps(
         _ input: NudgeGapInput,

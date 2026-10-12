@@ -1,7 +1,7 @@
 {
-  "contract": 6,
+  "contract": 7,
   "minReadable": 3,
-  "fingerprint": "6b1df06e56392c983d583322f9a3d89d5d7d2537f9272a67a23d5398c55841c8",
+  "fingerprint": "62d287a3c85cdb8667d4713c792c711233a3ec015d0de6b9161aad5ee6ce840a",
   "history": [
     {
       "contract": 3,
@@ -22,6 +22,11 @@
       "contract": 6,
       "date": "2026-10-12",
       "note": "停車の理由 heldBy と snap の pauseHeldBy を足す"
+    },
+    {
+      "contract": 7,
+      "date": "2026-10-13",
+      "note": "壊れた nudge・nudgePlan・reserved は捨てて snap を読む"
     }
   ]
 }

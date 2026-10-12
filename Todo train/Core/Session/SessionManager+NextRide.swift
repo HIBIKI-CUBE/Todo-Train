@@ -70,6 +70,7 @@ extension SessionManager {
         ticket.reservedAt = now
         ticket.reservedFromRideId = ride.id
         ticket.reservedVia = via
+        bumpCompanionSync()
         try save()
     }
 
@@ -85,6 +86,7 @@ extension SessionManager {
             changed = true
         }
         if changed {
+            bumpCompanionSync()
             try save()
         }
     }

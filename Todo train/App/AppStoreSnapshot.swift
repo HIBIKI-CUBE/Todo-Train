@@ -95,6 +95,7 @@ struct AppStoreSnapshot: Sendable {
         var reason: String?
         var createdAt: Date
         var sessionID: UUID?
+        var workingSeconds: Double? = nil
     }
 
     struct PauseRow: Sendable {
@@ -233,7 +234,8 @@ struct AppStoreSnapshot: Sendable {
                 addedSeconds: item.addedSeconds,
                 reason: item.reason,
                 createdAt: item.createdAt,
-                sessionID: item.session?.id
+                sessionID: item.session?.id,
+                workingSeconds: item.workingSeconds
             )
         }
         let pauses = try context.fetch(FetchDescriptor<SessionPause>()).map { pause in
@@ -362,6 +364,7 @@ struct AppStoreSnapshot: Sendable {
                 addedSeconds: row.addedSeconds,
                 reason: row.reason,
                 createdAt: row.createdAt,
+                workingSeconds: row.workingSeconds,
                 session: row.sessionID.flatMap { sessionsByID[$0] }
             )
             context.insert(item)

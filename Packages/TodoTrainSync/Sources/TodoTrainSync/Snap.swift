@@ -131,9 +131,9 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
         build = WireBuildInfo.decodeLenient(from: container, forKey: .build)
         contract = ContractKeyDecoding.positiveInt(container, .contract)
         minReadable = ContractKeyDecoding.positiveInt(container, .minReadable)
-        nudge = try container.decodeIfPresent(WireNudge.self, forKey: .nudge)
-        nudgePlan = try container.decodeIfPresent([WireNudgePlanItem].self, forKey: .nudgePlan)
-        reserved = try container.decodeIfPresent(WireReservedTicket.self, forKey: .reserved)
+        nudge = Self.lenient(WireNudge.self, from: container, forKey: .nudge)
+        nudgePlan = Self.lenient([WireNudgePlanItem].self, from: container, forKey: .nudgePlan)
+        reserved = Self.lenient(WireReservedTicket.self, from: container, forKey: .reserved)
         let decodedPauseHeldBy = try container.decodeIfPresent(PauseHeldBy.self, forKey: .pauseHeldBy)
         pauseHeldBy = phase == .paused ? decodedPauseHeldBy : nil
     }
@@ -167,6 +167,17 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
         if phase == .paused {
             try container.encodeIfPresent(pauseHeldBy, forKey: .pauseHeldBy)
         }
+    }
+
+    /// A broken optional field is dropped. The rest of the snap still decodes.
+    private static func lenient<T: Decodable, K: CodingKey>(
+        _ type: T.Type,
+        from container: KeyedDecodingContainer<K>,
+        forKey key: K
+    ) -> T? {
+        guard container.contains(key) else { return nil }
+        if (try? container.decodeNil(forKey: key)) == true { return nil }
+        return try? container.decode(T.self, forKey: key)
     }
 
     /// Remaining seconds using the contract formula. Idle / missing fields → nil.

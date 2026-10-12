@@ -65,6 +65,7 @@ extension SessionManager {
             bumpCompanionSync()
         }
         if ownsDeviceSideEffects(session) {
+            syncNudge(session, now: now)
             if crossedIntoOvertime {
                 skipPendingCheckInForOvertime(session)
                 refreshLiveActivity(for: session, now: now)

@@ -261,6 +261,22 @@ struct NudgeWireTests {
         #expect(!decision.shouldApply)
     }
 
+    @Test func malformedNudgeAndReservedLeaveTheRestOfTheSnap() throws {
+        let present = try ContractFixtures.data("fixtures/snap-nudge.json")
+        var object = try #require(JSONSerialization.jsonObject(with: present) as? [String: Any])
+        object["nudge"] = ["id": "not-a-uuid"]
+        object["reserved"] = "nope"
+        object["nudgePlan"] = [["stage": 1]]
+        let data = try JSONSerialization.data(withJSONObject: object)
+        let snap = try WireJSON.decoder().decode(SnapPlaintext.self, from: data)
+        #expect(snap.rev == 44)
+        #expect(snap.phase == .running)
+        #expect(snap.nudge == nil)
+        #expect(snap.reserved == nil)
+        #expect(snap.nudgePlan == nil)
+        #expect(snap.pendingCabin == .progress)
+    }
+
     private func answer(choice: NudgeChoice, addSeconds: Int?) -> CommandPlaintext {
         CommandPlaintext(
             id: UUID(uuidString: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")!,
