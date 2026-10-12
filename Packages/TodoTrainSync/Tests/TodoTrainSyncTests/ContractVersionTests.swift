@@ -87,7 +87,7 @@ struct ContractVersionTests {
         ) == ContractCopy.relayOlder)
         #expect(ContractCompat.commandBlock(peer: nil, relay: nil, side: .mac) == nil)
         #expect(ContractAnnouncement.parseHeader(nil) == .legacyPeer)
-        #expect(ContractAnnouncement.parseHeader("5;min=3") == .current)
+        #expect(ContractAnnouncement.parseHeader("6;min=3") == .current)
         #expect(ContractAnnouncement.parseHeader("4;min=3") == ContractAnnouncement(contract: 4, minReadable: 3))
         #expect(ContractAnnouncement.parseHeader("soon") == nil)
     }

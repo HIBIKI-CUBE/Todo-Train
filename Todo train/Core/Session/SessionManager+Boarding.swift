@@ -155,7 +155,13 @@ extension SessionManager {
         consumeArrivalCelebrations()
     }
 
-    func pause(now: Date? = nil, timetableHeld: Bool = false) throws {
+    func pause(
+        now: Date? = nil,
+        timetableHeld: Bool = false,
+        heldBy: PauseHeldBy? = nil,
+        pausedOn: PauseOrigin = .iphone,
+        heldByInferred: Bool = false
+    ) throws {
         let now = now ?? clock.now
         try refusePassengerDriving()
         guard let session = activeSession, session.isOpen else {
@@ -170,11 +176,33 @@ extension SessionManager {
             return
         }
 
-        try applyPause(session: session, now: now, timetableHeld: timetableHeld)
+        let heldBy = heldBy ?? (timetableHeld ? .timetable : .user)
+        try applyPause(
+            session: session,
+            now: now,
+            timetableHeld: timetableHeld,
+            heldBy: heldBy,
+            pausedOn: pausedOn,
+            heldByInferred: heldByInferred
+        )
     }
 
-    func applyPause(session: WorkSession, now: Date, syncAlarm: Bool = true, timetableHeld: Bool = false) throws {
-        flushToPaused(session, now: now)
+    func applyPause(
+        session: WorkSession,
+        now: Date,
+        syncAlarm: Bool = true,
+        timetableHeld: Bool = false,
+        heldBy: PauseHeldBy = .user,
+        pausedOn: PauseOrigin = .iphone,
+        heldByInferred: Bool = false
+    ) throws {
+        flushToPaused(
+            session,
+            now: now,
+            heldBy: heldBy,
+            pausedOn: pausedOn,
+            heldByInferred: heldByInferred
+        )
         session.timetableHeld = timetableHeld
         if timetableHeld {
             timetableQuietMessage = TimetableCopy.quiet
@@ -197,17 +225,29 @@ extension SessionManager {
 
     /// Park the running session without setting `phase` to `.paused` (no Focus cover tear-down).
     func parkRunningSessionForSwitch(_ session: WorkSession, now: Date) throws {
-        flushToPaused(session, now: now)
+        flushToPaused(session, now: now, heldBy: .rideSwitch, pausedOn: .iphone, heldByInferred: false)
         session.timetableHeld = false
         liveActivityManager.end()
         alarmScheduler.cancel(sessionID: session.id)
         try save()
     }
 
-    func flushToPaused(_ session: WorkSession, now: Date) {
+    func flushToPaused(
+        _ session: WorkSession,
+        now: Date,
+        heldBy: PauseHeldBy,
+        pausedOn: PauseOrigin,
+        heldByInferred: Bool
+    ) {
         session.closeActiveSegment(at: now)
         session.pausedAt = now
-        beginPauseRecord(on: session, now: now)
+        beginPauseRecord(
+            on: session,
+            now: now,
+            heldBy: heldBy,
+            pausedOn: pausedOn,
+            heldByInferred: heldByInferred
+        )
         session.pendingCheckIn = nil
         session.awayDueAt = nil
         overtimeNotifier.cancel(sessionID: session.id)
@@ -215,9 +255,18 @@ extension SessionManager {
         cancelAwayFireTask()
     }
 
-    func beginPauseRecord(on session: WorkSession, now: Date) {
+    func beginPauseRecord(
+        on session: WorkSession,
+        now: Date,
+        heldBy: PauseHeldBy,
+        pausedOn: PauseOrigin,
+        heldByInferred: Bool
+    ) {
         if session.pauses.contains(where: { $0.endedAt == nil }) { return }
         let record = SessionPause(startedAt: now, session: session)
+        record.heldBy = heldBy
+        record.pausedOn = pausedOn
+        record.heldByInferred = heldByInferred
         modelContext.insert(record)
     }
 
@@ -228,10 +277,27 @@ extension SessionManager {
     }
 
     /// StandBy / system AlarmKit pause → mirror into the open session (no AlarmKit echo).
+    /// A Live Activity 停車 already queued for this ride is the user's pause, not the alarm.
     func pauseFromAlarmKit(now: Date? = nil) throws {
         let now = now ?? clock.now
         guard let session = activeSession, session.isOpen, !session.isPaused else { return }
-        try applyPause(session: session, now: now, syncAlarm: false)
+        if isLiveActivityPausePending(sessionID: session.id) {
+            try pauseFromLiveActivity(now: now)
+            return
+        }
+        try applyPause(session: session, now: now, syncAlarm: false, heldBy: .alarm, pausedOn: .iphone)
+    }
+
+    /// Live Activity 停車. Does not echo AlarmKit; the intent may already have paused it.
+    func pauseFromLiveActivity(now: Date? = nil) throws {
+        let now = now ?? clock.now
+        guard let session = activeSession, session.isOpen, !session.isPaused else { return }
+        try applyPause(session: session, now: now, syncAlarm: false, heldBy: .user, pausedOn: .iphone)
+    }
+
+    private func isLiveActivityPausePending(sessionID: UUID) -> Bool {
+        guard let pending = FocusPendingActionStore.peek() else { return false }
+        return pending.kind == .pause && pending.sessionID == sessionID
     }
 
     /// StandBy dismiss / cancel of the end bell — keep the ride running, do not reschedule.

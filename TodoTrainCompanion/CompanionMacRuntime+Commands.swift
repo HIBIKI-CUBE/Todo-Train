@@ -2,8 +2,9 @@ import Foundation
 import TodoTrainSync
 
 extension CompanionMacRuntime {
-    func sendPause() async {
-        await sendRideCommand(.pause)
+    /// PiP の停車と車内放送の停車は `user`。保護境界は `timetable` を渡す。
+    func sendPause(heldBy: PauseHeldBy = .user) async {
+        await sendRideCommand(.pause, heldBy: heldBy)
     }
 
     func sendResume() async {
@@ -41,10 +42,10 @@ extension CompanionMacRuntime {
             return
         }
         sentTimetablePauseAt = pauseAt
-        Task { await sendPause() }
+        Task { await sendPause(heldBy: .timetable) }
     }
 
-    func sendRideCommand(_ op: WireOp) async {
+    func sendRideCommand(_ op: WireOp, heldBy: PauseHeldBy? = nil) async {
         if let blocked = ContractCompat.commandBlock(peer: peerContract, relay: relayContract, side: .mac) {
             lastStatus = blocked
             return
@@ -85,7 +86,8 @@ extension CompanionMacRuntime {
                 at: now,
                 build: LocalWireBuild.current,
                 contract: ContractVersion.contract,
-                minReadable: ContractVersion.minReadable
+                minReadable: ContractVersion.minReadable,
+                heldBy: op == .pause ? (heldBy ?? .user) : nil
             )
             let rev = OutgoingPauseApplying.nextCommandRev(current: cmdRev)
             cmdRev = rev

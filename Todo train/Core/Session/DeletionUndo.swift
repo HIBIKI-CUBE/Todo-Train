@@ -66,6 +66,9 @@ enum DeletionUndo {
         var id: UUID
         var startedAt: Date
         var endedAt: Date?
+        var heldByRaw: String?
+        var pausedOnRaw: String?
+        var heldByInferred: Bool
     }
 
     struct LineageRecord: Equatable {
@@ -143,7 +146,10 @@ enum DeletionUndo {
                 PauseRecord(
                     id: $0.id,
                     startedAt: $0.startedAt,
-                    endedAt: $0.endedAt
+                    endedAt: $0.endedAt,
+                    heldByRaw: $0.heldByRaw,
+                    pausedOnRaw: $0.pausedOnRaw,
+                    heldByInferred: $0.heldByInferred
                 )
             }
         )
@@ -260,6 +266,9 @@ enum DeletionUndo {
             }()
             existing.startedAt = pause.startedAt
             existing.endedAt = pause.endedAt
+            existing.heldByRaw = pause.heldByRaw
+            existing.pausedOnRaw = pause.pausedOnRaw
+            existing.heldByInferred = pause.heldByInferred
             existing.session = session
         }
     }

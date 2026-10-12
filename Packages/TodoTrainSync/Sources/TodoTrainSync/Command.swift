@@ -28,6 +28,8 @@ public struct CommandPlaintext: Codable, Equatable, Sendable {
     public var pipVisible: Bool?
     /// `presence` only. Unlocked, and the last input is inside the presence window.
     public var attending: Bool?
+    /// `pause` only. Absent on older Macs. `user` and `timetable` are applied; other values are `invalidPayload`.
+    public var heldBy: PauseHeldBy?
 
     public init(
         id: UUID,
@@ -45,7 +47,8 @@ public struct CommandPlaintext: Codable, Equatable, Sendable {
         answeredOn: NudgeAnsweredOn? = nil,
         ticketId: UUID? = nil,
         pipVisible: Bool? = nil,
-        attending: Bool? = nil
+        attending: Bool? = nil,
+        heldBy: PauseHeldBy? = nil
     ) {
         self.id = id
         self.op = op
@@ -63,6 +66,7 @@ public struct CommandPlaintext: Codable, Equatable, Sendable {
         self.ticketId = nil
         self.pipVisible = nil
         self.attending = nil
+        self.heldBy = nil
         switch op {
         case .issueAndBoard:
             self.title = title
@@ -78,7 +82,9 @@ public struct CommandPlaintext: Codable, Equatable, Sendable {
         case .presence:
             self.pipVisible = pipVisible
             self.attending = attending
-        case .pause, .resume, .still, .unknown:
+        case .pause:
+            self.heldBy = heldBy
+        case .resume, .still, .unknown:
             break
         }
     }
@@ -90,6 +96,7 @@ public struct CommandPlaintext: Codable, Equatable, Sendable {
     enum CodingKeys: String, CodingKey {
         case id, op, sessionId, at, title, estimatedSeconds, build, contract, minReadable
         case nudgeId, choice, addSeconds, answeredOn, ticketId, pipVisible, attending
+        case heldBy
     }
 
     public init(from decoder: Decoder) throws {
@@ -113,6 +120,7 @@ public struct CommandPlaintext: Codable, Equatable, Sendable {
         ticketId = nil
         pipVisible = nil
         attending = nil
+        heldBy = nil
         switch op {
         case .issueAndBoard:
             title = try container.decodeIfPresent(String.self, forKey: .title)
@@ -128,7 +136,9 @@ public struct CommandPlaintext: Codable, Equatable, Sendable {
         case .presence:
             pipVisible = try container.decodeIfPresent(Bool.self, forKey: .pipVisible)
             attending = try container.decodeIfPresent(Bool.self, forKey: .attending)
-        case .pause, .resume, .still, .unknown:
+        case .pause:
+            heldBy = try container.decodeIfPresent(PauseHeldBy.self, forKey: .heldBy)
+        case .resume, .still, .unknown:
             break
         }
         build = WireBuildInfo.decodeLenient(from: container, forKey: .build)
@@ -161,7 +171,9 @@ public struct CommandPlaintext: Codable, Equatable, Sendable {
         case .presence:
             try container.encodeIfPresent(pipVisible, forKey: .pipVisible)
             try container.encodeIfPresent(attending, forKey: .attending)
-        case .pause, .resume, .still, .unknown:
+        case .pause:
+            try container.encodeIfPresent(heldBy, forKey: .heldBy)
+        case .resume, .still, .unknown:
             break
         }
         try container.encodeIfPresent(build, forKey: .build)

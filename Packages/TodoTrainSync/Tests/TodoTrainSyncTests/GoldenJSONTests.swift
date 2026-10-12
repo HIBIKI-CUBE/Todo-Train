@@ -60,6 +60,7 @@ struct GoldenJSONTests {
         #expect(decoded.id == UUID(uuidString: "33333333-3333-4333-8333-333333333333"))
         #expect(decoded.sessionId == UUID(uuidString: "11111111-1111-4111-8111-111111111111"))
         #expect(decoded.at == 1_768_000_120)
+        #expect(decoded.heldBy == nil)
 
         let encoded = try WireJSON.encoder().encode(decoded)
         let again = try WireJSON.decoder().decode(CommandPlaintext.self, from: encoded)
@@ -69,6 +70,42 @@ struct GoldenJSONTests {
         #expect((object["id"] as? String)?.contains("A") == false)
         #expect(object["title"] == nil)
         #expect(object["estimatedSeconds"] == nil)
+        #expect(object["heldBy"] == nil)
+    }
+
+    @Test func cmdPauseTimetableRoundTrip() throws {
+        let data = try ContractFixtures.data("fixtures/cmd-pause-timetable.json")
+        let decoded = try WireJSON.decoder().decode(CommandPlaintext.self, from: data)
+        #expect(decoded.op == .pause)
+        #expect(decoded.heldBy == .timetable)
+        let encoded = try WireJSON.encoder().encode(decoded)
+        let object = try JSONSerialization.jsonObject(with: encoded) as! [String: Any]
+        #expect(object["heldBy"] as? String == "timetable")
+        #expect(object["title"] == nil)
+    }
+
+    @Test func snapPausedCarriesPauseHeldByAndRunningOmitsIt() throws {
+        let paused = try WireJSON.decoder().decode(
+            SnapPlaintext.self,
+            from: ContractFixtures.data("fixtures/snap-paused.json")
+        )
+        #expect(paused.phase == .paused)
+        #expect(paused.pauseHeldBy == .user)
+        let pausedObject = try JSONSerialization.jsonObject(with: try WireJSON.encoder().encode(paused)) as! [String: Any]
+        #expect(pausedObject["pauseHeldBy"] as? String == "user")
+
+        let running = try WireJSON.decoder().decode(
+            SnapPlaintext.self,
+            from: ContractFixtures.data("fixtures/snap.json")
+        )
+        #expect(running.pauseHeldBy == nil)
+        let runningObject = try JSONSerialization.jsonObject(with: try WireJSON.encoder().encode(running)) as! [String: Any]
+        #expect(runningObject["pauseHeldBy"] == nil)
+
+        var leaked = running
+        leaked.pauseHeldBy = .timetable
+        let leakedObject = try JSONSerialization.jsonObject(with: try WireJSON.encoder().encode(leaked)) as! [String: Any]
+        #expect(leakedObject["pauseHeldBy"] == nil)
     }
 
     @Test func cmdIssueAndBoardRoundTripOmitsNothingRequired() throws {
@@ -308,6 +345,8 @@ struct GoldenJSONTests {
         #expect(json["choice"] as? [String] == NudgeChoice.knownRawValues)
         #expect(json["answeredOn"] as? [String] == NudgeAnsweredOn.knownRawValues)
         #expect(json["extendPresetSeconds"] as? [Int] == [300, 600, 900])
+        #expect(json["heldBy"] as? [String] == PauseHeldBy.knownRawValues)
+        #expect(json["pauseCommandHeldBy"] as? [String] == PauseHeldBy.pauseCommandRawValues)
         let introduced = try #require(json["opIntroduced"] as? [String: Int])
         for op in ["pause", "resume", "still", "issueAndBoard", "answer", "boardReserved", "presence"] {
             #expect(introduced[op] == WireOp(rawValue: op).introducedIn)

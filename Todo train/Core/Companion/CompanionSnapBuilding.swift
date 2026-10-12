@@ -22,7 +22,8 @@ enum CompanionSnapBuilding {
         nextBlockTitle: String? = nil,
         nextBlockStartsAt: Int? = nil,
         nextBlockEndsAt: Int? = nil,
-        timetablePauseAt: Int? = nil
+        timetablePauseAt: Int? = nil,
+        pauseHeldBy: PauseHeldBy? = nil
     ) -> SnapPlaintext {
         guard let session, session.isOpen, phase != .idle else {
             return idle(
@@ -63,8 +64,15 @@ enum CompanionSnapBuilding {
             nextBlockTitle: nextBlockTitle,
             nextBlockStartsAt: nextBlockStartsAt,
             nextBlockEndsAt: nextBlockEndsAt,
-            timetablePauseAt: timetablePauseAt
+            timetablePauseAt: timetablePauseAt,
+            pauseHeldBy: pauseHeldBy ?? Self.openPauseHeldBy(session: session, phase: phase)
         )
+    }
+
+    /// The open pause's reason. Running, idle, and overtime omit it.
+    static func openPauseHeldBy(session: WorkSession, phase: SessionPhase) -> PauseHeldBy? {
+        guard phase == .paused else { return nil }
+        return session.pauses.first { $0.endedAt == nil }?.heldBy
     }
 
     static func idle(

@@ -12,7 +12,7 @@ final class SessionPause {
     var id: UUID = UUID()
     var startedAt: Date = Date.now
     var endedAt: Date?
-    /// 停車を保っている主体。既定は空で、まだ読まない。
+    /// 停車を保っている主体。`PauseHeldBy` の raw。空は理由が残っていない古い停車。
     var heldByRaw: String?
     /// 停車した端末。
     var pausedOnRaw: String?

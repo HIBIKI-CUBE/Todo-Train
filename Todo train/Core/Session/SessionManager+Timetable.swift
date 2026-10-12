@@ -5,6 +5,7 @@
 
 import Foundation
 import SwiftData
+import TodoTrainSync
 import UserNotifications
 
 extension SessionManager {
@@ -296,7 +297,7 @@ extension SessionManager {
     private func applyTimetableProtectionPause(at pauseAt: Date) throws {
         guard let session = activeSession, session.isOpen, !session.isPaused else { return }
         let clamped = max(pauseAt, session.segmentStartedAt ?? session.startedAt)
-        flushToPaused(session, now: clamped)
+        flushToPaused(session, now: clamped, heldBy: .timetable, pausedOn: .iphone, heldByInferred: false)
         session.timetableHeld = true
         phase = .paused
         timetableQuietMessage = TimetableCopy.quiet

@@ -18,6 +18,8 @@
   "choice": ["stillOnIt", "willExtend", "alreadyDone", "paused"],
   "answeredOn": ["mac"],
   "extendPresetSeconds": [300, 600, 900],
+  "heldBy": ["user", "timetable", "alarm", "switch", "passenger"],
+  "pauseCommandHeldBy": ["user", "timetable"],
   "error": [
     "pauseLimitReached",
     "noActiveService",
@@ -40,6 +42,8 @@
     "choice": "answer.choice. Same words as export checkIns.answer and CheckInAnswerKind. Unknown values decode and are invalidPayload.",
     "answeredOn": "answer.answeredOn. Only mac is valid. The decoder keeps unknown strings so #100 can add watch without a decode failure. Any value other than mac is invalidPayload until then.",
     "extendPresetSeconds": "answer.addSeconds, only when choice is willExtend. Anything else, including a missing value on willExtend or a value on another choice, is invalidPayload.",
-    "error": "Ack wire errors only. sessionMismatch and decryptFailed are wire-only (not SessionError cases). Map noActiveSession to noActiveService. Map SessionError.notPaused to notPaused. invalidPayload is issueAndBoard input (empty title or estimatedSeconds outside 60...3600) and answer input outside the extend presets. unsupportedOp means the receiver did not run an unknown op, or an op introduced after the receiver's contract. nudgeStale means the nudgeId is not the current nudge. noReservation means boardReserved arrived with no reserved ticket. reservationChanged means ticketId is not reserved.ticketId. Do not put the rest of SessionError on the wire."
+    "heldBy": "Who is holding the pause. user, timetable, alarm, switch, passenger. snap.pauseHeldBy uses these while the ride is paused and omits the key otherwise. Unknown strings stay on the value and do not fail the snap.",
+    "pauseCommandHeldBy": "pause.heldBy from Mac. Only user and timetable. alarm, switch, passenger, and unknown values are invalidPayload and are not applied. A missing key is an older Mac: the iPhone infers timetable when the same ride's protection boundary is within 60 seconds of arrival, otherwise user, and stores heldByInferred. The inferred flag is not on the wire.",
+    "error": "Ack wire errors only. sessionMismatch and decryptFailed are wire-only (not SessionError cases). Map noActiveSession to noActiveService. Map SessionError.notPaused to notPaused. invalidPayload is issueAndBoard input (empty title or estimatedSeconds outside 60...3600), answer input outside the extend presets, and pause.heldBy other than user or timetable. unsupportedOp means the receiver did not run an unknown op, or an op introduced after the receiver's contract. nudgeStale means the nudgeId is not the current nudge. noReservation means boardReserved arrived with no reserved ticket. reservationChanged means ticketId is not reserved.ticketId. Do not put the rest of SessionError on the wire."
   }
 }

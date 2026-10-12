@@ -27,6 +27,14 @@ describe("contract range", () => {
     )).toBe("selfTooOld");
   });
 
+  it("keeps an installed contract-4 client inside the range", () => {
+    expect(MIN_READABLE).toBeLessThanOrEqual(4);
+    expect(contractRange(
+      { contract: CONTRACT, minReadable: MIN_READABLE },
+      { contract: 4, minReadable: 3 },
+    )).toBe("ok");
+  });
+
   it("queues a command from an installed v4 client and from the current contract", async () => {
     const client = await pairedClient();
     const headers = ["4;min=3", `${CONTRACT};min=${MIN_READABLE}`];

@@ -102,6 +102,9 @@ struct AppStoreSnapshot: Sendable {
         var startedAt: Date
         var endedAt: Date?
         var sessionID: UUID?
+        var heldByRaw: String? = nil
+        var pausedOnRaw: String? = nil
+        var heldByInferred: Bool = false
     }
 
     struct BlockRow: Sendable {
@@ -238,7 +241,10 @@ struct AppStoreSnapshot: Sendable {
                 id: pause.id,
                 startedAt: pause.startedAt,
                 endedAt: pause.endedAt,
-                sessionID: pause.session?.id
+                sessionID: pause.session?.id,
+                heldByRaw: pause.heldByRaw,
+                pausedOnRaw: pause.pausedOnRaw,
+                heldByInferred: pause.heldByInferred
             )
         }
         let timetable = try timetableRows(from: context)
@@ -368,6 +374,9 @@ struct AppStoreSnapshot: Sendable {
                 endedAt: row.endedAt,
                 session: row.sessionID.flatMap { sessionsByID[$0] }
             )
+            pause.heldByRaw = row.heldByRaw
+            pause.pausedOnRaw = row.pausedOnRaw
+            pause.heldByInferred = row.heldByInferred
             context.insert(pause)
         }
 

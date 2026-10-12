@@ -280,7 +280,7 @@ final class CompanionSyncRuntime {
         if command.op == .issueAndBoard {
             ack = issueAndBoardAck(command, sessionManager: sessionManager)
         } else {
-            let decision = RemotePauseEvaluating.evaluate(
+            var decision = RemotePauseEvaluating.evaluate(
                 openSessionId: sessionManager.activeSession?.id,
                 pausedCount: sessionManager.pausedCountTowardLimit,
                 pauseLimit: sessionManager.pauseLimit,
@@ -290,7 +290,11 @@ final class CompanionSyncRuntime {
             if decision.shouldApply {
                 switch command.op {
                 case .pause:
-                    try sessionManager.pause()
+                    do {
+                        try sessionManager.applyCompanionPause(command)
+                    } catch is CompanionPauseRejection {
+                        decision = .invalidPayload
+                    }
                 case .resume:
                     try sessionManager.resume()
                 case .still:

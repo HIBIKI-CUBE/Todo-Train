@@ -92,6 +92,44 @@ struct CompanionSnapBuildingTests {
         #expect(snap.phase == .paused)
         #expect(snap.pausedAt == 160)
         #expect(snap.pausedAccumulated == 0)
+        #expect(snap.pauseHeldBy == nil)
+        let bare = try JSONSerialization.jsonObject(with: try jsonData(snap)) as! [String: Any]
+        #expect(bare["pauseHeldBy"] == nil)
+
+        let record = SessionPause(startedAt: Date(timeIntervalSince1970: 160), session: session)
+        record.heldBy = .user
+        record.pausedOn = .iphone
+        container.mainContext.insert(record)
+        try container.mainContext.save()
+        let withReason = CompanionSnapBuilding.snap(
+            rev: 3,
+            phase: .paused,
+            session: session,
+            now: Date(timeIntervalSince1970: 180),
+            serviceActive: true,
+            cabinEnabled: true
+        )
+        #expect(withReason.pauseHeldBy == .user)
+        let object = try JSONSerialization.jsonObject(with: try jsonData(withReason)) as! [String: Any]
+        #expect(object["pauseHeldBy"] as? String == "user")
+
+        let running = CompanionSnapBuilding.snap(
+            rev: 4,
+            phase: .running,
+            session: session,
+            now: Date(timeIntervalSince1970: 180),
+            serviceActive: true,
+            cabinEnabled: true
+        )
+        #expect(running.pauseHeldBy == nil)
+        let runningObject = try JSONSerialization.jsonObject(with: try jsonData(running)) as! [String: Any]
+        #expect(runningObject["pauseHeldBy"] == nil)
+    }
+
+    private func jsonData(_ snap: SnapPlaintext) throws -> Data {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        return try encoder.encode(snap)
     }
 }
 

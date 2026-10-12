@@ -1,7 +1,7 @@
 {
-  "contract": 5,
+  "contract": 6,
   "minReadable": 3,
-  "fingerprint": "fe36c066091f0e6ecaf299aa6756edb5b2613f90298c62c21f6a6b2c55d8001f",
+  "fingerprint": "6b1df06e56392c983d583322f9a3d89d5d7d2537f9272a67a23d5398c55841c8",
   "history": [
     {
       "contract": 3,
@@ -17,6 +17,11 @@
       "contract": 5,
       "date": "2026-10-12",
       "note": "声掛けの snap 欄と op answer・boardReserved・presence を足す"
+    },
+    {
+      "contract": 6,
+      "date": "2026-10-12",
+      "note": "停車の理由 heldBy と snap の pauseHeldBy を足す"
     }
   ]
 }

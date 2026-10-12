@@ -368,6 +368,10 @@ struct SessionManagerBoardingTests {
         #expect(manager.activeSession?.id != previous)
         #expect(manager.activeSession?.ticket?.title == "割り込み")
         #expect(current.isOpen)
+        let parked = try #require(manager.pausedSessions.first { $0.id == previous })
+        #expect(parked.pauses.first?.heldBy == .rideSwitch)
+        #expect(parked.pauses.first?.pausedOn == .iphone)
+        #expect(parked.pauses.first?.heldByInferred == false)
     }
 
     @Test func issueAndBoard_refusesWithoutService() throws {
