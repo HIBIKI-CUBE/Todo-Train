@@ -1,0 +1,4 @@
+# xcode-27 は GitHub ホストのプレビュー版ランナー。actionlint 1.7 の既定ラベル一覧にはまだ無い。
+self-hosted-runner:
+  labels:
+    - xcode-27

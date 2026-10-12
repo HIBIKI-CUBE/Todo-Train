@@ -17,6 +17,7 @@
 | [19-passenger-interval-design.md](19-passenger-interval-design.md) | 乗客モードの状態・ロック・受け入れ（Issue #66 の設計） |
 | [20-passenger-lcd-quality-refs.md](20-passenger-lcd-quality-refs.md) | 車内案内の視覚の下限。引用してよい範囲 |
 | [21-device-overwrite.md](21-device-overwrite.md) | スキーマや約束を変えたあとの実機上書き。バックアップ、件数、「このビルド」、別端末での #71 前 |
+| [22-mac-build.md](22-mac-build.md) | Mac の署名なし配布。Gatekeeper の初回起動と、セルフホストランナーの予備 |
 | [references/](references/) | マルス券の原画。車内案内の引用は [passenger-lcd/](references/passenger-lcd/) |
 | [approach-clear/](approach-clear/) | Hub 接近クリアランス（挙動は Issue #61） |
 

@@ -16,6 +16,7 @@
 - 同期のなぜ → [docs/13-sync-mac-companion.md](docs/13-sync-mac-companion.md)
 - Mac の役割 → [docs/14-mac-companion-ux.md](docs/14-mac-companion-ux.md)
 - カレンダーの体験摩擦 → [docs/17-calendar-experience.md](docs/17-calendar-experience.md)
+- Mac の配布ビルド（署名なし、Gatekeeper、セルフホストの予備） → [docs/22-mac-build.md](docs/22-mac-build.md)
 - Hub 接近クリアランス → [docs/approach-clear/](docs/approach-clear/) + Issue #61
 - スキーマや約束を変えたあとの実機確認 → [docs/21-device-overwrite.md](docs/21-device-overwrite.md)
 
@@ -39,5 +40,6 @@
 - Live Activity / Widget / 通知 / カメラは PR の Mac 検証に委ねる。
 - Worker は `cd sync/worker && npm test`（CI `sync-worker`）。パッケージと E2E は `sync/linux-swift.sh test` と `./sync/e2e/run.sh`（CI `sync-swift`）。
 - リレーのホストと preview の出し方は `sync/worker/README.md`。
+- Mac companion の署名なし Release は CI `mac-companion`（`runs-on: xcode-27`）。落とす手順は [docs/22-mac-build.md](docs/22-mac-build.md)。
 
 開発ブランチは `develop`。
