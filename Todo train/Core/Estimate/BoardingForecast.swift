@@ -88,7 +88,11 @@ enum BoardingForecast {
         let estimate = max(estimatedSeconds, 0)
         let scheduledMinutes = max(estimate / 60, 1)
         let scheduledArrival = now.addingTimeInterval(TimeInterval(estimate))
-        let pooled = ArrivalForecast.pooledRides(rides, now: now, calendar: calendar).rides
+        let pooled = ArrivalForecast.pooledRides(
+            ForecastSample.eligible(rides),
+            now: now,
+            calendar: calendar
+        ).rides
         let samples = pooled.map(\.activeSeconds)
         guard let predicted = predictedDuration(from: samples) else {
             return Snapshot(
@@ -156,9 +160,11 @@ enum BoardingForecast {
         now: Date,
         calendar: Calendar = .current
     ) -> ArrivalForecastContext? {
-        let rides = EstimateHeuristic.arrivedRides(
-            from: sessions,
-            matchingAnyTagIDs: tagFilter(for: ticket)
+        let rides = ForecastSample.eligible(
+            EstimateHeuristic.arrivedRides(
+                from: sessions,
+                matchingAnyTagIDs: tagFilter(for: ticket)
+            )
         )
         let pooled = ArrivalForecast.pooledRides(rides, now: now, calendar: calendar)
         guard let predicted = predictedDuration(from: pooled.rides.map(\.activeSeconds)) else {

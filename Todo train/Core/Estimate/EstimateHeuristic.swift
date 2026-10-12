@@ -4,6 +4,7 @@
 //
 
 import Foundation
+import TodoTrainSync
 
 enum EstimateHeuristic {
     static let presets = EstimateChips.ticketPresets
@@ -57,6 +58,8 @@ enum EstimateHeuristic {
         var extensionAddedSeconds: Int
         var extensionReasons: [String]
         var punctuality: ArrivalPunctuality
+        /// Sum of stored `macActiveSeconds` on pauses held by `user`.
+        var pauseInputSeconds: TimeInterval
     }
 
     /// Arrived rides, optionally filtered by tag IDs (any match).
@@ -84,7 +87,12 @@ enum EstimateHeuristic {
                 budgetSeconds: session.budgetSecondsAtStart,
                 extensionAddedSeconds: added,
                 extensionReasons: reasons,
-                punctuality: Punctuality.classify(session)
+                punctuality: Punctuality.classify(session),
+                pauseInputSeconds: ForecastExclusion.pauseInputSeconds(
+                    session.pauses.map {
+                        PauseInputReading(heldByRaw: $0.heldByRaw, macActiveSeconds: $0.macActiveSeconds)
+                    }
+                )
             )
         }
     }

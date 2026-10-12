@@ -48,6 +48,7 @@ enum DeletionUndo {
         var pendingCheckInKindRaw: String?
         var checkInPromptLine: String?
         var checkInAnswersJSON: String
+        var nudgeEventsJSON: String = "[]"
         var awayDueAt: Date?
         var boardedDeviceID: String?
         var ticketID: UUID?
@@ -132,6 +133,7 @@ enum DeletionUndo {
             pendingCheckInKindRaw: session.pendingCheckInKindRaw,
             checkInPromptLine: session.checkInPromptLine,
             checkInAnswersJSON: session.checkInAnswersJSON,
+            nudgeEventsJSON: session.nudgeEventsJSON,
             awayDueAt: session.awayDueAt,
             boardedDeviceID: session.boardedDeviceID,
             ticketID: session.ticket?.id,
@@ -235,6 +237,7 @@ enum DeletionUndo {
         session.pendingCheckInKindRaw = record.pendingCheckInKindRaw
         session.checkInPromptLine = record.checkInPromptLine
         session.checkInAnswersJSON = record.checkInAnswersJSON
+        session.nudgeEventsJSON = record.nudgeEventsJSON
         session.awayDueAt = record.awayDueAt
         session.boardedDeviceID = record.boardedDeviceID
         session.ticket = parent

@@ -27,7 +27,9 @@ extension SessionManager {
             answer: answer,
             now: now,
             nudgeID: stamp?.0,
-            answeredOn: stamp == nil ? nil : "iphone"
+            answeredOn: stamp == nil ? nil : "iphone",
+            answeredStage: stamp?.1.rawValue,
+            recordKind: stamp.map { CheckInKind.recorded(for: $0.1) }
         )
         session.awayDueAt = nil
         noteCabinActivity(now: now, clearPendingIdle: true)
@@ -42,6 +44,8 @@ extension SessionManager {
             try pause(now: now)
         case .alreadyDone:
             try arrive(resolution: .alreadyDone, now: now)
+        case .board:
+            break
         }
     }
 
@@ -62,7 +66,7 @@ extension SessionManager {
                 bumpCompanionSync()
                 _ = saveBestEffort()
                 return
-            case .none:
+            case .overrun, .gap, .none:
                 break
             }
 
@@ -265,6 +269,7 @@ extension SessionManager {
         session.nudgePendingStageRaw = nil
         session.nudgeAnsweredAt = nil
         session.nudgeAnsweredOnRaw = nil
+        session.nudgeEventsJSON = "[]"
     }
 
     func requestCheckInPrompt(for session: WorkSession, title: String, estimatedMinutes: Int) {
@@ -305,9 +310,12 @@ extension SessionManager {
         now: Date,
         nudgeID: String? = nil,
         addSeconds: Int? = nil,
-        answeredOn: String? = nil
+        answeredOn: String? = nil,
+        answeredStage: String? = nil,
+        recordKind: CheckInKind? = nil
     ) {
-        guard let kind = session.pendingCheckIn else { return }
+        guard let pending = session.pendingCheckIn else { return }
+        let kind = recordKind ?? pending
         var answers = session.checkInAnswers
         answers.append(
             CheckInAnswerRecord(
@@ -316,7 +324,8 @@ extension SessionManager {
                 answeredAt: now,
                 nudgeID: nudgeID,
                 addSeconds: addSeconds,
-                answeredOn: answeredOn
+                answeredOn: answeredOn,
+                answeredStage: answeredStage
             )
         )
         session.checkInAnswers = answers
@@ -324,7 +333,7 @@ extension SessionManager {
             session.nudgeAnsweredAt = now
             session.nudgeAnsweredOnRaw = answeredOn
         }
-        if kind == .progress {
+        if pending == .progress {
             session.checkInFiredCount += 1
         }
         session.pendingCheckIn = nil

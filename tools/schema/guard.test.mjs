@@ -82,8 +82,8 @@ test("V4 の今のモデルで検査が通る", () => {
   const head = readFingerprint();
   const latest = latestSchema(readAppSchema());
   const computed = fingerprintOf();
-  assert.equal(head.name, "AppSchemaV5");
-  assert.equal(head.version, "5.0.0");
+  assert.equal(head.name, "AppSchemaV6");
+  assert.equal(head.version, "6.0.0");
   assert.equal(head.fingerprint, computed);
   assert.equal(latest.name, head.name);
   assert.equal(latest.version, head.version);
@@ -320,11 +320,18 @@ test("凍結した版の型を書き換えると落ちる", () => {
   assert.equal(frozenBodiesChanged(source, v1), true);
 
   const current = source.replace(
-    "enum AppSchemaV5: VersionedSchema {\n    static var versionIdentifier: Schema.Version { Schema.Version(5, 0, 0) }",
-    "enum AppSchemaV5: VersionedSchema {\n    static var versionIdentifier: Schema.Version { Schema.Version(5, 0, 0) } // x",
+    "enum AppSchemaV6: VersionedSchema {\n    static var versionIdentifier: Schema.Version { Schema.Version(6, 0, 0) }",
+    "enum AppSchemaV6: VersionedSchema {\n    static var versionIdentifier: Schema.Version { Schema.Version(6, 0, 0) } // x",
   );
   assert.notEqual(current, source);
   assert.equal(frozenBodiesChanged(source, current), false);
+
+  const frozenV5 = source.replace(
+    "enum AppSchemaV5: VersionedSchema {\n    static var versionIdentifier: Schema.Version { Schema.Version(5, 0, 0) }",
+    "enum AppSchemaV5: VersionedSchema {\n    static var versionIdentifier: Schema.Version { Schema.Version(5, 0, 0) } // x",
+  );
+  assert.notEqual(frozenV5, source);
+  assert.equal(frozenBodiesChanged(source, frozenV5), true);
 
   const previous = source.replace(
     "enum AppSchemaV4: VersionedSchema {\n    static var versionIdentifier: Schema.Version { Schema.Version(4, 0, 0) }",

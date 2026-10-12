@@ -39,7 +39,8 @@ extension SessionManager {
         guard let anchor = gapAnchorSession(now: now) else { return false }
         guard !anchor.nudgeFiredStagesRaw.contains(ArrivalGapDeciding.dismissMarker) else { return false }
         let decision = gapDecision(anchor: anchor, now: now)
-        guard decision.visible != nil else { return false }
+        guard let visible = decision.visible else { return false }
+        anchor.cancelNudgeEvent(stage: visible.stage.rawValue, at: now)
         anchor.nudgeFiredStagesRaw.append(ArrivalGapDeciding.dismissMarker)
         arrivalGapBanner = nil
         cancelGapWatch()
@@ -52,7 +53,24 @@ extension SessionManager {
         guard let ticketID = arrivalGapBanner?.ticketID, let ticket = fetchTicket(id: ticketID) else {
             return
         }
+        recordGapBoardAnswer(at: clock.now, answeredOn: "iphone")
         try board(ticket: ticket)
+    }
+
+    func recordGapBoardAnswer(at date: Date, answeredOn: String) {
+        guard let anchor = gapAnchorSession(now: date) else { return }
+        let stage = gapDecision(anchor: anchor, now: date).visible?.stage.rawValue
+        var answers = anchor.checkInAnswers
+        answers.append(
+            CheckInAnswerRecord(
+                kind: .gap,
+                answer: .board,
+                answeredAt: date,
+                answeredOn: answeredOn,
+                answeredStage: stage
+            )
+        )
+        anchor.checkInAnswers = answers
     }
 
     func syncArrivalGap(now: Date) {
@@ -68,6 +86,16 @@ extension SessionManager {
         for item in decision.newlyDue where !anchor.nudgeFiredStagesRaw.contains(item.stage.rawValue) {
             anchor.nudgeFiredStagesRaw.append(item.stage.rawValue)
             let fresh = now.timeIntervalSince(item.fireAt) <= ArrivalGapDeciding.fresh
+            anchor.appendNudgeEvent(
+                NudgeEventRecord(
+                    stage: item.stage.rawValue,
+                    firedAt: item.fireAt,
+                    surface: item.surface.rawValue,
+                    rang: fresh && item.rings,
+                    skipped: !fresh,
+                    cancelledAt: nil
+                )
+            )
             if fresh, item.rings, item.surface == .iphone, iphoneHubVisible {
                 playGapCue()
             }

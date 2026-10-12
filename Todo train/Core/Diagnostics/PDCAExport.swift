@@ -2,12 +2,15 @@
 //  PDCAExport.swift
 //  Todo train
 //
-//  診断用の件数と時刻だけ。題名・理由・プロンプトは出さない。
+//  診断用の件数と時刻、停車と声掛けの生の記録。題名・理由・プロンプトは出さない。
 //  乗客レーンも同契約: 題名・本文・deviceId は出さない。無視した offer は記録しないので件数も出さない。
+//  識別子 todotrain.pdca.v0 は上げない。足した欄は、古い書き出しには無い。
+//  走行時間は書き出しても値を変えない。割合の欄は足さない。
 //
 
 import Foundation
 import SwiftData
+import TodoTrainSync
 
 nonisolated enum PDCAExport {
     static let schema = "todotrain.pdca.v0"
@@ -25,6 +28,7 @@ nonisolated enum PDCAExport {
         var extensions: [ExtensionRow]
         var lineages: [LineageRow]
         var checkIns: [CheckInRow]
+        var nudges: [NudgeRow]
         var timetableBlocks: [TimetableBlockRow]
         var timetableGuards: [TimetableGuardRow]
         var passengerRides: [PassengerRideRow]
@@ -98,6 +102,10 @@ nonisolated enum PDCAExport {
         var startedFrom: String
         /// 入る運行がなければキーごと省く。
         var serviceDayId: UUID?
+        /// `heldBy == user` の停車に残っている `macActiveSeconds` の合計。
+        var pauseInputSeconds: TimeInterval
+        /// 予測の到着から外す。走行時間はそのまま。
+        var excludedFromForecast: Bool
     }
 
     struct PauseRow: Encodable {
@@ -105,6 +113,15 @@ nonisolated enum PDCAExport {
         var rideId: UUID
         var startedAt: Date
         var endedAt: PDCANull<Date>
+        /// 保存された理由。空のままなら null。`timetableHeld` からは作らない。
+        var heldBy: PDCANull<String>
+        var pausedOn: PDCANull<String>
+        var heldByInferred: Bool
+        var macSampledSeconds: Double
+        var macActiveSeconds: Double
+        var promptedAt: PDCANull<Date>
+        /// `resume` / `keepPaused` / `none`、または保存されたままの文字列。
+        var promptAnswer: PDCANull<String>
     }
 
     struct ExtensionRow: Encodable {
@@ -129,6 +146,32 @@ nonisolated enum PDCAExport {
         var kind: String
         var answer: String
         var answeredAt: Date
+        var answeredStage: String?
+        var answeredOn: String?
+
+        enum CodingKeys: String, CodingKey {
+            case rideId, kind, answer, answeredAt, answeredStage, answeredOn
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(rideId, forKey: .rideId)
+            try container.encode(kind, forKey: .kind)
+            try container.encode(answer, forKey: .answer)
+            try container.encode(answeredAt, forKey: .answeredAt)
+            try container.encodeIfPresent(answeredStage, forKey: .answeredStage)
+            try container.encodeIfPresent(answeredOn, forKey: .answeredOn)
+        }
+    }
+
+    struct NudgeRow: Encodable {
+        var rideId: UUID
+        var stage: String
+        var firedAt: Date
+        var surface: String
+        var rang: Bool
+        var skipped: Bool
+        var cancelledAt: PDCANull<Date>
     }
 
     struct TimetableBlockRow: Encodable {
@@ -261,9 +304,15 @@ nonisolated enum PDCAExport {
         var pauseRows: [PauseRow] = []
         var extensionRows: [ExtensionRow] = []
         var checkInRows: [CheckInRow] = []
+        var nudgeRows: [NudgeRow] = []
         rideRows.reserveCapacity(orderedSessions.count)
 
         for session in orderedSessions {
+            let pauseInput = ForecastExclusion.pauseInputSeconds(
+                session.pauses.map {
+                    PauseInputReading(heldByRaw: $0.heldByRaw, macActiveSeconds: $0.macActiveSeconds)
+                }
+            )
             rideRows.append(
                 RideRow(
                     id: session.id,
@@ -280,7 +329,12 @@ nonisolated enum PDCAExport {
                     arrivalAction: PDCANull(session.arrivalAction?.rawValue),
                     arrivalStampedAt: PDCANull(session.arrivalStampedAt),
                     startedFrom: session.startedFrom.rawValue,
-                    serviceDayId: matchingServiceDayID(startedAt: session.startedAt, serviceDays: serviceDays)
+                    serviceDayId: matchingServiceDayID(startedAt: session.startedAt, serviceDays: serviceDays),
+                    pauseInputSeconds: pauseInput,
+                    excludedFromForecast: ForecastExclusion.excludes(
+                        pauseInputSeconds: pauseInput,
+                        activeSeconds: session.accumulatedActiveSeconds
+                    )
                 )
             )
             for pause in session.pauses {
@@ -289,7 +343,14 @@ nonisolated enum PDCAExport {
                         id: pause.id,
                         rideId: session.id,
                         startedAt: pause.startedAt,
-                        endedAt: PDCANull(pause.endedAt)
+                        endedAt: PDCANull(pause.endedAt),
+                        heldBy: PDCANull(pause.heldByRaw),
+                        pausedOn: PDCANull(pause.pausedOnRaw),
+                        heldByInferred: pause.heldByInferred,
+                        macSampledSeconds: pause.macSampledSeconds,
+                        macActiveSeconds: pause.macActiveSeconds,
+                        promptedAt: PDCANull(pause.promptedAt),
+                        promptAnswer: PDCANull(pause.promptAnswerRaw)
                     )
                 )
             }
@@ -304,10 +365,16 @@ nonisolated enum PDCAExport {
                 )
             }
             checkInRows.append(contentsOf: checkIns(from: session.checkInAnswersJSON, rideId: session.id))
+            nudgeRows.append(contentsOf: nudges(from: session))
         }
 
         pauseRows.sort { byDateThenID($0.startedAt, $0.id, $1.startedAt, $1.id) }
         extensionRows.sort { byDateThenID($0.createdAt, $0.id, $1.createdAt, $1.id) }
+        nudgeRows.sort { lhs, rhs in
+            if lhs.firedAt != rhs.firedAt { return lhs.firedAt < rhs.firedAt }
+            if lhs.rideId != rhs.rideId { return lhs.rideId.uuidString < rhs.rideId.uuidString }
+            return lhs.stage < rhs.stage
+        }
 
         let lineageRows = lineages
             .sorted { byDateThenID($0.createdAt, $0.id, $1.createdAt, $1.id) }
@@ -368,6 +435,7 @@ nonisolated enum PDCAExport {
             extensions: extensionRows,
             lineages: lineageRows,
             checkIns: checkInRows,
+            nudges: nudgeRows,
             timetableBlocks: blockRows,
             timetableGuards: guardRows,
             passengerRides: passengerRideRows,
@@ -461,7 +529,23 @@ nonisolated enum PDCAExport {
                 rideId: rideId,
                 kind: record.kind.rawValue,
                 answer: record.answer.rawValue,
-                answeredAt: record.answeredAt
+                answeredAt: record.answeredAt,
+                answeredStage: record.answeredStage,
+                answeredOn: record.answeredOn
+            )
+        }
+    }
+
+    private static func nudges(from session: WorkSession) -> [NudgeRow] {
+        session.nudgeEvents.map { event in
+            NudgeRow(
+                rideId: session.id,
+                stage: event.stage,
+                firedAt: event.firedAt,
+                surface: event.surface,
+                rang: event.rang,
+                skipped: event.skipped,
+                cancelledAt: PDCANull(event.cancelledAt)
             )
         }
     }

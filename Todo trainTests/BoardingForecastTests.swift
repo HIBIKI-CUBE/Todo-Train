@@ -68,6 +68,49 @@ struct BoardingForecastTests {
         #expect(snapshot.predictedScaleMinutes == 23)
     }
 
+    @Test func prediction_dropsRidesWithLongUserPauseInput() throws {
+        let container = try AppModelContainer.make(inMemory: true)
+        let context = ModelContext(container)
+        let ticket = Ticket(title: "T", estimatedSeconds: 20 * 60)
+        context.insert(ticket)
+        let kept = [
+            arrived(context, ticket: ticket, active: 20 * 60),
+            arrived(context, ticket: ticket, active: 22 * 60),
+            arrived(context, ticket: ticket, active: 24 * 60),
+        ]
+        let pulled = arrived(context, ticket: ticket, active: 10 * 60)
+        let pause = SessionPause(startedAt: .now, endedAt: .now, session: pulled)
+        pause.heldByRaw = "user"
+        pause.macSampledSeconds = 400
+        pause.macActiveSeconds = 400
+        context.insert(pause)
+        pulled.timetableHeld = false
+        let timetable = arrived(context, ticket: ticket, active: 10 * 60)
+        let held = SessionPause(startedAt: .now, endedAt: .now, session: timetable)
+        held.heldByRaw = "timetable"
+        held.macSampledSeconds = 9_000
+        held.macActiveSeconds = 9_000
+        context.insert(held)
+
+        let included = BoardingForecast.make(
+            now: .now,
+            estimatedSeconds: ticket.estimatedSeconds,
+            sessions: kept + [pulled],
+            matchingAnyTagIDs: nil
+        )
+        #expect(included.predictedMinutes == 22)
+        #expect(included.sampleCount == 3)
+        #expect(pulled.accumulatedActiveSeconds == 10 * 60)
+
+        let stillShort = BoardingForecast.make(
+            now: .now,
+            estimatedSeconds: ticket.estimatedSeconds,
+            sessions: kept + [timetable],
+            matchingAnyTagIDs: nil
+        )
+        #expect(stillShort.sampleCount == 4)
+    }
+
     @Test func prediction_ignoresNonArrivals() throws {
         let container = try AppModelContainer.make(inMemory: true)
         let context = ModelContext(container)
