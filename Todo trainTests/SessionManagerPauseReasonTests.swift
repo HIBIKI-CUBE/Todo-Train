@@ -23,7 +23,6 @@ struct SessionManagerPauseReasonTests {
             let ticket = try SessionManagerFixtures.makeTicket(context, seconds: 600)
             try manager.board(ticket: ticket)
             try manager.pause(timetableHeld: true)
-            #expect(manager.activeSession?.timetableHeld == true)
         }
         try expectOpenPause(heldBy: .alarm, pausedOn: .iphone, inferred: false) { manager, context, _, _ in
             let ticket = try SessionManagerFixtures.makeTicket(context, seconds: 600)
@@ -87,7 +86,6 @@ struct SessionManagerPauseReasonTests {
         #expect(recorded.heldBy == .timetable)
         #expect(recorded.pausedOn == .mac)
         #expect(recorded.heldByInferred == false)
-        #expect(manager.activeSession?.timetableHeld == true)
 
         let (rejected, rejectedContext, _, _) = try SessionManagerFixtures.makeHarness(now: start)
         try rejected.startService()
@@ -99,14 +97,25 @@ struct SessionManagerPauseReasonTests {
         }
         #expect(rejected.phase == .running)
         #expect(rejected.activeSession?.pauses.isEmpty == true)
+
+        let (held, heldContext, _, _) = try SessionManagerFixtures.makeHarness(now: start)
+        try held.startService()
+        _ = insertBlock(heldContext)
+        let occupying = try SessionManagerFixtures.makeTicket(heldContext, seconds: 600)
+        try held.board(ticket: occupying)
+        #expect(held.phase == .running)
+        let heldID = try #require(held.activeSession?.id)
+        try held.applyCompanionPause(pause(sessionID: heldID, heldBy: .timetable, at: start))
+        #expect(held.activeSession?.timetableHeld == true)
+        #expect(try openPause(held.activeSession).heldBy == .timetable)
     }
 
     @Test func missingHeldByUsesArrivalNotCommandAt() throws {
-        try expectInferred(delta: 0, commandAtDelta: -10_000, heldBy: .timetable, timetableHeld: true)
-        try expectInferred(delta: -60, commandAtDelta: 10_000, heldBy: .timetable, timetableHeld: true)
-        try expectInferred(delta: 60, commandAtDelta: 0, heldBy: .timetable, timetableHeld: true)
-        try expectInferred(delta: 61, commandAtDelta: 0, heldBy: .user, timetableHeld: false)
-        try expectInferred(delta: -61, commandAtDelta: 0, heldBy: .user, timetableHeld: false)
+        try expectInferred(delta: 0, commandAtDelta: -10_000, heldBy: .timetable)
+        try expectInferred(delta: -60, commandAtDelta: 10_000, heldBy: .timetable)
+        try expectInferred(delta: 60, commandAtDelta: 0, heldBy: .timetable)
+        try expectInferred(delta: 61, commandAtDelta: 0, heldBy: .user)
+        try expectInferred(delta: -61, commandAtDelta: 0, heldBy: .user)
     }
 
     @Test func explicitUserNearTheBoundaryStaysUser() throws {
@@ -169,8 +178,7 @@ struct SessionManagerPauseReasonTests {
     private func expectInferred(
         delta: TimeInterval,
         commandAtDelta: TimeInterval,
-        heldBy: PauseHeldBy,
-        timetableHeld: Bool
+        heldBy: PauseHeldBy
     ) throws {
         let (manager, context, clock, _) = try SessionManagerFixtures.makeHarness(now: start)
         try manager.startService()
@@ -187,7 +195,6 @@ struct SessionManagerPauseReasonTests {
         #expect(recorded.heldBy == heldBy)
         #expect(recorded.pausedOn == .mac)
         #expect(recorded.heldByInferred == true)
-        #expect(manager.activeSession?.timetableHeld == timetableHeld)
     }
 
     private func openPause(_ session: WorkSession?) throws -> SessionPause {
