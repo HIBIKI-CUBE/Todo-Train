@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import TodoTrainSync
 import WidgetKit
 
 struct TodoTrainEntry: TimelineEntry {

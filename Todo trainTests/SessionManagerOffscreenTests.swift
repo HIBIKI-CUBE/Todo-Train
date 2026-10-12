@@ -1,7 +1,9 @@
 import Foundation
 import Testing
+import TodoTrainSync
 @testable import Todo_train
 
+@MainActor
 @Suite("Offscreen notification gate")
 struct SessionManagerOffscreenTests {
     private let tokyo: Calendar = {
