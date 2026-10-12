@@ -16,6 +16,10 @@ struct AppStoreSnapshot: Sendable {
     var sessions: [SessionRow]
     var extensions: [ExtensionRow]
     var pauses: [PauseRow]
+    var blocks: [BlockRow]
+    var guards: [GuardRow]
+    var seriesRules: [SeriesRuleRow]
+    var passengerRides: [PassengerRideRow]
 
     struct TagRow: Sendable {
         var id: UUID
@@ -98,6 +102,52 @@ struct AppStoreSnapshot: Sendable {
         var startedAt: Date
         var endedAt: Date?
         var sessionID: UUID?
+    }
+
+    struct BlockRow: Sendable {
+        var id: UUID
+        var title: String
+        var startsAt: Date
+        var endsAt: Date
+        var sourceRaw: String
+        var adoptionScopeRaw: String
+        var isCancelled: Bool
+        var needsReview: Bool
+        var calendarEventIdentifier: String?
+        var calendarRecurrenceIdentifier: String?
+        var occurrenceStartKey: Double?
+        var createdAt: Date
+    }
+
+    struct GuardRow: Sendable {
+        var id: UUID
+        var sessionID: UUID
+        var blockID: UUID
+        var notifiedAt: Date
+        var protectionBoundary: Date
+        var resolvedAt: Date?
+        var invalidatedAt: Date?
+    }
+
+    struct SeriesRuleRow: Sendable {
+        var id: UUID
+        var recurrenceIdentifier: String
+        var title: String
+        var adopted: Bool
+        var excludedOccurrenceStarts: [Double]
+    }
+
+    struct PassengerRideRow: Sendable {
+        var id: UUID
+        var intervalId: String
+        var title: String
+        var intervalStart: Date
+        var intervalEnd: Date
+        var boardedAt: Date
+        var endedAt: Date?
+        var endReasonRaw: String?
+        var sourceRaw: String
+        var deviceId: String?
     }
 
     static func capture(from context: ModelContext) throws -> AppStoreSnapshot {
@@ -191,6 +241,8 @@ struct AppStoreSnapshot: Sendable {
                 sessionID: pause.session?.id
             )
         }
+        let timetable = try timetableRows(from: context)
+        let rides = try passengerRows(from: context)
         return AppStoreSnapshot(
             tags: tags,
             tickets: tickets,
@@ -198,7 +250,11 @@ struct AppStoreSnapshot: Sendable {
             serviceDays: serviceDays,
             sessions: sessions,
             extensions: extensions,
-            pauses: pauses
+            pauses: pauses,
+            blocks: timetable.blocks,
+            guards: timetable.guards,
+            seriesRules: timetable.seriesRules,
+            passengerRides: rides
         )
     }
 
@@ -313,6 +369,356 @@ struct AppStoreSnapshot: Sendable {
                 session: row.sessionID.flatMap { sessionsByID[$0] }
             )
             context.insert(pause)
+        }
+
+        restoreTimetable(into: context)
+        restorePassengerRides(into: context)
+    }
+
+    static func captureV1(from context: ModelContext) throws -> AppStoreSnapshot {
+        try capturePrePR71(from: context, includeTimetable: false, includePassenger: false)
+    }
+
+    static func captureV2(from context: ModelContext) throws -> AppStoreSnapshot {
+        try capturePrePR71(from: context, includeTimetable: true, includePassenger: false)
+    }
+
+    static func captureV3(from context: ModelContext) throws -> AppStoreSnapshot {
+        try capturePrePR71(from: context, includeTimetable: true, includePassenger: true)
+    }
+
+    static func captureV3_1(from context: ModelContext) throws -> AppStoreSnapshot {
+        let tags = try context.fetch(FetchDescriptor<AppSchemaV3_1.Tag>()).map { tag in
+            TagRow(
+                id: tag.id,
+                name: tag.name,
+                colorHex: tag.colorHex,
+                sortOrder: tag.sortOrder,
+                createdAt: tag.createdAt
+            )
+        }
+        let tickets = try context.fetch(FetchDescriptor<AppSchemaV3_1.Ticket>()).map { ticket in
+            TicketRow(
+                id: ticket.id,
+                title: ticket.title,
+                estimatedSeconds: ticket.estimatedSeconds,
+                sortOrder: ticket.sortOrder,
+                createdAt: ticket.createdAt,
+                dueDate: ticket.dueDate,
+                closedAt: ticket.closedAt,
+                closureKindRaw: ticket.closureKindRaw,
+                reservedAt: ticket.reservedAt,
+                reservedFromRideId: ticket.reservedFromRideId,
+                reservedViaRaw: ticket.reservedViaRaw,
+                tagIDs: ticket.tags.map(\.id)
+            )
+        }
+        let lineages = try context.fetch(FetchDescriptor<AppSchemaV3_1.TaskLineage>()).map { lineage in
+            LineageRow(
+                id: lineage.id,
+                kindRaw: lineage.kindRaw,
+                createdAt: lineage.createdAt,
+                fromSessionID: lineage.fromSessionID,
+                aiGenerated: lineage.aiGenerated,
+                parentID: lineage.parent?.id,
+                childID: lineage.child?.id
+            )
+        }
+        let serviceDays = try serviceDayRows(from: context)
+        let sessions = try context.fetch(FetchDescriptor<AppSchemaV3_1.WorkSession>()).map { session in
+            SessionRow(
+                id: session.id,
+                startedAt: session.startedAt,
+                endedAt: session.endedAt,
+                segmentStartedAt: session.segmentStartedAt,
+                pausedAt: session.pausedAt,
+                accumulatedActiveSeconds: session.accumulatedActiveSeconds,
+                estimatedSecondsAtStart: session.estimatedSecondsAtStart,
+                budgetSecondsAtStart: session.budgetSecondsAtStart,
+                outcomeRaw: session.outcomeRaw,
+                overtimeResolutionRaw: session.overtimeResolutionRaw,
+                arrivalActionRaw: session.arrivalActionRaw,
+                arrivalStampedAt: session.arrivalStampedAt,
+                startedFromRaw: session.startedFromRaw,
+                checkInOffsetSeconds: session.checkInOffsetSeconds,
+                checkInFiredCount: session.checkInFiredCount,
+                pendingCheckInKindRaw: session.pendingCheckInKindRaw,
+                checkInPromptLine: session.checkInPromptLine,
+                checkInAnswersJSON: session.checkInAnswersJSON,
+                awayDueAt: session.awayDueAt,
+                boardedDeviceID: session.boardedDeviceID,
+                timetableHeld: session.timetableHeld,
+                ticketID: session.ticket?.id
+            )
+        }
+        let extensions = try context.fetch(FetchDescriptor<AppSchemaV3_1.SessionExtension>()).map { item in
+            ExtensionRow(
+                id: item.id,
+                addedSeconds: item.addedSeconds,
+                reason: item.reason,
+                createdAt: item.createdAt,
+                sessionID: item.session?.id
+            )
+        }
+        let pauses = try context.fetch(FetchDescriptor<AppSchemaV3_1.SessionPause>()).map { pause in
+            PauseRow(
+                id: pause.id,
+                startedAt: pause.startedAt,
+                endedAt: pause.endedAt,
+                sessionID: pause.session?.id
+            )
+        }
+        let timetable = try timetableRows(from: context)
+        let rides = try passengerRows(from: context)
+        return AppStoreSnapshot(
+            tags: tags,
+            tickets: tickets,
+            lineages: lineages,
+            serviceDays: serviceDays,
+            sessions: sessions,
+            extensions: extensions,
+            pauses: pauses,
+            blocks: timetable.blocks,
+            guards: timetable.guards,
+            seriesRules: timetable.seriesRules,
+            passengerRides: rides
+        )
+    }
+
+    private static func capturePrePR71(
+        from context: ModelContext,
+        includeTimetable: Bool,
+        includePassenger: Bool
+    ) throws -> AppStoreSnapshot {
+        let tags = try context.fetch(FetchDescriptor<AppSchemaV3.Tag>()).map { tag in
+            TagRow(
+                id: tag.id,
+                name: tag.name,
+                colorHex: tag.colorHex,
+                sortOrder: tag.sortOrder,
+                createdAt: tag.createdAt
+            )
+        }
+        let tickets = try context.fetch(FetchDescriptor<AppSchemaV3.Ticket>()).map { ticket in
+            TicketRow(
+                id: ticket.id,
+                title: ticket.title,
+                estimatedSeconds: ticket.estimatedSeconds,
+                sortOrder: ticket.sortOrder,
+                createdAt: ticket.createdAt,
+                dueDate: ticket.dueDate,
+                closedAt: ticket.closedAt,
+                closureKindRaw: ticket.closureKindRaw,
+                reservedAt: nil,
+                reservedFromRideId: nil,
+                reservedViaRaw: nil,
+                tagIDs: ticket.tags.map(\.id)
+            )
+        }
+        let lineages = try context.fetch(FetchDescriptor<AppSchemaV3.TaskLineage>()).map { lineage in
+            LineageRow(
+                id: lineage.id,
+                kindRaw: lineage.kindRaw,
+                createdAt: lineage.createdAt,
+                fromSessionID: lineage.fromSessionID,
+                aiGenerated: lineage.aiGenerated,
+                parentID: lineage.parent?.id,
+                childID: lineage.child?.id
+            )
+        }
+        let serviceDays = try serviceDayRows(from: context)
+        let sessions = try context.fetch(FetchDescriptor<AppSchemaV3.WorkSession>()).map { session in
+            SessionRow(
+                id: session.id,
+                startedAt: session.startedAt,
+                endedAt: session.endedAt,
+                segmentStartedAt: session.segmentStartedAt,
+                pausedAt: session.pausedAt,
+                accumulatedActiveSeconds: session.accumulatedActiveSeconds,
+                estimatedSecondsAtStart: session.estimatedSecondsAtStart,
+                budgetSecondsAtStart: session.budgetSecondsAtStart,
+                outcomeRaw: session.outcomeRaw,
+                overtimeResolutionRaw: session.overtimeResolutionRaw,
+                arrivalActionRaw: nil,
+                arrivalStampedAt: nil,
+                startedFromRaw: nil,
+                checkInOffsetSeconds: session.checkInOffsetSeconds,
+                checkInFiredCount: session.checkInFiredCount,
+                pendingCheckInKindRaw: session.pendingCheckInKindRaw,
+                checkInPromptLine: session.checkInPromptLine,
+                checkInAnswersJSON: session.checkInAnswersJSON,
+                awayDueAt: session.awayDueAt,
+                boardedDeviceID: session.boardedDeviceID,
+                timetableHeld: session.timetableHeld,
+                ticketID: session.ticket?.id
+            )
+        }
+        let extensions = try context.fetch(FetchDescriptor<AppSchemaV3.SessionExtension>()).map { item in
+            ExtensionRow(
+                id: item.id,
+                addedSeconds: item.addedSeconds,
+                reason: item.reason,
+                createdAt: item.createdAt,
+                sessionID: item.session?.id
+            )
+        }
+        let pauses = try context.fetch(FetchDescriptor<AppSchemaV3.SessionPause>()).map { pause in
+            PauseRow(
+                id: pause.id,
+                startedAt: pause.startedAt,
+                endedAt: pause.endedAt,
+                sessionID: pause.session?.id
+            )
+        }
+        let timetable = try includeTimetable
+            ? timetableRows(from: context)
+            : (blocks: [], guards: [], seriesRules: [])
+        let rides = includePassenger ? try passengerRows(from: context) : []
+        return AppStoreSnapshot(
+            tags: tags,
+            tickets: tickets,
+            lineages: lineages,
+            serviceDays: serviceDays,
+            sessions: sessions,
+            extensions: extensions,
+            pauses: pauses,
+            blocks: timetable.blocks,
+            guards: timetable.guards,
+            seriesRules: timetable.seriesRules,
+            passengerRides: rides
+        )
+    }
+
+    private static func serviceDayRows(from context: ModelContext) throws -> [ServiceDayRow] {
+        try context.fetch(FetchDescriptor<ServiceDay>()).map { day in
+            ServiceDayRow(
+                id: day.id,
+                startedAt: day.startedAt,
+                endedAt: day.endedAt,
+                calendarDayKey: day.calendarDayKey,
+                pendingCabinKindRaw: day.pendingCabinKindRaw,
+                cabinIdleFiredCount: day.cabinIdleFiredCount,
+                lastCabinActivityAt: day.lastCabinActivityAt
+            )
+        }
+    }
+
+    private static func timetableRows(
+        from context: ModelContext
+    ) throws -> (blocks: [BlockRow], guards: [GuardRow], seriesRules: [SeriesRuleRow]) {
+        let blocks = try context.fetch(FetchDescriptor<TimetableBlock>()).map { block in
+            BlockRow(
+                id: block.id,
+                title: block.title,
+                startsAt: block.startsAt,
+                endsAt: block.endsAt,
+                sourceRaw: block.sourceRaw,
+                adoptionScopeRaw: block.adoptionScopeRaw,
+                isCancelled: block.isCancelled,
+                needsReview: block.needsReview,
+                calendarEventIdentifier: block.calendarEventIdentifier,
+                calendarRecurrenceIdentifier: block.calendarRecurrenceIdentifier,
+                occurrenceStartKey: block.occurrenceStartKey,
+                createdAt: block.createdAt
+            )
+        }
+        let guards = try context.fetch(FetchDescriptor<TimetableGuard>()).map { item in
+            GuardRow(
+                id: item.id,
+                sessionID: item.sessionID,
+                blockID: item.blockID,
+                notifiedAt: item.notifiedAt,
+                protectionBoundary: item.protectionBoundary,
+                resolvedAt: item.resolvedAt,
+                invalidatedAt: item.invalidatedAt
+            )
+        }
+        let seriesRules = try context.fetch(FetchDescriptor<TimetableSeriesRule>()).map { rule in
+            SeriesRuleRow(
+                id: rule.id,
+                recurrenceIdentifier: rule.recurrenceIdentifier,
+                title: rule.title,
+                adopted: rule.adopted,
+                excludedOccurrenceStarts: rule.excludedOccurrenceStarts
+            )
+        }
+        return (blocks, guards, seriesRules)
+    }
+
+    private static func passengerRows(from context: ModelContext) throws -> [PassengerRideRow] {
+        try context.fetch(FetchDescriptor<PassengerRide>()).map { ride in
+            PassengerRideRow(
+                id: ride.id,
+                intervalId: ride.intervalId,
+                title: ride.title,
+                intervalStart: ride.intervalStart,
+                intervalEnd: ride.intervalEnd,
+                boardedAt: ride.boardedAt,
+                endedAt: ride.endedAt,
+                endReasonRaw: ride.endReasonRaw,
+                sourceRaw: ride.sourceRaw,
+                deviceId: ride.deviceId
+            )
+        }
+    }
+
+    private func restoreTimetable(into context: ModelContext) {
+        for row in blocks {
+            let block = TimetableBlock(
+                id: row.id,
+                title: row.title,
+                startsAt: row.startsAt,
+                endsAt: row.endsAt,
+                source: TimetableSource(rawValue: row.sourceRaw) ?? .manual,
+                adoptionScope: TimetableAdoptionScope(rawValue: row.adoptionScopeRaw) ?? .occurrence,
+                calendarEventIdentifier: row.calendarEventIdentifier,
+                calendarRecurrenceIdentifier: row.calendarRecurrenceIdentifier,
+                occurrenceStartKey: row.occurrenceStartKey,
+                createdAt: row.createdAt
+            )
+            block.isCancelled = row.isCancelled
+            block.needsReview = row.needsReview
+            context.insert(block)
+        }
+        for row in guards {
+            let item = TimetableGuard(
+                id: row.id,
+                sessionID: row.sessionID,
+                blockID: row.blockID,
+                notifiedAt: row.notifiedAt,
+                protectionBoundary: row.protectionBoundary
+            )
+            item.resolvedAt = row.resolvedAt
+            item.invalidatedAt = row.invalidatedAt
+            context.insert(item)
+        }
+        for row in seriesRules {
+            let rule = TimetableSeriesRule(
+                id: row.id,
+                recurrenceIdentifier: row.recurrenceIdentifier,
+                title: row.title,
+                adopted: row.adopted
+            )
+            rule.excludedOccurrenceStarts = row.excludedOccurrenceStarts
+            context.insert(rule)
+        }
+    }
+
+    private func restorePassengerRides(into context: ModelContext) {
+        for row in passengerRides {
+            let ride = PassengerRide(
+                id: row.id,
+                intervalId: row.intervalId,
+                title: row.title,
+                intervalStart: row.intervalStart,
+                intervalEnd: row.intervalEnd,
+                boardedAt: row.boardedAt,
+                source: PassengerRideSource(rawValue: row.sourceRaw) ?? .manualInterval,
+                deviceId: row.deviceId
+            )
+            ride.endedAt = row.endedAt
+            ride.endReasonRaw = row.endReasonRaw
+            context.insert(ride)
         }
     }
 }

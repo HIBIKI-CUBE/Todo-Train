@@ -12,6 +12,15 @@ final class SessionPause {
     var id: UUID = UUID()
     var startedAt: Date = Date.now
     var endedAt: Date?
+    /// 停車を保っている主体。既定は空で、まだ読まない。
+    var heldByRaw: String?
+    /// 停車した端末。
+    var pausedOnRaw: String?
+    var heldByInferred: Bool = false
+    var macSampledSeconds: Double = 0
+    var macActiveSeconds: Double = 0
+    var promptedAt: Date?
+    var promptAnswerRaw: String?
     var session: WorkSession?
 
     init(
@@ -23,6 +32,13 @@ final class SessionPause {
         self.id = id
         self.startedAt = startedAt
         self.endedAt = endedAt
+        self.heldByRaw = nil
+        self.pausedOnRaw = nil
+        self.heldByInferred = false
+        self.macSampledSeconds = 0
+        self.macActiveSeconds = 0
+        self.promptedAt = nil
+        self.promptAnswerRaw = nil
         self.session = session
     }
 }

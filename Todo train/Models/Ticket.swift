@@ -17,6 +17,7 @@ final class Ticket {
     var closedAt: Date?
     /// Raw value of `ClosureKind`
     var closureKindRaw: String?
+    /// PR #71 の予約列。V3_1 に凍結し、V4 の差分として残す。
     /// 次の一本として予約した時刻。予約は乗車を始めない。未予約は nil。
     var reservedAt: Date?
     /// 予約したときに乗っていた乗車。

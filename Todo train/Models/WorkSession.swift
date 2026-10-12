@@ -46,6 +46,16 @@ final class WorkSession {
     var boardedDeviceID: String?
     /// ATS が停めた停車。占有が続いているあいだは上限に数えない。
     var timetableHeld: Bool = false
+    /// 鳴らした声掛けの段。既定は空で、まだ読まない。
+    var nudgeFiredStagesRaw: [String] = []
+    /// 答え待ちの声掛けの段。
+    var nudgePendingStageRaw: String?
+    /// 声掛けに答えた時刻。
+    var nudgeAnsweredAt: Date?
+    /// 答えた端末。watch / iphone / mac。
+    var nudgeAnsweredOnRaw: String?
+    /// 走行中の確認の位置。0.62〜0.78。
+    var checkInFraction: Double?
 
     var ticket: Ticket?
 
@@ -106,6 +116,11 @@ final class WorkSession {
         self.awayDueAt = nil
         self.boardedDeviceID = boardedDeviceID
         self.timetableHeld = false
+        self.nudgeFiredStagesRaw = []
+        self.nudgePendingStageRaw = nil
+        self.nudgeAnsweredAt = nil
+        self.nudgeAnsweredOnRaw = nil
+        self.checkInFraction = nil
         self.ticket = ticket
         self.extensions = []
         self.pauses = []
