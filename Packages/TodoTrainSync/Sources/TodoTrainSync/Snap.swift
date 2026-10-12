@@ -30,6 +30,8 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
     public var nudgePlan: [WireNudgePlanItem]?
     /// Ticket that can board after arrival. Absent when there is none.
     public var reserved: WireReservedTicket?
+    /// Reason for the open pause. Present only while `phase` is `paused`.
+    public var pauseHeldBy: PauseHeldBy?
 
     public init(
         rev: Int,
@@ -55,7 +57,8 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
         minReadable: Int? = nil,
         nudge: WireNudge? = nil,
         nudgePlan: [WireNudgePlanItem]? = nil,
-        reserved: WireReservedTicket? = nil
+        reserved: WireReservedTicket? = nil,
+        pauseHeldBy: PauseHeldBy? = nil
     ) {
         self.rev = rev
         self.sessionId = sessionId
@@ -81,6 +84,7 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
         self.nudge = nudge
         self.nudgePlan = nudgePlan
         self.reserved = reserved
+        self.pauseHeldBy = phase == .paused ? pauseHeldBy : nil
     }
 
     public var announcement: ContractAnnouncement {
@@ -93,7 +97,7 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
         case serviceActive, cabinEnabled, checkInFiredCount, pendingCabin
         case nextBlockTitle, nextBlockStartsAt, nextBlockEndsAt, timetablePauseAt, build
         case contract, minReadable
-        case nudge, nudgePlan, reserved
+        case nudge, nudgePlan, reserved, pauseHeldBy
     }
 
     public init(from decoder: Decoder) throws {
@@ -130,6 +134,8 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
         nudge = try container.decodeIfPresent(WireNudge.self, forKey: .nudge)
         nudgePlan = try container.decodeIfPresent([WireNudgePlanItem].self, forKey: .nudgePlan)
         reserved = try container.decodeIfPresent(WireReservedTicket.self, forKey: .reserved)
+        let decodedPauseHeldBy = try container.decodeIfPresent(PauseHeldBy.self, forKey: .pauseHeldBy)
+        pauseHeldBy = phase == .paused ? decodedPauseHeldBy : nil
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -158,6 +164,9 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
         try container.encodeIfPresent(nudge, forKey: .nudge)
         try container.encodeIfPresent(nudgePlan, forKey: .nudgePlan)
         try container.encodeIfPresent(reserved, forKey: .reserved)
+        if phase == .paused {
+            try container.encodeIfPresent(pauseHeldBy, forKey: .pauseHeldBy)
+        }
     }
 
     /// Remaining seconds using the contract formula. Idle / missing fields → nil.

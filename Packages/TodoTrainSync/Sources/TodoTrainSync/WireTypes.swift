@@ -89,7 +89,7 @@ public enum WireError: String, Codable, Sendable, Equatable {
     case sessionMismatch
     case decryptFailed
     case notPaused
-    /// Empty title, estimatedSeconds outside 60...3600, or `addSeconds` outside the extend presets.
+    /// Empty title, estimatedSeconds outside 60...3600, `addSeconds` outside the extend presets, or `pause.heldBy` other than `user` or `timetable`.
     case invalidPayload
     /// The receiver does not implement this `op`, or its contract predates the op.
     case unsupportedOp

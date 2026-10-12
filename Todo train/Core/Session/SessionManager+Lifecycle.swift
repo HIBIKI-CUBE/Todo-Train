@@ -141,7 +141,7 @@ extension SessionManager {
             guard pending.sessionID == activeSession?.id else { return nil }
             do {
                 if pending.kind == .pause {
-                    try pauseFromAlarmKit()
+                    try pauseFromLiveActivity()
                 } else {
                     try resumeFromAlarmKit()
                 }

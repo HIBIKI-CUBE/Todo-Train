@@ -7,6 +7,8 @@ public enum RemotePauseDecision: Equatable, Sendable {
     case noActiveService
     case notPaused
     case unsupportedOp
+    /// `pause.heldBy` was present and was not `user` or `timetable`.
+    case invalidPayload
 
     public var shouldApply: Bool { self == .apply }
 
@@ -18,6 +20,7 @@ public enum RemotePauseDecision: Equatable, Sendable {
         case .noActiveService: .noActiveService
         case .notPaused: .notPaused
         case .unsupportedOp: .unsupportedOp
+        case .invalidPayload: .invalidPayload
         }
     }
 }
@@ -36,14 +39,19 @@ public enum RemotePauseEvaluating {
         command: CommandPlaintext
     ) -> RemotePauseDecision {
         switch command.op {
-        case .pause, .resume:
+        case .pause:
+            if PauseReasonResolving.rejectsPauseCommand(command.heldBy) {
+                return .invalidPayload
+            }
             guard let commandSession = command.sessionId else { return .noActiveService }
             guard let openSessionId else { return .noActiveService }
             guard commandSession == openSessionId else { return .sessionMismatch }
-            if command.op == .pause {
-                if pausedCount >= pauseLimit { return .pauseLimitReached }
-                return .apply
-            }
+            if pausedCount >= pauseLimit { return .pauseLimitReached }
+            return .apply
+        case .resume:
+            guard let commandSession = command.sessionId else { return .noActiveService }
+            guard let openSessionId else { return .noActiveService }
+            guard commandSession == openSessionId else { return .sessionMismatch }
             if !isPaused { return .notPaused }
             return .apply
         case .still:
@@ -68,7 +76,7 @@ public enum RemotePauseEvaluating {
         switch decision {
         case .apply:
             AckPlaintext(cmdId: commandId, ok: true)
-        case .sessionMismatch, .pauseLimitReached, .noActiveService, .notPaused, .unsupportedOp:
+        case .sessionMismatch, .pauseLimitReached, .noActiveService, .notPaused, .unsupportedOp, .invalidPayload:
             AckPlaintext(cmdId: commandId, ok: false, error: decision.wireError)
         }
     }

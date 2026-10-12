@@ -138,7 +138,7 @@ struct NudgeWireTests {
             from: ContractFixtures.data("fixtures/cmd-pause.json")
         )
         let object = try json(pause)
-        for key in ["nudgeId", "choice", "addSeconds", "answeredOn", "ticketId", "pipVisible", "attending"] {
+        for key in ["nudgeId", "choice", "addSeconds", "answeredOn", "ticketId", "pipVisible", "attending", "heldBy"] {
             #expect(object[key] == nil, "pause must omit \(key)")
         }
     }

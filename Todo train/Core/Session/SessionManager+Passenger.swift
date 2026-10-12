@@ -7,6 +7,7 @@
 
 import Foundation
 import SwiftData
+import TodoTrainSync
 
 extension SessionManager {
     func boardPassenger(now: Date? = nil) {
@@ -15,7 +16,7 @@ extension SessionManager {
         guard case .offer(let interval, _) = passengerChrome else { return }
 
         if let session = activeSession, session.isOpen, !session.isPaused {
-            try? pause(now: now, timetableHeld: true)
+            try? pause(now: now, timetableHeld: true, heldBy: .passenger)
         }
 
         let snapshot = PassengerLane.ride(
