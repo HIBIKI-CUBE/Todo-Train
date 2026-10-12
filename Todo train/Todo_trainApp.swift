@@ -48,6 +48,7 @@ struct Todo_trainApp: App {
             OvertimeNotifier.shared.configure()
             CheckInNotifier.shared.configure()
             SessionPauseRuntime.pauser = manager
+            RideControlRuntime.installed = manager
             #if DEBUG
             if ProcessInfo.processInfo.arguments.contains("-SeedHistoryTimeline") {
                 let existing = (try? context.fetch(FetchDescriptor<WorkSession>())) ?? []
