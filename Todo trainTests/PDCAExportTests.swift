@@ -24,6 +24,51 @@ struct PDCAExportTests {
         #expect(keys.isDisjoint(with: PDCAFixture.forbiddenKeys))
     }
 
+    @Test func exportJSON_buildUsesContainerSchemaAndOmitsPeerUntilMacSendsOne() throws {
+        let fixture = try PDCAFixture.make()
+        let object = try jsonObject(try fixture.jsonData())
+        let build = try #require(object["build"] as? [String: Any])
+        #expect(Set(build.keys) == [
+            "sha", "branch", "dirty", "builtAt", "schemaVersion", "marketingVersion",
+        ])
+        #expect(build["schemaVersion"] as? String == StoreSchemaVersion.wire)
+        #expect(build["schemaVersion"] as? String == {
+            let version = AppModelContainer.schema.version
+            return "\(version.major).\(version.minor).\(version.patch)"
+        }())
+        #expect(object["pairedBuild"] is NSNull)
+
+        let paired = PDCAExport.PairedBuildRow(
+            sha: "abcdef1",
+            dirty: false,
+            schema: "3.0.0",
+            builtAt: "2026-10-12T16:20:00+09:00"
+        )
+        let stamped = try jsonObject(
+            try PDCAExport.jsonData(
+                in: fixture.context,
+                exportedAt: PDCAFixture.exportedAt,
+                build: PDCAExport.BuildRow(
+                    sha: "1047101",
+                    branch: "develop",
+                    dirty: true,
+                    builtAt: "2026-10-12T16:20:00+09:00",
+                    schemaVersion: StoreSchemaVersion.wire,
+                    marketingVersion: "1.0"
+                ),
+                pairedBuild: paired
+            )
+        )
+        let written = try #require(stamped["build"] as? [String: Any])
+        #expect(written["sha"] as? String == "1047101")
+        #expect(written["dirty"] as? Bool == true)
+        #expect(written["marketingVersion"] as? String == "1.0")
+        let peer = try #require(stamped["pairedBuild"] as? [String: Any])
+        #expect(Set(peer.keys) == ["builtAt", "dirty", "schema", "sha"])
+        #expect(peer["sha"] as? String == "abcdef1")
+        #expect(stamped["schema"] as? String == "todotrain.pdca.v0")
+    }
+
     @Test func exportJSON_hasPDCASchemaKeys() throws {
         let fixture = try PDCAFixture.make()
         let object = try jsonObject(try fixture.jsonData())
@@ -611,6 +656,8 @@ private enum PDCAContract {
         "timetableGuards",
         "passengerRides",
         "passengerSummary",
+        "build",
+        "pairedBuild",
     ]
 
     static let arrayKeys: [String] = [
