@@ -5,6 +5,10 @@ public enum CabinKind: Sendable, Equatable {
     case progress
     case away
     case idle
+    /// Estimate and the handoffs after it. Stage 1 stays `progress`.
+    case overrun
+    /// Blank after arrival.
+    case gap
     case unknown(String)
 
     public var rawValue: String {
@@ -12,6 +16,8 @@ public enum CabinKind: Sendable, Equatable {
         case .progress: "progress"
         case .away: "away"
         case .idle: "idle"
+        case .overrun: "overrun"
+        case .gap: "gap"
         case .unknown(let value): value
         }
     }
@@ -21,6 +27,8 @@ public enum CabinKind: Sendable, Equatable {
         case "progress": self = .progress
         case "away": self = .away
         case "idle": self = .idle
+        case "overrun": self = .overrun
+        case "gap": self = .gap
         default: self = .unknown(rawValue)
         }
     }
@@ -50,6 +58,9 @@ public enum CabinDelivery: Equatable, Sendable {
             hasRide ? .pip : .notification
         case .idle:
             .notification
+        case .overrun, .gap:
+            // #107 and #108 choose the surface. Until then, do not notify.
+            .ignore
         case .away, .unknown, .none:
             .ignore
         }

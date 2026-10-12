@@ -27,7 +27,22 @@ public enum WireOp: Sendable, Equatable {
     case still
     /// Issue a ticket and board it in one beat. Not arrive/extend.
     case issueAndBoard
+    /// Reply to the nudge on the snap. Not arrive/extend.
+    case answer
+    /// Board the ticket in `snap.reserved`. `sessionId` is null.
+    case boardReserved
+    /// Mac `pipVisible` and `attending`. Sent only when either changes.
+    case presence
     case unknown(String)
+
+    /// Contract that introduced this op. Unknown ops have no version.
+    public var introducedIn: Int? {
+        switch self {
+        case .pause, .resume, .still, .issueAndBoard: 3
+        case .answer, .boardReserved, .presence: 5
+        case .unknown: nil
+        }
+    }
 
     public var rawValue: String {
         switch self {
@@ -35,6 +50,9 @@ public enum WireOp: Sendable, Equatable {
         case .resume: "resume"
         case .still: "still"
         case .issueAndBoard: "issueAndBoard"
+        case .answer: "answer"
+        case .boardReserved: "boardReserved"
+        case .presence: "presence"
         case .unknown(let value): value
         }
     }
@@ -45,6 +63,9 @@ public enum WireOp: Sendable, Equatable {
         case "resume": self = .resume
         case "still": self = .still
         case "issueAndBoard": self = .issueAndBoard
+        case "answer": self = .answer
+        case "boardReserved": self = .boardReserved
+        case "presence": self = .presence
         default: self = .unknown(rawValue)
         }
     }
@@ -68,10 +89,16 @@ public enum WireError: String, Codable, Sendable, Equatable {
     case sessionMismatch
     case decryptFailed
     case notPaused
-    /// Empty title, or estimatedSeconds outside 60...3600, on issueAndBoard.
+    /// Empty title, estimatedSeconds outside 60...3600, or `addSeconds` outside the extend presets.
     case invalidPayload
-    /// The receiver does not implement this `op`. The command was not applied.
+    /// The receiver does not implement this `op`, or its contract predates the op.
     case unsupportedOp
+    /// `nudgeId` is not the nudge on the current snap.
+    case nudgeStale
+    /// `boardReserved` arrived with no `reserved` ticket.
+    case noReservation
+    /// `ticketId` is not `reserved.ticketId`.
+    case reservationChanged
 }
 
 /// `phase` on the wire. Unknown values must not crash; display conservatively.

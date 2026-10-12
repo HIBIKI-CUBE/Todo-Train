@@ -1,7 +1,7 @@
 {
-  "contract": 4,
+  "contract": 5,
   "minReadable": 3,
-  "fingerprint": "6fb4f6419bd716d619024439be4f3ccef54803e904508396ae5f1cd5add616ea",
+  "fingerprint": "fe36c066091f0e6ecaf299aa6756edb5b2613f90298c62c21f6a6b2c55d8001f",
   "history": [
     {
       "contract": 3,
@@ -12,6 +12,11 @@
       "contract": 4,
       "date": "2026-10-12",
       "note": "未知の op を受け、端末と relay が版を名乗る"
+    },
+    {
+      "contract": 5,
+      "date": "2026-10-12",
+      "note": "声掛けの snap 欄と op answer・boardReserved・presence を足す"
     }
   ]
 }

@@ -27,6 +27,23 @@ describe("contract range", () => {
     )).toBe("selfTooOld");
   });
 
+  it("queues a command from an installed v4 client and from the current contract", async () => {
+    const client = await pairedClient();
+    const headers = ["4;min=3", `${CONTRACT};min=${MIN_READABLE}`];
+    for (const [index, header] of headers.entries()) {
+      const queued = await request("/v1/cmd", {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${client.writeToken}`,
+          "content-type": "application/json",
+          "X-TT-Contract": header,
+        },
+        body: JSON.stringify(envelope("cmd", 7 + index)),
+      });
+      expect(queued.status).toBe(201);
+    }
+  });
+
   it("accepts a peer that does not announce and still queues the command", async () => {
     const client = await pairedClient();
     const queued = await requestAuth("/v1/cmd", "POST", client.writeToken, envelope("cmd", 1));

@@ -55,7 +55,8 @@ public enum RemotePauseEvaluating {
         case .issueAndBoard:
             // Host applies this op itself. Never treat it as pause/resume/still.
             return .noActiveService
-        case .unknown:
+        case .answer, .boardReserved, .presence, .unknown:
+            // #106 applies answer and boardReserved. Until then they are not a pause.
             return .unsupportedOp
         }
     }

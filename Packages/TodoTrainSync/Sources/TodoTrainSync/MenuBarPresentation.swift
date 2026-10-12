@@ -177,6 +177,9 @@ public struct MenuBarPresentation: Equatable, Sendable {
         case .notPaused: SyncCopy.notPaused
         case .invalidPayload: SyncCopy.invalidPayload
         case .unsupportedOp: ContractCopy.unsupportedOp
+        case .nudgeStale: "この声掛けは終わりました"
+        case .noReservation: "予約なし"
+        case .reservationChanged: "予約が変わりました"
         }
     }
 
