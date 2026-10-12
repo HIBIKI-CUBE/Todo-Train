@@ -94,6 +94,12 @@ public enum WatchLink {
     }
 }
 
+/// Where the Watch app opens. An open ride is the ride screen. Otherwise 発車.
+public enum WatchOpenedScreen: Equatable, Sendable {
+    case riding
+    case board
+}
+
 /// The Watch's copy of the iPhone snap. A newer context replaces it.
 public struct WatchMirror: Equatable, Sendable {
     public private(set) var snap: SnapPlaintext?
@@ -123,6 +129,17 @@ public struct WatchMirror: Equatable, Sendable {
     public var replyGate: WatchReplyGate {
         guard snap != nil else { return .waiting }
         return WatchLink.maySendReply(peer: peer) ? .open : .displayOnly
+    }
+
+    /// Live Activity launch lands here. Running, paused, and overtime stay on the ride.
+    /// No snap yet is not a ride, so it opens 発車.
+    public var openedScreen: WatchOpenedScreen {
+        switch snap?.phase {
+        case .running, .paused, .overtime:
+            return .riding
+        case .idle, .unknown, nil:
+            return .board
+        }
     }
 }
 

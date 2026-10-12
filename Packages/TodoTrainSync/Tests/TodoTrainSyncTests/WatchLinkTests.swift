@@ -87,6 +87,42 @@ struct WatchLinkTests {
         #expect(mirror.replyGate == .waiting)
         #expect(mirror.title == nil)
         #expect(mirror.remainingSeconds(at: 1_768_000_060) == nil)
+        #expect(mirror.openedScreen == .board)
+    }
+
+    @Test func openRideOpensTheRideScreen() throws {
+        for name in ["fixtures/snap.json", "fixtures/snap-paused.json"] {
+            var mirror = WatchMirror()
+            mirror.receive(snapData: try ContractFixtures.data(name))
+            #expect(mirror.openedScreen == .riding)
+        }
+        var overtime = try runningSnap(title: "週次レポート", rev: 8)
+        overtime.phase = .overtime
+        var mirror = WatchMirror()
+        mirror.receive(try WatchLink.context(for: overtime))
+        #expect(mirror.openedScreen == .riding)
+    }
+
+    @Test func idleOrUnknownOpensBoard() throws {
+        var idle = WatchMirror()
+        idle.receive(snapData: try ContractFixtures.data("fixtures/snap-idle.json"))
+        #expect(idle.openedScreen == .board)
+
+        var unknownSnap = try runningSnap(title: "週次レポート", rev: 9)
+        unknownSnap.phase = .unknown("holding")
+        var unknown = WatchMirror()
+        unknown.receive(try WatchLink.context(for: unknownSnap))
+        #expect(unknown.openedScreen == .board)
+    }
+
+    @Test func laterSnapMovesBetweenRideAndBoard() throws {
+        var mirror = WatchMirror()
+        mirror.receive(snapData: try ContractFixtures.data("fixtures/snap-idle.json"))
+        #expect(mirror.openedScreen == .board)
+        mirror.receive(snapData: try ContractFixtures.data("fixtures/snap.json"))
+        #expect(mirror.openedScreen == .riding)
+        mirror.receive(snapData: try ContractFixtures.data("fixtures/snap-idle.json"))
+        #expect(mirror.openedScreen == .board)
     }
 
     private func runningSnap(title: String, rev: Int) throws -> SnapPlaintext {

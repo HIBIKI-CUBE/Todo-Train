@@ -2,6 +2,7 @@ import SwiftUI
 import TodoTrainSync
 
 enum WatchCopy {
+    static let board = "発車"
     static let idle = "乗車はありません。"
     static let remaining = "残り"
     static let overtime = "超過"
@@ -14,20 +15,33 @@ struct WatchRootView: View {
     var session: WatchPhoneSession
 
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 1)) { context in
-            let now = Int(context.date.timeIntervalSince1970)
-            VStack(alignment: .leading, spacing: 8) {
-                ride(at: now)
-                if session.mirror.replyGate == .displayOnly {
-                    Text(WatchCopy.displayOnly)
-                        .font(.footnote)
-                }
-                build
+        VStack(alignment: .leading, spacing: 8) {
+            switch session.mirror.openedScreen {
+            case .riding:
+                WatchRidingBody(session: session)
+            case .board:
+                WatchBoardBody()
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            if session.mirror.replyGate == .displayOnly {
+                Text(WatchCopy.displayOnly)
+                    .font(.footnote)
+            }
+            WatchBuildBlock()
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 4)
         .onAppear { session.activate() }
+    }
+}
+
+/// Placeholder for the open ride. The instruments land in a later change.
+private struct WatchRidingBody: View {
+    var session: WatchPhoneSession
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            ride(at: Int(context.date.timeIntervalSince1970))
+        }
     }
 
     @ViewBuilder
@@ -52,12 +66,29 @@ struct WatchRootView: View {
                 Text(clock(snap.remainingSeconds(at: now)))
                     .font(.title2.monospacedDigit())
             }
-        } else {
-            Text(WatchCopy.idle)
         }
     }
 
-    private var build: some View {
+    private func clock(_ seconds: Int?) -> String {
+        guard let seconds else { return "–" }
+        let value = abs(seconds)
+        return String(format: "%d:%02d", value / 60, value % 60)
+    }
+}
+
+/// Placeholder for boarding when nothing is open.
+private struct WatchBoardBody: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(WatchCopy.board)
+                .font(.headline)
+            Text(WatchCopy.idle)
+        }
+    }
+}
+
+private struct WatchBuildBlock: View {
+    var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(BuildInfoCopy.title)
                 .font(.caption2)
@@ -75,11 +106,5 @@ struct WatchRootView: View {
                 .foregroundStyle(.secondary)
         }
         .accessibilityElement(children: .combine)
-    }
-
-    private func clock(_ seconds: Int?) -> String {
-        guard let seconds else { return "–" }
-        let value = abs(seconds)
-        return String(format: "%d:%02d", value / 60, value % 60)
     }
 }
