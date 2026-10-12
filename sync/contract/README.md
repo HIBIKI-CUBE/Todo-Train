@@ -30,6 +30,7 @@ Worker は `ct` を JSON.parse しない。平文フィクスチャと AES-GCM �
 | [fixtures/cmd-issueAndBoard-interrupt.json](fixtures/cmd-issueAndBoard-interrupt.json) | `op: issueAndBoard`、乗務中割り込み |
 | [fixtures/ack-ok.json](fixtures/ack-ok.json) | 成功 ack 平文 |
 | [fixtures/hint.json](fixtures/hint.json) | 公開 hint（rev だけ） |
+| [fixtures/v3/](fixtures/v3/) | 版 3 の凍結。中身は変えない |
 | [vectors/aes-gcm-snap.json](vectors/aes-gcm-snap.json) | 既知鍵の AES-GCM と confirm HMAC。Worker は使わない |
 
 固定 UUID / Unix / 鍵はフィクスチャ間で共有する（`pairingId` `a1a2a3a4-b1b2-4c3c-8d4d-e5e6e7e8e9ea` など）。
