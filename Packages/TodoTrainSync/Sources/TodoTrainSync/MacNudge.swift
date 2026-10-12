@@ -1,7 +1,7 @@
 import Foundation
 
 extension NudgeStageWire {
-    /// Ride stage number. Gaps stay nil until #108.
+    /// Ride stage number. Arrival gaps are not ride stages.
     public var rideStageNumber: Int? {
         switch self {
         case .checkIn: 1
@@ -24,6 +24,11 @@ extension NudgeStageWire {
     public var isRideRing: Bool {
         guard let rideStageNumber else { return false }
         return rideStageNumber >= 3
+    }
+
+    /// Arrival-gap chime. One device at a time, same as a ride ring.
+    public var isGapRing: Bool {
+        self == .gap1 || self == .gap2
     }
 }
 
@@ -146,18 +151,26 @@ public enum MacNudgeRinging {
         plan: [WireNudgePlanItem]?
     ) -> [Candidate] {
         var rows: [Candidate] = []
-        if let nudge, nudge.stage.isRideRing, nudge.ringSurface == .mac {
-            rows.append(Candidate(key: key(sessionID: sessionID, stage: nudge.stage), fireAt: nudge.firedAt))
+        if let nudge, nudge.ringSurface == .mac, (nudge.stage.isRideRing || nudge.stage.isGapRing) {
+            rows.append(
+                Candidate(
+                    key: key(sessionID: sessionID, stage: nudge.stage, fireAt: nudge.firedAt),
+                    fireAt: nudge.firedAt
+                )
+            )
         }
-        for item in plan ?? [] where item.stage.isRideRing && item.surface == .mac && item.rings {
-            let key = key(sessionID: sessionID, stage: item.stage)
+        for item in plan ?? [] where item.surface == .mac && item.rings && (item.stage.isRideRing || item.stage.isGapRing) {
+            let key = key(sessionID: sessionID, stage: item.stage, fireAt: item.fireAt)
             if rows.contains(where: { $0.key == key }) { continue }
             rows.append(Candidate(key: key, fireAt: item.fireAt))
         }
         return rows
     }
 
-    private static func key(sessionID: UUID?, stage: NudgeStageWire) -> String {
+    private static func key(sessionID: UUID?, stage: NudgeStageWire, fireAt: Int) -> String {
+        if stage.isGapRing {
+            return "\(stage.rawValue)|\(fireAt)"
+        }
         let ride = sessionID?.uuidString.lowercased() ?? ""
         return "\(ride)|\(stage.rawValue)"
     }

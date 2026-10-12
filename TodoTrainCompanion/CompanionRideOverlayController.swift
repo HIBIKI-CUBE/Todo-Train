@@ -52,6 +52,14 @@ final class CompanionRideOverlayController: NSObject {
                 },
                 onCancelExtend: { [weak self] in
                     self?.model.extendPicker = false
+                },
+                onBoardReserved: { [weak self] in
+                    guard let self else { return }
+                    Task { await self.runtime.sendBoardReserved() }
+                },
+                onCloseGap: { [weak self] in
+                    guard let self else { return }
+                    Task { await self.runtime.sendStill() }
                 }
             )
         )
@@ -73,6 +81,14 @@ final class CompanionRideOverlayController: NSObject {
         }
         rootView.onClick = { [weak self] point in
             self?.handleClick(at: point)
+        }
+        rootView.boardGestureEnabled = { [weak self] in
+            guard let self else { return false }
+            return self.model.presentation.canBoardReserved && !self.model.isTucked
+        }
+        rootView.onBoardGesture = { [weak self] in
+            guard let self, !self.model.presentation.isSending else { return }
+            Task { await self.runtime.sendBoardReserved() }
         }
         panel.contentView = rootView
         panel.orderOut(nil)
@@ -158,6 +174,11 @@ final class CompanionRideOverlayController: NSObject {
         model.edgeLamp = layout.isTucked && presentation.holdLamp
         let visible = presentation.isVisible
         if visible {
+            if presentation.showsArrivalGap, layout.isTucked {
+                layout.isTucked = false
+                persist()
+                applyLayoutToChrome()
+            }
             if !lastVisible {
                 applyFrame(animated: false)
             }
@@ -224,6 +245,21 @@ final class CompanionRideOverlayController: NSObject {
             case 2: sendExtend(900)
             case 3: model.extendPicker = false
             default: break
+            }
+            return
+        }
+        if presentation.showsArrivalGap {
+            let contentWidth = panel.frame.width - Self.handleWidth
+            let x = point.x - Self.handleWidth
+            guard x >= 0 else { return }
+            if presentation.canBoardReserved {
+                if x < contentWidth / 2 {
+                    Task { await runtime.sendBoardReserved() }
+                } else {
+                    Task { await runtime.sendStill() }
+                }
+            } else {
+                Task { await runtime.sendStill() }
             }
             return
         }

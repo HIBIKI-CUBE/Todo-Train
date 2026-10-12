@@ -49,6 +49,15 @@ final class SessionManager {
     var macAttending = false
     /// Bumps when this iPhone should play the overrun presentation once.
     var nudgeRingTick = 0
+    /// Hub is the front surface. Focus and other tabs are not.
+    var iphoneHubVisible = false
+    /// Arrival stamp screen is still up. Gap stays down until it closes.
+    var arrivalScreenOpen = false
+    /// Bumps once when this iPhone's gap turn is fresh. Focus does not listen.
+    var gapCueTick = 0
+    /// Banner on Hub during the arrival blank. Nil on Focus.
+    var arrivalGapBanner: ArrivalGapBannerState?
+    var gapWatchTask: Task<Void, Never>?
     /// Working seconds at the previous nudge sample. A jump larger than the tick does not ring.
     var nudgeObservedElapsed: TimeInterval?
     var nudgeObservedSessionID: UUID?

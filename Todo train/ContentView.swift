@@ -18,6 +18,7 @@ struct ContentView: View {
 
     @State private var isFocusPresented = false
     @State private var passengerCoverPresented = false
+    @State private var rootTab = RootTab.tickets
     @State private var didRecoverOnLaunch = false
     @State private var transferCanvas = TransferCanvasPresenter()
     @State private var ticketMotion = TicketMotionBridge()
@@ -73,6 +74,7 @@ struct ContentView: View {
             }
             syncFocusPresentation()
             syncPassengerCover()
+            syncGapSurface()
             companion.handleScenePhase(.active, sessionManager: sessionManager)
             sessionManager.suppressProgressLocalNotifications = companion.isPaired
         }
@@ -98,6 +100,7 @@ struct ContentView: View {
                 applyPendingFocusAction()
                 syncFocusPresentation()
                 syncPassengerCover()
+                syncGapSurface()
                 sessionManager.setForegroundReconcileActive(true)
             } else if newPhase == .background {
                 sessionManager.beginAwayWatch()
@@ -129,6 +132,16 @@ struct ContentView: View {
             if !isFocusPresented {
                 syncPassengerCover()
             }
+            syncGapSurface()
+        }
+        .onChange(of: rootTab) { _, _ in
+            syncGapSurface()
+        }
+        .onChange(of: passengerCoverPresented) { _, _ in
+            syncGapSurface()
+        }
+        .onChange(of: sessionManager.presentation.punctualityMoment?.id) { _, _ in
+            syncGapSurface()
         }
         .onChange(of: ticketMotion.suppressFocusCover) { _, suppress in
             var transaction = Transaction()
@@ -169,6 +182,7 @@ struct ContentView: View {
                 )
         }
         .onChange(of: isFocusPresented) { wasPresented, presented in
+            syncGapSurface()
             // Safety net if onDismiss and enqueue ordering ever races.
             if wasPresented && !presented {
                 promoteTransferCanvasAfterFocusDismiss()
@@ -228,6 +242,27 @@ struct ContentView: View {
         .sensoryFeedback(.success, trigger: sessionManager.presentation.punctualityHapticTick)
     }
 
+    private enum RootTab: Hashable {
+        case tickets
+        case timetable
+        case history
+        case settings
+    }
+
+    /// Hub is the only iPhone surface for the arrival gap. Focus stays a driving desk.
+    private func syncGapSurface() {
+        let arrivalOpen: Bool = {
+            if case .arrival = sessionManager.presentation.punctualityMoment?.kind { return true }
+            return false
+        }()
+        let hub = scenePhase == .active
+            && rootTab == .tickets
+            && !isFocusPresented
+            && !passengerCoverPresented
+            && !arrivalOpen
+        sessionManager.noteArrivalGapSurface(hubVisible: hub, arrivalScreenOpen: arrivalOpen)
+    }
+
     /// まもなく／申し出のときだけ付ける。空の `tabViewBottomAccessory` はタブ上に帯が残る。
     private var showsPassengerTabAccessory: Bool {
         !isFocusPresented && sessionManager.passengerChrome.showsHubOffer
@@ -235,26 +270,26 @@ struct ContentView: View {
 
     @ViewBuilder
     private var tabViewWithOptionalPassengerAccessory: some View {
-        let tabs = TabView {
-            Tab("切符", systemImage: "tram.fill") {
+        let tabs = TabView(selection: $rootTab) {
+            Tab("切符", systemImage: "tram.fill", value: RootTab.tickets) {
                 NavigationStack {
                     HubView()
                 }
             }
 
-            Tab(TimetableCopy.board, systemImage: "calendar") {
+            Tab(TimetableCopy.board, systemImage: "calendar", value: RootTab.timetable) {
                 NavigationStack {
                     TimetableDayView()
                 }
             }
 
-            Tab("履歴", systemImage: "clock") {
+            Tab("履歴", systemImage: "clock", value: RootTab.history) {
                 NavigationStack {
                     HistoryView()
                 }
             }
 
-            Tab("設定", systemImage: "gearshape") {
+            Tab("設定", systemImage: "gearshape", value: RootTab.settings) {
                 NavigationStack {
                     SettingsView()
                 }

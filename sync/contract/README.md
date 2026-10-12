@@ -6,7 +6,7 @@
 
 Worker は `ct` を JSON.parse しない。平文フィクスチャと AES-GCM ベクトルはクライアント側の round-trip 用。復号鍵を Worker テストに持たない。
 
-新しい HTTP 経路も `arrive` / `extend` の `op` も、ここから足さない。`resume` は 2026-09-12、`still`（車内放送の消費）は 2026-09-12 に追加。`issueAndBoard`（発行＋発車の一拍。在庫のみは無し）は 2026-10-07 に追加。`answer`（声掛けへの返事）・`boardReserved`（予約の切符の発車）・`presence`（Mac の在席。変化したときだけ）は 2026-10-12 に追加。`pause` の任意 `heldBy` と snap の任意 `pauseHeldBy` は 2026-10-12 に追加。2026-10-13 の版 8 は車内放送の文言だけを足し、ワイヤの形は版 7 のまま。切符全件レプリカは載せない。`GET /v1/hint/:pairingId` だけ例外（平文 rev。暗号文は載せない）。
+新しい HTTP 経路も `arrive` / `extend` の `op` も、ここから足さない。`resume` は 2026-09-12、`still`（車内放送の消費）は 2026-09-12 に追加。`issueAndBoard`（発行＋発車の一拍。在庫のみは無し）は 2026-10-07 に追加。`answer`（声掛けへの返事）・`boardReserved`（予約の切符の発車）・`presence`（Mac の在席。変化したときだけ）は 2026-10-12 に追加。`pause` の任意 `heldBy` と snap の任意 `pauseHeldBy` は 2026-10-12 に追加。2026-10-13 の版 8 と版 9 は車内放送の文言だけを足し、ワイヤの形は版 7 のまま。切符全件レプリカは載せない。`GET /v1/hint/:pairingId` だけ例外（平文 rev。暗号文は載せない）。
 
 ## ファイル一覧
 

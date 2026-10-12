@@ -76,7 +76,7 @@ extension SessionManager {
             WireReservedTicket(ticketId: $0.id, title: $0.title, estimatedSeconds: $0.estimatedSeconds)
         }
         guard let session = activeSession, session.isOpen, phase != .idle else {
-            return NudgeSnapFields(nudge: nil, plan: nil, reserved: reserved, pendingCabin: nil)
+            return arrivalGapSnapFields(now: now, reserved: reserved)
         }
         let input = nudgeInput(for: session, now: now)
         let evaluation = NudgePlanner.evaluate(input)

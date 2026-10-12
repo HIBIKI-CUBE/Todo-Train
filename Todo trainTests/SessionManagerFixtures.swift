@@ -13,6 +13,7 @@ import TodoTrainSync
 enum SessionManagerFixtures {
     static func makeHarness(
         now: Date = Date(timeIntervalSince1970: 1_700_000_000),
+        calendar: Calendar = .current,
         pauseLimit: Int = PauseLimitGuard.defaultLimit,
         endBellEnabled: Bool = false,
         cabinAnnouncementsEnabled: Bool = true,
@@ -35,6 +36,7 @@ enum SessionManagerFixtures {
         let manager = SessionManager(
             modelContext: context,
             clock: clock,
+            calendar: calendar,
             settings: settings,
             checkInNotifier: checkInNotifier ?? NoOpCheckInNotifier(),
             liveActivityManager: liveActivityManager,

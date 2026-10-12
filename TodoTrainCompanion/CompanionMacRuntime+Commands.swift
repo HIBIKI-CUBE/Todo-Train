@@ -15,7 +15,12 @@ extension CompanionMacRuntime {
         let interrupt = cabinInterrupt
         let pip = overlayPresentation.cabinPrompt != nil
         let idle = interrupt.showsNotification && interrupt.kind == .idle
-        guard pip || idle, !presentation.isSending else { return }
+        let gap = overlayPresentation.showsArrivalGap
+        guard pip || idle || gap, !presentation.isSending else { return }
+        if gap {
+            await sendRideCommand(.still)
+            return
+        }
         if pip, let sessionId = snap?.sessionId {
             markOptimisticCabin(sessionId: sessionId, firedCount: (snap?.checkInFiredCount ?? 0) + 1)
         }
@@ -166,6 +171,36 @@ extension CompanionMacRuntime {
             encKey: keys.enc
         )
         _ = try await client.postCmd(envelope)
+    }
+
+    func sendBoardReserved() async {
+        guard overlayPresentation.canBoardReserved, let ticketId = snap?.reserved?.ticketId else { return }
+        if let blocked = ContractCompat.commandBlock(peer: peerContract, relay: relayContract, side: .mac) {
+            lastStatus = blocked
+            return
+        }
+        let cmdId = UUID()
+        guard let next = OutgoingPauseApplying.beginSending(cmdId: cmdId, current: outgoingPause) else {
+            return
+        }
+        outgoingPause = next
+        transportNotice = nil
+        do {
+            let command = CommandPlaintext(
+                id: cmdId,
+                op: .boardReserved,
+                sessionId: nil,
+                at: now,
+                build: LocalWireBuild.current,
+                contract: ContractVersion.contract,
+                minReadable: ContractVersion.minReadable,
+                nudgeId: snap?.nudge?.id,
+                ticketId: ticketId
+            )
+            try await post(command)
+        } catch {
+            noteCommandTransportFailure(error)
+        }
     }
 
     func sendIssueAndBoard(title: String, estimatedSeconds: Int) async {

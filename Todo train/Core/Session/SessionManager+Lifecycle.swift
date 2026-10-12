@@ -37,12 +37,14 @@ extension SessionManager {
             } else {
                 phase = .idle
                 liveActivityManager.end()
+                syncArrivalGap(now: now)
                 refreshIdleCabin(now: now)
                 applyTimetableEffects(now: now)
                 return
             }
             return reconcile(now: now)
         }
+        clearArrivalGapWatch()
 
         applyTimetableEffects(now: now)
 

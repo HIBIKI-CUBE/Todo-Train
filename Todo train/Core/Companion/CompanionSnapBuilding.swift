@@ -34,7 +34,9 @@ enum CompanionSnapBuilding {
                 rev: rev,
                 serviceActive: serviceActive,
                 cabinEnabled: cabinEnabled,
-                pendingCabin: pendingCabin,
+                pendingCabin: openPendingCabin ?? pendingCabin,
+                nudge: nudge,
+                nudgePlan: nudgePlan,
                 reserved: reserved
             )
         }
@@ -88,6 +90,8 @@ enum CompanionSnapBuilding {
         serviceActive: Bool,
         cabinEnabled: Bool,
         pendingCabin: CabinKind? = nil,
+        nudge: WireNudge? = nil,
+        nudgePlan: [WireNudgePlanItem]? = nil,
         reserved: WireReservedTicket? = nil
     ) -> SnapPlaintext {
         SnapPlaintext(
@@ -105,6 +109,8 @@ enum CompanionSnapBuilding {
             cabinEnabled: cabinEnabled,
             checkInFiredCount: 0,
             pendingCabin: pendingCabin,
+            nudge: nudge,
+            nudgePlan: nudgePlan,
             reserved: reserved
         )
     }
