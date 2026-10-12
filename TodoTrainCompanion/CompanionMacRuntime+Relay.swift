@@ -134,9 +134,11 @@ extension CompanionMacRuntime {
                 case .ignore:
                     break
                 case .remember(let hint, let tag):
+                    noteRelayContract(hint.relayAnnouncement)
                     previous = hint
                     etag = tag
                 case .catchUp(let catchUp, let hint, let tag):
+                    noteRelayContract(hint.relayAnnouncement)
                     previous = hint
                     etag = tag
                     let keys = try SyncCrypto.deriveKeys(
@@ -179,24 +181,29 @@ extension CompanionMacRuntime {
         lastStatus = nil
         defer { Task { await connection.close() } }
         while !Task.isCancelled {
-            let frame: WSFrame
+            let incoming: WSIncoming
             do {
-                frame = try await connection.receive()
+                incoming = try await connection.receiveIncoming()
             } catch SyncError.invalidJSON {
                 continue
             }
-            let keys = try SyncCrypto.deriveKeys(masterKey: pairing.masterKey, pairingId: pairing.pairingId)
-            do {
-                switch frame.t {
-                case .snap:
-                    try applySnap(frame.envelope, pairingId: pairing.pairingId, encKey: keys.enc)
-                case .ack:
-                    try applyAck(frame.envelope, pairingId: pairing.pairingId, encKey: keys.enc)
-                case .cmd:
-                    break
+            switch incoming {
+            case .hello(let announcement):
+                noteRelayContract(announcement)
+            case .frame(let frame):
+                let keys = try SyncCrypto.deriveKeys(masterKey: pairing.masterKey, pairingId: pairing.pairingId)
+                do {
+                    switch frame.t {
+                    case .snap:
+                        try applySnap(frame.envelope, pairingId: pairing.pairingId, encKey: keys.enc)
+                    case .ack:
+                        try applyAck(frame.envelope, pairingId: pairing.pairingId, encKey: keys.enc)
+                    case .cmd:
+                        break
+                    }
+                } catch {
+                    lastStatus = userFacing(error)
                 }
-            } catch {
-                lastStatus = userFacing(error)
             }
         }
     }
@@ -205,6 +212,9 @@ extension CompanionMacRuntime {
         snap = try SyncCrypto.openJSON(SnapPlaintext.self, envelope: envelope, pairingId: pairingId, encKey: encKey)
         if let build = snap?.build {
             notePeerBuild(build)
+        }
+        if let snap {
+            notePeerContract(snap.announcement)
         }
         reconcileOptimisticCabin()
         if snap?.pendingCabin != .idle {
@@ -218,6 +228,7 @@ extension CompanionMacRuntime {
         if let build = ack.build {
             notePeerBuild(build)
         }
+        notePeerContract(ack.announcement)
         outgoingPause = OutgoingPauseApplying.applyAck(ack, current: outgoingPause)
         issueBoardTrack = IssueBoardTracking.applyAck(ack, current: issueBoardTrack)
         if case .failed = outgoingPause {
@@ -229,5 +240,15 @@ extension CompanionMacRuntime {
     func notePeerBuild(_ build: WireBuildInfo) {
         peerBuild = build
         PeerBuildStore.save(build, to: defaults)
+    }
+
+    func notePeerContract(_ announcement: ContractAnnouncement) {
+        peerContract = announcement
+        PeerContractStore.save(announcement, to: defaults, key: PeerContractStore.peerKey)
+    }
+
+    func noteRelayContract(_ announcement: ContractAnnouncement) {
+        relayContract = announcement
+        PeerContractStore.save(announcement, to: defaults, key: PeerContractStore.relayKey)
     }
 }

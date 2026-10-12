@@ -29,6 +29,8 @@ public enum SyncCopy {
             return pauseLimitReached
         case .transport(_, let code) where code == "notPaused":
             return notPaused
+        case .transport(let status, let code) where status == 426 || code == "contractRange":
+            return ContractCopy.relayOlder
         default:
             return relayDisconnected
         }

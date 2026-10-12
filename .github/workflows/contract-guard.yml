@@ -1,0 +1,36 @@
+# 約束の指紋と、凍結した fixtures。全 PR で見る。
+# 止めるのはここ。PR テンプレートのチェックは補助。
+
+name: contract-guard
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [develop, main]
+  pull_request:
+
+concurrency:
+  group: contract-guard-${{ github.event.pull_request.number && format('pr-{0}', github.event.pull_request.number) || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    name: contract fingerprint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: guard
+        env:
+          BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: node tools/contract/guard.mjs
+      - name: guard tests
+        run: node --test tools/contract/guard.test.mjs

@@ -14,6 +14,17 @@ public struct WireBuildInfo: Codable, Equatable, Sendable {
         self.schema = schema
         self.builtAt = builtAt
     }
+
+    /// A present `build` that is missing a field, or is not an object, is ignored.
+    /// The surrounding snap, ack, or cmd still decodes.
+    static func decodeLenient<K: CodingKey>(
+        from container: KeyedDecodingContainer<K>,
+        forKey key: K
+    ) -> WireBuildInfo? {
+        guard container.contains(key) else { return nil }
+        if (try? container.decodeNil(forKey: key)) == true { return nil }
+        return try? container.decode(WireBuildInfo.self, forKey: key)
+    }
 }
 
 public enum PeerBuildStore {

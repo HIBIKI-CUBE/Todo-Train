@@ -18,6 +18,14 @@ struct SettingsView: View {
     @State private var didCopyBuild = false
     @State private var buildCopyGeneration = 0
 
+    private var contractNotice: ContractPresentation {
+        ContractPresentation.make(
+            peer: runtime.peerContract,
+            relay: runtime.relayContract,
+            side: .iphone
+        )
+    }
+
     var body: some View {
         Form {
             Section {
@@ -118,6 +126,11 @@ struct SettingsView: View {
                 Text(BuildInfoCopy.explanation)
                     .font(.footnote)
                     .foregroundStyle(TrainTheme.muted)
+                if let diagnostic = contractNotice.diagnostic {
+                    Text(diagnostic)
+                        .font(.footnote)
+                        .foregroundStyle(TrainTheme.muted)
+                }
             } header: {
                 Text("診断")
             } footer: {
@@ -165,6 +178,16 @@ struct SettingsView: View {
                     Text(notice)
                         .font(.footnote)
                         .foregroundStyle(TrainTheme.muted)
+                }
+                if !contractNotice.guidance.isEmpty {
+                    Text(ContractCopy.heading)
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(TrainTheme.muted)
+                    ForEach(contractNotice.guidance, id: \.self) { line in
+                        Text(line)
+                            .font(.footnote)
+                            .foregroundStyle(TrainTheme.muted)
+                    }
                 }
             } header: {
                 Text("Mac")

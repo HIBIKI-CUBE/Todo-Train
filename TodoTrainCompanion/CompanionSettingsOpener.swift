@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import TodoTrainSync
 
 @MainActor
 enum CompanionSettingsOpener {
@@ -34,6 +35,7 @@ enum CompanionSettingsOpener {
 @MainActor
 enum CompanionStatusItemRightClick {
     private static var mouseMonitor: Any?
+    static var contractPresentation: () -> ContractPresentation = { .quiet }
 
     static func install() {
         guard mouseMonitor == nil else { return }
@@ -71,6 +73,22 @@ enum CompanionStatusItemRightClick {
         let build = NSMenuItem(title: LocalWireBuild.line, action: nil, keyEquivalent: "")
         build.isEnabled = false
         menu.addItem(build)
+        let notice = contractPresentation()
+        if let diagnostic = notice.diagnostic {
+            let line = NSMenuItem(title: diagnostic, action: nil, keyEquivalent: "")
+            line.isEnabled = false
+            menu.addItem(line)
+        }
+        if !notice.guidance.isEmpty {
+            let heading = NSMenuItem(title: ContractCopy.heading, action: nil, keyEquivalent: "")
+            heading.isEnabled = false
+            menu.addItem(heading)
+            for line in notice.guidance {
+                let item = NSMenuItem(title: line, action: nil, keyEquivalent: "")
+                item.isEnabled = false
+                menu.addItem(item)
+            }
+        }
         menu.addItem(.separator())
 
         let settings = NSMenuItem(

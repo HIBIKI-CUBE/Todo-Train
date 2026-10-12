@@ -1,4 +1,5 @@
 import SwiftUI
+import TodoTrainSync
 
 @main
 struct TodoTrainCompanionApp: App {
@@ -46,6 +47,14 @@ final class CompanionAppDelegate: NSObject, NSApplicationDelegate {
     private var imaYaru: ImaYaruPanelController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        let runtime = self.runtime
+        CompanionStatusItemRightClick.contractPresentation = {
+            ContractPresentation.make(
+                peer: runtime.peerContract,
+                relay: runtime.relayContract,
+                side: .mac
+            )
+        }
         CompanionStatusItemRightClick.install()
         let overlay = CompanionRideOverlayController(runtime: runtime)
         self.overlay = overlay
@@ -56,7 +65,6 @@ final class CompanionAppDelegate: NSObject, NSApplicationDelegate {
         ImaYaruOpener.present = { [weak imaYaru] in
             imaYaru?.present()
         }
-        let runtime = self.runtime
         ImaYaruHotKeyCenter.shared.setHandler { [weak runtime] in
             guard let runtime, runtime.canOfferImaYaru else { return }
             runtime.openImaYaru()

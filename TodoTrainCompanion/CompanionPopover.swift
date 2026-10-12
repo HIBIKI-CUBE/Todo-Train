@@ -71,6 +71,22 @@ struct CompanionPopover: View {
                     .foregroundStyle(.secondary)
             }
 
+            let notice = ContractPresentation.make(
+                peer: runtime.peerContract,
+                relay: runtime.relayContract,
+                side: .mac
+            )
+            if !notice.guidance.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(ContractCopy.heading)
+                    ForEach(notice.guidance, id: \.self) { line in
+                        Text(line)
+                    }
+                }
+                .font(.callout)
+                .foregroundStyle(.secondary)
+            }
+
             if view.canReconnect {
                 Button("つなぎ直す") {
                     runtime.reconnect()

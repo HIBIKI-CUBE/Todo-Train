@@ -20,12 +20,46 @@ public enum WireKind: String, Codable, Sendable, Equatable {
     case ack
 }
 
-public enum WireOp: String, Codable, Sendable, Equatable {
+/// `op` on the wire. Unknown values must not throw; the host acks `unsupportedOp` and does not run them.
+public enum WireOp: Sendable, Equatable {
     case pause
     case resume
     case still
     /// Issue a ticket and board it in one beat. Not arrive/extend.
     case issueAndBoard
+    case unknown(String)
+
+    public var rawValue: String {
+        switch self {
+        case .pause: "pause"
+        case .resume: "resume"
+        case .still: "still"
+        case .issueAndBoard: "issueAndBoard"
+        case .unknown(let value): value
+        }
+    }
+
+    public init(rawValue: String) {
+        switch rawValue {
+        case "pause": self = .pause
+        case "resume": self = .resume
+        case "still": self = .still
+        case "issueAndBoard": self = .issueAndBoard
+        default: self = .unknown(rawValue)
+        }
+    }
+}
+
+extension WireOp: Codable {
+    public init(from decoder: Decoder) throws {
+        let value = try decoder.singleValueContainer().decode(String.self)
+        self.init(rawValue: value)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
 }
 
 public enum WireError: String, Codable, Sendable, Equatable {
@@ -36,6 +70,8 @@ public enum WireError: String, Codable, Sendable, Equatable {
     case notPaused
     /// Empty title, or estimatedSeconds outside 60...3600, on issueAndBoard.
     case invalidPayload
+    /// The receiver does not implement this `op`. The command was not applied.
+    case unsupportedOp
 }
 
 /// `phase` on the wire. Unknown values must not crash; display conservatively.
