@@ -42,6 +42,7 @@ Worker は `ct` を JSON.parse しない。平文フィクスチャと AES-GCM �
 | [fixtures/v3/](fixtures/v3/) | 版 3 の凍結。中身は変えない |
 | [fixtures/v4/](fixtures/v4/) | 版 4 の凍結。中身は変えない |
 | [fixtures/v5/](fixtures/v5/) | 版 5 の凍結。中身は変えない |
+| [fixtures/v6/](fixtures/v6/) | 版 6 の凍結。中身は変えない |
 | [vectors/aes-gcm-snap.json](vectors/aes-gcm-snap.json) | 既知鍵の AES-GCM と confirm HMAC。Worker は使わない |
 
 固定 UUID / Unix / 鍵はフィクスチャ間で共有する（`pairingId` `a1a2a3a4-b1b2-4c3c-8d4d-e5e6e7e8e9ea` など）。

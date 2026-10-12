@@ -35,6 +35,28 @@ struct CheckInAnswerRecord: Codable, Equatable, Sendable {
     var kind: CheckInKind
     var answer: CheckInAnswerKind
     var answeredAt: Date
+    /// Stable nudge id. Absent on answers recorded before the nudge stamp.
+    var nudgeID: String?
+    /// Set for `willExtend` once the minutes are known.
+    var addSeconds: Int?
+    /// `iphone` or `mac`.
+    var answeredOn: String?
+
+    init(
+        kind: CheckInKind,
+        answer: CheckInAnswerKind,
+        answeredAt: Date,
+        nudgeID: String? = nil,
+        addSeconds: Int? = nil,
+        answeredOn: String? = nil
+    ) {
+        self.kind = kind
+        self.answer = answer
+        self.answeredAt = answeredAt
+        self.nudgeID = nudgeID
+        self.addSeconds = addSeconds
+        self.answeredOn = answeredOn
+    }
 }
 
 enum CheckInCopy {

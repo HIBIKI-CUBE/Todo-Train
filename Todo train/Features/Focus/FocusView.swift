@@ -5,6 +5,7 @@
 
 import SwiftData
 import SwiftUI
+import TodoTrainSync
 
 struct FocusView: View {
     @Environment(SessionManager.self) private var sessionManager
@@ -24,6 +25,7 @@ struct FocusView: View {
     @State private var showError = false
     @State private var didPlayOvertimeSound = false
     @State private var overtimePulse = false
+    @State private var nudgePulse = false
     @State private var overtimeHaptic = 0
     @State private var extendReason: String?
     @State private var didConsumePendingAction = false
@@ -37,7 +39,7 @@ struct FocusView: View {
     var body: some View {
         ZStack {
             CabinBackground(
-                phase: currentTimerPhase,
+                phase: cabinPhase,
                 reduceTransparency: reduceTransparency
             )
 
@@ -83,6 +85,9 @@ struct FocusView: View {
             sessionManager.reconcile()
             handleOvertimeSound()
             consumePendingActionIfNeeded()
+        }
+        .onChange(of: sessionManager.nudgeRingTick) { _, _ in
+            playNudgeRing()
         }
         .onChange(of: sessionManager.phase) { _, newPhase in
             if newPhase != .overtime {
@@ -174,11 +179,11 @@ struct FocusView: View {
                 .fill(
                     sessionManager.pendingCheckIn == .progress && sessionManager.phase != .overtime
                         ? TrainTheme.signalAmber
-                        : currentTimerPhase.accentColor
+                        : cabinPhase.accentColor
                 )
                 .frame(width: 3)
                 .opacity(
-                    currentTimerPhase == .cruise && sessionManager.pendingCheckIn != .progress ? 0 : 1
+                    cabinPhase == .cruise && sessionManager.pendingCheckIn != .progress ? 0 : 1
                 )
         }
     }
@@ -186,7 +191,7 @@ struct FocusView: View {
     private var timerPanel: some View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
             let remaining = sessionManager.remainingSeconds
-            let phase = timerPhase(remaining: remaining)
+            let phase = instrumentPhase(remaining: remaining)
 
             GeometryReader { geo in
                 let fontSize = timerFontSize(in: geo.size)
@@ -196,8 +201,9 @@ struct FocusView: View {
                     .foregroundStyle(phase.accentColor)
                     .minimumScaleFactor(0.4)
                     .lineLimit(1)
-                    .scaleEffect((overtimePulse && !reduceMotion) ? 1.02 : 1)
+                    .scaleEffect(((overtimePulse || nudgePulse) && !reduceMotion) ? 1.02 : 1)
                     .animation(reduceMotion ? nil : TrainTheme.Motion.pulse, value: overtimePulse)
+                    .animation(reduceMotion ? nil : TrainTheme.Motion.pulse, value: nudgePulse)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .accessibilityLabel("残り時間")
                     .accessibilityValue(CockpitFormat.timerLabel(remaining: remaining))
@@ -386,7 +392,7 @@ struct FocusView: View {
         if sessionManager.pendingCheckIn == .progress, sessionManager.phase != .overtime {
             return TrainTheme.signalAmber
         }
-        return currentTimerPhase.accentColor
+        return cabinPhase.accentColor
     }
 
     private var estimateMetaText: String? {
@@ -395,10 +401,27 @@ struct FocusView: View {
             return nil
         }
         let extensionMinutes = max(0, (budget - estimate) / 60)
+        if let caption = sessionManager.nudgeExtensionCaption {
+            return "見積もり \(estimate / 60)分 · \(caption)"
+        }
         if extensionMinutes > 0 {
             return "見積もり \(estimate / 60)分 · 延長 +\(extensionMinutes)分"
         }
         return "見積もり \(estimate / 60)分"
+    }
+
+    private var cabinPhase: FocusTimerPhase {
+        instrumentPhase(remaining: sessionManager.remainingSeconds)
+    }
+
+    private func instrumentPhase(remaining: TimeInterval) -> FocusTimerPhase {
+        if sessionManager.phase == .overtime || remaining <= 0 {
+            return timerPhase(remaining: remaining)
+        }
+        if sessionManager.nudgeCurrentStage == .approach {
+            return .approach
+        }
+        return timerPhase(remaining: remaining)
     }
 
     private func timerFontSize(in size: CGSize) -> CGFloat {
@@ -467,6 +490,16 @@ struct FocusView: View {
         }
         showExtendChips = false
         extendReason = nil
+    }
+
+    private func playNudgeRing() {
+        if settings.overtimeSoundEnabled {
+            OvertimeAlert.playSound()
+        }
+        overtimeHaptic += 1
+        if !reduceMotion {
+            nudgePulse.toggle()
+        }
     }
 
     private func handleOvertimeSound() {

@@ -28,7 +28,9 @@ struct TodoTrainSessionLiveActivity: Widget {
                 isOvertime: context.state.isOvertime,
                 isStale: context.isStale,
                 isPaused: context.state.isPaused,
-                checkInPrompt: context.state.checkInPrompt
+                checkInPrompt: context.state.checkInPrompt,
+                instrumentPhaseRaw: context.state.instrumentPhaseRaw,
+                promptKeepsTimerColor: context.state.promptKeepsTimerColor == true
             )
             return DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
@@ -189,7 +191,9 @@ private struct SessionCockpitRoot: View {
             isOvertime: context.state.isOvertime,
             isStale: context.isStale,
             isPaused: context.state.isPaused,
-            checkInPrompt: context.state.checkInPrompt
+            checkInPrompt: context.state.checkInPrompt,
+            instrumentPhaseRaw: context.state.instrumentPhaseRaw,
+            promptKeepsTimerColor: context.state.promptKeepsTimerColor == true
         )
 
         return Group {

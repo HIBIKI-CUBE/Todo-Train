@@ -17,6 +17,16 @@ nonisolated enum FocusTimerPhase: Equatable {
         self = Self.phase(remaining: remaining, budgetSeconds: budgetSeconds)
     }
 
+    static func instrument(raw: String?) -> FocusTimerPhase? {
+        switch raw {
+        case "cruise": .cruise
+        case "approach": .approach
+        case "final": .final
+        case "overtime": .overtime
+        default: nil
+        }
+    }
+
     static func phase(remaining: TimeInterval, budgetSeconds: TimeInterval) -> FocusTimerPhase {
         switch TimerUrgency.phase(remaining: remaining, budgetSeconds: budgetSeconds) {
         case .cruise: .cruise
@@ -164,6 +174,8 @@ nonisolated struct CockpitDisplayModel: Equatable {
         isStale: Bool,
         isPaused: Bool = false,
         checkInPrompt: String? = nil,
+        instrumentPhaseRaw: String? = nil,
+        promptKeepsTimerColor: Bool = false,
         now: Date = .now
     ) -> CockpitDisplayModel {
         let snapshot = CockpitInstrumentSnapshot.session(
@@ -199,12 +211,23 @@ nonisolated struct CockpitDisplayModel: Equatable {
             headerState = hasPrompt ? prompt : snapshot.headerState
             pausedProgress = nil
         }
+        let instrument = FocusTimerPhase.instrument(raw: instrumentPhaseRaw)
+        let phase: FocusTimerPhase = {
+            if isPaused {
+                return FocusTimerPhase(remaining: remaining, budgetSeconds: TimeInterval(budgetSeconds))
+            }
+            if !isOvertime, let instrument {
+                return instrument
+            }
+            if hasPrompt, !promptKeepsTimerColor {
+                return .approach
+            }
+            return snapshot.phase
+        }()
         return CockpitDisplayModel(
             title: title,
             clock: clock,
-            phase: isPaused
-                ? FocusTimerPhase(remaining: remaining, budgetSeconds: TimeInterval(budgetSeconds))
-                : (hasPrompt ? .approach : snapshot.phase),
+            phase: phase,
             headerState: headerState,
             deadlineLabel: isPaused ? "停車中" : CockpitPresentation.deadlineLabel(from: snapshot),
             budgetSeconds: budgetSeconds,

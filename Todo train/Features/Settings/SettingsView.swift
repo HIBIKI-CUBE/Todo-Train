@@ -55,7 +55,10 @@ struct SettingsView: View {
             } header: {
                 Text("フォーカス")
             } footer: {
-                Text("発車中に充電していると、自動ロックしません。車内放送は長い乗務の途中に短い問いを出し、ほかのアプリへ離れたときは列車側で一度だけ知らせます。")
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("発車中に充電していると、自動ロックしません。")
+                    Text("車内放送は長い乗務の途中に短い問いを出し、ほかのアプリへ離れたときは列車側で一度だけ知らせます。")
+                }
             }
             .onChange(of: settings.cabinAnnouncementsEnabled) { _, _ in
                 sessionManager.syncCabinAnnouncementsWithSettings()

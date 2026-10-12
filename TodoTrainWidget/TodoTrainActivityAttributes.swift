@@ -16,6 +16,8 @@ nonisolated struct TodoTrainActivityAttributes: ActivityAttributes {
         var budgetSeconds: Int
         var isPaused: Bool
         var checkInPrompt: String?
+        var instrumentPhaseRaw: String?
+        var promptKeepsTimerColor: Bool?
 
         init(
             title: String,
@@ -23,7 +25,9 @@ nonisolated struct TodoTrainActivityAttributes: ActivityAttributes {
             isOvertime: Bool,
             budgetSeconds: Int,
             isPaused: Bool = false,
-            checkInPrompt: String? = nil
+            checkInPrompt: String? = nil,
+            instrumentPhaseRaw: String? = nil,
+            promptKeepsTimerColor: Bool? = nil
         ) {
             self.title = title
             self.deadline = deadline
@@ -31,6 +35,8 @@ nonisolated struct TodoTrainActivityAttributes: ActivityAttributes {
             self.budgetSeconds = budgetSeconds
             self.isPaused = isPaused
             self.checkInPrompt = checkInPrompt
+            self.instrumentPhaseRaw = instrumentPhaseRaw
+            self.promptKeepsTimerColor = promptKeepsTimerColor
         }
     }
 

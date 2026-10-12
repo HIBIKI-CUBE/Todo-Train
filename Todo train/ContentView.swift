@@ -61,6 +61,7 @@ struct ContentView: View {
             message: undoCenter.restoreErrorMessage ?? ""
         )
         .onAppear {
+            sessionManager.iphoneSceneActive = scenePhase == .active
             if !didRecoverOnLaunch {
                 recoverOnLaunch()
                 didRecoverOnLaunch = true
@@ -83,6 +84,7 @@ struct ContentView: View {
             sessionManager.syncCabinAnnouncementsWithSettings()
         }
         .onChange(of: scenePhase) { _, newPhase in
+            sessionManager.noteIphoneScene(newPhase == .active)
             companion.handleScenePhase(newPhase, sessionManager: sessionManager)
             // Inactive keeps the loop (the UI is still on screen). Background stops it
             // before away is armed, so a due watch is not promoted into an alert.

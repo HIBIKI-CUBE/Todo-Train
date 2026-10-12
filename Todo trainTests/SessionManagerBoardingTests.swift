@@ -321,26 +321,29 @@ struct SessionManagerBoardingTests {
         #expect(manager.companionSyncTick == 1)
 
         try manager.board(ticket: ticket)
-        #expect(manager.companionSyncTick == 2)
-
-        try manager.pause()
+        // Board, then the approach stage is already due on a one-minute ride.
         #expect(manager.companionSyncTick == 3)
 
-        try manager.resume()
+        try manager.pause()
         #expect(manager.companionSyncTick == 4)
 
-        try manager.extend(by: 60)
+        try manager.resume()
         #expect(manager.companionSyncTick == 5)
+
+        try manager.extend(by: 60)
+        // The new estimate moves approach, so the snap bumps again.
+        #expect(manager.companionSyncTick == 7)
 
         clock.advance(by: 121)
         manager.reconcile()
         #expect(manager.phase == .overtime)
-        #expect(manager.companionSyncTick == 6)
+        // Crossing the estimate records that stage and bumps once more.
+        #expect(manager.companionSyncTick == 9)
         manager.reconcile()
-        #expect(manager.companionSyncTick == 6)
+        #expect(manager.companionSyncTick == 9)
 
         try manager.arrive()
-        #expect(manager.companionSyncTick == 7)
+        #expect(manager.companionSyncTick == 10)
         #expect(manager.phase == .idle)
     }
 

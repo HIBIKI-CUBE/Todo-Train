@@ -70,7 +70,7 @@ HMAC-SHA256(cfmKey, UTF-8("{pairingId}|{offerId}|mac"))
 
 フィールドは [fixtures/snap.json](fixtures/snap.json)。乗務なしは [fixtures/snap-idle.json](fixtures/snap-idle.json)（`sessionId` と他の乗務欄は `null`、`phase` は `idle`）。声掛けのある snap は [fixtures/snap-nudge.json](fixtures/snap-nudge.json)。`serviceActive` / `cabinEnabled` / `checkInFiredCount` / `pendingCabin` は乗務なしでも載せる。欠ける旧 snap は `serviceActive=false`、`cabinEnabled=true`、`checkInFiredCount=0`、`pendingCabin=null`。`pendingCabin` は `progress` / `away` / `idle` / `overrun` / `gap` / `null`。未知値は表示だけ無視。`idle` は運行中で乗務が無いとき。iPhone が立て、Mac は通知するだけ。1段目は既存の `progress`。`overrun` は見積もり時刻と引き継ぎ、`gap` は到着後の空白。旧 Mac は未知の `pendingCabin` を無視する。`lastActivityAt` は載せない。
 
-任意の `nudge` / `nudgePlan` / `reserved` は声掛け。欠けていても旧クライアントは無視する。値があるときだけ出す。欄が欠けた snap と、この欄を持つ snap の両方を、いまの型が読む。
+任意の `nudge` / `nudgePlan` / `reserved` は声掛け。欠けていても旧クライアントは無視する。値があるときだけ出す。欄が欠けた snap と、この欄を持つ snap の両方を、いまの型が読む。どれかの値が壊れていても、その欄だけ捨てて snap の復号は続ける。
 
 `nudge` はいま出ている声掛け。`id`、`kind`（`progress` / `overrun` / `gap`）、`stage`（`checkIn` / `approach` / `estimate` / `handoff1` / `handoff2` / `handoff3` / `gap1` / `gap2`）、`ringSurface`（`mac` / `iphone` / `none`）、`firedAt`（Unix 整数秒）。未知の `kind` / `stage` / `ringSurface` は文字列のまま残し、snap の復号は続ける。`ringSurface` に `watch` を足すのは #100。
 

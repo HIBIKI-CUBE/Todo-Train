@@ -107,6 +107,31 @@ final class FocusTimerPhaseTests: XCTestCase {
         XCTAssertEqual(model.phase, .overtime)
     }
 
+    func testCheckInPromptCanKeepTheTimerColor() {
+        let deadline = Date().addingTimeInterval(1000)
+        let kept = CockpitDisplayModel.session(
+            title: "A",
+            deadline: deadline,
+            budgetSeconds: 1200,
+            isOvertime: false,
+            isStale: false,
+            checkInPrompt: "まだ『A』？",
+            promptKeepsTimerColor: true
+        )
+        XCTAssertEqual(kept.headerState, "まだ『A』？")
+        XCTAssertEqual(kept.phase, .cruise)
+
+        let approach = CockpitDisplayModel.session(
+            title: "A",
+            deadline: deadline,
+            budgetSeconds: 1200,
+            isOvertime: false,
+            isStale: false,
+            instrumentPhaseRaw: "approach"
+        )
+        XCTAssertEqual(approach.phase, .approach)
+    }
+
     func testTimerIntervalGuardsInvertedRange() {
         let start = Date()
         let end = start.addingTimeInterval(-30)

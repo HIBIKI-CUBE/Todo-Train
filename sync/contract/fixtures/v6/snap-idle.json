@@ -1,0 +1,16 @@
+{
+  "rev": 43,
+  "sessionId": null,
+  "ticketId": null,
+  "title": null,
+  "phase": "idle",
+  "startedAt": null,
+  "estimatedSeconds": null,
+  "pausedAccumulated": null,
+  "pausedAt": null,
+  "boardedDeviceID": null,
+  "serviceActive": false,
+  "cabinEnabled": true,
+  "checkInFiredCount": 0,
+  "pendingCabin": null
+}

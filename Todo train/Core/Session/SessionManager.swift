@@ -42,6 +42,17 @@ final class SessionManager {
     var foregroundReconcileTask: Task<Void, Never>?
     /// Set by the app scene; the loop itself only runs with `SystemSessionClock`.
     var isForegroundForReconcile = false
+    /// `.active` only. `.inactive` keeps the 1 Hz loop and is not Focus for a nudge.
+    var iphoneSceneActive = false
+    /// Mac presence. Until a presence command, Mac is not foreground.
+    var macPipVisible = false
+    var macAttending = false
+    /// Bumps when this iPhone should play the overrun presentation once.
+    var nudgeRingTick = 0
+    /// Working seconds at the previous nudge sample. A jump larger than the tick does not ring.
+    var nudgeObservedElapsed: TimeInterval?
+    var nudgeObservedSessionID: UUID?
+    var nudgeObservedStageRaw: String?
     /// Avoid re-enqueueing the same idle banner on every `reconcile`.
     var idleLocalNotificationArmed = false
     #if canImport(UIKit)

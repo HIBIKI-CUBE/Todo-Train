@@ -60,6 +60,7 @@ enum DeletionUndo {
         var addedSeconds: Int
         var reason: String?
         var createdAt: Date
+        var workingSeconds: Double?
     }
 
     struct PauseRecord: Equatable {
@@ -139,7 +140,8 @@ enum DeletionUndo {
                     id: $0.id,
                     addedSeconds: $0.addedSeconds,
                     reason: $0.reason,
-                    createdAt: $0.createdAt
+                    createdAt: $0.createdAt,
+                    workingSeconds: $0.workingSeconds
                 )
             },
             pauses: session.pauses.map {
@@ -243,6 +245,7 @@ enum DeletionUndo {
                     addedSeconds: ext.addedSeconds,
                     reason: ext.reason,
                     createdAt: ext.createdAt,
+                    workingSeconds: ext.workingSeconds,
                     session: session
                 )
                 context.insert(created)
@@ -251,6 +254,7 @@ enum DeletionUndo {
             existing.addedSeconds = ext.addedSeconds
             existing.reason = ext.reason
             existing.createdAt = ext.createdAt
+            existing.workingSeconds = ext.workingSeconds
             existing.session = session
         }
         for pause in record.pauses {

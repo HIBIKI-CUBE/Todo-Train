@@ -5,6 +5,7 @@
 //  V1 はダイヤ導入前。V2 で占有・網・シリーズ。V3 で乗客の乗車。
 //  V3 は PR #71 より前の列で凍結する。PR #71 の列は V3_1（3.1.0）。
 //  V4 で声掛けの段と停車の列を既定値のまま足す。
+//  V5 で延長の時点の実働秒を足す。V4 の乗車グラフは AppSchemaV4+Frozen.swift。
 //
 
 import Foundation
@@ -448,6 +449,27 @@ enum AppSchemaV3_1: VersionedSchema {
 enum AppSchemaV4: VersionedSchema {
     static var versionIdentifier: Schema.Version { Schema.Version(4, 0, 0) }
 
+    /// 乗車グラフは凍結コピー。ライブの `SessionExtension` は V5 で実働秒を足す。
+    static var models: [any PersistentModel.Type] {
+        [
+            AppSchemaV4.Ticket.self,
+            AppSchemaV4.WorkSession.self,
+            AppSchemaV4.SessionExtension.self,
+            AppSchemaV4.SessionPause.self,
+            AppSchemaV4.Tag.self,
+            AppSchemaV4.TaskLineage.self,
+            ServiceDay.self,
+            TimetableBlock.self,
+            TimetableGuard.self,
+            TimetableSeriesRule.self,
+            PassengerRide.self,
+        ]
+    }
+}
+
+enum AppSchemaV5: VersionedSchema {
+    static var versionIdentifier: Schema.Version { Schema.Version(5, 0, 0) }
+
     static var models: [any PersistentModel.Type] {
         [
             Ticket.self,
@@ -473,11 +495,12 @@ enum AppMigrationPlan: SchemaMigrationPlan {
             AppSchemaV3.self,
             AppSchemaV3_1.self,
             AppSchemaV4.self,
+            AppSchemaV5.self,
         ]
     }
 
     static var stages: [MigrationStage] {
-        [migrateV1toV2, migrateV2toV3, migrateV3toV3_1, migrateV3_1toV4]
+        [migrateV1toV2, migrateV2toV3, migrateV3toV3_1, migrateV3_1toV4, migrateV4toV5]
     }
 
     /// 既存エンティティはそのまま。ダイヤ3型を空テーブルとして足す。
@@ -506,5 +529,11 @@ enum AppMigrationPlan: SchemaMigrationPlan {
     static let migrateV3_1toV4 = MigrationStage.lightweight(
         fromVersion: AppSchemaV3_1.self,
         toVersion: AppSchemaV4.self
+    )
+
+    /// 延長の時点の実働秒。既定は nil。
+    static let migrateV4toV5 = MigrationStage.lightweight(
+        fromVersion: AppSchemaV4.self,
+        toVersion: AppSchemaV5.self
     )
 }
