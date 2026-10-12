@@ -89,7 +89,7 @@
 
 | ID | 所見 | 根拠 | 候補アクション |
 |----|------|------|----------------|
-| P2-1 | **QR UI が iOS / Mac で二重** | `Features/Settings/QRViewfinderFrame.swift` と `TodoTrainCompanion/QRViewfinderFrame.swift`（現状同一）。`CompanionQRCodeView` は差分あり | 共有可能な描画を Package へ。プラットフォーム差だけ残す |
+| P2-1 | ~~**QR UI が iOS / Mac で二重**~~ | ~~Viewfinder / Renderer 二重~~ | **済**: `Packages/TodoTrainQRUI`。枠と CGImage 生成を共有。padding / 角 / VoiceOver 文言は呼び出し側。`TodoTrainQRUITests` |
 | P2-2 | **Package deployment target がアプリより古い** | アプリ `IPHONEOS_DEPLOYMENT_TARGET = 27.0`、Packages は `.iOS(.v17)` | 意図的ならコメントで固定。でなければ 27 に揃えて「古い API が混入しない」制約にする |
 | P2-3 | ~~**`ServiceEndSheet` typealias 残骸**~~ | ~~`typealias ServiceEndSheet = ServiceShutdownCover`~~ | **済（本 PR）**: 参照ゼロのためファイル削除 |
 | P2-4 | **`import CoreData` in ContentView** | `NSPersistentStoreRemoteChange` 購読に必要。未使用ではなかった | ゲート false のあいだ購読ごと狭めるなら P3-6 と一緒に |
@@ -136,10 +136,11 @@
 4. **~~発車可否の単一 API（P1-13）~~** — 済。
 5. ~~**reconcile スケジューラ（P1-11）**~~ — 済。
 6. ~~**SessionManager から投影を剥がす（P1-1）第一スライス**~~ — `SessionPresentation` + `+Projection` 済。残りは passenger chrome / DeviceSideEffects。
-7. **クロスターゲット共有（P2-1 / P2-13）** — QR、Cockpit/Timer SPM。次の実装スライス候補。
+7. ~~**QR UI 共有（P2-1）**~~ — `TodoTrainQRUI` 済。
 8. ~~**Intent 単一書き込み口（P1-12）**~~ — 済。
-9. **テストで鎖（P1-8 / P2-8–11 / P2-17）** — リファクタ PR は純関数テストを先に足す。
-10. **依存更新は単独 PR（P2-5）** — アプリ本体と混ぜない。Dependabot high も別確認。
+9. **Cockpit/Timer SPM（P2-13）** — Widget フォルダ例外をやめる。次の実装スライス候補。
+10. **テストで鎖（P1-8 / P2-8–11 / P2-17）** — リファクタ PR は純関数テストを先に足す。
+11. **依存更新は単独 PR（P2-5）** — アプリ本体と混ぜない。Dependabot high も別確認。
 
 やらない方がいいこと:
 

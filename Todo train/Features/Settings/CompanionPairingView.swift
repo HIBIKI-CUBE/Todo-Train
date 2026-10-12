@@ -1,4 +1,5 @@
 import SwiftUI
+import TodoTrainQRUI
 import TodoTrainSync
 
 struct CompanionPairingView: View {
@@ -22,7 +23,13 @@ struct CompanionPairingView: View {
                     .padding(.horizontal, TrainTheme.Space.lg)
 
                 if let encoded = qr?.encoded {
-                    CompanionQRCodeView(encoded: encoded, dimension: 220)
+                    CompanionQRCodeView(
+                        encoded: encoded,
+                        dimension: 220,
+                        chromePadding: 16,
+                        cornerRadius: TrainTheme.Radius.control,
+                        accessibilityLabel: "Mac に向ける QR"
+                    )
                 }
 
                 if showsCamera {
