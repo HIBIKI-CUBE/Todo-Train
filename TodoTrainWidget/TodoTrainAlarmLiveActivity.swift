@@ -5,6 +5,7 @@
 //  Dark cockpit for Lock Screen + StandBy (AlarmKit).
 //  StandBy = isActivityFullscreen. Background: showsWidgetContainerBackground
 //  for Lock Screen container; activityBackgroundTint for StandBy edge fill.
+//  ActivityFamily.small is the Watch Smart Stack face, same shape as the session card.
 //  Single essential control (停車 / 再乗車 / 停止). Arrive / extend via app deep link.
 //
 
@@ -56,7 +57,7 @@ struct TodoTrainAlarmLiveActivity: Widget {
             .keylineTint(presentation.phase.accentColor)
             .widgetURL(URL(string: "todotrain://focus"))
         }
-        .supplementalActivityFamilies([.medium])
+        .supplementalActivityFamilies([.medium, .small])
     }
 }
 
@@ -152,15 +153,25 @@ private struct AlarmPresentationModel {
 private struct AlarmCockpitRoot: View {
     let context: ActivityViewContext<AlarmAttributes<TodoTrainAlarmMetadata>>
 
+    @Environment(\.activityFamily) private var activityFamily
+
+    var body: some View {
+        if activityFamily == .small {
+            AlarmSmallActivityView(context: context)
+        } else {
+            alarmLockScreen
+        }
+    }
+
     /// StandBy / fullscreen — Apple's documented signal only.
     @Environment(\.isActivityFullscreen) private var isFullscreen
     @Environment(\.showsWidgetContainerBackground) private var showsWidgetContainerBackground
     @Environment(\.isLuminanceReduced) private var isLuminanceReduced
 
-    var body: some View {
+    private var alarmLockScreen: some View {
         let presentation = AlarmPresentationModel(context: context)
 
-        Group {
+        return Group {
             if isFullscreen {
                 CockpitStandByInstrument(
                     title: presentation.title,
@@ -211,6 +222,46 @@ private struct AlarmCockpitRoot: View {
         .activityBackgroundTint(.black)
         .activitySystemActionForegroundColor(.white)
         .widgetURL(URL(string: "todotrain://focus"))
+    }
+}
+
+/// Smart Stack card for the end bell. Title and the same instrument as the session card. No buttons.
+private struct AlarmSmallActivityView: View {
+    let context: ActivityViewContext<AlarmAttributes<TodoTrainAlarmMetadata>>
+
+    @Environment(\.showsWidgetContainerBackground) private var showsWidgetContainerBackground
+
+    var body: some View {
+        let presentation = AlarmPresentationModel(context: context)
+        let face = SessionSmallFace(
+            title: presentation.title,
+            clock: smallClock(presentation.clock, isStale: context.isStale),
+            phase: presentation.phase,
+            holdLamp: SessionSmallHoldLamp(isLit: false, phase: presentation.phase),
+            pausedLabel: pausedLabel(for: presentation.mode)
+        )
+        SessionSmallInstrument(face: face)
+            .background {
+                if showsWidgetContainerBackground {
+                    Color.black
+                }
+            }
+            .activityBackgroundTint(.black)
+            .widgetURL(URL(string: "todotrain://focus"))
+    }
+
+    private func smallClock(_ clock: CockpitClockStyle, isStale: Bool) -> CockpitClockStyle {
+        if case .countdown = clock, isStale {
+            return .stale
+        }
+        return clock
+    }
+
+    private func pausedLabel(for mode: AlarmPresentationState.Mode) -> String? {
+        if case .paused = mode {
+            return "停車中"
+        }
+        return nil
     }
 }
 
@@ -307,6 +358,51 @@ private enum AlarmPreviewFixtures {
     AlarmPreviewFixtures.countdownState(remaining: 5 * 60)
     AlarmPreviewFixtures.countdownState(remaining: 90)
     AlarmPreviewFixtures.alertState
+}
+
+#Preview("Alarm Smart Stack") {
+    let now = Date.now
+    VStack(spacing: 8) {
+        alarmSmallPreview(
+            title: "仕様書を書く",
+            clock: .countdown(end: now.addingTimeInterval(5 * 60)),
+            phase: .cruise,
+            pausedLabel: nil
+        )
+        alarmSmallPreview(
+            title: "仕様書を書く",
+            clock: .paused(remaining: 12 * 60),
+            phase: .cruise,
+            pausedLabel: "停車中"
+        )
+        alarmSmallPreview(
+            title: "仕様書を書く",
+            clock: .alert,
+            phase: .overtime,
+            pausedLabel: nil
+        )
+    }
+    .padding()
+    .background(Color.black)
+}
+
+private func alarmSmallPreview(
+    title: String,
+    clock: CockpitClockStyle,
+    phase: FocusTimerPhase,
+    pausedLabel: String?
+) -> some View {
+    SessionSmallInstrument(
+        face: SessionSmallFace(
+            title: title,
+            clock: clock,
+            phase: phase,
+            holdLamp: SessionSmallHoldLamp(isLit: false, phase: phase),
+            pausedLabel: pausedLabel
+        )
+    )
+    .frame(width: 184, height: 72)
+    .background(Color.black)
 }
 #endif
 #endif
