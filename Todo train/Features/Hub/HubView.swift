@@ -345,7 +345,7 @@ struct HubView: View {
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, TrainTheme.Space.lg)
 
-            if let quiet = sessionManager.timetableQuietMessage {
+            if let quiet = sessionManager.presentation.timetableQuietMessage {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(quiet)
                         .font(.footnote)

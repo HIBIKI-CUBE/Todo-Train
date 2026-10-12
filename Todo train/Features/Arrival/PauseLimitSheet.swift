@@ -115,7 +115,7 @@ struct PauseLimitSheet: View {
 
     private func resumePaused(_ ticket: Ticket) {
         do {
-            if sessionManager.phase == .running || sessionManager.phase == .overtime {
+            if sessionManager.fetchRunningSession() != nil {
                 try sessionManager.switchBoard(ticket: ticket)
             } else {
                 try sessionManager.board(ticket: ticket)

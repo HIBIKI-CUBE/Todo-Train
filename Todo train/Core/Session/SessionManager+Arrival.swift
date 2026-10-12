@@ -36,10 +36,7 @@ extension SessionManager {
 
     /// 別経路で乗車が始まったら、残っている到着祝祭を閉じる。
     func consumeArrivalCelebrations() {
-        punctualityQueue.removeAll { moment in
-            if case .arrival = moment.kind { return true }
-            return false
-        }
+        presentation.consumeArrivalCelebrations()
     }
 
     /// 検札後の券面を右スワイプしたときの発車。`issueAndBoard` は使わない。

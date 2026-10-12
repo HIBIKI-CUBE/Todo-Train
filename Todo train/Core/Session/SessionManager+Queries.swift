@@ -80,12 +80,7 @@ extension SessionManager {
     }
 
     func enqueuePunctualityMoment(_ moment: PunctualityMoment) {
-        punctualityQueue.append(moment)
-        // Arrival haptic is owned by ArrivalInvalidateOverlay (user swipe).
-        // 定時運行 keeps a brief success cue on enqueue.
-        if case .onTimeService = moment.kind {
-            punctualityHapticTick += 1
-        }
+        presentation.enqueuePunctualityMoment(moment)
     }
 
     /// Arrivals closed during this service window (startedAt ... endedBy).

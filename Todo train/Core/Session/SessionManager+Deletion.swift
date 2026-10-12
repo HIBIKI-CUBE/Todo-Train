@@ -65,8 +65,7 @@ extension SessionManager {
     }
 
     func consumePunctualityMoment() {
-        guard !punctualityQueue.isEmpty else { return }
-        punctualityQueue.removeFirst()
+        presentation.consumePunctualityMoment()
     }
 
     /// Clears in-memory / external side effects for an open session without writing closure fields.
