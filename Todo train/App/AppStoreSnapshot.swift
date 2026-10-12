@@ -83,6 +83,7 @@ struct AppStoreSnapshot: Sendable {
         var pendingCheckInKindRaw: String?
         var checkInPromptLine: String?
         var checkInAnswersJSON: String
+        var nudgeEventsJSON: String = "[]"
         var awayDueAt: Date?
         var boardedDeviceID: String?
         var timetableHeld: Bool
@@ -222,6 +223,7 @@ struct AppStoreSnapshot: Sendable {
                 pendingCheckInKindRaw: session.pendingCheckInKindRaw,
                 checkInPromptLine: session.checkInPromptLine,
                 checkInAnswersJSON: session.checkInAnswersJSON,
+                nudgeEventsJSON: session.nudgeEventsJSON,
                 awayDueAt: session.awayDueAt,
                 boardedDeviceID: session.boardedDeviceID,
                 timetableHeld: session.timetableHeld,
@@ -352,6 +354,7 @@ struct AppStoreSnapshot: Sendable {
             session.pendingCheckInKindRaw = row.pendingCheckInKindRaw
             session.checkInPromptLine = row.checkInPromptLine
             session.checkInAnswersJSON = row.checkInAnswersJSON
+            session.nudgeEventsJSON = row.nudgeEventsJSON
             session.awayDueAt = row.awayDueAt
             session.timetableHeld = row.timetableHeld
             context.insert(session)

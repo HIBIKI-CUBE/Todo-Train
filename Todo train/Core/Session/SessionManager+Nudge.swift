@@ -47,9 +47,11 @@ extension SessionManager {
             session.nudgeFiredStagesRaw.append(mark.stage.rawValue)
             fired.insert(mark.stage.rawValue)
             changed = true
+            let justReached = freshTick && (previous.map { mark.offset > $0 } ?? false)
+            recordReachedStage(mark.stage, on: session, input: input, fresh: justReached)
             if mark.stage == .checkIn {
                 promoteCheckIn(session)
-            } else if freshTick, let previous, mark.offset > previous {
+            } else if justReached {
                 let ring = NudgePlanner.ring(stage: mark.stage, on: input)
                 if ring.rings, ring.surface == .iphone, mark.stage != .estimate {
                     nudgeRingTick += 1
@@ -161,7 +163,7 @@ extension SessionManager {
         guard nudgeStamp(on: session, nudgeID: nudgeID) == nil else { return }
         appendNudgeStamp(
             on: session,
-            kind: .progress,
+            stage: stage,
             answer: .paused,
             at: now,
             nudgeID: nudgeID,
@@ -242,6 +244,7 @@ extension SessionManager {
             return NudgeCommandEvaluating.ack(decision: .noReservation, commandId: command.id)
         }
         let at = Date(timeIntervalSince1970: TimeInterval(command.at))
+        recordGapBoardAnswer(at: at, answeredOn: "mac")
         do {
             try board(ticket: ticket, now: at)
             return AckPlaintext(cmdId: command.id, ok: true)
@@ -308,7 +311,7 @@ extension SessionManager {
             try extend(by: seconds, now: at)
             appendNudgeStamp(
                 on: session,
-                kind: .progress,
+                stage: stage,
                 answer: .willExtend,
                 at: at,
                 nudgeID: nudgeID,
@@ -319,7 +322,7 @@ extension SessionManager {
         case .alreadyDone:
             appendNudgeStamp(
                 on: session,
-                kind: stage == .checkIn ? .progress : .progress,
+                stage: stage,
                 answer: .alreadyDone,
                 at: at,
                 nudgeID: nudgeID,
@@ -333,7 +336,7 @@ extension SessionManager {
         case .paused:
             appendNudgeStamp(
                 on: session,
-                kind: .progress,
+                stage: stage,
                 answer: .paused,
                 at: at,
                 nudgeID: nudgeID,
@@ -349,12 +352,14 @@ extension SessionManager {
                     answer: .stillOnIt,
                     now: at,
                     nudgeID: nudgeID,
-                    answeredOn: answeredOn
+                    answeredOn: answeredOn,
+                    answeredStage: stage.rawValue,
+                    recordKind: CheckInKind.recorded(for: stage)
                 )
             } else {
                 appendNudgeStamp(
                     on: session,
-                    kind: .progress,
+                    stage: stage,
                     answer: .stillOnIt,
                     at: at,
                     nudgeID: nudgeID,
@@ -367,6 +372,8 @@ extension SessionManager {
             bumpCompanionSync()
             try save()
             reconcile(now: at)
+        case .board:
+            return
         }
     }
 
@@ -481,9 +488,29 @@ extension SessionManager {
         return NudgeSession.Stamp(answer: record.answer, addSeconds: record.addSeconds)
     }
 
+    private func recordReachedStage(
+        _ stage: NudgeStage,
+        on session: WorkSession,
+        input: NudgeRideInput,
+        fresh: Bool
+    ) {
+        let ring = NudgePlanner.ring(stage: stage, on: input)
+        let fired = nudgeFiredDate(stage: stage, session: session, now: input.now)
+        session.appendNudgeEvent(
+            NudgeEventRecord(
+                stage: stage.rawValue,
+                firedAt: fired,
+                surface: ring.surface.rawValue,
+                rang: fresh && ring.rings,
+                skipped: !fresh,
+                cancelledAt: nil
+            )
+        )
+    }
+
     private func appendNudgeStamp(
         on session: WorkSession,
-        kind: CheckInKind,
+        stage: NudgeStage,
         answer: CheckInAnswerKind,
         at: Date,
         nudgeID: String,
@@ -493,12 +520,13 @@ extension SessionManager {
         var answers = session.checkInAnswers
         answers.append(
             CheckInAnswerRecord(
-                kind: kind,
+                kind: CheckInKind.recorded(for: stage),
                 answer: answer,
                 answeredAt: at,
                 nudgeID: nudgeID,
                 addSeconds: addSeconds,
-                answeredOn: answeredOn
+                answeredOn: answeredOn,
+                answeredStage: stage.rawValue
             )
         )
         session.checkInAnswers = answers

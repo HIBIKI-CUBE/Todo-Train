@@ -56,6 +56,8 @@ final class WorkSession {
     var nudgeAnsweredOnRaw: String?
     /// 走行中の確認の位置。0.62〜0.78。
     var checkInFraction: Double?
+    /// JSON array of `NudgeEventRecord`. One row per stage, written when the stage is reached.
+    var nudgeEventsJSON: String = "[]"
 
     var ticket: Ticket?
 
@@ -121,6 +123,7 @@ final class WorkSession {
         self.nudgeAnsweredAt = nil
         self.nudgeAnsweredOnRaw = nil
         self.checkInFraction = nil
+        self.nudgeEventsJSON = "[]"
         self.ticket = ticket
         self.extensions = []
         self.pauses = []

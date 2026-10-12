@@ -14,13 +14,24 @@ enum CheckInKind: String, Codable, Sendable, Equatable {
     case progress
     case away
     case idle
+    /// Stages 3...6. Stage 1 stays `progress`.
+    case overrun
+    /// Arrival gap.
+    case gap
 
     var cabin: CabinKind {
         switch self {
         case .progress: .progress
         case .away: .away
         case .idle: .idle
+        case .overrun: .overrun
+        case .gap: .gap
         }
+    }
+
+    /// Stage 1 is `progress`. Later ride stages are `overrun`.
+    static func recorded(for stage: NudgeStage) -> CheckInKind {
+        stage.number >= 3 ? .overrun : .progress
     }
 }
 
@@ -29,9 +40,11 @@ enum CheckInAnswerKind: String, Codable, Sendable, Equatable {
     case paused
     case alreadyDone
     case willExtend
+    /// Boarded the reserved ticket from the arrival gap.
+    case board
 }
 
-struct CheckInAnswerRecord: Codable, Equatable, Sendable {
+struct CheckInAnswerRecord: Equatable, Sendable {
     var kind: CheckInKind
     var answer: CheckInAnswerKind
     var answeredAt: Date
@@ -41,6 +54,8 @@ struct CheckInAnswerRecord: Codable, Equatable, Sendable {
     var addSeconds: Int?
     /// `iphone` or `mac`.
     var answeredOn: String?
+    /// Ride stage or gap name. Absent on answers recorded before the stage stamp.
+    var answeredStage: String?
 
     init(
         kind: CheckInKind,
@@ -48,7 +63,8 @@ struct CheckInAnswerRecord: Codable, Equatable, Sendable {
         answeredAt: Date,
         nudgeID: String? = nil,
         addSeconds: Int? = nil,
-        answeredOn: String? = nil
+        answeredOn: String? = nil,
+        answeredStage: String? = nil
     ) {
         self.kind = kind
         self.answer = answer
@@ -56,6 +72,35 @@ struct CheckInAnswerRecord: Codable, Equatable, Sendable {
         self.nudgeID = nudgeID
         self.addSeconds = addSeconds
         self.answeredOn = answeredOn
+        self.answeredStage = answeredStage
+    }
+}
+
+extension CheckInAnswerRecord: Codable {
+    enum CodingKeys: String, CodingKey {
+        case kind, answer, answeredAt, nudgeID, addSeconds, answeredOn, answeredStage
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        kind = try container.decode(CheckInKind.self, forKey: .kind)
+        answer = try container.decode(CheckInAnswerKind.self, forKey: .answer)
+        answeredAt = try container.decode(Date.self, forKey: .answeredAt)
+        nudgeID = try container.decodeIfPresent(String.self, forKey: .nudgeID)
+        addSeconds = try container.decodeIfPresent(Int.self, forKey: .addSeconds)
+        answeredOn = try container.decodeIfPresent(String.self, forKey: .answeredOn)
+        answeredStage = try container.decodeIfPresent(String.self, forKey: .answeredStage)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(kind, forKey: .kind)
+        try container.encode(answer, forKey: .answer)
+        try container.encode(answeredAt, forKey: .answeredAt)
+        try container.encodeIfPresent(nudgeID, forKey: .nudgeID)
+        try container.encodeIfPresent(addSeconds, forKey: .addSeconds)
+        try container.encodeIfPresent(answeredOn, forKey: .answeredOn)
+        try container.encodeIfPresent(answeredStage, forKey: .answeredStage)
     }
 }
 

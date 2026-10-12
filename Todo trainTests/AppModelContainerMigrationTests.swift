@@ -144,6 +144,56 @@ struct AppModelContainerMigrationTests {
         try Self.expectNewColumnsAtDefaults(in: migrated.mainContext)
     }
 
+    @Test func make_migratesV5PauseReadingsWithoutRebuild() throws {
+        let url = Self.temporaryStoreURL()
+        defer { Self.removeStoreFiles(at: url) }
+        let started = Date(timeIntervalSince1970: 1_700_000_000)
+        try autoreleasepool {
+            let schema = Schema(versionedSchema: AppSchemaV5.self)
+            let container = try ModelContainer(
+                for: schema,
+                configurations: [ModelConfiguration(schema: schema, url: url)]
+            )
+            let ticket = AppSchemaV5.Ticket(title: "残す切符", estimatedSeconds: 1_200, sortOrder: 1)
+            container.mainContext.insert(ticket)
+            let session = AppSchemaV5.WorkSession(
+                startedAt: started,
+                estimatedSecondsAtStart: 1_200,
+                ticket: ticket
+            )
+            session.accumulatedActiveSeconds = 1_000
+            session.endedAt = started.addingTimeInterval(1_000)
+            session.outcomeRaw = "arrived"
+            session.timetableHeld = false
+            container.mainContext.insert(session)
+            let pause = AppSchemaV5.SessionPause(
+                startedAt: started.addingTimeInterval(100),
+                endedAt: started.addingTimeInterval(500),
+                session: session
+            )
+            pause.heldByRaw = "timetable"
+            pause.pausedOnRaw = "iphone"
+            pause.heldByInferred = false
+            pause.macSampledSeconds = 300
+            pause.macActiveSeconds = 240
+            container.mainContext.insert(pause)
+            try container.mainContext.save()
+        }
+        AppModelContainer.rebuildCount = 0
+        let migrated = try AppModelContainer.make(storeURL: url)
+        #expect(AppModelContainer.rebuildCount == 0)
+        let session = try #require(try migrated.mainContext.fetch(FetchDescriptor<WorkSession>()).first)
+        #expect(session.ticket?.title == "残す切符")
+        #expect(session.accumulatedActiveSeconds == 1_000)
+        #expect(session.nudgeEventsJSON == "[]")
+        #expect(session.timetableHeld == false)
+        let pause = try #require(session.pauses.first)
+        #expect(pause.heldByRaw == "timetable")
+        #expect(pause.macSampledSeconds == 300)
+        #expect(pause.macActiveSeconds == 240)
+        #expect(pause.pausedOnRaw == "iphone")
+    }
+
     @Test func frozenV3_1HashesMatchThePostPR71Store() throws {
         let url = Self.temporaryStoreURL()
         defer { Self.removeStoreFiles(at: url) }
@@ -512,6 +562,7 @@ struct AppModelContainerMigrationTests {
             #expect(session.nudgeAnsweredAt == nil)
             #expect(session.nudgeAnsweredOnRaw == nil)
             #expect(session.checkInFraction == nil)
+            #expect(session.nudgeEventsJSON == "[]")
         }
         for pause in try context.fetch(FetchDescriptor<SessionPause>()) {
             #expect(pause.heldByRaw == nil)

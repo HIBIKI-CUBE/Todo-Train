@@ -141,6 +141,8 @@ struct PDCAExportTests {
         #expect(isNull(resumed["arrivalAction"]))
         #expect(isNull(resumed["arrivalStampedAt"]))
         #expect(resumed["startedFrom"] as? String == "other")
+        #expect(number(resumed, "pauseInputSeconds") == 0)
+        #expect(resumed["excludedFromForecast"] as? Bool == false)
 
         let orphan = try #require(row(rides, id: fixture.orphanRideID))
         #expect(isNull(orphan["ticketId"]))
@@ -154,6 +156,13 @@ struct PDCAExportTests {
         let pause = try #require(row(pauses, id: fixture.pauseID))
         #expect(pause["rideId"] as? String == fixture.resumedRideID.uuidString)
         #expect(date(pause, "endedAt") == PDCAFixture.dayStart.addingTimeInterval(900))
+        #expect(isNull(pause["heldBy"]))
+        #expect(isNull(pause["pausedOn"]))
+        #expect(pause["heldByInferred"] as? Bool == false)
+        #expect(number(pause, "macSampledSeconds") == 0)
+        #expect(number(pause, "macActiveSeconds") == 0)
+        #expect(isNull(pause["promptedAt"]))
+        #expect(isNull(pause["promptAnswer"]))
 
         let extensionRow = try #require(row(extensions, id: fixture.extensionID))
         #expect(extensionRow["rideId"] as? String == fixture.resumedRideID.uuidString)
@@ -339,6 +348,151 @@ struct PDCAExportTests {
         #expect(swiped["startedFrom"] as? String == "arrivalSwipe")
         #expect(isNull(swiped["arrivalAction"]))
         #expect(isNull(swiped["arrivalStampedAt"]))
+    }
+
+    @Test func exportJSON_writesRawPauseReadingsAndLeavesRideTime() throws {
+        let fixture = try PDCAFixture.make()
+        let context = fixture.context
+        let pauses = try context.fetch(FetchDescriptor<SessionPause>())
+        let recorded = try #require(pauses.first { $0.id == fixture.pauseID })
+        recorded.heldByRaw = "timetable"
+        recorded.pausedOnRaw = "mac"
+        recorded.heldByInferred = true
+        recorded.macSampledSeconds = 600
+        recorded.macActiveSeconds = 480
+        recorded.promptedAt = PDCAFixture.dayStart.addingTimeInterval(700)
+        recorded.promptAnswerRaw = "keepPaused"
+
+        let userPause = SessionPause(
+            startedAt: PDCAFixture.dayStart.addingTimeInterval(910),
+            endedAt: PDCAFixture.dayStart.addingTimeInterval(1_200),
+            session: try #require(context.fetch(FetchDescriptor<WorkSession>()).first { $0.id == fixture.resumedRideID })
+        )
+        userPause.heldByRaw = "user"
+        userPause.pausedOnRaw = "iphone"
+        userPause.heldByInferred = false
+        userPause.macSampledSeconds = 300
+        userPause.macActiveSeconds = 300
+        userPause.promptAnswerRaw = "none"
+        context.insert(userPause)
+
+        let sessions = try context.fetch(FetchDescriptor<WorkSession>())
+        let resumed = try #require(sessions.first { $0.id == fixture.resumedRideID })
+        let active = resumed.accumulatedActiveSeconds
+        resumed.timetableHeld = false
+        resumed.nudgeEvents = [
+            NudgeEventRecord(
+                stage: "estimate",
+                firedAt: PDCAFixture.dayStart.addingTimeInterval(1_300),
+                surface: "iphone",
+                rang: true,
+                skipped: false,
+                cancelledAt: nil
+            ),
+            NudgeEventRecord(
+                stage: "gap1",
+                firedAt: PDCAFixture.dayStart.addingTimeInterval(2_100),
+                surface: "mac",
+                rang: false,
+                skipped: true,
+                cancelledAt: PDCAFixture.dayStart.addingTimeInterval(2_200)
+            ),
+        ]
+        resumed.checkInAnswers = [
+            CheckInAnswerRecord(
+                kind: .overrun,
+                answer: .stillOnIt,
+                answeredAt: PDCAFixture.dayStart.addingTimeInterval(1_300),
+                answeredOn: "iphone",
+                answeredStage: "estimate"
+            ),
+            CheckInAnswerRecord(
+                kind: .gap,
+                answer: .board,
+                answeredAt: PDCAFixture.dayStart.addingTimeInterval(2_200),
+                answeredOn: "mac",
+                answeredStage: "gap1"
+            ),
+        ]
+        try context.save()
+
+        let object = try jsonObject(try fixture.jsonData())
+        #expect(object["schema"] as? String == "todotrain.pdca.v0")
+        let rides = try rows(object, "rides")
+        let ride = try #require(row(rides, id: fixture.resumedRideID))
+        #expect(number(ride, "accumulatedActiveSeconds") == Int(active))
+        #expect(number(ride, "pauseInputSeconds") == 300)
+        #expect(ride["excludedFromForecast"] as? Bool == false)
+        #expect(ride["timetableHeld"] as? Bool == false)
+
+        let pauseRows = try rows(object, "pauses")
+        let timetable = try #require(row(pauseRows, id: fixture.pauseID))
+        #expect(timetable["heldBy"] as? String == "timetable")
+        #expect(timetable["pausedOn"] as? String == "mac")
+        #expect(timetable["heldByInferred"] as? Bool == true)
+        #expect(number(timetable, "macSampledSeconds") == 600)
+        #expect(number(timetable, "macActiveSeconds") == 480)
+        #expect(date(timetable, "promptedAt") == PDCAFixture.dayStart.addingTimeInterval(700))
+        #expect(timetable["promptAnswer"] as? String == "keepPaused")
+        let user = try #require(row(pauseRows, id: userPause.id))
+        #expect(user["heldBy"] as? String == "user")
+        #expect(user["promptAnswer"] as? String == "none")
+        #expect(isNull(user["promptedAt"]))
+
+        let nudges = try rows(object, "nudges")
+        expectExactKeys(nudges, PDCAContract.nudgeKeys)
+        #expect(nudges.count == 2)
+        #expect(nudges[0]["stage"] as? String == "estimate")
+        #expect(nudges[0]["rang"] as? Bool == true)
+        #expect(nudges[0]["skipped"] as? Bool == false)
+        #expect(isNull(nudges[0]["cancelledAt"]))
+        #expect(nudges[1]["stage"] as? String == "gap1")
+        #expect(nudges[1]["surface"] as? String == "mac")
+        #expect(date(nudges[1], "cancelledAt") == PDCAFixture.dayStart.addingTimeInterval(2_200))
+
+        let checkIns = try rows(object, "checkIns")
+        let overrun = try #require(checkIns.first { $0["kind"] as? String == "overrun" })
+        #expect(overrun["answer"] as? String == "stillOnIt")
+        #expect(overrun["answeredStage"] as? String == "estimate")
+        #expect(overrun["answeredOn"] as? String == "iphone")
+        let boarded = try #require(checkIns.first { $0["answer"] as? String == "board" })
+        #expect(boarded["kind"] as? String == "gap")
+        #expect(boarded["answeredStage"] as? String == "gap1")
+
+        var keys = Set<String>()
+        collectKeys(object, into: &keys)
+        #expect(keys.isDisjoint(with: ["pauseInputRatio", "inputShare", "ratio", "percent"]))
+    }
+
+    @Test func exportJSON_excludesForecastWhenUserInputIsLongAndLarge() throws {
+        let container = try AppModelContainer.make(inMemory: true)
+        let context = ModelContext(container)
+        let session = WorkSession(
+            startedAt: PDCAFixture.dayStart,
+            estimatedSecondsAtStart: 1_200
+        )
+        session.endedAt = PDCAFixture.dayStart.addingTimeInterval(1_000)
+        session.accumulatedActiveSeconds = 1_000
+        session.outcome = .arrived
+        context.insert(session)
+        let pause = SessionPause(
+            startedAt: PDCAFixture.dayStart,
+            endedAt: PDCAFixture.dayStart.addingTimeInterval(400),
+            session: session
+        )
+        pause.heldByRaw = "user"
+        pause.macSampledSeconds = 400
+        pause.macActiveSeconds = 400
+        context.insert(pause)
+        try context.save()
+
+        let ride = try #require(row(try rows(
+            try jsonObject(try PDCAExport.jsonData(in: context, exportedAt: PDCAFixture.exportedAt)),
+            "rides"
+        ), id: session.id))
+        #expect(number(ride, "accumulatedActiveSeconds") == 1_000)
+        #expect(number(ride, "pauseInputSeconds") == 400)
+        #expect(ride["excludedFromForecast"] as? Bool == true)
     }
 }
 
@@ -652,6 +806,7 @@ private enum PDCAContract {
         "extensions",
         "lineages",
         "checkIns",
+        "nudges",
         "timetableBlocks",
         "timetableGuards",
         "passengerRides",
@@ -668,6 +823,7 @@ private enum PDCAContract {
         "extensions",
         "lineages",
         "checkIns",
+        "nudges",
         "timetableBlocks",
         "timetableGuards",
         "passengerRides",
@@ -684,8 +840,16 @@ private enum PDCAContract {
         "estimatedSecondsAtStart", "budgetSecondsAtStart", "outcome",
         "overtimeResolution", "timetableHeld", "checkInFiredCount",
         "arrivalAction", "arrivalStampedAt", "startedFrom",
+        "pauseInputSeconds", "excludedFromForecast",
     ]
-    static let pauseKeys: Set<String> = ["id", "rideId", "startedAt", "endedAt"]
+    static let pauseKeys: Set<String> = [
+        "id", "rideId", "startedAt", "endedAt",
+        "heldBy", "pausedOn", "heldByInferred",
+        "macSampledSeconds", "macActiveSeconds", "promptedAt", "promptAnswer",
+    ]
+    static let nudgeKeys: Set<String> = [
+        "rideId", "stage", "firedAt", "surface", "rang", "skipped", "cancelledAt",
+    ]
     static let extensionKeys: Set<String> = ["id", "rideId", "addedSeconds", "createdAt"]
     static let lineageKeys: Set<String> = [
         "id", "kind", "createdAt", "fromRideId", "parentTicketId", "childTicketId", "aiGenerated",

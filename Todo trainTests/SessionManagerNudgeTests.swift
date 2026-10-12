@@ -23,8 +23,16 @@ struct SessionManagerNudgeTests {
         manager.reconcile()
         #expect(manager.pendingCheckIn == .progress)
         #expect(manager.activeSession?.nudgeFiredStagesRaw == [NudgeStage.checkIn.rawValue])
+        let fired = try #require(manager.activeSession?.nudgeEvents.first)
+        #expect(fired.stage == NudgeStage.checkIn.rawValue)
+        #expect(fired.rang == false)
+        #expect(fired.skipped == true)
 
         try manager.answerCheckIn(.stillOnIt)
+        let stamp = try #require(manager.activeSession?.checkInAnswers.last)
+        #expect(stamp.kind == .progress)
+        #expect(stamp.answeredStage == NudgeStage.checkIn.rawValue)
+        #expect(stamp.answeredOn == "iphone")
         clock.advance(by: 20 * 60)
         manager.reconcile()
         let checkIns = manager.activeSession?.nudgeFiredStagesRaw.filter { $0 == NudgeStage.checkIn.rawValue }
