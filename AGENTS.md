@@ -23,6 +23,9 @@
 - コーチではなく道具。定時は瞬間だけ（ストリーク・点数・定時率は足さない）。
 - 型名は **`Ticket`**。走行の真実は **`WorkSession`（`endedAt == nil`）+ `SessionManager.reconcile()`**。
 - 同一切符の大幅書き換えはしない。残りは途中下車 → 乗り継ぎ。全日 LA は張らない。
+- 同期の約束の版の正本は `sync/contract/version.json` だけ。Swift の定数と Worker はここを写す。
+- 足すだけ（任意キー、新しい op、新しい enum）は `contract` だけ上げる。古い側が誤読する変更（意味の変更、必須化、削除）は `minReadable` も上げる。
+- 版の更新は `cd sync/worker && npm run contract:bump -- --note "一行"`。
 - 画面の文言は [docs/03-terminology.md](docs/03-terminology.md) の「文体」に従い、`tools/wording/check.py` を通す（CI `wording`）。
 - iOS アプリと Mac companion だけ `ENABLE_USER_SCRIPT_SANDBOXING = NO`。ビルド情報の Run Script が `.git` を読むためで、プロジェクト全体の YES は残す。
 
