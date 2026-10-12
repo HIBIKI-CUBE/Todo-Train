@@ -145,6 +145,7 @@ final class CompanionSyncRuntime {
             connection = try await socket.connect()
         } catch {
             lastStatus = userFacing(error)
+            sessionManager.noteMacPresenceUnreachable()
             return
         }
         defer { Task { await connection.close() } }
@@ -159,6 +160,7 @@ final class CompanionSyncRuntime {
             } catch {
                 if Task.isCancelled { return }
                 lastStatus = userFacing(error)
+                sessionManager.noteMacPresenceUnreachable()
                 return
             }
             switch incoming {
@@ -214,6 +216,7 @@ final class CompanionSyncRuntime {
             } catch {
                 if Task.isCancelled { return }
                 lastStatus = userFacing(error)
+                sessionManager.noteMacPresenceUnreachable()
             }
             try? await Task.sleep(nanoseconds: HintPolling.intervalNanoseconds)
         }
@@ -425,6 +428,10 @@ final class CompanionSyncRuntime {
         plaintext.build = LocalWireBuild.current
         plaintext.contract = ContractVersion.contract
         plaintext.minReadable = ContractVersion.minReadable
+        let assignment = sessionManager.offscreenAssignment(now: now)
+        plaintext.notifyOn = assignment.on
+        plaintext.notifyTurn = assignment.turn
+        plaintext.notifyFireAt = assignment.fireAt
         let envelope = try SyncCrypto.sealJSON(
             plaintext,
             pairingId: pairing.pairingId,

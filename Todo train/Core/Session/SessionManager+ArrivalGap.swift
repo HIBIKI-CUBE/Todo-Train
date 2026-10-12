@@ -26,6 +26,7 @@ extension SessionManager {
         self.arrivalScreenOpen = arrivalScreenOpen
         guard changed else { return }
         syncArrivalGap(now: clock.now)
+        refreshOffscreenNotifications()
     }
 
     func dismissArrivalGap() {

@@ -128,7 +128,7 @@ extension SessionManager {
             session.awayDueAt = nil
             return
         }
-        if awayInterruptChannel == .localNotification {
+        if awayInterruptChannel == .localNotification, iphonePosts(.away, turn: 0, now: now) {
             checkInNotifier.scheduleAway(
                 sessionID: session.id,
                 ticketTitle: session.ticket?.title ?? "切符",
@@ -137,6 +137,7 @@ extension SessionManager {
             )
         }
         armAwayFire(at: fireAt, sessionID: session.id)
+        publishOffscreenAssignment(now: now)
     }
 
     /// Lock screen: drop the watch. Do not promote a pending `.away` panel.
@@ -381,39 +382,7 @@ extension SessionManager {
     }
 
     func refreshProgressCheckInNotifications(for session: WorkSession, now: Date) {
-        guard ownsDeviceSideEffects(session) else {
-            checkInNotifier.cancel(sessionID: session.id)
-            return
-        }
-        guard settings.cabinAnnouncementsEnabled else {
-            checkInNotifier.cancel(sessionID: session.id)
-            return
-        }
-        guard session.isOpen, !session.isPaused else {
-            checkInNotifier.cancel(sessionID: session.id)
-            return
-        }
-        if suppressProgressLocalNotifications || iphoneSceneActive {
-            checkInNotifier.cancelProgress(sessionID: session.id)
-            return
-        }
-        let elapsed = session.elapsedSeconds(at: now)
-        let body = session.checkInPromptLine ?? CheckInCopy.fallback(title: session.ticket?.title ?? "")
-        let title = session.ticket?.title ?? "切符"
-        for (index, offset) in session.checkInOffsets.enumerated() {
-            guard index >= session.checkInFiredCount else { continue }
-            guard let fireAt = CheckInScheduling.wallFireAt(
-                offset: offset,
-                elapsedSeconds: elapsed,
-                now: now
-            ) else { continue }
-            checkInNotifier.scheduleProgress(
-                sessionID: session.id,
-                index: index,
-                ticketTitle: title,
-                body: body,
-                fireAt: fireAt
-            )
-        }
+        _ = now
+        checkInNotifier.cancelProgress(sessionID: session.id)
     }
 }

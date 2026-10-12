@@ -155,6 +155,10 @@ nonisolated enum CheckInNotification {
     static func isIdle(_ identifier: String) -> Bool {
         identifier.hasPrefix("checkin.idle.")
     }
+
+    static func isProgress(_ identifier: String) -> Bool {
+        identifier.hasPrefix("checkin.progress.")
+    }
 }
 
 nonisolated enum TimetableNotification {

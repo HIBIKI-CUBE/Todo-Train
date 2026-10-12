@@ -1,7 +1,7 @@
 {
-  "contract": 9,
+  "contract": 11,
   "minReadable": 3,
-  "fingerprint": "aebd74efed4318f60bb5ce956c3c643f59a066faf75209b47df80b0a240f0eba",
+  "fingerprint": "424a9f5ca87833938a8e452269938cb4871307af9789dd85700601cb712cff2c",
   "history": [
     {
       "contract": 3,
@@ -37,6 +37,16 @@
       "contract": 9,
       "date": "2026-10-13",
       "note": "到着後の空白の文言を足す。ワイヤの形は変えない"
+    },
+    {
+      "contract": 10,
+      "date": "2026-10-13",
+      "note": "版 8 と版 9 の fixture を凍結する。ワイヤの形は変えない"
+    },
+    {
+      "contract": 11,
+      "date": "2026-10-13",
+      "note": "画面の外の通知先 notifyOn を足す"
     }
   ]
 }

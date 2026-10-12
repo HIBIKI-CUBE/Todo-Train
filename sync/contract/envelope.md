@@ -68,7 +68,7 @@ HMAC-SHA256(cfmKey, UTF-8("{pairingId}|{offerId}|mac"))
 
 ## Snap 平文
 
-フィールドは [fixtures/snap.json](fixtures/snap.json)。乗務なしは [fixtures/snap-idle.json](fixtures/snap-idle.json)（`sessionId` と他の乗務欄は `null`、`phase` は `idle`）。声掛けのある snap は [fixtures/snap-nudge.json](fixtures/snap-nudge.json)。`serviceActive` / `cabinEnabled` / `checkInFiredCount` / `pendingCabin` は乗務なしでも載せる。欠ける旧 snap は `serviceActive=false`、`cabinEnabled=true`、`checkInFiredCount=0`、`pendingCabin=null`。`pendingCabin` は `progress` / `away` / `idle` / `overrun` / `gap` / `null`。未知値は表示だけ無視。`idle` は運行中で乗務が無いとき。iPhone が立て、Mac は通知するだけ。1段目は既存の `progress`。`overrun` は見積もり時刻と引き継ぎ、`gap` は到着後の空白。旧 Mac は未知の `pendingCabin` を無視する。`lastActivityAt` は載せない。
+フィールドは [fixtures/snap.json](fixtures/snap.json)。乗務なしは [fixtures/snap-idle.json](fixtures/snap-idle.json)（`sessionId` と他の乗務欄は `null`、`phase` は `idle`）。声掛けのある snap は [fixtures/snap-nudge.json](fixtures/snap-nudge.json)。`serviceActive` / `cabinEnabled` / `checkInFiredCount` / `pendingCabin` は乗務なしでも載せる。欠ける旧 snap は `serviceActive=false`、`cabinEnabled=true`、`checkInFiredCount=0`、`pendingCabin=null`。`pendingCabin` は `progress` / `away` / `idle` / `overrun` / `gap` / `null`。未知値は表示だけ無視。`idle` は運行中で乗務が無いとき。Hub か PiP が出ているあいだは画面に出す。どちらの画面も出ていないときだけ、`notifyOn` の端末が通知する。1段目は既存の `progress`。`progress` は通知にしない。`overrun` は見積もり時刻と引き継ぎ、`gap` は到着後の空白。旧 Mac は未知の `pendingCabin` を無視する。`lastActivityAt` は載せない。
 
 任意の `nudge` / `nudgePlan` / `reserved` は声掛け。欠けていても旧クライアントは無視する。値があるときだけ出す。欄が欠けた snap と、この欄を持つ snap の両方を、いまの型が読む。どれかの値が壊れていても、その欄だけ捨てて snap の復号は続ける。
 
@@ -81,6 +81,8 @@ HMAC-SHA256(cfmKey, UTF-8("{pairingId}|{offerId}|mac"))
 `estimatedSeconds` は当初見積ではなく **いまの予算（延長込み）**。iOS の `WorkSession.budgetSecondsAtStart` に対応する。
 
 任意の `nextBlockTitle` / `nextBlockStartsAt` / `nextBlockEndsAt` / `timetablePauseAt` は乗務中のいま、なければ次の占有（ダイヤまたは掲示）。欠けていても旧クライアントは無視する。Encode は値があるときだけ出す。時刻と分は Date からクライアントが床する。残り秒は送らない。一行だけ。Hub のいま＋次の二行は iPhone 側。
+
+任意の `notifyOn` / `notifyTurn` / `notifyFireAt` は、どちらの画面も出ていないときの通知の番。`notifyOn` は `iphone` / `mac` / `none`。`notifyTurn` は 0 から 3 の整数。`notifyFireAt` は Unix 整数秒。見積もり超過の発火時刻は残り秒から求めるので、ここには置かないことがある。欠けていても旧クライアントは無視する。未知の `notifyOn` は捨てて、snap の復号は続ける。値が無いときはキーごと省く。`none` はどちらの端末も出さない。Mac は `notifyOn` が `mac` のときだけ、自分の端末の通知を出す。プッシュは使わない。在席が決まらない snap は `iphone` を載せる。
 
 任意の `pauseHeldBy` は停車中の理由。`user` / `timetable` / `alarm` / `switch` / `passenger`。`phase` が `paused` のときだけ出す。走行中・乗務なし・超過ではキーを置かない。欠けていても旧クライアントは無視する。未知の文字列は残し、snap の復号は続ける。停車中の例は [fixtures/snap-paused.json](fixtures/snap-paused.json)。
 

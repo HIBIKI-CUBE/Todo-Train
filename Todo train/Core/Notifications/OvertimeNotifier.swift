@@ -4,6 +4,7 @@
 //
 
 import Foundation
+import TodoTrainSync
 import UserNotifications
 
 @MainActor
@@ -81,7 +82,7 @@ final class OvertimeNotifier: NSObject, OvertimeNotifying, UNUserNotificationCen
 
         let content = UNMutableNotificationContent()
         content.title = "Todo train"
-        content.body = "『\(ticketTitle)』の見積もりを過ぎました"
+        content.body = CabinCopy.overtimePassed(title: ticketTitle)
         content.sound = .default
         content.interruptionLevel = .timeSensitive
 
@@ -116,10 +117,10 @@ final class OvertimeNotifier: NSObject, OvertimeNotifying, UNUserNotificationCen
         willPresent notification: UNNotification
     ) async -> UNNotificationPresentationOptions {
         let identifier = notification.request.identifier
-        if CheckInNotification.isIdle(identifier) {
-            return [.banner, .sound, .list]
+        let show = await MainActor.run {
+            sessionManager?.shouldPresentOffscreenNotification(identifier) ?? false
         }
-        return []
+        return show ? [.banner, .sound, .list] : []
     }
 
     nonisolated func userNotificationCenter(

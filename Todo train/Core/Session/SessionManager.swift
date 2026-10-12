@@ -47,10 +47,14 @@ final class SessionManager {
     /// Mac presence. Until a presence command, Mac is not foreground.
     var macPipVisible = false
     var macAttending = false
+    /// False until a presence op arrives, and again when the relay link drops.
+    var macPresenceKnown = false
     /// Bumps when this iPhone should play the overrun presentation once.
     var nudgeRingTick = 0
     /// Hub is the front surface. Focus and other tabs are not.
     var iphoneHubVisible = false
+    /// Focus cover is up. Background does not count as the desk.
+    var iphoneFocusVisible = false
     /// Arrival stamp screen is still up. Gap stays down until it closes.
     var arrivalScreenOpen = false
     /// Bumps once when this iPhone's gap turn is fresh. Focus does not listen.
@@ -72,8 +76,11 @@ final class SessionManager {
     /// Prevents recover / foreground from silently re-scheduling the same bell.
     var suppressedEndBellSessionIDs: Set<UUID> = []
 
-    /// Paired Mac owns the desk progress interrupt; skip iPhone progress local notifications.
+    /// Paired Mac. Progress questions are never local notifications.
     var suppressProgressLocalNotifications = false
+    var lastNotifyOn: NotifyOn?
+    var lastNotifyTurn: Int?
+    var lastNotifyFireAt: Int?
     /// Calendar 掲示 (eligible, not necessarily adopted). Warmed from the ダイヤ tab, and Hub if already authorized.
     var noticeOccurrences: [CalendarOccurrence] = []
     /// Last AlarmKit / end-bell fire we scheduled, so reconcile does not hammer AlarmKit.

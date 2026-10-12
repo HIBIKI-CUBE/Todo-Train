@@ -69,7 +69,10 @@ struct ContractVersionTests {
     @Test func commandBlockStopsOnlyOutsideTheRange() {
         let local = ContractAnnouncement.current
         #expect(ContractCompat.commandBlock(peer: .legacyPeer, relay: .legacyPeer, side: .iphone) == nil)
-        #expect(ContractCompat.evaluate(local: local, peer: ContractAnnouncement(contract: 10, minReadable: 3)) == .peerNewer)
+        #expect(ContractCompat.evaluate(
+            local: local,
+            peer: ContractAnnouncement(contract: ContractVersion.contract + 1, minReadable: 3)
+        ) == .peerNewer)
         #expect(ContractCompat.commandBlock(
             peer: ContractAnnouncement(contract: 2, minReadable: 2),
             relay: nil,
@@ -99,7 +102,7 @@ struct ContractVersionTests {
         #expect(aligned.diagnostic == ContractCopy.aligned)
         #expect(aligned.guidance.isEmpty)
         let newer = ContractPresentation.make(
-            peer: ContractAnnouncement(contract: 10, minReadable: 3),
+            peer: ContractAnnouncement(contract: ContractVersion.contract + 1, minReadable: 3),
             relay: nil,
             side: .mac
         )

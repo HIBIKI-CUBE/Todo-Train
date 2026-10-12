@@ -20,8 +20,9 @@ extension SessionManager {
     func noteIphoneScene(_ active: Bool) {
         let changed = iphoneSceneActive != active
         iphoneSceneActive = active
-        guard changed, let session = activeSession, session.isOpen, !session.isPaused else { return }
-        refreshProgressCheckInNotifications(for: session, now: clock.now)
+        guard changed else { return }
+        refreshOffscreenNotifications()
+        guard let session = activeSession, session.isOpen, !session.isPaused else { return }
         reconcile()
     }
 
@@ -138,8 +139,10 @@ extension SessionManager {
         }
         switch command.op {
         case .presence:
+            macPresenceKnown = true
             macPipVisible = command.pipVisible == true
             macAttending = command.attending == true
+            refreshOffscreenNotifications(now: now)
             reconcile(now: now)
             bumpCompanionSync()
             return AckPlaintext(cmdId: command.id, ok: true)
