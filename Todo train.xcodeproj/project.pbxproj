@@ -1272,6 +1272,7 @@
 				INFOPLIST_FILE = TodoTrainWatch/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Todo train";
 				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = "dev.hibiki-cube.Todo-train";
+				INFOPLIST_KEY_WKSupportsLiveActivityLaunchAttributeTypes = "TodoTrainActivityAttributes AlarmAttributes AlarmAttributes<TodoTrainAlarmMetadata>";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -1313,6 +1314,7 @@
 				INFOPLIST_FILE = TodoTrainWatch/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Todo train";
 				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = "dev.hibiki-cube.Todo-train";
+				INFOPLIST_KEY_WKSupportsLiveActivityLaunchAttributeTypes = "TodoTrainActivityAttributes AlarmAttributes AlarmAttributes<TodoTrainAlarmMetadata>";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",

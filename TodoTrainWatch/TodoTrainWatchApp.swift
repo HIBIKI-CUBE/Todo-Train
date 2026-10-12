@@ -19,6 +19,13 @@ final class WatchPhoneSession {
     private(set) var mirror = WatchMirror()
     private let link = WatchLinkSession()
 
+    init() {
+        if WCSession.isSupported(),
+           let data = WCSession.default.receivedApplicationContext[WatchLink.snapKey] as? Data {
+            mirror.receive(snapData: data)
+        }
+    }
+
     func activate() {
         link.onSnap = { [weak self] data in
             self?.mirror.receive(snapData: data)

@@ -4,6 +4,12 @@
 <dict>
 	<key>WKApplication</key>
 	<true/>
+	<key>WKSupportsLiveActivityLaunchAttributeTypes</key>
+	<array>
+		<string>TodoTrainActivityAttributes</string>
+		<string>AlarmAttributes</string>
+		<string>AlarmAttributes&lt;TodoTrainAlarmMetadata&gt;</string>
+	</array>
 	<key>WKCompanionAppBundleIdentifier</key>
 	<string>dev.hibiki-cube.Todo-train</string>
 	<key>CFBundleDisplayName</key>
