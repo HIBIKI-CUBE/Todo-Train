@@ -1,4 +1,4 @@
-# 約束の指紋と、凍結した fixtures。全 PR で見る。
+# 約束の指紋と、凍結した fixtures。SwiftData の指紋。全 PR で見る。
 # 止めるのはここ。PR テンプレートのチェックは補助。
 
 name: contract-guard
@@ -34,3 +34,21 @@ jobs:
         run: node tools/contract/guard.mjs
       - name: guard tests
         run: node --test tools/contract/guard.test.mjs
+
+  schema:
+    name: schema fingerprint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: guard
+        env:
+          BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: node tools/schema/guard.mjs
+      - name: guard tests
+        run: node --test tools/schema/guard.test.mjs
