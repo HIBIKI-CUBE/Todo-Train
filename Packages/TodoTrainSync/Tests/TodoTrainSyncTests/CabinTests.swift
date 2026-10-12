@@ -81,8 +81,8 @@ struct CabinDeliveryTests {
         #expect(CabinDelivery.surface(kind: .progress, hasRide: true) == .pip)
     }
 
-    @Test func progressWithoutRideUsesNotification() {
-        #expect(CabinDelivery.surface(kind: .progress, hasRide: false) == .notification)
+    @Test func progressWithoutRideDoesNotNotify() {
+        #expect(CabinDelivery.surface(kind: .progress, hasRide: false) == .ignore)
     }
 
     @Test func idleUsesNotification() {

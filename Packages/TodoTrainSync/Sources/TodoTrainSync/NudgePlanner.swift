@@ -351,6 +351,15 @@ public enum NudgePlanner: Sendable {
         )
     }
 
+    /// Safety-net turn when neither screen is showing.
+    /// Attending Mac leads. Otherwise iPhone leads. The other device takes the next turn.
+    /// The two devices never share a turn. Turns outside `maxRings` are `.none`.
+    public static func offscreenSurface(turn: Int, macAttending: Bool) -> NudgeSurface {
+        guard (0..<NudgeThresholds.maxRings).contains(turn) else { return .none }
+        let column: [NudgeSurface] = macAttending ? [.mac, .iphone] : [.iphone, .mac]
+        return column[turn % column.count]
+    }
+
     /// Who would ring this stage for the given foreground. Display stages and the AlarmKit bell do not ring.
     public static func ring(
         stage: NudgeStage,

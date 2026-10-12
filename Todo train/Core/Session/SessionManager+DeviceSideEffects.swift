@@ -259,6 +259,10 @@ extension SessionManager {
             overtimeNotifier.cancel(sessionID: session.id)
             return
         }
+        guard iphonePosts(.overtime, turn: 0, now: now) else {
+            overtimeNotifier.cancel(sessionID: session.id)
+            return
+        }
         let elapsed = session.elapsedSeconds(at: now)
         guard let fireAt = OvertimeSchedule.fireAt(
             budgetSeconds: session.budgetSecondsAtStart,

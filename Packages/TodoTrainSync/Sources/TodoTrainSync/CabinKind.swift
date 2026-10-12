@@ -55,7 +55,8 @@ public enum CabinDelivery: Equatable, Sendable {
     public static func surface(kind: CabinKind?, hasRide: Bool) -> CabinDelivery {
         switch kind {
         case .progress:
-            hasRide ? .pip : .notification
+            // Questions stay on a screen. They are not a notification.
+            hasRide ? .pip : .ignore
         case .idle:
             .notification
         case .overrun:
@@ -95,6 +96,11 @@ public enum CabinCopy {
     public static let extendFifteen = "+15"
     public static let iphone = "iPhone"
     public static let mac = "Mac"
+
+    /// Same sentence the overtime notification already uses.
+    public static func overtimePassed(title: String) -> String {
+        "『\(title)』の見積もりを過ぎました"
+    }
 
     /// Dispatcher question. The same line at every stage.
     public static func question(title: String) -> String {

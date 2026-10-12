@@ -63,6 +63,7 @@ struct ContentView: View {
         )
         .onAppear {
             sessionManager.iphoneSceneActive = scenePhase == .active
+            sessionManager.noteIphoneFocus(isFocusPresented)
             if !didRecoverOnLaunch {
                 recoverOnLaunch()
                 didRecoverOnLaunch = true
@@ -182,6 +183,7 @@ struct ContentView: View {
                 )
         }
         .onChange(of: isFocusPresented) { wasPresented, presented in
+            sessionManager.noteIphoneFocus(presented)
             syncGapSurface()
             // Safety net if onDismiss and enqueue ordering ever races.
             if wasPresented && !presented {

@@ -1,5 +1,12 @@
 import Foundation
 
+/// Who posts the safety-net notification. Absent on snaps from before contract 11.
+public enum NotifyOn: String, Codable, Sendable, Equatable {
+    case iphone
+    case mac
+    case none
+}
+
 public struct SnapPlaintext: Codable, Equatable, Sendable {
     public var rev: Int
     public var sessionId: UUID?
@@ -32,6 +39,12 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
     public var reserved: WireReservedTicket?
     /// Reason for the open pause. Present only while `phase` is `paused`.
     public var pauseHeldBy: PauseHeldBy?
+    /// Which device posts the safety-net. Absent means an older iPhone.
+    public var notifyOn: NotifyOn?
+    /// Turn inside the 4-ring cap. Present with `notifyOn` when a post is assigned.
+    public var notifyTurn: Int?
+    /// Unix seconds for Mac's away or idle notification. Overtime is computed from the ride.
+    public var notifyFireAt: Int?
 
     public init(
         rev: Int,
@@ -58,7 +71,10 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
         nudge: WireNudge? = nil,
         nudgePlan: [WireNudgePlanItem]? = nil,
         reserved: WireReservedTicket? = nil,
-        pauseHeldBy: PauseHeldBy? = nil
+        pauseHeldBy: PauseHeldBy? = nil,
+        notifyOn: NotifyOn? = nil,
+        notifyTurn: Int? = nil,
+        notifyFireAt: Int? = nil
     ) {
         self.rev = rev
         self.sessionId = sessionId
@@ -85,6 +101,9 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
         self.nudgePlan = nudgePlan
         self.reserved = reserved
         self.pauseHeldBy = phase == .paused ? pauseHeldBy : nil
+        self.notifyOn = notifyOn
+        self.notifyTurn = notifyTurn
+        self.notifyFireAt = notifyFireAt
     }
 
     public var announcement: ContractAnnouncement {
@@ -98,6 +117,7 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
         case nextBlockTitle, nextBlockStartsAt, nextBlockEndsAt, timetablePauseAt, build
         case contract, minReadable
         case nudge, nudgePlan, reserved, pauseHeldBy
+        case notifyOn, notifyTurn, notifyFireAt
     }
 
     public init(from decoder: Decoder) throws {
@@ -136,6 +156,13 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
         reserved = Self.lenient(WireReservedTicket.self, from: container, forKey: .reserved)
         let decodedPauseHeldBy = try container.decodeIfPresent(PauseHeldBy.self, forKey: .pauseHeldBy)
         pauseHeldBy = phase == .paused ? decodedPauseHeldBy : nil
+        if let raw = try container.decodeIfPresent(String.self, forKey: .notifyOn) {
+            notifyOn = NotifyOn(rawValue: raw)
+        } else {
+            notifyOn = nil
+        }
+        notifyTurn = try container.decodeIfPresent(Int.self, forKey: .notifyTurn)
+        notifyFireAt = try container.decodeIfPresent(Int.self, forKey: .notifyFireAt)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -167,6 +194,9 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
         if phase == .paused {
             try container.encodeIfPresent(pauseHeldBy, forKey: .pauseHeldBy)
         }
+        try container.encodeIfPresent(notifyOn, forKey: .notifyOn)
+        try container.encodeIfPresent(notifyTurn, forKey: .notifyTurn)
+        try container.encodeIfPresent(notifyFireAt, forKey: .notifyFireAt)
     }
 
     /// A broken optional field is dropped. The rest of the snap still decodes.

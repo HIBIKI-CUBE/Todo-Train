@@ -167,7 +167,7 @@ struct SessionManagerAwayTests {
         let ticket = try SessionManagerFixtures.makeTicket(context, seconds: 30 * 60)
         try manager.board(ticket: ticket)
         #expect(!scheduler.requests.isEmpty)
-        #expect(!checkIns.progress.isEmpty)
+        #expect(checkIns.progress.isEmpty)
 
         manager.activeSession?.boardedDeviceID = "phone-b"
         try context.save()

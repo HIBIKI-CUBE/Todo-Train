@@ -342,6 +342,7 @@ struct GoldenJSONTests {
         #expect(json["nudgeKind"] as? [String] == NudgeKind.knownRawValues)
         #expect(json["nudgeStage"] as? [String] == NudgeStageWire.knownRawValues)
         #expect(json["ringSurface"] as? [String] == NudgeRingSurface.knownRawValues)
+        #expect(json["notifyOn"] as? [String] == ["iphone", "mac", "none"])
         #expect(json["choice"] as? [String] == NudgeChoice.knownRawValues)
         #expect(json["answeredOn"] as? [String] == NudgeAnsweredOn.knownRawValues)
         #expect(json["extendPresetSeconds"] as? [Int] == [300, 600, 900])

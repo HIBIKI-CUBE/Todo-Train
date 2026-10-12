@@ -15,6 +15,7 @@
   "nudgeKind": ["progress", "overrun", "gap"],
   "nudgeStage": ["checkIn", "approach", "estimate", "handoff1", "handoff2", "handoff3", "gap1", "gap2"],
   "ringSurface": ["mac", "iphone", "none"],
+  "notifyOn": ["iphone", "mac", "none"],
   "choice": ["stillOnIt", "willExtend", "alreadyDone", "paused"],
   "answeredOn": ["mac"],
   "extendPresetSeconds": [300, 600, 900],
@@ -35,7 +36,8 @@
   "notes": {
     "phase": "SessionPhase raw values. Unknown values: display conservatively, do not crash.",
     "op": "pause, resume, still (consume the current cabin prompt), issueAndBoard (issue a ticket and board it in one beat), answer (reply to a nudge), boardReserved (board the reserved ticket), and presence (Mac pipVisible and attending, sent only when either changes). Do not add arrive/extend. issueAndBoard carries title and estimatedSeconds. answer carries nudgeId, choice, answeredOn, and addSeconds only for willExtend. boardReserved carries ticketId and optional nudgeId, with sessionId null. presence carries pipVisible and attending, with sessionId null. Other ops omit those keys. Unknown op values decode as unknown and are not applied. An op whose opIntroduced is above the receiver's contract is unsupportedOp.",
-    "pendingCabin": "Current 車内放送 kind on snap. null when none. Unknown values: ignore for display. idle means service is open with no ride; iPhone sets it, Mac notifies only. progress is stage 1. overrun is the estimate and handoffs. gap is the blank after arrival. Older Macs ignore unknown values.",
+    "pendingCabin": "Current 車内放送 kind on snap. null when none. Unknown values: ignore for display. idle means service is open with no ride. Hub or PiP shows it while that screen is up. notifyOn names who posts when neither screen is up. progress is stage 1 and is not a notification. overrun is the estimate and handoffs. gap is the blank after arrival. Older Macs ignore unknown values.",
+    "notifyOn": "Optional snap field. iphone, mac, or none. Who posts the safety-net notification when neither screen is up. none posts nowhere. Missing on snaps from before contract 11. Unknown strings are dropped and do not fail the snap. notifyTurn is 0...3. notifyFireAt is Unix seconds for away or idle. Overtime fire time comes from remaining seconds.",
     "nudgeKind": "nudge.kind. progress uses pendingCabin progress. overrun and gap match the pendingCabin values of the same name. Unknown values are kept and do not fail the snap.",
     "nudgeStage": "nudge.stage and nudgePlan.stage. Ride stages match NudgeStage. gap1 and gap2 match NudgeGap. Unknown values are kept.",
     "ringSurface": "nudge.ringSurface and nudgePlan.surface. none means the stage is shown and does not ring. Unknown values, including a future watch, are kept. #100 adds watch as a named value.",

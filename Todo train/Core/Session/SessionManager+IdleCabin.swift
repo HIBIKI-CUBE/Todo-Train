@@ -104,7 +104,12 @@ extension SessionManager {
         let elapsed = now.timeIntervalSince(activity)
 
         if day.pendingCabin == .idle {
-            armIdleLocalNotification(serviceDayID: day.id, fireAt: now.addingTimeInterval(1))
+            if iphonePosts(.idle, turn: day.cabinIdleFiredCount, now: now) {
+                armIdleLocalNotification(serviceDayID: day.id, fireAt: now.addingTimeInterval(1))
+            } else {
+                checkInNotifier.cancelIdle(serviceDayID: day.id)
+                idleLocalNotificationArmed = false
+            }
             return
         }
 
@@ -121,7 +126,12 @@ extension SessionManager {
                 return
             }
             bumpCompanionSync()
-            armIdleLocalNotification(serviceDayID: day.id, fireAt: now.addingTimeInterval(1))
+            if iphonePosts(.idle, turn: day.cabinIdleFiredCount, now: now) {
+                armIdleLocalNotification(serviceDayID: day.id, fireAt: now.addingTimeInterval(1))
+            } else {
+                checkInNotifier.cancelIdle(serviceDayID: day.id)
+                idleLocalNotificationArmed = false
+            }
             return
         }
 
@@ -131,12 +141,17 @@ extension SessionManager {
             seed: day.id,
             now: now
         ) {
-            checkInNotifier.scheduleIdle(
-                serviceDayID: day.id,
-                body: CabinCopy.idle,
-                fireAt: fireAt
-            )
-            idleLocalNotificationArmed = true
+            if iphonePosts(.idle, turn: day.cabinIdleFiredCount, now: now) {
+                checkInNotifier.scheduleIdle(
+                    serviceDayID: day.id,
+                    body: CabinCopy.idle,
+                    fireAt: fireAt
+                )
+                idleLocalNotificationArmed = true
+            } else {
+                checkInNotifier.cancelIdle(serviceDayID: day.id)
+                idleLocalNotificationArmed = false
+            }
             armIdleWatch(at: fireAt, serviceDayID: day.id)
         } else {
             cancelIdleWatch()
