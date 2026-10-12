@@ -124,6 +124,7 @@
 		B6EE2E73302B4E730022EBAD /* Exceptions for "Todo train" folder in "Todo train" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				App/AppSchema.fingerprint,
 				Info.plist,
 			);
 			target = B6EE2E51302B4E710022EBAD /* Todo train */;
