@@ -405,22 +405,24 @@ struct CockpitCompactTimer: View {
         .multilineTextAlignment(.trailing)
     }
 
-    /// `Text(timerInterval:)` keeps seconds; hidden template sets the ideal width.
+    /// `Text(timerInterval:)` takes every offered width. The hidden template is the width;
+    /// the overlay cannot grow past it, so compact trailing stays as wide as the digits.
     @ViewBuilder
     private func liveCountdown(end: Date) -> some View {
         let template = CockpitLayoutPolicy.islandTimerWidthTemplate(
             remaining: end.timeIntervalSinceNow
         )
-        ZStack(alignment: .trailing) {
-            Text(template)
-                .hidden()
-                .accessibilityHidden(true)
-            Text(
-                timerInterval: CockpitTimerInterval.countdown(to: end),
-                countsDown: true,
-                showsHours: false
-            )
-        }
+        Text(template)
+            .hidden()
+            .accessibilityHidden(true)
+            .overlay(alignment: .trailing) {
+                Text(
+                    timerInterval: CockpitTimerInterval.countdown(to: end),
+                    countsDown: true,
+                    showsHours: false
+                )
+                .multilineTextAlignment(.trailing)
+            }
     }
 }
 
