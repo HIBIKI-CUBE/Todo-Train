@@ -38,4 +38,4 @@ LAN / Bonjour は社内 Wi-Fi のクライアント分離で届かないこと�
 
 ## この面のやらないこと
 
-アカウント、APNs、LAN 主経路、サーバ側正本、画面に載る長期鍵、片側タップ確定、照合数字の目視、裏カメラへの持ち替え。CloudKit と JSON エクスポート同期は [02](02-requirements.md)。
+アカウント、APNs、LAN 主経路、サーバ側正本、画面に載る長期鍵、片側タップ確定、照合数字の目視、裏カメラへの持ち替え。CloudKit と JSON エクスポート同期は [02](02-requirements.md)。Watch の写しはリレーに載せない。iPhone から WatchConnectivity で渡す（[23](23-watch.md)）。

@@ -18,6 +18,7 @@
 | [20-passenger-lcd-quality-refs.md](20-passenger-lcd-quality-refs.md) | 車内案内の視覚の下限。引用してよい範囲 |
 | [21-device-overwrite.md](21-device-overwrite.md) | スキーマや約束を変えたあとの実機上書き。バックアップ、件数、「このビルド」、別端末での #71 前 |
 | [22-mac-build.md](22-mac-build.md) | Mac の署名なし配布。Gatekeeper の初回起動と、セルフホストランナーの予備 |
+| [23-watch.md](23-watch.md) | Watch は iPhone の写し。App ID を最初の実機署名で 1 個使う |
 | [references/](references/) | マルス券の原画。車内案内の引用は [passenger-lcd/](references/passenger-lcd/) |
 | [approach-clear/](approach-clear/) | Hub 接近クリアランス（挙動は Issue #61） |
 

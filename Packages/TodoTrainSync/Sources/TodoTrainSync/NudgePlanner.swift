@@ -17,7 +17,8 @@ public enum NudgeThresholds: Sendable {
     public static let handoffMaximum: TimeInterval = 2 * 60
     /// Rings from stage 3, including an AlarmKit end bell that occupies stage 3.
     public static let maxRings: Int = 4
-    /// Device column. `#100` extends this with `.watch` between iPhone and the repeat.
+    /// Device column. Watch is an extra turn after Mac and iPhone (`#100`).
+    /// `maxRings` counts across the column, not once per device.
     public static let deviceOrder: [NudgeSurface] = [.mac, .iphone]
     public static let gap1Delay: TimeInterval = 3 * 60
     public static let gap2Delay: TimeInterval = 6 * 60

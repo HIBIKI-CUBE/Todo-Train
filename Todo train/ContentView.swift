@@ -77,10 +77,12 @@ struct ContentView: View {
             syncPassengerCover()
             syncGapSurface()
             companion.handleScenePhase(.active, sessionManager: sessionManager)
+            WatchSessionBridge.shared.publishCurrent()
             sessionManager.suppressProgressLocalNotifications = companion.isPaired
         }
         .onChange(of: sessionManager.companionSyncTick) { _, _ in
             companion.noteSessionChanged(sessionManager: sessionManager)
+            WatchSessionBridge.shared.publishCurrent()
         }
         .onChange(of: companion.isPaired) { _, paired in
             sessionManager.suppressProgressLocalNotifications = paired
