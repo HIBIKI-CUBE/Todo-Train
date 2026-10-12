@@ -6,7 +6,7 @@ import UIKit
 import AppKit
 #endif
 
-/// Pairing QR chrome. Padding / corner / VoiceOver copy stay platform-specific at the call site.
+/// Pairing QR chrome. Size, padding, corner, and VoiceOver copy are required at the call site.
 public struct CompanionQRCodeView: View {
     public var encoded: String
     public var dimension: CGFloat
@@ -16,9 +16,9 @@ public struct CompanionQRCodeView: View {
 
     public init(
         encoded: String,
-        dimension: CGFloat = 220,
-        chromePadding: CGFloat = 16,
-        cornerRadius: CGFloat = 12,
+        dimension: CGFloat,
+        chromePadding: CGFloat,
+        cornerRadius: CGFloat,
         accessibilityLabel: String
     ) {
         self.encoded = encoded

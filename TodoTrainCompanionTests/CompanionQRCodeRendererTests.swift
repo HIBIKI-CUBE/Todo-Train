@@ -1,0 +1,1 @@
+../Packages/TodoTrainQRUI/Tests/TodoTrainQRUITests/CompanionQRCodeRendererTests.swift

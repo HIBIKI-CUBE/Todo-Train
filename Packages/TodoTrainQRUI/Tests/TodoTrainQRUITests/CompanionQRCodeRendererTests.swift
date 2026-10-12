@@ -1,6 +1,6 @@
 import CoreGraphics
 import Testing
-@testable import TodoTrainQRUI
+import TodoTrainQRUI
 
 struct CompanionQRCodeRendererTests {
     @Test func phonePairingURLRendersSquareDarkModules() throws {

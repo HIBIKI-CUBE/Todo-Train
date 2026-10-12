@@ -89,7 +89,7 @@
 
 | ID | 所見 | 根拠 | 候補アクション |
 |----|------|------|----------------|
-| P2-1 | ~~**QR UI が iOS / Mac で二重**~~ | ~~Viewfinder / Renderer 二重~~ | **済**: `Packages/TodoTrainQRUI`。枠と CGImage 生成を共有。padding / 角 / VoiceOver 文言は呼び出し側。`TodoTrainQRUITests` |
+| P2-1 | ~~**QR UI が iOS / Mac で二重**~~ | ~~Viewfinder / Renderer 二重~~ | **済**: `Packages/TodoTrainQRUI`。枠と CGImage 生成を共有。大きさ / padding / 角 / VoiceOver 文言は呼び出し必須（既定値なし）。Renderer テストはパッケージにあり、両アプリのテストターゲットが同じファイルを参照する |
 | P2-2 | **Package deployment target がアプリより古い** | アプリ `IPHONEOS_DEPLOYMENT_TARGET = 27.0`、Packages は `.iOS(.v17)` | 意図的ならコメントで固定。でなければ 27 に揃えて「古い API が混入しない」制約にする |
 | P2-3 | ~~**`ServiceEndSheet` typealias 残骸**~~ | ~~`typealias ServiceEndSheet = ServiceShutdownCover`~~ | **済（本 PR）**: 参照ゼロのためファイル削除 |
 | P2-4 | **`import CoreData` in ContentView** | `NSPersistentStoreRemoteChange` 購読に必要。未使用ではなかった | ゲート false のあいだ購読ごと狭めるなら P3-6 と一緒に |
