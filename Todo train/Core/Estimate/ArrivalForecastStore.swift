@@ -112,7 +112,16 @@ final class ArrivalForecastStore {
         calendar: Calendar = .current,
         priority: ArrivalForecastPriority = .warm
     ) {
-        Task { _ = await refresh(ticket: ticket, sessions: sessions, now: now, calendar: calendar, priority: priority) }
+        // Read the models here. The unstructured task must not touch them:
+        // the caller (a test, or a dismissed screen) may release the context first.
+        let ticketID = ticket.id
+        let forecast = BoardingForecast.forecastContext(
+            ticket: ticket,
+            sessions: sessions,
+            now: now,
+            calendar: calendar
+        )
+        Task { _ = await self.finish(ticketID: ticketID, forecast: forecast, priority: priority) }
     }
 
     func prefetchIssued(_ ticket: Ticket, in modelContext: ModelContext) {
@@ -152,12 +161,21 @@ final class ArrivalForecastStore {
         priority: ArrivalForecastPriority = .user
     ) async -> Int? {
         let ticketID = ticket.id
-        guard let context = BoardingForecast.forecastContext(
+        let forecast = BoardingForecast.forecastContext(
             ticket: ticket,
             sessions: sessions,
             now: now,
             calendar: calendar
-        ) else {
+        )
+        return await finish(ticketID: ticketID, forecast: forecast, priority: priority)
+    }
+
+    private func finish(
+        ticketID: UUID,
+        forecast: ArrivalForecastContext?,
+        priority: ArrivalForecastPriority
+    ) async -> Int? {
+        guard let context = forecast else {
             cache.removeValue(forKey: ticketID)
             return nil
         }
