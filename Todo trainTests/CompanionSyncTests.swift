@@ -99,6 +99,8 @@ struct CompanionSnapBuildingTests {
         let record = SessionPause(startedAt: Date(timeIntervalSince1970: 160), session: session)
         record.heldBy = .user
         record.pausedOn = .iphone
+        record.macSampledSeconds = 300
+        record.macActiveSeconds = 270
         container.mainContext.insert(record)
         try container.mainContext.save()
         let withReason = CompanionSnapBuilding.snap(
@@ -112,8 +114,12 @@ struct CompanionSnapBuildingTests {
         #expect(withReason.pauseHeldBy == .user)
         #expect(withReason.pauseId == record.id)
         let object = try JSONSerialization.jsonObject(with: try jsonData(withReason)) as! [String: Any]
+        #expect(withReason.macSampledSeconds == 300)
+        #expect(withReason.macActiveSeconds == 270)
         #expect(object["pauseHeldBy"] as? String == "user")
         #expect(object["pauseId"] as? String == record.id.uuidString.lowercased())
+        #expect(object["macSampledSeconds"] as? Int == 300)
+        #expect(object["macActiveSeconds"] as? Int == 270)
 
         let running = CompanionSnapBuilding.snap(
             rev: 4,
@@ -125,9 +131,11 @@ struct CompanionSnapBuildingTests {
         )
         #expect(running.pauseHeldBy == nil)
         #expect(running.pauseId == nil)
+        #expect(running.macSampledSeconds == nil)
         let runningObject = try JSONSerialization.jsonObject(with: try jsonData(running)) as! [String: Any]
         #expect(runningObject["pauseHeldBy"] == nil)
         #expect(runningObject["pauseId"] == nil)
+        #expect(runningObject["macSampledSeconds"] == nil)
     }
 
     private func jsonData(_ snap: SnapPlaintext) throws -> Data {

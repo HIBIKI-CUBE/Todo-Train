@@ -1,7 +1,7 @@
 {
-  "contract": 12,
+  "contract": 13,
   "minReadable": 3,
-  "fingerprint": "553ca16e5e0e9690721f4798820d06f1c510ccfa48e0f67a898e59701a1ae123",
+  "fingerprint": "522b4103a9e2f32218c7042f010d11142d312caafed71c8da7c71ff948227d51",
   "history": [
     {
       "contract": 3,
@@ -52,6 +52,11 @@
       "contract": 12,
       "date": "2026-10-13",
       "note": "停車中の入力 pauseInputReport と snap の pauseId を足す"
+    },
+    {
+      "contract": 13,
+      "date": "2026-10-13",
+      "note": "停車中の snap に測った秒を足し、記録は下げない"
     }
   ]
 }

@@ -93,8 +93,12 @@ struct GoldenJSONTests {
         #expect(paused.pauseHeldBy == .user)
         #expect(paused.pauseId == UUID(uuidString: "44444444-4444-4444-8444-444444444444"))
         let pausedObject = try JSONSerialization.jsonObject(with: try WireJSON.encoder().encode(paused)) as! [String: Any]
+        #expect(paused.macSampledSeconds == 300)
+        #expect(paused.macActiveSeconds == 270)
         #expect(pausedObject["pauseHeldBy"] as? String == "user")
         #expect(pausedObject["pauseId"] as? String == "44444444-4444-4444-8444-444444444444")
+        #expect(pausedObject["macSampledSeconds"] as? Int == 300)
+        #expect(pausedObject["macActiveSeconds"] as? Int == 270)
 
         let running = try WireJSON.decoder().decode(
             SnapPlaintext.self,
@@ -102,16 +106,21 @@ struct GoldenJSONTests {
         )
         #expect(running.pauseHeldBy == nil)
         #expect(running.pauseId == nil)
+        #expect(running.macSampledSeconds == nil)
         let runningObject = try JSONSerialization.jsonObject(with: try WireJSON.encoder().encode(running)) as! [String: Any]
         #expect(runningObject["pauseHeldBy"] == nil)
         #expect(runningObject["pauseId"] == nil)
+        #expect(runningObject["macSampledSeconds"] == nil)
 
         var leaked = running
         leaked.pauseHeldBy = .timetable
         leaked.pauseId = UUID(uuidString: "44444444-4444-4444-8444-444444444444")
+        leaked.macSampledSeconds = 300
+        leaked.macActiveSeconds = 270
         let leakedObject = try JSONSerialization.jsonObject(with: try WireJSON.encoder().encode(leaked)) as! [String: Any]
         #expect(leakedObject["pauseHeldBy"] == nil)
         #expect(leakedObject["pauseId"] == nil)
+        #expect(leakedObject["macSampledSeconds"] == nil)
     }
 
     @Test func cmdIssueAndBoardRoundTripOmitsNothingRequired() throws {

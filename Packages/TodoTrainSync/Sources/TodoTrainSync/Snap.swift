@@ -41,6 +41,9 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
     public var pauseHeldBy: PauseHeldBy?
     /// Open pause. Present only while `phase` is `paused`. A broken value is dropped.
     public var pauseId: UUID?
+    /// Seconds already stored for the open pause. Present only while `phase` is `paused`.
+    public var macSampledSeconds: Double?
+    public var macActiveSeconds: Double?
     /// Which device posts the safety-net. Absent means an older iPhone.
     public var notifyOn: NotifyOn?
     /// Turn inside the 4-ring cap. Present with `notifyOn` when a post is assigned.
@@ -75,6 +78,8 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
         reserved: WireReservedTicket? = nil,
         pauseHeldBy: PauseHeldBy? = nil,
         pauseId: UUID? = nil,
+        macSampledSeconds: Double? = nil,
+        macActiveSeconds: Double? = nil,
         notifyOn: NotifyOn? = nil,
         notifyTurn: Int? = nil,
         notifyFireAt: Int? = nil
@@ -105,6 +110,9 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
         self.reserved = reserved
         self.pauseHeldBy = phase == .paused ? pauseHeldBy : nil
         self.pauseId = phase == .paused ? pauseId : nil
+        let stored = Self.consistentPauseSeconds(sampled: macSampledSeconds, active: macActiveSeconds)
+        self.macSampledSeconds = phase == .paused ? stored?.sampled : nil
+        self.macActiveSeconds = phase == .paused ? stored?.active : nil
         self.notifyOn = notifyOn
         self.notifyTurn = notifyTurn
         self.notifyFireAt = notifyFireAt
@@ -121,6 +129,7 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
         case nextBlockTitle, nextBlockStartsAt, nextBlockEndsAt, timetablePauseAt, build
         case contract, minReadable
         case nudge, nudgePlan, reserved, pauseHeldBy, pauseId
+        case macSampledSeconds, macActiveSeconds
         case notifyOn, notifyTurn, notifyFireAt
     }
 
@@ -162,6 +171,12 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
         pauseHeldBy = phase == .paused ? decodedPauseHeldBy : nil
         let decodedPauseId = Self.lenientUUID(from: container, forKey: .pauseId)
         pauseId = phase == .paused ? decodedPauseId : nil
+        let stored = Self.consistentPauseSeconds(
+            sampled: Self.lenientNonNegativeDouble(from: container, forKey: .macSampledSeconds),
+            active: Self.lenientNonNegativeDouble(from: container, forKey: .macActiveSeconds)
+        )
+        macSampledSeconds = phase == .paused ? stored?.sampled : nil
+        macActiveSeconds = phase == .paused ? stored?.active : nil
         if let raw = try container.decodeIfPresent(String.self, forKey: .notifyOn) {
             notifyOn = NotifyOn(rawValue: raw)
         } else {
@@ -200,6 +215,8 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
         if phase == .paused {
             try container.encodeIfPresent(pauseHeldBy, forKey: .pauseHeldBy)
             try container.encodeIfPresentLowercaseUUID(pauseId, forKey: .pauseId)
+            try container.encodeIfPresent(macSampledSeconds, forKey: .macSampledSeconds)
+            try container.encodeIfPresent(macActiveSeconds, forKey: .macActiveSeconds)
         }
         try container.encodeIfPresent(notifyOn, forKey: .notifyOn)
         try container.encodeIfPresent(notifyTurn, forKey: .notifyTurn)
@@ -215,6 +232,29 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
         guard container.contains(key) else { return nil }
         if (try? container.decodeNil(forKey: key)) == true { return nil }
         return try? container.decode(T.self, forKey: key)
+    }
+
+    /// Both seconds, or neither. A broken or impossible pair is dropped.
+    private static func consistentPauseSeconds(
+        sampled: Double?,
+        active: Double?
+    ) -> (sampled: Double, active: Double)? {
+        guard let sampled, let active, sampled >= 0, active >= 0, active <= sampled, sampled.isFinite, active.isFinite else {
+            return nil
+        }
+        return (sampled, active)
+    }
+
+    private static func lenientNonNegativeDouble<K: CodingKey>(
+        from container: KeyedDecodingContainer<K>,
+        forKey key: K
+    ) -> Double? {
+        guard container.contains(key) else { return nil }
+        if (try? container.decodeNil(forKey: key)) == true { return nil }
+        guard let value = try? container.decode(Double.self, forKey: key), value >= 0, value.isFinite else {
+            return nil
+        }
+        return value
     }
 
     /// A broken pause id is dropped. The rest of the snap still decodes.

@@ -3,7 +3,7 @@ import SwiftData
 import TodoTrainSync
 
 extension SessionManager {
-    /// Last report for this pause wins. Ride time is left as it was recorded.
+    /// Stored seconds only rise. The question is written once, and not after the pause ends.
     func applyPauseInputReport(_ command: CommandPlaintext) -> AckPlaintext {
         guard let report = PauseInputReport.make(
             sessionId: command.sessionId,
@@ -23,14 +23,17 @@ extension SessionManager {
             guard pause.session?.id == report.sessionId else {
                 return AckPlaintext(cmdId: command.id, ok: false, error: .sessionMismatch)
             }
-            pause.macSampledSeconds = report.macSampledSeconds
-            pause.macActiveSeconds = report.macActiveSeconds
-            if let promptedAt = report.promptedAt {
-                pause.promptedAt = Date(timeIntervalSince1970: TimeInterval(promptedAt))
-            }
-            if let answer = report.promptAnswer {
-                pause.promptAnswerRaw = answer.rawValue
-            }
+            let merged = PauseInputRecord(
+                macSampledSeconds: pause.macSampledSeconds,
+                macActiveSeconds: pause.macActiveSeconds,
+                promptedAt: pause.promptedAt.map { Int($0.timeIntervalSince1970) },
+                promptAnswerRaw: pause.promptAnswerRaw,
+                ended: pause.endedAt != nil
+            ).merged(with: report)
+            pause.macSampledSeconds = merged.macSampledSeconds
+            pause.macActiveSeconds = merged.macActiveSeconds
+            pause.promptedAt = merged.promptedAt.map { Date(timeIntervalSince1970: TimeInterval($0)) }
+            pause.promptAnswerRaw = merged.promptAnswerRaw
             try save()
             return AckPlaintext(cmdId: command.id, ok: true)
         } catch {

@@ -32,7 +32,9 @@ extension CompanionMacRuntime {
             pauseId: snap?.pauseId,
             pausedAt: snap?.pausedAt,
             heldBy: snap?.pauseHeldBy,
-            title: snap?.title
+            title: snap?.title,
+            storedSampled: snap?.macSampledSeconds,
+            storedActive: snap?.macActiveSeconds
         )
         let step = pauseInput.step(observation)
         pausePromptLine = step.prompt

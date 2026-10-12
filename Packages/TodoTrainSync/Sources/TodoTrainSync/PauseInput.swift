@@ -136,6 +136,51 @@ public struct PauseInputReport: Equatable, Sendable {
     }
 }
 
+/// Stored raw seconds only rise. The question is written once, and not after the pause ends.
+public struct PauseInputRecord: Equatable, Sendable {
+    public var macSampledSeconds: Double
+    public var macActiveSeconds: Double
+    public var promptedAt: Int?
+    public var promptAnswerRaw: String?
+    public var ended: Bool
+
+    public init(
+        macSampledSeconds: Double,
+        macActiveSeconds: Double,
+        promptedAt: Int?,
+        promptAnswerRaw: String?,
+        ended: Bool
+    ) {
+        self.macSampledSeconds = macSampledSeconds
+        self.macActiveSeconds = macActiveSeconds
+        self.promptedAt = promptedAt
+        self.promptAnswerRaw = promptAnswerRaw
+        self.ended = ended
+    }
+
+    public func merged(with report: PauseInputReport) -> PauseInputRecord {
+        let sampled = max(max(0, macSampledSeconds), report.macSampledSeconds)
+        let active = min(max(max(0, macActiveSeconds), report.macActiveSeconds), sampled)
+        var prompted = promptedAt
+        var answer = promptAnswerRaw
+        if !ended {
+            if prompted == nil {
+                prompted = report.promptedAt
+            }
+            if answer == nil {
+                answer = report.promptAnswer?.rawValue
+            }
+        }
+        return PauseInputRecord(
+            macSampledSeconds: sampled,
+            macActiveSeconds: active,
+            promptedAt: prompted,
+            promptAnswerRaw: answer,
+            ended: ended
+        )
+    }
+}
+
 public enum PauseInputSampling {
     public struct Bucket: Equatable, Sendable {
         public var sampled: TimeInterval
@@ -223,6 +268,9 @@ public struct PauseInputObservation: Equatable, Sendable {
     public var pausedAt: Int?
     public var heldBy: PauseHeldBy?
     public var title: String?
+    /// Seconds already stored for this pause. Absent on snaps from before contract 13.
+    public var storedSampled: TimeInterval?
+    public var storedActive: TimeInterval?
 
     public init(
         uptime: TimeInterval,
@@ -234,7 +282,9 @@ public struct PauseInputObservation: Equatable, Sendable {
         pauseId: UUID? = nil,
         pausedAt: Int? = nil,
         heldBy: PauseHeldBy? = nil,
-        title: String? = nil
+        title: String? = nil,
+        storedSampled: TimeInterval? = nil,
+        storedActive: TimeInterval? = nil
     ) {
         self.uptime = uptime
         self.unixNow = unixNow
@@ -246,6 +296,8 @@ public struct PauseInputObservation: Equatable, Sendable {
         self.pausedAt = pausedAt
         self.heldBy = heldBy
         self.title = title
+        self.storedSampled = storedSampled
+        self.storedActive = storedActive
     }
 }
 
@@ -337,6 +389,7 @@ public struct PauseInputEngine: Equatable, Sendable {
         current?.heldBy = observation.heldBy
         current?.title = observation.title
         guard var watch = current else { return }
+        watch = Self.seed(watch, observation)
         let bucket = PauseInputSampling.advance(
             sampled: watch.sampled,
             active: watch.active,
@@ -349,6 +402,20 @@ public struct PauseInputEngine: Equatable, Sendable {
         watch.active = bucket.active
         watch.lastUptime = bucket.lastUptime
         current = watch
+    }
+
+    /// A new watch starts from the seconds already stored. A later snap cannot lower them.
+    private static func seed(_ watch: PauseInputWatch, _ observation: PauseInputObservation) -> PauseInputWatch {
+        var watch = watch
+        guard let storedSampled = observation.storedSampled,
+              let storedActive = observation.storedActive,
+              storedSampled >= 0,
+              storedActive >= 0,
+              storedActive <= storedSampled
+        else { return watch }
+        watch.sampled = max(watch.sampled, storedSampled)
+        watch.active = min(max(watch.active, storedActive), watch.sampled)
+        return watch
     }
 
     private mutating func parkIfAnotherRide(_ observation: PauseInputObservation) {

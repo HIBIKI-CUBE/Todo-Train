@@ -7,7 +7,7 @@ import TodoTrainSync
 struct SessionManagerPauseInputTests {
     private let start = Date(timeIntervalSince1970: 1_700_000_000)
 
-    @Test func lastReportWinsAndRideTimeStays() throws {
+    @Test func storedSecondsOnlyRiseAndRideTimeStays() throws {
         let (manager, context, clock, _) = try SessionManagerFixtures.makeHarness(now: start)
         try manager.startService()
         let ticket = try SessionManagerFixtures.makeTicket(context, seconds: 600)
@@ -22,31 +22,83 @@ struct SessionManagerPauseInputTests {
         let first = command(
             session: session.id,
             pause: pause.id,
-            sampled: 30,
-            active: 30,
+            sampled: 300,
+            active: 270,
             promptedAt: 1_700_000_200,
             answer: .keepPaused
         )
         #expect(manager.applyPauseInputReport(first).ok)
-        let second = command(
+        let lower = command(
             session: session.id,
             pause: pause.id,
-            sampled: 90,
-            active: 60,
-            promptedAt: nil,
-            answer: nil
+            sampled: 30,
+            active: 30,
+            promptedAt: 1_700_000_900,
+            answer: .resume
         )
-        #expect(manager.applyPauseInputReport(second).ok)
-        #expect(pause.macSampledSeconds == 90)
-        #expect(pause.macActiveSeconds == 60)
+        #expect(manager.applyPauseInputReport(lower).ok)
+        #expect(pause.macSampledSeconds == 300)
+        #expect(pause.macActiveSeconds == 270)
         #expect(pause.promptAnswerRaw == "keepPaused")
         #expect(pause.promptedAt == Date(timeIntervalSince1970: 1_700_000_200))
         #expect(session.accumulatedActiveSeconds == rideAtPause)
 
+        let raised = command(
+            session: session.id,
+            pause: pause.id,
+            sampled: 330,
+            active: 300,
+            promptedAt: 1_700_000_950,
+            answer: PausePromptAnswer.none
+        )
+        #expect(manager.applyPauseInputReport(raised).ok)
+        #expect(pause.macSampledSeconds == 330)
+        #expect(pause.macActiveSeconds == 300)
+        #expect(pause.promptAnswerRaw == "keepPaused")
+        #expect(pause.promptedAt == Date(timeIntervalSince1970: 1_700_000_200))
+
         try manager.resume()
         #expect(session.accumulatedActiveSeconds == rideAtPause)
         #expect(pause.endedAt != nil)
-        #expect(pause.macSampledSeconds == 90)
+
+        let afterEnd = command(
+            session: session.id,
+            pause: pause.id,
+            sampled: 360,
+            active: 300,
+            promptedAt: 1_700_001_000,
+            answer: .resume
+        )
+        #expect(manager.applyPauseInputReport(afterEnd).ok)
+        #expect(pause.macSampledSeconds == 360)
+        #expect(pause.macActiveSeconds == 300)
+        #expect(pause.promptAnswerRaw == "keepPaused")
+        #expect(pause.promptedAt == Date(timeIntervalSince1970: 1_700_000_200))
+
+        let afterEndLower = command(
+            session: session.id,
+            pause: pause.id,
+            sampled: 40,
+            active: 10,
+            promptedAt: nil,
+            answer: nil
+        )
+        #expect(manager.applyPauseInputReport(afterEndLower).ok)
+        #expect(pause.macSampledSeconds == 360)
+        #expect(pause.macActiveSeconds == 300)
+        #expect(session.accumulatedActiveSeconds == rideAtPause)
+
+        var restarted = PauseInputEngine()
+        let anchored = restarted.step(restartObservation(uptime: 1_000, storedSampled: 300, storedActive: 270))
+        #expect(anchored.reports.isEmpty)
+        #expect(restarted.current?.sampled == 300)
+        #expect(restarted.current?.active == 270)
+        _ = restarted.step(restartObservation(uptime: 1_030, storedSampled: 300, storedActive: 270))
+        #expect(restarted.current?.sampled == 330)
+        #expect(restarted.current?.active == 300)
+        _ = restarted.step(restartObservation(uptime: 1_031, storedSampled: 30, storedActive: 30))
+        #expect(restarted.current?.sampled == 330)
+        #expect(restarted.current?.active == 300)
     }
 
     @Test func impossibleShareAndUnknownPauseAreRefused() throws {
@@ -90,6 +142,27 @@ struct SessionManagerPauseInputTests {
             macActiveSeconds: active,
             promptedAt: promptedAt,
             promptAnswer: answer
+        )
+    }
+
+    private func restartObservation(
+        uptime: TimeInterval,
+        storedSampled: TimeInterval,
+        storedActive: TimeInterval
+    ) -> PauseInputObservation {
+        PauseInputObservation(
+            uptime: uptime,
+            unixNow: 1_700_000_000 + Int(uptime),
+            secondsSinceLastInput: 5,
+            counting: true,
+            phase: .paused,
+            sessionId: UUID(uuidString: "11111111-1111-4111-8111-111111111111"),
+            pauseId: UUID(uuidString: "44444444-4444-4444-8444-444444444444"),
+            pausedAt: 1_700_000_000,
+            heldBy: .user,
+            title: "週次",
+            storedSampled: storedSampled,
+            storedActive: storedActive
         )
     }
 }

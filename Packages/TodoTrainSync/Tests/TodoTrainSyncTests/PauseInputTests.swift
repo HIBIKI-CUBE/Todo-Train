@@ -239,11 +239,56 @@ struct PauseInputPromptTests {
         #expect(again == decoded)
     }
 
+    @Test func restartContinuesFromSeededValues() {
+        var engine = PauseInputEngine()
+        let anchored = engine.step(watching(
+            uptime: 1_000,
+            unix: 1_000_000,
+            heldBy: .user,
+            storedSampled: 300,
+            storedActive: 270
+        ))
+        #expect(anchored.reports.isEmpty)
+        #expect(engine.current?.sampled == 300)
+        #expect(engine.current?.active == 270)
+        _ = engine.step(watching(
+            uptime: 1_030,
+            unix: 1_000_030,
+            heldBy: .user,
+            storedSampled: 300,
+            storedActive: 270
+        ))
+        #expect(engine.current?.sampled == 330)
+        #expect(engine.current?.active == 300)
+        _ = engine.step(watching(
+            uptime: 1_031,
+            unix: 1_000_031,
+            heldBy: .user,
+            storedSampled: 30,
+            storedActive: 30
+        ))
+        #expect(engine.current?.sampled == 330)
+        #expect(engine.current?.active == 300)
+    }
+
     @Test func brokenPauseIdDoesNotFailTheSnap() throws {
         let json = Data(#"{"rev":1,"sessionId":"11111111-1111-4111-8111-111111111111","ticketId":null,"title":"a","phase":"paused","startedAt":1,"estimatedSeconds":60,"pausedAccumulated":0,"pausedAt":2,"boardedDeviceID":null,"serviceActive":true,"cabinEnabled":true,"checkInFiredCount":0,"pendingCabin":null,"pauseId":"not-a-uuid"}"#.utf8)
         let snap = try WireJSON.decoder().decode(SnapPlaintext.self, from: json)
         #expect(snap.phase == .paused)
         #expect(snap.pauseId == nil)
+    }
+
+    @Test func brokenStoredSecondsDoNotFailTheSnap() throws {
+        let json = Data(#"{"rev":1,"sessionId":"11111111-1111-4111-8111-111111111111","ticketId":null,"title":"a","phase":"paused","startedAt":1,"estimatedSeconds":60,"pausedAccumulated":0,"pausedAt":2,"boardedDeviceID":null,"serviceActive":true,"cabinEnabled":true,"checkInFiredCount":0,"pendingCabin":null,"macSampledSeconds":"300","macActiveSeconds":-1}"#.utf8)
+        let snap = try WireJSON.decoder().decode(SnapPlaintext.self, from: json)
+        #expect(snap.phase == .paused)
+        #expect(snap.macSampledSeconds == nil)
+        #expect(snap.macActiveSeconds == nil)
+
+        let impossible = Data(#"{"rev":1,"sessionId":"11111111-1111-4111-8111-111111111111","ticketId":null,"title":"a","phase":"paused","startedAt":1,"estimatedSeconds":60,"pausedAccumulated":0,"pausedAt":2,"boardedDeviceID":null,"serviceActive":true,"cabinEnabled":true,"checkInFiredCount":0,"pendingCabin":null,"macSampledSeconds":30,"macActiveSeconds":90}"#.utf8)
+        let dropped = try WireJSON.decoder().decode(SnapPlaintext.self, from: impossible)
+        #expect(dropped.macSampledSeconds == nil)
+        #expect(dropped.macActiveSeconds == nil)
     }
 
     private func primed(
@@ -271,7 +316,9 @@ struct PauseInputPromptTests {
         heldBy: PauseHeldBy,
         pauseId: UUID? = nil,
         pausedAt: Int = 1_000_000,
-        title: String = "週次"
+        title: String = "週次",
+        storedSampled: TimeInterval? = nil,
+        storedActive: TimeInterval? = nil
     ) -> PauseInputObservation {
         PauseInputObservation(
             uptime: uptime,
@@ -283,7 +330,9 @@ struct PauseInputPromptTests {
             pauseId: pauseId ?? pause,
             pausedAt: pausedAt,
             heldBy: heldBy,
-            title: title
+            title: title,
+            storedSampled: storedSampled,
+            storedActive: storedActive
         )
     }
 

@@ -40,6 +40,8 @@ enum CompanionSnapBuilding {
                 reserved: reserved
             )
         }
+        let open = Self.openPause(session: session, phase: phase)
+        let samples = Self.openPauseSamples(session: session, phase: phase)
         let started = Int(session.startedAt.timeIntervalSince1970)
         let elapsedActive = Int(session.elapsedSeconds(at: now).rounded(.towardZero))
         let pausedAtUnix: Int?
@@ -75,21 +77,27 @@ enum CompanionSnapBuilding {
             nudge: nudge,
             nudgePlan: nudgePlan,
             reserved: reserved,
-            pauseHeldBy: pauseHeldBy ?? Self.openPauseHeldBy(session: session, phase: phase),
-            pauseId: Self.openPauseId(session: session, phase: phase)
+            pauseHeldBy: pauseHeldBy ?? open?.heldBy,
+            pauseId: open?.id,
+            macSampledSeconds: samples?.sampled,
+            macActiveSeconds: samples?.active
         )
     }
 
-    /// The open pause's reason. Running, idle, and overtime omit it.
-    static func openPauseHeldBy(session: WorkSession, phase: SessionPhase) -> PauseHeldBy? {
-        guard phase == .paused else { return nil }
-        return session.pauses.first { $0.endedAt == nil }?.heldBy
+    /// Seconds already stored on the open pause. The pair stays within itself.
+    static func openPauseSamples(
+        session: WorkSession,
+        phase: SessionPhase
+    ) -> (sampled: Double, active: Double)? {
+        guard let pause = openPause(session: session, phase: phase) else { return nil }
+        let sampled = max(0, pause.macSampledSeconds)
+        let active = min(max(0, pause.macActiveSeconds), sampled)
+        return (sampled, active)
     }
 
-    /// The open pause. Running, idle, and overtime omit it.
-    static func openPauseId(session: WorkSession, phase: SessionPhase) -> UUID? {
+    private static func openPause(session: WorkSession, phase: SessionPhase) -> SessionPause? {
         guard phase == .paused else { return nil }
-        return session.pauses.first { $0.endedAt == nil }?.id
+        return session.pauses.first { $0.endedAt == nil }
     }
 
     static func idle(

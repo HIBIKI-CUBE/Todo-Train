@@ -33,7 +33,7 @@ public enum WireOp: Sendable, Equatable {
     case boardReserved
     /// Mac `pipVisible` and `attending`. Sent only when either changes.
     case presence
-    /// Mac samples of input during one pause. Last write for that `pauseId` wins.
+    /// Mac samples of input during one pause. Stored seconds only rise.
     case pauseInputReport
     case unknown(String)
 
