@@ -130,22 +130,6 @@ struct ArrivalForecastFingerprint: Equatable, Hashable, Sendable {
 enum ArrivalForecast {
     static let recentLimit = 8
 
-    /// Prefer the current hour band when it has enough arrivals; otherwise all tagged rides.
-    static func pooledRides(
-        _ rides: [EstimateHeuristic.ArrivedRide],
-        now: Date,
-        calendar: Calendar
-    ) -> (rides: [EstimateHeuristic.ArrivedRide], bandCount: Int) {
-        let band = WorkHourBand.of(hour: calendar.component(.hour, from: now))
-        let inBand = rides.filter {
-            WorkHourBand.of(hour: calendar.component(.hour, from: $0.startedAt)) == band
-        }
-        if inBand.count >= EstimateHeuristic.minimumSampleCount {
-            return (inBand, inBand.count)
-        }
-        return (rides, inBand.count)
-    }
-
     static func context(
         ticket: Ticket,
         rides: [EstimateHeuristic.ArrivedRide],

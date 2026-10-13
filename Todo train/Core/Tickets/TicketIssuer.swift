@@ -11,14 +11,20 @@ import SwiftData
 enum TicketIssuer {
     static func resolveMinutes(
         requested: Int?,
+        title: String = "",
         sessions: [WorkSession],
-        lastIssued: Int?
+        now: Date = .now,
+        lastIssued: Int?,
+        calendar: Calendar = .current
     ) -> Int {
         if let requested {
             return AppSettings.clampEstimateMinutes(requested)
         }
         if let suggestion = EstimateHeuristic.suggestion(
-            from: EstimateHeuristic.arrivedSamples(from: sessions, matchingAnyTagIDs: nil)
+            title: title,
+            sessions: sessions,
+            now: now,
+            calendar: calendar
         ) {
             return suggestion.minutes
         }

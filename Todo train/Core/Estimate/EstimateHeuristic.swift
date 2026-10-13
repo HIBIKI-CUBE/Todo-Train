@@ -45,12 +45,36 @@ enum EstimateHeuristic {
         return (snapToPresetMinutes(median), samples.count)
     }
 
+    /// Past arrivals chosen by `RideSimilarity`, then snapped. Nil below the sample floor.
+    @MainActor
+    static func suggestion(
+        title: String,
+        tagIDs: Set<UUID> = [],
+        ticket: Ticket? = nil,
+        sessions: [WorkSession],
+        now: Date = .now,
+        calendar: Calendar = .current
+    ) -> (minutes: Int, sampleCount: Int)? {
+        let chosen = RideSimilarity.select(
+            title: title,
+            tagIDs: tagIDs,
+            ticket: ticket,
+            sessions: sessions,
+            now: now,
+            calendar: calendar
+        ).chosen
+        return suggestion(from: chosen.map(\.ride.activeSeconds))
+    }
+
     static func caption(minutes: Int, sampleCount: Int) -> String {
         "過去の中央値 約\(minutes)分（\(sampleCount)件）"
     }
 
     struct ArrivedRide: Equatable, Sendable {
+        var id: UUID
+        var ticketID: UUID?
         var title: String
+        var tagIDs: Set<UUID>
         var startedAt: Date
         var activeSeconds: TimeInterval
         var estimatedSeconds: Int
@@ -80,7 +104,10 @@ enum EstimateHeuristic {
                 return reason.isEmpty ? nil : String(reason.prefix(40))
             }
             return ArrivedRide(
+                id: session.id,
+                ticketID: session.ticket?.id,
                 title: session.ticket?.title ?? "",
+                tagIDs: Set(session.ticket?.tags.map(\.id) ?? []),
                 startedAt: session.startedAt,
                 activeSeconds: session.accumulatedActiveSeconds,
                 estimatedSeconds: session.estimatedSecondsAtStart,

@@ -6,6 +6,7 @@
 import Foundation
 import SwiftData
 import Testing
+import TodoTrainSync
 @testable import Todo_train
 
 @MainActor
@@ -67,6 +68,8 @@ struct PDCAExportTests {
         #expect(Set(peer.keys) == ["builtAt", "dirty", "schema", "sha"])
         #expect(peer["sha"] as? String == "abcdef1")
         #expect(stamped["schema"] as? String == "todotrain.pdca.v0")
+        #expect(ContractVersion.contract == 14)
+        #expect(AppSchemaV6.versionIdentifier == Schema.Version(6, 0, 0))
     }
 
     @Test func exportJSON_hasPDCASchemaKeys() throws {
@@ -143,6 +146,17 @@ struct PDCAExportTests {
         #expect(resumed["startedFrom"] as? String == "other")
         #expect(number(resumed, "pauseInputSeconds") == 0)
         #expect(resumed["excludedFromForecast"] as? Bool == false)
+        #expect(resumed["tagIds"] as? [String] == [fixture.tagID.uuidString])
+        #expect(number(resumed, "ordinalInDay") == 2)
+        #expect(number(resumed, "cumulativeActiveSecondsBefore") == 0)
+        #expect(isNull(resumed["secondsSincePreviousArrival"]))
+        #expect(resumed["previousRideId"] as? String == fixture.orphanRideID.uuidString)
+        #expect(isNull(resumed["nextRideId"]))
+        #expect(number(resumed, "issueToDepartSeconds") == 60)
+        #expect(resumed["batchId"] as? String == fixture.arrivedTicketID.uuidString)
+        #expect(isNull(resumed["slackToNextTimetableBlockSeconds"]))
+        #expect(resumed["lineageGroupId"] as? String == fixture.arrivedTicketID.uuidString)
+        #expect((resumed["similarityCandidates"] as? [Any])?.isEmpty == true)
 
         let orphan = try #require(row(rides, id: fixture.orphanRideID))
         #expect(isNull(orphan["ticketId"]))
@@ -152,6 +166,33 @@ struct PDCAExportTests {
         let boundary = try #require(row(rides, id: fixture.boundaryRideID))
         #expect(boundary["serviceDayId"] == nil)
         #expect(boundary["outcome"] as? String == "arrived")
+        #expect((boundary["tagIds"] as? [String])?.isEmpty == true)
+        #expect(isNull(boundary["ordinalInDay"]))
+        #expect(isNull(boundary["cumulativeActiveSecondsBefore"]))
+        #expect(isNull(boundary["previousRideId"]))
+        #expect(isNull(boundary["nextRideId"]))
+        #expect(number(boundary, "issueToDepartSeconds") == 3_599)
+        #expect(boundary["batchId"] as? String == fixture.arrivedTicketID.uuidString)
+        let lineageGroup = [fixture.partialTicketID, fixture.openTicketID].min {
+            $0.uuidString < $1.uuidString
+        }
+        #expect(boundary["lineageGroupId"] as? String == lineageGroup?.uuidString)
+        let candidates = try #require(boundary["similarityCandidates"] as? [[String: Any]])
+        #expect(candidates.count == 1)
+        let candidate = try #require(candidates.first)
+        #expect(Set(candidate.keys) == PDCAContract.similarityCandidateKeys)
+        #expect(candidate["rideId"] as? String == fixture.resumedRideID.uuidString)
+        #expect(double(candidate, "titleNGram") == 1)
+        #expect(double(candidate, "tag") == 0)
+        #expect(double(candidate, "lineage") == 0)
+
+        let orphanRide = try #require(row(rides, id: fixture.orphanRideID))
+        #expect(number(orphanRide, "ordinalInDay") == 1)
+        #expect(isNull(orphanRide["previousRideId"]))
+        #expect(orphanRide["nextRideId"] as? String == fixture.resumedRideID.uuidString)
+        #expect(isNull(orphanRide["issueToDepartSeconds"]))
+        #expect(isNull(orphanRide["batchId"]))
+        #expect(isNull(orphanRide["lineageGroupId"]))
 
         let pause = try #require(row(pauses, id: fixture.pauseID))
         #expect(pause["rideId"] as? String == fixture.resumedRideID.uuidString)
@@ -535,6 +576,7 @@ private struct PDCAFixture {
     static let dayEnd = dayStart.addingTimeInterval(3_600)
 
     var context: ModelContext
+    var tagID: UUID
     var serviceDayID: UUID
     var arrivedTicketID: UUID
     var partialTicketID: UUID
@@ -561,6 +603,7 @@ private struct PDCAFixture {
         let context = ModelContext(container)
         let stamp = ISO8601DateFormatter().string(from: dayStart.addingTimeInterval(120))
 
+        let tagID = UUID()
         let serviceDayID = UUID()
         let arrivedTicketID = UUID()
         let partialTicketID = UUID()
@@ -591,7 +634,7 @@ private struct PDCAFixture {
         arrived.dueDate = dayStart.addingTimeInterval(86_400)
         arrived.closedAt = dayStart.addingTimeInterval(2_000)
         arrived.closureKind = .arrived
-        let tag = Tag(name: "SECRET_TAG_NAME_ZX9", colorHex: "#SECRETTAG")
+        let tag = Tag(id: tagID, name: "SECRET_TAG_NAME_ZX9", colorHex: "#SECRETTAG")
         context.insert(tag)
         arrived.tags = [tag]
         context.insert(arrived)
@@ -775,6 +818,7 @@ private struct PDCAFixture {
         try context.save()
         return PDCAFixture(
             context: context,
+            tagID: tagID,
             serviceDayID: serviceDayID,
             arrivedTicketID: arrivedTicketID,
             partialTicketID: partialTicketID,
@@ -841,6 +885,13 @@ private enum PDCAContract {
         "overtimeResolution", "timetableHeld", "checkInFiredCount",
         "arrivalAction", "arrivalStampedAt", "startedFrom",
         "pauseInputSeconds", "excludedFromForecast",
+        "tagIds", "ordinalInDay", "cumulativeActiveSecondsBefore",
+        "secondsSincePreviousArrival", "previousRideId", "nextRideId",
+        "issueToDepartSeconds", "batchId", "slackToNextTimetableBlockSeconds",
+        "lineageGroupId", "similarityCandidates",
+    ]
+    static let similarityCandidateKeys: Set<String> = [
+        "rideId", "score", "titleNGram", "tag", "lineage", "hourBand", "dayKind",
     ]
     static let pauseKeys: Set<String> = [
         "id", "rideId", "startedAt", "endedAt",
@@ -904,6 +955,10 @@ private func date(_ row: [String: Any], _ key: String) -> Date? {
 
 private func number(_ row: [String: Any], _ key: String) -> Int? {
     (row[key] as? NSNumber)?.intValue
+}
+
+private func double(_ row: [String: Any], _ key: String) -> Double? {
+    (row[key] as? NSNumber)?.doubleValue
 }
 
 private func isNull(_ value: Any?) -> Bool {

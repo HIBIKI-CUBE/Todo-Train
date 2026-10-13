@@ -53,12 +53,12 @@ struct TicketDetailView: View {
     }
 
     private var estimateSuggestion: (minutes: Int, sampleCount: Int)? {
-        let tagIDs = Set(ticket.tags.map(\.id))
-        let samples = EstimateHeuristic.arrivedSamples(
-            from: Array(allSessions),
-            matchingAnyTagIDs: tagIDs.isEmpty ? nil : tagIDs
+        EstimateHeuristic.suggestion(
+            title: ticket.title,
+            tagIDs: Set(ticket.tags.map(\.id)),
+            ticket: ticket,
+            sessions: Array(allSessions)
         )
-        return EstimateHeuristic.suggestion(from: samples)
     }
 
     var body: some View {
