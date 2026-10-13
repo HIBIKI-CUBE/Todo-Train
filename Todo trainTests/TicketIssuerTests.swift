@@ -9,20 +9,14 @@ import Testing
 @testable import Todo_train
 
 struct TicketIssuerTests {
-    @Test func resolveMinutes_prefersRequestedThenHeuristicThenLast() {
+    @Test func resolveMinutes_prefersRequestedThenLastIssuedThenDefault() {
+        #expect(TicketIssuer.resolveMinutes(requested: 12, lastIssued: 45) == 12)
+        #expect(TicketIssuer.resolveMinutes(requested: nil, lastIssued: 45) == 45)
         #expect(
-            TicketIssuer.resolveMinutes(requested: 12, sessions: [], lastIssued: 45) == 12
-        )
-        #expect(
-            TicketIssuer.resolveMinutes(requested: nil, sessions: [], lastIssued: 45) == 45
-        )
-        #expect(
-            TicketIssuer.resolveMinutes(requested: nil, sessions: [], lastIssued: nil)
+            TicketIssuer.resolveMinutes(requested: nil, lastIssued: nil)
                 == EstimateHeuristic.defaultHighlightMinutes
         )
-        #expect(
-            TicketIssuer.resolveMinutes(requested: 90, sessions: [], lastIssued: nil) == 60
-        )
+        #expect(TicketIssuer.resolveMinutes(requested: 90, lastIssued: nil) == 60)
     }
 
     @Test func issue_appendsOpenTicket() throws {

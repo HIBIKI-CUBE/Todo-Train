@@ -5,6 +5,18 @@
 
 import AppIntents
 
+struct IssueEstimateMinuteOptions: DynamicOptionsProvider {
+    func results() async throws -> IntentItemCollection<Int> {
+        let items = EstimateSnapMapping.stops.map { minutes in
+            IntentItem(
+                minutes,
+                title: LocalizedStringResource(stringLiteral: "\(minutes)分")
+            )
+        }
+        return IntentItemCollection(sections: [IntentItemSection(items: items)])
+    }
+}
+
 struct IssueTicketIntent: AppIntent {
     static var title: LocalizedStringResource = "切符を発行"
     static var description = IntentDescription("Hub に新しい切符を追加します。発車はしません。")
@@ -13,11 +25,15 @@ struct IssueTicketIntent: AppIntent {
     @Parameter(title: "題名")
     var title: String
 
-    @Parameter(title: "見積もり（分）")
+    @Parameter(
+        title: "見積もり（分）",
+        requestValueDialog: "見積もりは何分ですか",
+        optionsProvider: IssueEstimateMinuteOptions()
+    )
     var minutes: Int?
 
     static var parameterSummary: some ParameterSummary {
-        Summary("「\(\.$title)」の切符を発行")
+        Summary("「\(\.$title)」を\(\.$minutes)分で発行")
     }
 
     @MainActor
@@ -27,6 +43,13 @@ struct IssueTicketIntent: AppIntent {
             return .result(dialog: "題名を入れてください")
         }
 
+        let resolvedMinutes: Int
+        if let minutes {
+            resolvedMinutes = minutes
+        } else {
+            resolvedMinutes = try await $minutes.requestValue("見積もりは何分ですか")
+        }
+
         let issued: (ticket: Ticket, minutes: Int)
         switch try InventoryIssueTarget.resolve(
             sessionManager: AppRuntime.sessionManager,
@@ -34,11 +57,11 @@ struct IssueTicketIntent: AppIntent {
             makeContainer: { try AppModelContainer.make() }
         ) {
         case .manager(let manager):
-            issued = try manager.issueInventoryTicket(title: trimmed, minutes: minutes)
+            issued = try manager.issueInventoryTicket(title: trimmed, minutes: resolvedMinutes)
         case .context(let context):
             issued = try InventoryTicketIssue.issue(
                 title: trimmed,
-                minutes: minutes,
+                minutes: resolvedMinutes,
                 into: context,
                 settings: AppSettings.shared
             )
