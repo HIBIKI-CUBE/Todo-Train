@@ -6,6 +6,7 @@
 //  乗客レーンも同契約: 題名・本文・deviceId は出さない。無視した offer は記録しないので件数も出さない。
 //  識別子 todotrain.pdca.v0 は上げない。足した欄は、古い書き出しには無い。
 //  走行時間は書き出しても値を変えない。割合の欄は足さない。
+//  確度の評価欄も書き出すときに計算する。題名の文字とタグの名前は入れない。
 //
 
 import Foundation
@@ -106,6 +107,36 @@ nonisolated enum PDCAExport {
         var pauseInputSeconds: TimeInterval
         /// 予測の到着から外す。走行時間はそのまま。
         var excludedFromForecast: Bool
+        /// 切符のタグ UUID。名前は出さない。切符が無ければ空。
+        var tagIds: [UUID]
+        /// その運行の何本目か。運行に入らなければ null。
+        var ordinalInDay: PDCANull<Int>
+        /// 同じ運行で、それより前の乗車の走行時間の合計。運行に入らなければ null。
+        var cumulativeActiveSecondsBefore: PDCANull<TimeInterval>
+        /// 直前の乗車の終わりから発車までの秒。終わりが無い、または直前が無ければ null。
+        var secondsSincePreviousArrival: PDCANull<TimeInterval>
+        var previousRideId: PDCANull<UUID>
+        var nextRideId: PDCANull<UUID>
+        /// 切符の `createdAt` から発車までの秒。切符が無ければ null。
+        var issueToDepartSeconds: PDCANull<TimeInterval>
+        /// 発券が 15 分以内で続く切符の組。識別子は組で一番早い切符の id。
+        var batchId: PDCANull<UUID>
+        /// 発車以降に始まる有効な時刻表ブロックまでの秒。題名は読まない。無ければ null。
+        var slackToNextTimetableBlockSeconds: PDCANull<TimeInterval>
+        /// 乗り継ぎでつながる切符の組。孤立した切符は自分の id。切符が無ければ null。
+        var lineageGroupId: PDCANull<UUID>
+        /// それより前の、予測に使える乗車のうち点数の上位。文字は入れない。
+        var similarityCandidates: [SimilarityCandidateRow]
+    }
+
+    struct SimilarityCandidateRow: Encodable, Equatable {
+        var rideId: UUID
+        var score: Double
+        var titleNGram: Double
+        var tag: Double
+        var lineage: Double
+        var hourBand: Double
+        var dayKind: Double
     }
 
     struct PauseRow: Encodable {
@@ -225,9 +256,16 @@ nonisolated enum PDCAExport {
         in context: ModelContext,
         exportedAt: Date = .now,
         build: BuildRow? = nil,
-        pairedBuild: PairedBuildRow? = nil
+        pairedBuild: PairedBuildRow? = nil,
+        calendar: Calendar = .current
     ) throws -> Data {
-        try encode(make(in: context, exportedAt: exportedAt, build: build, pairedBuild: pairedBuild))
+        try encode(make(
+            in: context,
+            exportedAt: exportedAt,
+            build: build,
+            pairedBuild: pairedBuild,
+            calendar: calendar
+        ))
     }
 
     @MainActor
@@ -235,7 +273,8 @@ nonisolated enum PDCAExport {
         in context: ModelContext,
         exportedAt: Date = .now,
         build: BuildRow? = nil,
-        pairedBuild: PairedBuildRow? = nil
+        pairedBuild: PairedBuildRow? = nil,
+        calendar: Calendar = .current
     ) throws -> Document {
         make(
             exportedAt: exportedAt,
@@ -247,7 +286,8 @@ nonisolated enum PDCAExport {
             lineages: try context.fetch(FetchDescriptor<TaskLineage>()),
             timetableBlocks: try context.fetch(FetchDescriptor<TimetableBlock>()),
             timetableGuards: try context.fetch(FetchDescriptor<TimetableGuard>()),
-            passengerRides: try context.fetch(FetchDescriptor<PassengerRide>())
+            passengerRides: try context.fetch(FetchDescriptor<PassengerRide>()),
+            calendar: calendar
         )
     }
 
@@ -262,7 +302,8 @@ nonisolated enum PDCAExport {
         lineages: [TaskLineage],
         timetableBlocks: [TimetableBlock],
         timetableGuards: [TimetableGuard],
-        passengerRides: [PassengerRide]
+        passengerRides: [PassengerRide],
+        calendar: Calendar = .current
     ) -> Document {
         var rideCountByTicket: [UUID: Int] = [:]
         for session in sessions {
@@ -300,6 +341,14 @@ nonisolated enum PDCAExport {
             }
 
         let orderedSessions = sessions.sorted { byDateThenID($0.startedAt, $0.id, $1.startedAt, $1.id) }
+        let annotations = rideAnnotations(
+            sessions: orderedSessions,
+            tickets: tickets,
+            lineages: lineages,
+            timetableBlocks: timetableBlocks,
+            serviceDays: serviceDays,
+            calendar: calendar
+        )
         var rideRows: [RideRow] = []
         var pauseRows: [PauseRow] = []
         var extensionRows: [ExtensionRow] = []
@@ -313,6 +362,7 @@ nonisolated enum PDCAExport {
                     PauseInputReading(heldByRaw: $0.heldByRaw, macActiveSeconds: $0.macActiveSeconds)
                 }
             )
+            let note = annotations[session.id]
             rideRows.append(
                 RideRow(
                     id: session.id,
@@ -334,7 +384,18 @@ nonisolated enum PDCAExport {
                     excludedFromForecast: ForecastExclusion.excludes(
                         pauseInputSeconds: pauseInput,
                         activeSeconds: session.accumulatedActiveSeconds
-                    )
+                    ),
+                    tagIds: note?.tagIds ?? [],
+                    ordinalInDay: PDCANull(note?.ordinalInDay),
+                    cumulativeActiveSecondsBefore: PDCANull(note?.cumulativeActiveSecondsBefore),
+                    secondsSincePreviousArrival: PDCANull(note?.secondsSincePreviousArrival),
+                    previousRideId: PDCANull(note?.previousRideId),
+                    nextRideId: PDCANull(note?.nextRideId),
+                    issueToDepartSeconds: PDCANull(note?.issueToDepartSeconds),
+                    batchId: PDCANull(note?.batchId),
+                    slackToNextTimetableBlockSeconds: PDCANull(note?.slackToNextTimetableBlockSeconds),
+                    lineageGroupId: PDCANull(note?.lineageGroupId),
+                    similarityCandidates: note?.similarityCandidates ?? []
                 )
             )
             for pause in session.pauses {
@@ -440,6 +501,122 @@ nonisolated enum PDCAExport {
             timetableGuards: guardRows,
             passengerRides: passengerRideRows,
             passengerSummary: passengerSummary
+        )
+    }
+
+    private struct RideAnnotation {
+        var tagIds: [UUID]
+        var ordinalInDay: Int?
+        var cumulativeActiveSecondsBefore: TimeInterval?
+        var secondsSincePreviousArrival: TimeInterval?
+        var previousRideId: UUID?
+        var nextRideId: UUID?
+        var issueToDepartSeconds: TimeInterval?
+        var batchId: UUID?
+        var slackToNextTimetableBlockSeconds: TimeInterval?
+        var lineageGroupId: UUID?
+        var similarityCandidates: [SimilarityCandidateRow]
+    }
+
+    @MainActor
+    private static func rideAnnotations(
+        sessions: [WorkSession],
+        tickets: [Ticket],
+        lineages: [TaskLineage],
+        timetableBlocks: [TimetableBlock],
+        serviceDays: [ServiceDay],
+        calendar: Calendar
+    ) -> [UUID: RideAnnotation] {
+        let groups = RideSimilarity.lineageGroups(
+            ticketIDs: tickets.map(\.id),
+            links: lineages.compactMap { lineage in
+                guard let parent = lineage.parent?.id, let child = lineage.child?.id else { return nil }
+                return (parent, child)
+            }
+        )
+        let batches = RideSimilarity.batchIDs(
+            tickets.map { RideSimilarity.IssuedTicket(id: $0.id, createdAt: $0.createdAt) }
+        )
+        let blocks = timetableBlocks.map {
+            RideSimilarity.Occupancy(
+                id: $0.id,
+                startsAt: $0.startsAt,
+                endsAt: $0.endsAt,
+                isCancelled: $0.isCancelled
+            )
+        }
+        let slots = RideSimilarity.daySlots(sessions.map { session in
+            RideSimilarity.DayRide(
+                id: session.id,
+                serviceDayID: matchingServiceDayID(startedAt: session.startedAt, serviceDays: serviceDays),
+                startedAt: session.startedAt,
+                endedAt: session.endedAt,
+                activeSeconds: session.accumulatedActiveSeconds
+            )
+        })
+        let eligibleIDs = Set(
+            ForecastSample.eligible(
+                EstimateHeuristic.arrivedRides(from: sessions, matchingAnyTagIDs: nil)
+            ).map(\.id)
+        )
+        let features = sessions.map { feature(for: $0, groups: groups) }
+        let pool = features.filter { eligibleIDs.contains($0.id) }
+        let candidates = RideSimilarity.priorCandidates(for: features, among: pool, calendar: calendar)
+
+        var notes: [UUID: RideAnnotation] = [:]
+        notes.reserveCapacity(sessions.count)
+        for session in sessions {
+            let ticketID = session.ticket?.id
+            let slot = slots[session.id]
+            let tagIds = (session.ticket?.tags.map(\.id) ?? []).sorted { $0.uuidString < $1.uuidString }
+            notes[session.id] = RideAnnotation(
+                tagIds: tagIds,
+                ordinalInDay: slot?.ordinal,
+                cumulativeActiveSecondsBefore: slot?.cumulativeActiveSecondsBefore,
+                secondsSincePreviousArrival: slot?.secondsSincePreviousArrival,
+                previousRideId: slot?.previousRideID,
+                nextRideId: slot?.nextRideID,
+                issueToDepartSeconds: session.ticket.map {
+                    session.startedAt.timeIntervalSince($0.createdAt)
+                },
+                batchId: ticketID.flatMap { batches[$0] },
+                slackToNextTimetableBlockSeconds: RideSimilarity.slack(
+                    departedAt: session.startedAt,
+                    blocks: blocks
+                ),
+                lineageGroupId: ticketID.map { groups[$0] ?? $0 },
+                similarityCandidates: (candidates[session.id] ?? []).map(candidateRow)
+            )
+        }
+        return notes
+    }
+
+    @MainActor
+    private static func feature(
+        for session: WorkSession,
+        groups: [UUID: UUID]
+    ) -> RideSimilarity.Ride {
+        let ticketID = session.ticket?.id
+        return RideSimilarity.Ride(
+            id: session.id,
+            ticketID: ticketID,
+            title: session.ticket?.title ?? "",
+            tagIDs: Set(session.ticket?.tags.map(\.id) ?? []),
+            lineageGroupID: ticketID.map { groups[$0] ?? $0 },
+            startedAt: session.startedAt,
+            activeSeconds: session.accumulatedActiveSeconds
+        )
+    }
+
+    private static func candidateRow(_ scored: RideSimilarity.ScoredRide) -> SimilarityCandidateRow {
+        SimilarityCandidateRow(
+            rideId: scored.ride.id,
+            score: scored.score,
+            titleNGram: scored.cues.titleNGram,
+            tag: scored.cues.tag,
+            lineage: scored.cues.lineage,
+            hourBand: scored.cues.hourBand,
+            dayKind: scored.cues.dayKind
         )
     }
 

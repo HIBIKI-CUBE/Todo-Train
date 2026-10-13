@@ -3,7 +3,7 @@
 //  Todo train
 //
 //  Wall-clock if boarded now, plus a prediction (not a recorded arrival).
-//  Skeleton is tag + hour-band median. On-device model may refine minutes.
+//  Samples come from RideSimilarity. On-device model may refine minutes.
 //
 
 import Foundation
@@ -53,14 +53,18 @@ enum BoardingForecast {
         sessions: [WorkSession],
         calendar: Calendar = .current
     ) -> Snapshot {
-        make(
+        let selection = RideSimilarity.select(
+            title: ticket.title,
+            tagIDs: tagFilter(for: ticket) ?? [],
+            ticket: ticket,
+            sessions: sessions,
+            now: now,
+            calendar: calendar
+        )
+        return make(
             now: now,
             estimatedSeconds: ticket.estimatedSeconds,
-            rides: EstimateHeuristic.arrivedRides(
-                from: sessions,
-                matchingAnyTagIDs: tagFilter(for: ticket)
-            ),
-            calendar: calendar
+            samples: selection.chosen.map(\.ride.activeSeconds)
         )
     }
 
@@ -71,29 +75,29 @@ enum BoardingForecast {
         matchingAnyTagIDs tagIDs: Set<UUID>?,
         calendar: Calendar = .current
     ) -> Snapshot {
-        make(
+        let selection = RideSimilarity.select(
+            title: "",
+            tagIDs: tagIDs ?? [],
+            ticket: nil,
+            sessions: sessions,
+            now: now,
+            calendar: calendar
+        )
+        return make(
             now: now,
             estimatedSeconds: estimatedSeconds,
-            rides: EstimateHeuristic.arrivedRides(from: sessions, matchingAnyTagIDs: tagIDs),
-            calendar: calendar
+            samples: selection.chosen.map(\.ride.activeSeconds)
         )
     }
 
     static func make(
         now: Date,
         estimatedSeconds: Int,
-        rides: [EstimateHeuristic.ArrivedRide],
-        calendar: Calendar = .current
+        samples: [TimeInterval]
     ) -> Snapshot {
         let estimate = max(estimatedSeconds, 0)
         let scheduledMinutes = max(estimate / 60, 1)
         let scheduledArrival = now.addingTimeInterval(TimeInterval(estimate))
-        let pooled = ArrivalForecast.pooledRides(
-            ForecastSample.eligible(rides),
-            now: now,
-            calendar: calendar
-        ).rides
-        let samples = pooled.map(\.activeSeconds)
         guard let predicted = predictedDuration(from: samples) else {
             return Snapshot(
                 scheduledArrival: scheduledArrival,
@@ -160,20 +164,23 @@ enum BoardingForecast {
         now: Date,
         calendar: Calendar = .current
     ) -> ArrivalForecastContext? {
-        let rides = ForecastSample.eligible(
-            EstimateHeuristic.arrivedRides(
-                from: sessions,
-                matchingAnyTagIDs: tagFilter(for: ticket)
-            )
+        let selection = RideSimilarity.select(
+            title: ticket.title,
+            tagIDs: tagFilter(for: ticket) ?? [],
+            ticket: ticket,
+            sessions: sessions,
+            now: now,
+            calendar: calendar
         )
-        let pooled = ArrivalForecast.pooledRides(rides, now: now, calendar: calendar)
-        guard let predicted = predictedDuration(from: pooled.rides.map(\.activeSeconds)) else {
+        let chosenIDs = Set(selection.chosen.map(\.ride.id))
+        let chosen = selection.eligible.filter { chosenIDs.contains($0.id) }
+        guard let predicted = predictedDuration(from: chosen.map(\.activeSeconds)) else {
             return nil
         }
         return ArrivalForecast.context(
             ticket: ticket,
-            rides: rides,
-            pooled: pooled.rides,
+            rides: chosen,
+            pooled: chosen,
             medianMinutes: predicted.minutes,
             now: now,
             calendar: calendar

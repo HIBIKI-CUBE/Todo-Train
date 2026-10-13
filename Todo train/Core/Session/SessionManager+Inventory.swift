@@ -52,6 +52,7 @@ enum InventoryTicketIssue {
         let sessions = (try? context.fetch(FetchDescriptor<WorkSession>())) ?? []
         let resolved = TicketIssuer.resolveMinutes(
             requested: minutes,
+            title: trimmed,
             sessions: sessions,
             lastIssued: settings.lastIssuedEstimateMinutes
         )

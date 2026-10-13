@@ -67,12 +67,11 @@ struct QuickAddSheet: View {
     }
 
     private var estimateSuggestion: (minutes: Int, sampleCount: Int)? {
-        let tagIDs: Set<UUID>? = selectedTagIDs.isEmpty ? nil : selectedTagIDs
-        let samples = EstimateHeuristic.arrivedSamples(
-            from: Array(allSessions),
-            matchingAnyTagIDs: tagIDs
+        EstimateHeuristic.suggestion(
+            title: trimmedTitle,
+            tagIDs: selectedTagIDs,
+            sessions: Array(allSessions)
         )
-        return EstimateHeuristic.suggestion(from: samples)
     }
 
     private var highlightedEstimateMinutes: Int {

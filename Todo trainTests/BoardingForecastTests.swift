@@ -188,43 +188,44 @@ struct BoardingForecastTests {
         #expect(snapshot.sampleCount == 3)
     }
 
-    @Test func prediction_prefersCurrentHourBandWhenSampled() throws {
+    @Test func prediction_keepsTitleMatchesFromOtherHourBands() throws {
         let container = try AppModelContainer.make(inMemory: true)
         let context = ModelContext(container)
         let ticket = Ticket(title: "資料", estimatedSeconds: 20 * 60)
+        let other = Ticket(title: "買い物", estimatedSeconds: 20 * 60)
         context.insert(ticket)
+        context.insert(other)
 
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0)!
-        let morning = calendar.date(from: DateComponents(year: 2026, month: 1, day: 1, hour: 9))!
-        let evening = calendar.date(from: DateComponents(year: 2026, month: 1, day: 1, hour: 20))!
+        let morning = calendar.date(from: DateComponents(year: 2026, month: 1, day: 5, hour: 9))!
+        let evening = calendar.date(from: DateComponents(year: 2026, month: 1, day: 5, hour: 20))!
 
         let sessions = [
             arrived(context, ticket: ticket, active: 10 * 60, at: morning),
             arrived(context, ticket: ticket, active: 12 * 60, at: morning),
             arrived(context, ticket: ticket, active: 14 * 60, at: morning),
-            arrived(context, ticket: ticket, active: 40 * 60, at: evening),
-            arrived(context, ticket: ticket, active: 42 * 60, at: evening),
-            arrived(context, ticket: ticket, active: 44 * 60, at: evening),
+            arrived(context, ticket: other, active: 40 * 60, at: evening),
+            arrived(context, ticket: other, active: 42 * 60, at: evening),
+            arrived(context, ticket: other, active: 44 * 60, at: evening),
         ]
         let atNight = BoardingForecast.make(
             now: evening,
-            estimatedSeconds: ticket.estimatedSeconds,
+            ticket: ticket,
             sessions: sessions,
-            matchingAnyTagIDs: nil,
             calendar: calendar
         )
-        #expect(atNight.predictedMinutes == 42)
+        #expect(atNight.predictedMinutes == 12)
         #expect(atNight.sampleCount == 3)
 
         let atMorning = BoardingForecast.make(
             now: morning,
-            estimatedSeconds: ticket.estimatedSeconds,
+            ticket: ticket,
             sessions: sessions,
-            matchingAnyTagIDs: nil,
             calendar: calendar
         )
         #expect(atMorning.predictedMinutes == 12)
+        #expect(atMorning.sampleCount == 3)
     }
 
     @Test func scaleMinutes_clampsPredictionAboveSixty() {
