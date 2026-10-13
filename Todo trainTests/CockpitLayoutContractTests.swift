@@ -199,6 +199,40 @@ final class CockpitLayoutContractTests: XCTestCase {
         }
     }
 
+    func testGaugeTicksFollowThePlannedBudget() {
+        XCTAssertEqual(CockpitGaugeTicks.fractions(budgetSeconds: 20 * 60, limited: true), [0.5, 1])
+        XCTAssertEqual(
+            CockpitGaugeTicks.fractions(budgetSeconds: 4 * 60),
+            [0.25, 0.5, 0.75, 1]
+        )
+        XCTAssertEqual(
+            CockpitGaugeTicks.fractions(budgetSeconds: 20 * 60),
+            [0.25, 0.5, 0.75, 1]
+        )
+        XCTAssertEqual(
+            CockpitGaugeTicks.fractions(budgetSeconds: 12 * 60),
+            [2, 4, 6, 8, 10, 12].map { Double($0) / 12 }
+        )
+        XCTAssertEqual(CockpitGaugeTicks.fractions(budgetSeconds: 8 * 60).last, 1)
+    }
+
+    func testGaugeTrackKeepsARedTailPastThePlan() {
+        XCTAssertEqual(CockpitGaugeRange.trackFraction(progress: 0), 0)
+        XCTAssertEqual(CockpitGaugeRange.trackFraction(progress: 1), 0.8, accuracy: 0.0001)
+        XCTAssertEqual(CockpitGaugeRange.trackFraction(progress: 1.25), 1, accuracy: 0.0001)
+        XCTAssertEqual(CockpitGaugeRange.trackFraction(progress: 3), 1, accuracy: 0.0001)
+
+        let deadline = Date(timeIntervalSince1970: 1_700_000_000)
+        let range = CockpitGaugeRange.timerInterval(deadline: deadline, budgetSeconds: 20 * 60)
+        let budget: TimeInterval = 20 * 60
+        XCTAssertEqual(range.lowerBound, deadline.addingTimeInterval(-budget))
+        XCTAssertEqual(
+            range.upperBound.timeIntervalSince(deadline),
+            budget * 0.25,
+            accuracy: 0.001
+        )
+    }
+
     func testIslandWidthContractsMatchHIG() {
         XCTAssertEqual(CockpitSizeContract.islandCompactSide.width, 62.33, accuracy: 0.01)
         XCTAssertEqual(CockpitSizeContract.islandMinimalMaxWidth, 45)

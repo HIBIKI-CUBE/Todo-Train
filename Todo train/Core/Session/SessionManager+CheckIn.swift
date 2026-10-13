@@ -225,6 +225,11 @@ extension SessionManager {
         try? pause()
     }
 
+    func continueRide(sessionID: UUID) {
+        guard activeSession?.id == sessionID else { return }
+        acknowledgeCabinStill()
+    }
+
     /// Settings toggle for 車内放送 — apply immediately to the active ride.
     func syncCabinAnnouncementsWithSettings(now: Date? = nil) {
         let now = now ?? clock.now

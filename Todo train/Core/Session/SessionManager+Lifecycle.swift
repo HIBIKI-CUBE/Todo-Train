@@ -153,6 +153,11 @@ extension SessionManager {
             } catch {
                 return nil
             }
+        case .still:
+            guard pending.sessionID == activeSession?.id else { return nil }
+            acknowledgeCabinStill()
+            FocusPendingActionStore.consumeIfMatches(pending)
+            return .still
         case .arrive, .extend:
             return nil
         }

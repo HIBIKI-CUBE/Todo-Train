@@ -161,7 +161,12 @@ struct FocusView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            if let label = headerStateLabel {
+            if sessionManager.phase == .overtime || cabinPhase == .overtime {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundStyle(CockpitColors.red)
+                    .accessibilityLabel("予定の時刻を過ぎています")
+            } else if let label = headerStateLabel {
                 Text(label)
                     .font(.system(size: 20, weight: .bold, design: .default))
                     .foregroundStyle(headerStateColor)
@@ -246,13 +251,14 @@ struct FocusView: View {
                     phase: phase,
                     occupancy: dispatched.occupancy,
                     pinch: clearance == .pinch,
-                    overrun: clearance == .overrun
+                    overrun: clearance == .overrun,
+                    budgetSeconds: sessionManager.activeSession?.budgetSecondsAtStart ?? 1
                 )
 
                 HStack(spacing: TrainTheme.Space.md) {
                     Text(deadlineLabel(remaining: remaining, now: context.date))
                         .font(.system(size: 15, weight: .semibold, design: .default))
-                        .foregroundStyle(phase == .overtime ? TrainTheme.signalRed : FocusPanel.ink)
+                        .foregroundStyle(FocusPanel.muted)
                         .monospacedDigit()
 
                     Spacer(minLength: 0)
@@ -442,14 +448,8 @@ struct FocusView: View {
     }
 
     private func deadlineLabel(remaining: TimeInterval, now: Date) -> String {
-        if remaining <= 0 {
-            return "予定を超過"
-        }
         let deadline = now.addingTimeInterval(remaining)
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "ja_JP")
-        formatter.dateFormat = "予定 HH:mm"
-        return formatter.string(from: deadline)
+        return CockpitFormat.scheduledLabel(deadline: deadline) ?? "予定 —"
     }
 
     private func occupancyInstrument(now: Date) -> (
@@ -562,6 +562,12 @@ struct FocusView: View {
                 if FocusPendingActionStore.consumeIfMatches(action) {
                     didConsumePendingAction = true
                 }
+            }
+        case .still:
+            guard action.sessionID == sessionManager.activeSession?.id else { return }
+            sessionManager.acknowledgeCabinStill()
+            if FocusPendingActionStore.consumeIfMatches(action) {
+                didConsumePendingAction = true
             }
         }
     }
