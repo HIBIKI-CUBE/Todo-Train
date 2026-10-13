@@ -20,10 +20,20 @@ struct TodoTrainSessionLiveActivity: Widget {
             SessionCockpitRoot(context: context)
         } dynamicIsland: { context in
             let presentation = sessionPresentation(context)
+            let sessionID = context.attributes.sessionID
             return DynamicIsland {
-                DynamicIslandExpandedRegion(.bottom) {
-                    SessionExpandedFace(model: presentation, sessionID: context.attributes.sessionID)
+                DynamicIslandExpandedRegion(.leading) {
+                    SessionExpandedFace(model: presentation, sessionID: sessionID, slot: .leading)
                 }
+                .safeLeadingChrome()
+                DynamicIslandExpandedRegion(.trailing) {
+                    SessionExpandedFace(model: presentation, sessionID: sessionID, slot: .trailing)
+                }
+                .safeTrailingChrome()
+                DynamicIslandExpandedRegion(.bottom) {
+                    SessionExpandedFace(model: presentation, sessionID: sessionID, slot: .bottom)
+                }
+                .safeBottomChrome()
             } compactLeading: {
                 CockpitCompactLeadingGauge(model: presentation)
             } compactTrailing: {
@@ -32,6 +42,7 @@ struct TodoTrainSessionLiveActivity: Widget {
                 CockpitRingGauge(model: presentation)
                     .accessibilityLabel(presentation.showsOvertimeMark ? "予定の時刻を過ぎています" : "残り時間")
             }
+            .safeCompactChrome()
             .keylineTint(presentation.phase.accentColor)
             .widgetURL(URL(string: "todotrain://focus"))
         }
@@ -59,6 +70,8 @@ struct SessionCockpitFace: View {
     let model: CockpitDisplayModel
     let sessionID: UUID
     var metrics: CockpitFaceMetrics
+    var surface: CockpitSafeSurface
+    var slot: CockpitSafeSlot = .all
     var showsTrainMark: Bool = true
     var limitedWidth: Bool = false
 
@@ -66,6 +79,8 @@ struct SessionCockpitFace: View {
         CockpitActivityChrome(
             model: model,
             metrics: metrics,
+            surface: surface,
+            slot: slot,
             showsTrainMark: showsTrainMark,
             limitedWidth: limitedWidth,
             rideButton: { pauseButton },
@@ -109,6 +124,7 @@ struct SessionCockpitFace: View {
 private struct SessionExpandedFace: View {
     let model: CockpitDisplayModel
     let sessionID: UUID
+    var slot: CockpitSafeSlot = .all
     @Environment(\.isDynamicIslandLimitedInWidth) private var limitedWidth
 
     var body: some View {
@@ -116,6 +132,8 @@ private struct SessionExpandedFace: View {
             model: model,
             sessionID: sessionID,
             metrics: limitedWidth ? .expandedTight : .expanded,
+            surface: .islandExpanded,
+            slot: slot,
             showsTrainMark: true,
             limitedWidth: limitedWidth
         )
@@ -152,7 +170,8 @@ private struct SessionCockpitRoot: View {
                 SessionCockpitFace(
                     model: presentation,
                     sessionID: context.attributes.sessionID,
-                    metrics: .stackSmall
+                    metrics: .stackSmall,
+                    surface: .stack
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .opacity(SessionSmallLuminance.resolve(reduced: isLuminanceReduced).instrument)
@@ -347,11 +366,12 @@ private enum SessionPreviewFixtures {
 
 #Preview("Session StandBy") {
     let now = Date.now
-    SessionCockpitFace(
-        model: SessionPreviewFixtures.model(SessionPreviewFixtures.running(remaining: 12 * 60), now: now),
-        sessionID: UUID(),
-        metrics: .standBy
-    )
+        SessionCockpitFace(
+            model: SessionPreviewFixtures.model(SessionPreviewFixtures.running(remaining: 12 * 60), now: now),
+            sessionID: UUID(),
+            metrics: .standBy,
+            surface: .standBy
+        )
     .frame(width: 408, height: 160)
     .background(Color.black)
 }
@@ -369,7 +389,8 @@ private func stackGallery(metrics: CockpitFaceMetrics, width: CGFloat, height: C
             SessionCockpitFace(
                 model: SessionPreviewFixtures.model(state, now: now),
                 sessionID: UUID(),
-                metrics: metrics
+                metrics: metrics,
+                surface: .stack
             )
             .frame(width: width, height: height)
             .background(Color.black)

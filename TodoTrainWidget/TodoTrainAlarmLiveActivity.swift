@@ -21,9 +21,18 @@ struct TodoTrainAlarmLiveActivity: Widget {
         } dynamicIsland: { context in
             let presentation = AlarmPresentationModel(context: context)
             return DynamicIsland {
-                DynamicIslandExpandedRegion(.bottom) {
-                    AlarmExpandedFace(model: presentation)
+                DynamicIslandExpandedRegion(.leading) {
+                    AlarmExpandedFace(model: presentation, slot: .leading)
                 }
+                .safeLeadingChrome()
+                DynamicIslandExpandedRegion(.trailing) {
+                    AlarmExpandedFace(model: presentation, slot: .trailing)
+                }
+                .safeTrailingChrome()
+                DynamicIslandExpandedRegion(.bottom) {
+                    AlarmExpandedFace(model: presentation, slot: .bottom)
+                }
+                .safeBottomChrome()
             } compactLeading: {
                 CockpitCompactLeadingGauge(model: presentation.display)
             } compactTrailing: {
@@ -32,6 +41,7 @@ struct TodoTrainAlarmLiveActivity: Widget {
                 CockpitRingGauge(model: presentation.display)
                     .accessibilityLabel(presentation.display.showsOvertimeMark ? "予定の時刻を過ぎています" : "残り時間")
             }
+            .safeCompactChrome()
             .keylineTint(presentation.phase.accentColor)
             .widgetURL(URL(string: "todotrain://focus"))
         }
@@ -130,6 +140,8 @@ private struct AlarmPresentationModel {
 private struct AlarmCockpitFace: View {
     let model: AlarmPresentationModel
     var metrics: CockpitFaceMetrics
+    var surface: CockpitSafeSurface
+    var slot: CockpitSafeSlot = .all
     var showsTrainMark: Bool = true
     var limitedWidth: Bool = false
 
@@ -137,6 +149,8 @@ private struct AlarmCockpitFace: View {
         CockpitActivityChrome(
             model: model.display,
             metrics: metrics,
+            surface: surface,
+            slot: slot,
             showsTrainMark: showsTrainMark,
             limitedWidth: limitedWidth,
             rideButton: { rideButton },
@@ -173,12 +187,15 @@ private struct AlarmCockpitFace: View {
 
 private struct AlarmExpandedFace: View {
     let model: AlarmPresentationModel
+    var slot: CockpitSafeSlot = .all
     @Environment(\.isDynamicIslandLimitedInWidth) private var limitedWidth
 
     var body: some View {
         AlarmCockpitFace(
             model: model,
             metrics: limitedWidth ? .expandedTight : .expanded,
+            surface: .islandExpanded,
+            slot: slot,
             showsTrainMark: true,
             limitedWidth: limitedWidth
         )
@@ -197,7 +214,7 @@ private struct AlarmCockpitRoot: View {
         let presentation = AlarmPresentationModel(context: context)
         Group {
             if activityFamily == .small {
-                AlarmCockpitFace(model: presentation, metrics: .stackSmall)
+                AlarmCockpitFace(model: presentation, metrics: .stackSmall, surface: .stack)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                     .opacity(SessionSmallLuminance.resolve(reduced: isLuminanceReduced).instrument)
             } else {
@@ -436,6 +453,7 @@ private func alarmCard(
     CockpitActivityChrome(
         model: model,
         metrics: metrics,
+        surface: .stack,
         rideButton: {
             CockpitRoundButtonLabel(
                 systemImage: alert ? "stop.fill" : "pause.fill",

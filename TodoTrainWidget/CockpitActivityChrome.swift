@@ -5,6 +5,7 @@
 //  Left: ticket name and state. Right: remaining mm:ss.
 //  Bottom: tick gauge and 「予定 HH:mm」, or the pause / check-in row.
 //  The gauge is ProgressView(timerInterval:) with ticks and a train-head pointer.
+//  Outer inset and corner radius belong to CockpitSafeChrome. Do not pad the face.
 //
 
 import SwiftUI
@@ -17,50 +18,48 @@ struct CockpitFaceMetrics: Equatable {
     var captionSize: CGFloat
     var gaugeHeight: CGFloat
     var trainMark: CGFloat
-    var marginH: CGFloat
-    var marginV: CGFloat
     var rowSpacing: CGFloat
     var fillsTimer: Bool
 
     static let expanded = CockpitFaceMetrics(
         timerSize: 34, titleSize: 15, stateSize: 12, captionSize: 11,
-        gaugeHeight: 12, trainMark: 13, marginH: 12, marginV: 4,
+        gaugeHeight: 12, trainMark: 13,
         rowSpacing: 4, fillsTimer: false
     )
 
     static let expandedTight = CockpitFaceMetrics(
         timerSize: 26, titleSize: 13, stateSize: 11, captionSize: 10,
-        gaugeHeight: 10, trainMark: 12, marginH: 8, marginV: 2,
+        gaugeHeight: 10, trainMark: 12,
         rowSpacing: 2, fillsTimer: false
     )
 
     static let lockScreen = CockpitFaceMetrics(
         timerSize: 40, titleSize: 16, stateSize: 13, captionSize: 12,
-        gaugeHeight: 12, trainMark: 14, marginH: 14, marginV: 10,
+        gaugeHeight: 12, trainMark: 14,
         rowSpacing: 8, fillsTimer: false
     )
 
     static let lockScreenCompact = CockpitFaceMetrics(
         timerSize: 28, titleSize: 14, stateSize: 12, captionSize: 11,
-        gaugeHeight: 10, trainMark: 12, marginH: 10, marginV: 6,
+        gaugeHeight: 10, trainMark: 12,
         rowSpacing: 4, fillsTimer: false
     )
 
     static let standBy = CockpitFaceMetrics(
         timerSize: 96, titleSize: 18, stateSize: 15, captionSize: 14,
-        gaugeHeight: 14, trainMark: 16, marginH: 8, marginV: 8,
+        gaugeHeight: 14, trainMark: 16,
         rowSpacing: 8, fillsTimer: true
     )
 
     static let stackMedium = CockpitFaceMetrics(
         timerSize: 30, titleSize: 14, stateSize: 12, captionSize: 11,
-        gaugeHeight: 10, trainMark: 12, marginH: 8, marginV: 6,
+        gaugeHeight: 10, trainMark: 12,
         rowSpacing: 6, fillsTimer: false
     )
 
     static let stackSmall = CockpitFaceMetrics(
         timerSize: 22, titleSize: 12, stateSize: 10, captionSize: 10,
-        gaugeHeight: 8, trainMark: 10, marginH: 6, marginV: 4,
+        gaugeHeight: 8, trainMark: 10,
         rowSpacing: 3, fillsTimer: false
     )
 
@@ -79,6 +78,8 @@ struct CockpitFaceMetrics: Equatable {
 struct CockpitActivityChrome<RideButton: View, ResumeButton: View, PromptButtons: View>: View {
     let model: CockpitDisplayModel
     var metrics: CockpitFaceMetrics
+    var surface: CockpitSafeSurface
+    var slot: CockpitSafeSlot = .all
     var showsTrainMark: Bool = true
     var limitedWidth: Bool = false
     @ViewBuilder var rideButton: () -> RideButton
@@ -86,20 +87,67 @@ struct CockpitActivityChrome<RideButton: View, ResumeButton: View, PromptButtons
     @ViewBuilder var promptButtons: () -> PromptButtons
 
     var body: some View {
+        switch slot {
+        case .all:
+            CockpitSafeHost(surface: surface) {
+                faceStack
+            } leading: {
+                leadingColumn
+            } trailing: {
+                trailingColumn
+            } bottom: {
+                bottomColumn
+            }
+        case .leading:
+            leadingColumn
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .dynamicIsland(verticalPlacement: .belowIfTooWide)
+                .environment(\.cockpitConcentricRadius, surfaceConcentricRadius)
+        case .trailing:
+            trailingColumn
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+                .dynamicIsland(verticalPlacement: .belowIfTooWide)
+                .environment(\.cockpitConcentricRadius, surfaceConcentricRadius)
+        case .bottom:
+            bottomColumn
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .environment(\.cockpitConcentricRadius, surfaceConcentricRadius)
+        }
+    }
+
+    private var surfaceConcentricRadius: CGFloat {
+        CockpitSafeChrome.expandedOuterRadius - CockpitSafeChrome.expandedEdgeInset
+    }
+
+    private var faceStack: some View {
         VStack(alignment: .leading, spacing: metrics.rowSpacing) {
             HStack(alignment: .center, spacing: 4) {
-                titleBlock
+                leadingColumn
                 Spacer(minLength: 4)
-                CockpitFaceTimer(model: model, metrics: metrics, limitedWidth: limitedWidth)
-                trailingSlot
+                trailingColumn
             }
             .frame(maxHeight: metrics.fillsTimer ? .infinity : nil)
-
-            bottomSlot
+            bottomColumn
         }
-        .padding(.horizontal, metrics.marginH)
-        .padding(.vertical, metrics.marginV)
-        .frame(maxWidth: .infinity, maxHeight: metrics.fillsTimer ? .infinity : nil, alignment: .top)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+
+    private var leadingColumn: some View {
+        titleBlock
+            .frame(maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private var trailingColumn: some View {
+        HStack(spacing: 4) {
+            CockpitFaceTimer(model: model, metrics: metrics, limitedWidth: limitedWidth)
+            trailingControl
+        }
+        .frame(maxHeight: .infinity, alignment: metrics.fillsTimer ? .trailing : .topTrailing)
+    }
+
+    private var bottomColumn: some View {
+        bottomSlot
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     private var titleBlock: some View {
@@ -134,7 +182,7 @@ struct CockpitActivityChrome<RideButton: View, ResumeButton: View, PromptButtons
     }
 
     @ViewBuilder
-    private var trailingSlot: some View {
+    private var trailingControl: some View {
         switch model.chromeMode {
         case .riding:
             rideButton()
@@ -176,9 +224,15 @@ struct CockpitFittedChrome<RideButton: View, ResumeButton: View, PromptButtons: 
                 height: geo.size.height,
                 fullscreen: fullscreen
             )
+            let surface = CockpitSafeSurface.fitting(
+                width: geo.size.width,
+                height: geo.size.height,
+                fullscreen: fullscreen
+            )
             CockpitActivityChrome(
                 model: model,
                 metrics: metrics,
+                surface: surface,
                 showsTrainMark: showsTrainMark,
                 limitedWidth: limitedWidth,
                 rideButton: rideButton,
@@ -323,15 +377,16 @@ struct CockpitPromptBottom<Replies: View>: View {
 struct CockpitRoundButtonLabel: View {
     let systemImage: String
     let tint: Color
+    @Environment(\.cockpitConcentricRadius) private var concentricRadius
 
     var body: some View {
         Image(systemName: systemImage)
             .font(.system(size: 13, weight: .bold))
             .foregroundStyle(tint)
             .frame(width: 28, height: 28)
-            .background(CockpitColors.fillRaised, in: Circle())
-            .frame(width: 44, height: 44)
-            .contentShape(Rectangle())
+            .background(CockpitColors.fillRaised, in: CockpitConcentricCorner(radius: concentricRadius))
+            .frame(width: CockpitSafeChrome.controlSide, height: CockpitSafeChrome.controlSide)
+            .contentShape(CockpitConcentricCorner(radius: concentricRadius))
     }
 }
 
@@ -339,6 +394,7 @@ struct CockpitReplyLabel: View {
     let title: String
     let systemImage: String
     let tint: Color
+    @Environment(\.cockpitConcentricRadius) private var concentricRadius
 
     var body: some View {
         HStack(spacing: 4) {
@@ -351,9 +407,9 @@ struct CockpitReplyLabel: View {
         }
         .foregroundStyle(tint)
         .padding(.horizontal, 8)
-        .frame(minWidth: 44, minHeight: 44)
-        .background(CockpitColors.fillRaised, in: Capsule())
-        .contentShape(Capsule())
+        .frame(minWidth: CockpitSafeChrome.controlSide, minHeight: CockpitSafeChrome.controlSide)
+        .background(CockpitColors.fillRaised, in: CockpitConcentricCorner(radius: concentricRadius))
+        .contentShape(CockpitConcentricCorner(radius: concentricRadius))
     }
 }
 
@@ -563,7 +619,6 @@ struct CockpitCompactLeadingGauge: View {
     var body: some View {
         CockpitTickGauge(model: model, limitedWidth: limitedWidth, showsTrain: true)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .padding(.horizontal, limitedWidth ? 1 : 3)
             .accessibilityLabel("進捗")
     }
 }
