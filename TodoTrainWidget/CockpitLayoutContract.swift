@@ -176,27 +176,53 @@ nonisolated enum CockpitLayoutPolicy {
     }
 
     static func lockScreenTotalHeight(density: CockpitDensity, hasControls: Bool) -> CGFloat {
-        switch density {
-        case .regular:
-            let margin = CockpitSizeContract.outerMargin * 2
-            let base: CGFloat = 40 + 4 + 18 + 6 + 4 + 2 + 12
-            let controls = hasControls ? (6 + CockpitSizeContract.controlHeight) : 0
-            return margin + base + controls
-        case .compact:
-            let margin = CockpitSizeContract.compactOuterMargin * 2
-            let timer: CGFloat = 28
-            if hasControls {
-                return margin + timer + 4 + CockpitSizeContract.compactControlHeight
-            }
-            return margin + timer + 4 + 3
-        }
+        let metrics: CockpitFaceMetrics = density == .regular ? .lockScreen : .lockScreenCompact
+        let mode: CockpitChromeMode = hasControls ? .paused : .riding
+        let canvas: CGFloat = density == .regular
+            ? CockpitSizeContract.lockScreenMaxHeight
+            : CockpitSizeContract.lockScreenMinHeight
+        let content = canvas - CockpitSafeChrome.lockScreenEdgeInset * 2
+        let budget = CockpitFaceBudget.resolve(
+            mode: mode,
+            metrics: metrics,
+            contentHeight: content,
+            showsOvertimeMark: false,
+            showsInlineState: false
+        )
+        return budget.idealHeight + CockpitSafeChrome.lockScreenEdgeInset * 2
     }
 
     static func lockScreenRegularWithoutDeadlineHeight(hasControls: Bool) -> CGFloat {
-        let margin = CockpitSizeContract.outerMargin * 2
-        let base: CGFloat = 40 + 4 + 18 + 6 + 4
-        let controls = hasControls ? (6 + CockpitSizeContract.controlHeight) : 0
-        return margin + base + controls
+        let content = CockpitSizeContract.lockScreenMaxHeight - CockpitSafeChrome.lockScreenEdgeInset * 2
+        let mode: CockpitChromeMode = hasControls ? .paused : .riding
+        var budget = CockpitFaceBudget.resolve(
+            mode: mode,
+            metrics: .lockScreen,
+            contentHeight: content,
+            showsOvertimeMark: false,
+            showsInlineState: false
+        )
+        if budget.showsSchedule {
+            let face = CockpitFaceMetrics.lockScreen
+            let dropped = CockpitFaceBudget.resolve(
+                mode: mode,
+                metrics: CockpitFaceMetrics(
+                    timerSize: face.timerSize,
+                    titleSize: face.titleSize,
+                    stateSize: face.stateSize,
+                    captionSize: 0,
+                    gaugeHeight: face.gaugeHeight,
+                    trainMark: face.trainMark,
+                    rowSpacing: face.rowSpacing,
+                    fillsTimer: false
+                ),
+                contentHeight: content,
+                showsOvertimeMark: false,
+                showsInlineState: false
+            )
+            budget = dropped
+        }
+        return budget.idealHeight + CockpitSafeChrome.lockScreenEdgeInset * 2
     }
 
     /// Fixed chrome + minimum timer (timer then fills any remainder).

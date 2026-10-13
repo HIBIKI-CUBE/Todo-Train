@@ -70,6 +70,10 @@ final class CockpitGaugePreviewExportTests: XCTestCase {
             ("session-lock-paused", 408, 160, face(paused, .lockScreen, .lockScreen)),
             ("session-lock-compact", 408, 84, face(riding, .lockScreenCompact, .lockScreen)),
             ("session-standby", 408, 160, face(riding, .standBy, .standBy)),
+            ("session-standby-paused", 408, 160, face(paused, .standBy, .standBy)),
+            ("session-standby-prompt", 408, 160, face(prompt, .standBy, .standBy)),
+            ("session-lock-prompt", 408, 160, face(prompt, .lockScreen, .lockScreen)),
+            ("session-lock-overtime", 408, 160, face(overtime, .lockScreen, .lockScreen)),
             ("session-stack-small", 184, 72, face(riding, .stackSmall, .stack)),
             ("session-stack-small-paused", 184, 72, face(paused, .stackSmall, .stack)),
             ("session-stack-small-prompt", 184, 72, face(prompt, .stackSmall, .stack)),
@@ -138,7 +142,7 @@ final class CockpitGaugePreviewExportTests: XCTestCase {
         let side = limited ? CGSize(width: 52.33, height: 36.67) : CockpitSizeContract.islandCompactSide
         return AnyView(
             HStack(spacing: 8) {
-                pill(CockpitTickGauge(model: model, limitedWidth: limited, showsTrain: true), size: side)
+                pill(CockpitCompactLeadingGauge(model: model), size: side)
                 Capsule()
                     .fill(Color.black)
                     .overlay(Capsule().stroke(Color.white.opacity(0.7), lineWidth: 1))

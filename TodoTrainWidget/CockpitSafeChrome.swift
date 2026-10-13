@@ -43,8 +43,12 @@ enum CockpitSafeSurface: Equatable, Sendable {
 
 /// Clip, camera housing, and the slots that stay inside both.
 struct CockpitSafeChrome: Equatable, Sendable {
-    /// Expanded island outer corner. Inner controls use this minus `edgeInset`.
+    /// Expanded island corner beside the camera. HIG's 44pt; the top row sits here.
     static let expandedOuterRadius: CGFloat = 44
+    /// Expanded island bottom corner. Measured on a Pro Max expanded island:
+    /// the bottom chord matches a 50pt corner, rounder than the 44pt top.
+    /// The bottom slot's width is the chord of this radius, not a second padding guess.
+    static let expandedBottomRadius: CGFloat = 50
     /// Lock Screen / StandBy card corner in proposal points.
     static let lockScreenOuterRadius: CGFloat = 24
     /// Smart Stack card corner.
@@ -79,6 +83,10 @@ struct CockpitSafeChrome: Equatable, Sendable {
     }
 
     static var expandedEdgeInset: CGFloat { cornerInset(radius: expandedOuterRadius) }
+    /// Horizontal inset of the bottom slot: the chord at the bottom clearance, both ends.
+    static var expandedBottomChordInset: CGFloat {
+        chordInset(radius: expandedBottomRadius, distanceFromEdge: expandedEdgeInset).rounded(.up)
+    }
     static var lockScreenEdgeInset: CGFloat { cornerInset(radius: lockScreenOuterRadius) }
     static var stackEdgeInset: CGFloat { cornerInset(radius: stackOuterRadius) }
     static var compactEdgeInset: CGFloat {
@@ -95,6 +103,19 @@ struct CockpitSafeChrome: Equatable, Sendable {
         guard radius > 0 else { return 0 }
         let raw = radius * (1 - 1 / CGFloat(2).squareRoot())
         return raw.rounded(.up)
+    }
+
+    /// How far a horizontal chord sits in from the straight side, `distanceFromEdge`
+    /// up from the bottom (or down from the top) of a circular corner of `radius`.
+    /// At the corner point this matches `cornerInset`. Closer to the edge the chord is narrower.
+    static func chordInset(radius: CGFloat, distanceFromEdge: CGFloat) -> CGFloat {
+        guard radius > 0 else { return 0 }
+        if distanceFromEdge >= radius { return 0 }
+        if distanceFromEdge <= 0 { return radius }
+        let dy = radius - distanceFromEdge
+        let under = radius * radius - dy * dy
+        guard under > 0 else { return radius }
+        return radius - under.squareRoot()
     }
 
     static func resolve(surface: CockpitSafeSurface, canvas: CGSize) -> CockpitSafeChrome {
@@ -180,6 +201,8 @@ struct CockpitSafeChrome: Equatable, Sendable {
             return dx * dx + dy * dy <= radius * radius + 0.5
         case .pill, .roundedRect:
             return pointInsideRoundedRect(point, radius: clip.radius)
+        case .uneven(let top, let bottom):
+            return pointInsideUneven(point, top: top, bottom: bottom)
         }
     }
 
@@ -192,6 +215,16 @@ struct CockpitSafeChrome: Equatable, Sendable {
         case .roundedRect(let radius):
             return RoundedRectangle(cornerRadius: min(radius, min(rect.width, rect.height) / 2), style: .continuous)
                 .path(in: rect)
+        case .uneven(let top, let bottom):
+            let limit = min(rect.width, rect.height) / 2
+            return UnevenRoundedRectangle(
+                topLeadingRadius: min(top, limit),
+                bottomLeadingRadius: min(bottom, limit),
+                bottomTrailingRadius: min(bottom, limit),
+                topTrailingRadius: min(top, limit),
+                style: .continuous
+            )
+            .path(in: rect)
         }
     }
 
@@ -212,6 +245,45 @@ struct CockpitSafeChrome: Equatable, Sendable {
         return dx * dx + dy * dy <= curve * curve + 0.5
     }
 
+    /// Top and bottom corners can differ. A short island's bottom arc reaches past mid-height,
+    /// so the corner is chosen by which edge the point is near, not by a half split.
+    private func pointInsideUneven(_ point: CGPoint, top: CGFloat, bottom: CGFloat) -> Bool {
+        let width = canvas.width
+        let height = canvas.height
+        if point.x < -0.01 || point.y < -0.01 || point.x > width + 0.01 || point.y > height + 0.01 {
+            return false
+        }
+        let topRadius = min(max(top, 0), min(width, height) / 2)
+        let bottomRadius = min(max(bottom, 0), min(width, height) / 2)
+        let nearTop = point.y <= topRadius
+        let nearBottom = point.y >= height - bottomRadius
+        let radius: CGFloat
+        let centerY: CGFloat
+        if nearTop && nearBottom {
+            if point.y <= height / 2 {
+                radius = topRadius
+                centerY = topRadius
+            } else {
+                radius = bottomRadius
+                centerY = height - bottomRadius
+            }
+        } else if nearTop {
+            radius = topRadius
+            centerY = topRadius
+        } else if nearBottom {
+            radius = bottomRadius
+            centerY = height - bottomRadius
+        } else {
+            return true
+        }
+        let nearSide = point.x <= radius || point.x >= width - radius
+        if !nearSide { return true }
+        let centerX = point.x <= radius ? radius : width - radius
+        let dx = point.x - centerX
+        let dy = point.y - centerY
+        return dx * dx + dy * dy <= radius * radius + 0.5
+    }
+
     private static func expanded(canvas: CGSize) -> CockpitSafeChrome {
         let inset = expandedEdgeInset
         let width = canvas.width
@@ -226,34 +298,45 @@ struct CockpitSafeChrome: Equatable, Sendable {
             height: cameraHeight
         )
         let top = inset
-        let sideHeight = min(
-            max(controlSide, camera.maxY - top),
-            max(0, height - inset - bandGap - top)
-        )
+        // The action row is reserved under the camera before the top band takes space,
+        // so a short island cannot push 再乗車 out. Extra height stays in the bottom slot.
+        let bottomReserve = controlSide
+        let scheduleBand = CockpitFaceMetrics.expanded.scheduleBand
+        let slotBottom = height - inset
+        let bottomFloor = camera.maxY + bandGap
+        let bottomLimit = max(bottomFloor, slotBottom - bottomReserve)
+        let naturalTop = max(controlSide, scheduleBand, camera.maxY - top)
+        let topLimit = max(0, bottomLimit - bandGap - top)
+        let sideHeight = min(naturalTop, topLimit)
         let leading = CGRect(
             x: inset,
             y: top,
             width: max(0, camera.minX - cameraGap - inset),
-            height: sideHeight
+            height: max(0, sideHeight)
         )
         let trailingX = camera.maxX + cameraGap
         let trailing = CGRect(
             x: trailingX,
             y: top,
             width: max(0, width - inset - trailingX),
-            height: sideHeight
+            height: max(0, sideHeight)
         )
-        let bottomY = max(camera.maxY, top + sideHeight) + bandGap
+        let bottomY = min(max(bottomFloor, top + sideHeight + bandGap), slotBottom)
+        // Chord at the slot's bottom edge. Both ends move in by the same amount.
+        let horizontal = chordInset(
+            radius: expandedBottomRadius,
+            distanceFromEdge: max(0, height - slotBottom)
+        ).rounded(.up)
         let bottom = CGRect(
-            x: inset,
+            x: horizontal,
             y: bottomY,
-            width: max(0, width - 2 * inset),
-            height: max(0, height - inset - bottomY)
+            width: max(0, width - 2 * horizontal),
+            height: max(0, slotBottom - bottomY)
         )
         return CockpitSafeChrome(
             surface: .islandExpanded,
             canvas: canvas,
-            clip: .roundedRect(radius: expandedOuterRadius),
+            clip: .uneven(top: expandedOuterRadius, bottom: expandedBottomRadius),
             edgeInset: inset,
             camera: camera,
             content: .null,
@@ -291,6 +374,8 @@ struct CockpitSafeChrome: Equatable, Sendable {
 
 enum CockpitSafeClip: Equatable, Sendable {
     case roundedRect(radius: CGFloat)
+    /// Expanded island. The bottom corners are rounder than the top.
+    case uneven(top: CGFloat, bottom: CGFloat)
     case pill(radius: CGFloat)
     case circle(radius: CGFloat)
 
@@ -298,6 +383,8 @@ enum CockpitSafeClip: Equatable, Sendable {
         switch self {
         case .roundedRect(let radius), .pill(let radius), .circle(let radius):
             return radius
+        case .uneven(let top, _):
+            return top
         }
     }
 }
@@ -421,7 +508,7 @@ extension DynamicIslandExpandedRegion {
     }
 
     func safeBottomChrome() -> DynamicIslandExpandedRegion<Content> {
-        contentMargins(.horizontal, CockpitSafeChrome.expandedEdgeInset)
+        contentMargins(.horizontal, CockpitSafeChrome.expandedBottomChordInset)
             .contentMargins(.bottom, CockpitSafeChrome.expandedEdgeInset)
     }
 }
