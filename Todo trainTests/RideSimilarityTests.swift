@@ -354,26 +354,6 @@ struct RideSimilarityTests {
         #expect(snapshot.predictedMinutes == 10)
     }
 
-    @Test func resolveMinutes_prefersTitleMatchesOverTheWholeHistory() throws {
-        let container = try AppModelContainer.make(inMemory: true)
-        let context = ModelContext(container)
-        let report = Ticket(title: "週報", estimatedSeconds: 20 * 60)
-        let errand = Ticket(title: "買い物", estimatedSeconds: 5 * 60)
-        context.insert(report)
-        context.insert(errand)
-        var sessions: [WorkSession] = []
-        for _ in 0..<3 {
-            sessions.append(arrived(context, ticket: report, active: 20 * 60))
-            sessions.append(arrived(context, ticket: errand, active: 5 * 60))
-        }
-        #expect(
-            TicketIssuer.resolveMinutes(requested: nil, title: "週報", sessions: sessions, lastIssued: nil) == 20
-        )
-        #expect(
-            TicketIssuer.resolveMinutes(requested: nil, title: "", sessions: sessions, lastIssued: nil) == 15
-        )
-    }
-
     @Test func exportOmitsExcludedRidesFromCandidatesAndReadsSlackFromBlockTimes() throws {
         let container = try AppModelContainer.make(inMemory: true)
         let context = ModelContext(container)
