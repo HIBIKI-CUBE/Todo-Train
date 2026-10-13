@@ -26,14 +26,14 @@ final class CockpitLayoutContractTests: XCTestCase {
         )
     }
 
-    func testLockScreenRegularExceedsMaxWithControls() {
+    func testLockScreenRegularFitsMaxWithControls() {
         let regular = CockpitLayoutPolicy.requiredTotalHeight(
             density: .regular,
             hasControls: true,
             surface: .lockScreen
         )
-        XCTAssertGreaterThan(regular, CockpitSizeContract.lockScreenMaxHeight)
-        XCTAssertFalse(
+        XCTAssertLessThanOrEqual(regular, CockpitSizeContract.lockScreenMaxHeight)
+        XCTAssertTrue(
             CockpitLayoutPolicy.fits(
                 proposedHeight: 160,
                 density: .regular,
@@ -96,7 +96,7 @@ final class CockpitLayoutContractTests: XCTestCase {
             ),
             .regular
         )
-        // With controls: full regular overflows 160, but title+progress still prefer regular tier.
+        // With controls the reserved action row still fits the 160pt cap, so the regular tier stays.
         XCTAssertEqual(
             CockpitLayoutPolicy.resolvedDensity(
                 proposedHeight: 160,
@@ -271,5 +271,122 @@ final class CockpitLayoutContractTests: XCTestCase {
             CockpitSizeContract.islandCompactSide.width,
             CockpitSizeContract.islandCompactSide.width
         )
+    }
+
+    func testLockScreenPreferredHeightFitsTheSystemCap() {
+        for sample in faceStates {
+            let preferred = CockpitFaceBudget.preferred(
+                mode: sample.mode,
+                metrics: .lockScreen,
+                showsOvertimeMark: sample.overtime,
+                showsInlineState: sample.inline
+            )
+            let total = preferred.idealHeight + CockpitSafeChrome.lockScreenEdgeInset * 2
+            XCTAssertLessThanOrEqual(
+                total,
+                CockpitSizeContract.lockScreenMaxHeight,
+                sample.name
+            )
+            XCTAssertGreaterThan(preferred.bottom, 0, sample.name)
+        }
+    }
+
+    func testEveryStateFitsEverySurfaceHeight() {
+        let canvases: [(CockpitSafeSurface, CGSize, Bool)] = [
+            (.lockScreen, CGSize(width: 408, height: 160), false),
+            (.lockScreen, CGSize(width: 408, height: 84), false),
+            (.lockScreen, CGSize(width: 408, height: 100), false),
+            (.lockScreen, CGSize(width: 371, height: 160), false),
+            (.standBy, CGSize(width: 408, height: 160), true),
+            (.standBy, CGSize(width: 408, height: 84), true),
+            (.standBy, CGSize(width: 956, height: 160), true),
+            (.stack, CGSize(width: 184, height: 72), false),
+            (.stack, CGSize(width: 198, height: 140), false)
+        ]
+        for (surface, canvas, fullscreen) in canvases {
+            let chrome = CockpitSafeChrome.resolve(surface: surface, canvas: canvas)
+            let metrics = fullscreen
+                ? CockpitFaceMetrics.standBy
+                : CockpitFaceMetrics.resolve(width: canvas.width, height: canvas.height, fullscreen: false)
+            for sample in faceStates {
+                let budget = CockpitFaceBudget.resolve(
+                    mode: sample.mode,
+                    metrics: metrics,
+                    contentHeight: chrome.content.height,
+                    showsOvertimeMark: sample.overtime,
+                    showsInlineState: sample.inline
+                )
+                XCTAssertLessThanOrEqual(
+                    budget.idealHeight,
+                    chrome.content.height + 0.5,
+                    "\(sample.name) \(surface) \(canvas)"
+                )
+                XCTAssertEqual(
+                    budget.bottom,
+                    CockpitFaceBudget.bottomHeight(mode: sample.mode, metrics: metrics),
+                    accuracy: 0.01,
+                    "\(sample.name) dropped the bottom row on \(surface) \(canvas)"
+                )
+            }
+        }
+    }
+
+    func testExpandedStackFitsUnderTheCapForEveryState() {
+        for sample in faceStates {
+            let height = CockpitFaceBudget.expandedCanvasHeight(mode: sample.mode)
+            XCTAssertLessThanOrEqual(height, CockpitSizeContract.lockScreenMaxHeight, sample.name)
+            XCTAssertGreaterThanOrEqual(height, CockpitSizeContract.lockScreenMinHeight, sample.name)
+            let chrome = CockpitSafeChrome.resolve(
+                surface: .islandExpanded,
+                canvas: CGSize(width: CockpitSizeContract.proMaxWidth, height: height)
+            )
+            XCTAssertGreaterThanOrEqual(
+                chrome.bottom.height,
+                CockpitFaceBudget.bottomHeight(mode: sample.mode, metrics: .expanded),
+                sample.name
+            )
+            XCTAssertTrue(chrome.contains(chrome.bottom), sample.name)
+            XCTAssertTrue(chrome.contains(chrome.leading), sample.name)
+            XCTAssertTrue(chrome.contains(chrome.trailing), sample.name)
+            XCTAssertGreaterThanOrEqual(
+                chrome.trailing.height,
+                CockpitFaceMetrics.expanded.scheduleBand,
+                sample.name
+            )
+            XCTAssertGreaterThan(chrome.bottom.minX, CockpitSafeChrome.expandedEdgeInset, sample.name)
+        }
+        let compactCanvases = [
+            CockpitSizeContract.islandCompactSide,
+            CGSize(width: 52.33, height: 36.67)
+        ]
+        for canvas in compactCanvases {
+            let chrome = CockpitSafeChrome.resolve(surface: .islandCompact, canvas: canvas)
+            let side = CockpitCompactMark.side(fitting: chrome.content.size)
+            let mark = CGRect(
+                x: chrome.content.midX - side / 2,
+                y: chrome.content.midY - side / 2,
+                width: side,
+                height: side
+            )
+            for sample in faceStates {
+                XCTAssertGreaterThanOrEqual(
+                    side,
+                    CockpitCompactMark.legibleSide,
+                    "\(sample.name) compact \(canvas)"
+                )
+                XCTAssertEqual(mark.width, mark.height, accuracy: 0.01, sample.name)
+                XCTAssertGreaterThan(side, CockpitCompactMark.barThickness, sample.name)
+                XCTAssertTrue(chrome.contains(mark), "\(sample.name) compact \(canvas)")
+            }
+        }
+    }
+
+    private var faceStates: [(name: String, mode: CockpitChromeMode, overtime: Bool, inline: Bool)] {
+        [
+            ("riding", .riding, false, true),
+            ("paused", .paused, false, false),
+            ("prompt", .prompt("まだ乗ってる？"), false, false),
+            ("overtime", .riding, true, false)
+        ]
     }
 }

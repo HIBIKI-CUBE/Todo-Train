@@ -61,6 +61,51 @@ final class CockpitSafeChromeTests: XCTestCase {
         XCTAssertTrue(chrome.clearOfCamera(mark))
         XCTAssertTrue(chrome.clearOfCamera(button))
         XCTAssertEqual(chrome.concentricRadius, 31, accuracy: 0.001)
+        XCTAssertGreaterThan(chrome.bottom.minX, CockpitSafeChrome.expandedEdgeInset)
+        XCTAssertEqual(
+            chrome.bottom.minX,
+            canvas.width - chrome.bottom.maxX,
+            accuracy: 0.01
+        )
+    }
+
+    /// The Pro Max expanded island's bottom corners are rounder than the 44pt top.
+    /// A gauge or 「予定 HH:mm」 placed on the old uniform inset sits in that corner.
+    func testExpandedBottomChordClearsTheRounderCorner() {
+        XCTAssertGreaterThan(
+            CockpitSafeChrome.expandedBottomRadius,
+            CockpitSafeChrome.expandedOuterRadius
+        )
+        let chord = CockpitSafeChrome.expandedBottomChordInset
+        XCTAssertGreaterThan(chord, CockpitSafeChrome.expandedEdgeInset)
+        for height: CGFloat in [110, 160] {
+            let canvas = CGSize(width: CockpitSizeContract.proMaxWidth, height: height)
+            let chrome = CockpitSafeChrome.resolve(surface: .islandExpanded, canvas: canvas)
+            let oldGaugeEnd = CGPoint(
+                x: CockpitSafeChrome.expandedEdgeInset,
+                y: canvas.height - CockpitSafeChrome.expandedEdgeInset
+            )
+            let oldCaptionEnd = CGPoint(
+                x: canvas.width - CockpitSafeChrome.expandedEdgeInset,
+                y: canvas.height - CockpitSafeChrome.expandedEdgeInset
+            )
+            XCTAssertFalse(chrome.pointInsideClip(oldGaugeEnd), "gauge hugged the bottom at \(height)")
+            XCTAssertFalse(chrome.pointInsideClip(oldCaptionEnd), "予定 sat in the corner at \(height)")
+            XCTAssertEqual(chrome.bottom.minX, chord, accuracy: 0.01)
+            XCTAssertEqual(canvas.width - chrome.bottom.maxX, chord, accuracy: 0.01)
+            XCTAssertTrue(chrome.contains(chrome.bottom), "chord slot left the island at \(height)")
+            XCTAssertTrue(chrome.clearOfCamera(chrome.bottom))
+            let captionH = min(CockpitFaceMetrics.expanded.captionSize, chrome.trailing.height)
+            let captionW = min(72, chrome.trailing.width)
+            let schedule = CGRect(
+                x: chrome.trailing.maxX - captionW,
+                y: chrome.trailing.maxY - captionH,
+                width: captionW,
+                height: captionH
+            )
+            XCTAssertTrue(chrome.contains(schedule), "予定 under the timer left the island at \(height)")
+            XCTAssertFalse(chrome.bottom.contains(schedule))
+        }
     }
 
     func testCardCornersKeepAControlInside() {
@@ -110,6 +155,32 @@ final class CockpitSafeChromeTests: XCTestCase {
         )
         XCTAssertTrue(tight.contains(tight.content))
         XCTAssertLessThanOrEqual(tight.edgeInset, CockpitSafeChrome.minimalEdgeInset)
+    }
+
+    func testCompactLeadingMarkFillsTheSlot() {
+        let canvases = [
+            CockpitSizeContract.islandCompactSide,
+            CGSize(width: 52.33, height: 36.67)
+        ]
+        for canvas in canvases {
+            let chrome = CockpitSafeChrome.resolve(surface: .islandCompact, canvas: canvas)
+            let side = CockpitCompactMark.side(fitting: chrome.content.size)
+            XCTAssertEqual(side, min(chrome.content.width, chrome.content.height), accuracy: 0.01)
+            XCTAssertGreaterThanOrEqual(side, CockpitCompactMark.legibleSide, "\(canvas)")
+            XCTAssertGreaterThanOrEqual(CockpitCompactMark.slotSide, CockpitCompactMark.legibleSide)
+            XCTAssertLessThan(CockpitCompactMark.barThickness, CockpitCompactMark.legibleSide)
+            XCTAssertGreaterThan(side, CockpitCompactMark.barThickness)
+            XCTAssertGreaterThan(CockpitCompactMark.stroke(for: side), 2)
+            let mark = CGRect(
+                x: chrome.content.midX - side / 2,
+                y: chrome.content.midY - side / 2,
+                width: side,
+                height: side
+            )
+            XCTAssertEqual(mark.width, mark.height, accuracy: 0.01, "\(canvas)")
+            XCTAssertTrue(chrome.contains(mark), "\(canvas)")
+            XCTAssertTrue(chrome.contains(chrome.content))
+        }
     }
 
     private var samples: [(surface: CockpitSafeSurface, canvas: CGSize)] {

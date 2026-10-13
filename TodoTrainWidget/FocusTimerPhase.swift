@@ -75,6 +75,8 @@ nonisolated enum CockpitColors {
     static let muted = Color.white.opacity(0.55)
     static let hairline = Color.white.opacity(0.14)
     static let track = Color.white.opacity(0.08)
+    /// Compact leading ring. The long gauge can stay faint; this circle has to read on its own.
+    static let ringTrack = Color.white.opacity(0.42)
     static let fill = Color.white.opacity(0.04)
     static let fillRaised = Color.white.opacity(0.07)
     static let approach = Color(red: 1.0, green: 0.82, blue: 0.42)

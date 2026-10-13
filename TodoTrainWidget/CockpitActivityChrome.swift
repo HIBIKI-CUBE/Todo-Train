@@ -2,8 +2,8 @@
 //  CockpitActivityChrome.swift
 //  Shared Live Activity face.
 //
-//  Left: ticket name and state. Right: remaining mm:ss.
-//  Bottom: tick gauge and 「予定 HH:mm」, or the pause / check-in row.
+//  Left: ticket name and state. Right: remaining mm:ss, with 「予定 HH:mm」 under it.
+//  Bottom: tick gauge, or the pause / check-in row. The bottom row is reserved first.
 //  The gauge is ProgressView(timerInterval:) with ticks and a train-head pointer.
 //  Outer inset and corner radius belong to CockpitSafeChrome. Do not pad the face.
 //
@@ -20,6 +20,14 @@ struct CockpitFaceMetrics: Equatable {
     var trainMark: CGFloat
     var rowSpacing: CGFloat
     var fillsTimer: Bool
+
+    /// The caption's line box. Point size alone clips 「予定 HH:mm」 out of the band.
+    var captionLine: CGFloat { captionSize + 4 }
+
+    /// Timer row (at least the 44pt control) plus 「予定 HH:mm」 under it.
+    var scheduleBand: CGFloat {
+        max(timerSize, CockpitSafeChrome.controlSide) + 2 + captionLine
+    }
 
     static let expanded = CockpitFaceMetrics(
         timerSize: 34, titleSize: 15, stateSize: 12, captionSize: 11,
@@ -75,6 +83,134 @@ struct CockpitFaceMetrics: Equatable {
     }
 }
 
+/// Vertical stack that fits the height the system actually proposed.
+/// The bottom row (gauge, or 停車中 / 再乗車) is reserved first and is never the piece that overflows.
+struct CockpitFaceBudget: Equatable, Sendable {
+    var top: CGFloat
+    var bottom: CGFloat
+    var spacing: CGFloat
+    var timerHeight: CGFloat
+    var showsSchedule: Bool
+    var showsStateLine: Bool
+
+    var idealHeight: CGFloat { top + spacing + bottom }
+
+    static func bottomHeight(mode: CockpitChromeMode, metrics: CockpitFaceMetrics) -> CGFloat {
+        switch mode {
+        case .riding:
+            return metrics.gaugeHeight
+        case .paused, .prompt:
+            return CockpitSafeChrome.controlSide
+        }
+    }
+
+    /// Uncompressed stack. StandBy's timer does not grow here; `resolve` fills leftover space.
+    static func preferred(
+        mode: CockpitChromeMode,
+        metrics: CockpitFaceMetrics,
+        showsOvertimeMark: Bool,
+        showsInlineState: Bool
+    ) -> CockpitFaceBudget {
+        resolve(
+            mode: mode,
+            metrics: metrics,
+            contentHeight: .greatestFiniteMagnitude,
+            showsOvertimeMark: showsOvertimeMark,
+            showsInlineState: showsInlineState
+        )
+    }
+
+    /// Canvas height of an expanded island that keeps the top band and the bottom row under the 160pt cap.
+    /// The chrome reserves a 44pt bottom before it gives the top band its height, so the canvas
+    /// includes that reserve even when the gauge itself is shorter.
+    static func expandedCanvasHeight(
+        mode: CockpitChromeMode,
+        metrics: CockpitFaceMetrics = .expanded
+    ) -> CGFloat {
+        let inset = CockpitSafeChrome.expandedEdgeInset
+        let topBand = max(metrics.scheduleBand, CockpitSafeChrome.cameraHousing.height)
+        let bottom = max(bottomHeight(mode: mode, metrics: metrics), CockpitSafeChrome.controlSide)
+        let height = inset + topBand + CockpitSafeChrome.bandGap + bottom + inset
+        return min(
+            CockpitSizeContract.lockScreenMaxHeight,
+            max(CockpitSizeContract.lockScreenMinHeight, height)
+        )
+    }
+
+    static func resolve(
+        mode: CockpitChromeMode,
+        metrics: CockpitFaceMetrics,
+        contentHeight: CGFloat,
+        showsOvertimeMark: Bool,
+        showsInlineState: Bool
+    ) -> CockpitFaceBudget {
+        let fullBottom = bottomHeight(mode: mode, metrics: metrics)
+        let bottom = min(fullBottom, max(0, contentHeight))
+        let room = max(0, contentHeight - bottom)
+        let preferredSpacing = metrics.rowSpacing
+        let tightSpacing = min(2, preferredSpacing)
+        let control: CGFloat = {
+            if case .riding = mode { return CockpitSafeChrome.controlSide }
+            return 0
+        }()
+        let stateWanted = showsOvertimeMark || showsInlineState
+
+        func pack(spacing: CGFloat, state: Bool, schedule: Bool, timer: CGFloat) -> CockpitFaceBudget? {
+            let title = metrics.titleSize + (state ? (1 + metrics.stateSize) : 0)
+            let row = max(timer, control)
+            let column = row + (schedule ? (2 + metrics.captionLine) : 0)
+            let top = max(title, column)
+            guard top + spacing + bottom <= contentHeight + 0.5 else { return nil }
+            var budget = CockpitFaceBudget(
+                top: top,
+                bottom: bottom,
+                spacing: spacing,
+                timerHeight: timer,
+                showsSchedule: schedule,
+                showsStateLine: state
+            )
+            if metrics.fillsTimer, contentHeight.isFinite {
+                let extra = max(0, contentHeight - budget.idealHeight)
+                budget.top += extra
+                budget.timerHeight = max(timer, budget.top - (schedule ? (2 + metrics.captionLine) : 0))
+            }
+            return budget
+        }
+
+        if let hit = pack(spacing: preferredSpacing, state: stateWanted, schedule: true, timer: metrics.timerSize) {
+            return hit
+        }
+        if let hit = pack(spacing: tightSpacing, state: stateWanted, schedule: true, timer: metrics.timerSize) {
+            return hit
+        }
+        if let hit = pack(spacing: tightSpacing, state: false, schedule: true, timer: metrics.timerSize) {
+            return hit
+        }
+        let spacing = tightSpacing
+        let topRoom = max(0, room - spacing)
+        let scheduleExtra = 2 + metrics.captionLine
+        let timerRoom = max(0, topRoom - scheduleExtra)
+        let shrunk = min(metrics.timerSize, timerRoom)
+        if shrunk >= 12,
+           let hit = pack(spacing: spacing, state: false, schedule: true, timer: shrunk) {
+            return hit
+        }
+        let timerOnly = min(metrics.timerSize, topRoom)
+        if let hit = pack(spacing: spacing, state: false, schedule: false, timer: timerOnly) {
+            return hit
+        }
+        let fallbackTop = max(0, contentHeight - bottom - spacing)
+        return CockpitFaceBudget(
+            top: fallbackTop,
+            bottom: bottom,
+            spacing: fallbackTop > 0 ? spacing : 0,
+            timerHeight: min(metrics.timerSize, fallbackTop),
+            showsSchedule: false,
+            showsStateLine: false
+        )
+    }
+}
+
 struct CockpitActivityChrome<RideButton: View, ResumeButton: View, PromptButtons: View>: View {
     let model: CockpitDisplayModel
     var metrics: CockpitFaceMetrics
@@ -90,27 +226,25 @@ struct CockpitActivityChrome<RideButton: View, ResumeButton: View, PromptButtons
         switch slot {
         case .all:
             CockpitSafeHost(surface: surface) {
-                faceStack
+                fittedFace
             } leading: {
-                leadingColumn
+                titleBlock(showsStateLine: true)
             } trailing: {
-                trailingColumn
+                fittedTrailing
             } bottom: {
-                bottomColumn
+                fittedBottom
             }
         case .leading:
-            leadingColumn
+            titleBlock(showsStateLine: true)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 .dynamicIsland(verticalPlacement: .belowIfTooWide)
                 .environment(\.cockpitConcentricRadius, surfaceConcentricRadius)
         case .trailing:
-            trailingColumn
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+            fittedTrailing
                 .dynamicIsland(verticalPlacement: .belowIfTooWide)
                 .environment(\.cockpitConcentricRadius, surfaceConcentricRadius)
         case .bottom:
-            bottomColumn
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            fittedBottom
                 .environment(\.cockpitConcentricRadius, surfaceConcentricRadius)
         }
     }
@@ -119,38 +253,116 @@ struct CockpitActivityChrome<RideButton: View, ResumeButton: View, PromptButtons
         CockpitSafeChrome.expandedOuterRadius - CockpitSafeChrome.expandedEdgeInset
     }
 
-    private var faceStack: some View {
-        VStack(alignment: .leading, spacing: metrics.rowSpacing) {
-            HStack(alignment: .center, spacing: 4) {
-                leadingColumn
-                Spacer(minLength: 4)
-                trailingColumn
+    /// Lock screen, StandBy, and the stack. The first stack that fits the proposal wins.
+    /// Explicit heights keep `Text(timerInterval:)` from reporting an ideal taller than the card.
+    private var fittedFace: some View {
+        GeometryReader { geo in
+            let resolved = budget(fitting: geo.size.height)
+            let preferred = CockpitFaceBudget.preferred(
+                mode: model.chromeMode,
+                metrics: metrics,
+                showsOvertimeMark: model.showsOvertimeMark,
+                showsInlineState: model.inlineState != nil
+            )
+            ViewThatFits(in: .vertical) {
+                if !metrics.fillsTimer {
+                    arranged(preferred)
+                }
+                arranged(resolved)
             }
-            .frame(maxHeight: metrics.fillsTimer ? .infinity : nil)
-            bottomColumn
+            .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
-    private var leadingColumn: some View {
-        titleBlock
-            .frame(maxHeight: .infinity, alignment: .topLeading)
-    }
-
-    private var trailingColumn: some View {
-        HStack(spacing: 4) {
-            CockpitFaceTimer(model: model, metrics: metrics, limitedWidth: limitedWidth)
-            trailingControl
+    private func arranged(_ budget: CockpitFaceBudget) -> some View {
+        VStack(alignment: .leading, spacing: budget.spacing) {
+            HStack(alignment: .center, spacing: 4) {
+                titleBlock(showsStateLine: budget.showsStateLine)
+                Spacer(minLength: 4)
+                trailingStack(budget)
+            }
+            .frame(height: budget.top, alignment: .center)
+            .layoutPriority(0)
+            bottomSlot
+                .frame(height: budget.bottom, alignment: .center)
+                .layoutPriority(1)
         }
-        .frame(maxHeight: .infinity, alignment: metrics.fillsTimer ? .trailing : .topTrailing)
     }
 
-    private var bottomColumn: some View {
+    /// Expanded trailing region. 予定 sits under the remaining time, off the bottom corner.
+    /// Ideal height is the stack itself, so the island grows to it instead of collapsing.
+    private var fittedTrailing: some View {
+        let withSchedule = CockpitFaceBudget(
+            top: metrics.scheduleBand,
+            bottom: 0,
+            spacing: 0,
+            timerHeight: metrics.timerSize,
+            showsSchedule: true,
+            showsStateLine: false
+        )
+        let timerOnly = CockpitFaceBudget(
+            top: max(metrics.timerSize, CockpitSafeChrome.controlSide),
+            bottom: 0,
+            spacing: 0,
+            timerHeight: metrics.timerSize,
+            showsSchedule: false,
+            showsStateLine: false
+        )
+        return ViewThatFits(in: .vertical) {
+            trailingStack(withSchedule)
+            trailingStack(timerOnly)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+    }
+
+    /// Gauge or action row. Its own height is the ideal, so the system keeps the row
+    /// and the chord inset (content margins) keeps it off the bottom corners.
+    private var fittedBottom: some View {
         bottomSlot
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
     }
 
-    private var titleBlock: some View {
+    private func budget(fitting height: CGFloat) -> CockpitFaceBudget {
+        CockpitFaceBudget.resolve(
+            mode: model.chromeMode,
+            metrics: metrics,
+            contentHeight: height,
+            showsOvertimeMark: model.showsOvertimeMark,
+            showsInlineState: model.inlineState != nil
+        )
+    }
+
+    private func trailingStack(_ budget: CockpitFaceBudget) -> some View {
+        VStack(alignment: .trailing, spacing: 2) {
+            HStack(spacing: 4) {
+                CockpitFaceTimer(
+                    model: model,
+                    metrics: metrics,
+                    limitedWidth: limitedWidth,
+                    height: budget.timerHeight
+                )
+                trailingControl
+            }
+            if budget.showsSchedule {
+                scheduleLabel
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .trailing)
+    }
+
+    @ViewBuilder
+    private var scheduleLabel: some View {
+        if let caption = model.gaugeCaption {
+            Text(caption)
+                .font(.system(size: metrics.captionSize, weight: .semibold))
+                .foregroundStyle(CockpitColors.muted)
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+    }
+
+    private func titleBlock(showsStateLine: Bool) -> some View {
         VStack(alignment: .leading, spacing: 1) {
             HStack(alignment: .firstTextBaseline, spacing: 4) {
                 if showsTrainMark {
@@ -166,12 +378,12 @@ struct CockpitActivityChrome<RideButton: View, ResumeButton: View, PromptButtons
                     .minimumScaleFactor(0.5)
                     .privacySensitive()
             }
-            if model.showsOvertimeMark {
+            if showsStateLine, model.showsOvertimeMark {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.system(size: metrics.stateSize, weight: .bold))
                     .foregroundStyle(CockpitColors.red)
                     .accessibilityLabel("予定の時刻を過ぎています")
-            } else if let state = model.inlineState {
+            } else if showsStateLine, let state = model.inlineState {
                 Text(state)
                     .font(.system(size: metrics.stateSize, weight: .bold))
                     .foregroundStyle(model.phase.accentColor)
@@ -179,6 +391,7 @@ struct CockpitActivityChrome<RideButton: View, ResumeButton: View, PromptButtons
                     .minimumScaleFactor(0.8)
             }
         }
+        .frame(maxHeight: .infinity, alignment: .topLeading)
     }
 
     @ViewBuilder
@@ -248,6 +461,8 @@ struct CockpitFaceTimer: View {
     let model: CockpitDisplayModel
     var metrics: CockpitFaceMetrics
     var limitedWidth: Bool = false
+    /// Explicit height so `Text(timerInterval:)` cannot report an ideal taller than the card.
+    var height: CGFloat? = nil
 
     var body: some View {
         Group {
@@ -269,6 +484,7 @@ struct CockpitFaceTimer: View {
             } else {
                 timerText
                     .font(.system(size: limitedWidth ? metrics.timerSize * 0.85 : metrics.timerSize, weight: .bold))
+                    .frame(height: height, alignment: .trailing)
             }
         }
         .monospacedDigit()
@@ -320,20 +536,10 @@ struct CockpitGaugeBottom: View {
     var limitedWidth: Bool = false
 
     var body: some View {
-        HStack(alignment: .center, spacing: 8) {
-            CockpitTickGauge(model: model, limitedWidth: limitedWidth)
-                .frame(height: metrics.gaugeHeight)
-            if let caption = model.gaugeCaption {
-                Text(caption)
-                    .font(.system(size: metrics.captionSize, weight: .semibold))
-                    .foregroundStyle(CockpitColors.muted)
-                    .monospacedDigit()
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-                    .layoutPriority(1)
-            }
-        }
-        .accessibilityElement(children: .combine)
+        CockpitTickGauge(model: model, limitedWidth: limitedWidth)
+            .frame(height: metrics.gaugeHeight)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityHidden(true)
     }
 }
 
@@ -493,6 +699,8 @@ struct TrainHeadGaugeStyle: ProgressViewStyle {
 struct RingGaugeStyle: ProgressViewStyle {
     var phase: FocusTimerPhase
     var muted: Bool
+    var trackColor: Color = CockpitColors.track
+    var lineWidth: CGFloat = 3
 
     func makeBody(configuration: Configuration) -> some View {
         let fraction = min(max(configuration.fractionCompleted ?? 0, 0), 1)
@@ -502,10 +710,10 @@ struct RingGaugeStyle: ProgressViewStyle {
         let tint = muted ? CockpitColors.muted : (pastFull ? CockpitColors.red : phase.accentColor)
         ZStack {
             Circle()
-                .stroke(CockpitColors.track, lineWidth: 3)
+                .stroke(trackColor, lineWidth: lineWidth)
             Circle()
                 .trim(from: 0, to: ring)
-                .stroke(tint, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                .stroke(tint, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
                 .rotationEffect(.degrees(-90))
             if pastFull, !muted {
                 Image(systemName: "exclamationmark.triangle.fill")
@@ -513,7 +721,7 @@ struct RingGaugeStyle: ProgressViewStyle {
                     .foregroundStyle(CockpitColors.red)
             }
         }
-        .padding(1.5)
+        .padding(lineWidth / 2)
     }
 }
 
@@ -612,13 +820,56 @@ struct CockpitRingGauge: View {
     }
 }
 
+/// Diameter of the compact-leading mark. It is the slot's shorter side, never a squeezed bar.
+enum CockpitCompactMark {
+    /// Below this, a ring with a train mark does not read as a gauge.
+    static let legibleSide: CGFloat = 18
+    /// The old horizontal bar never drew thicker than this, which is why it was a sliver.
+    static let barThickness: CGFloat = 6
+
+    static func side(fitting size: CGSize) -> CGFloat {
+        min(max(0, size.width), max(0, size.height))
+    }
+
+    /// Square that fills the HIG compact pill after the cap inset.
+    /// A fixed side keeps the region from collapsing to the old bar's height.
+    static var slotSide: CGFloat {
+        let chrome = CockpitSafeChrome.resolve(
+            surface: .islandCompact,
+            canvas: CockpitSizeContract.islandCompactSide
+        )
+        return side(fitting: chrome.content.size)
+    }
+
+    /// Stroke that stays a ring on `side`, not a hairline.
+    static func stroke(for side: CGFloat) -> CGFloat {
+        max(2.5, side * 0.14)
+    }
+}
+
 struct CockpitCompactLeadingGauge: View {
     let model: CockpitDisplayModel
-    @Environment(\.isDynamicIslandLimitedInWidth) private var limitedWidth
 
     var body: some View {
-        CockpitTickGauge(model: model, limitedWidth: limitedWidth, showsTrain: true)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .accessibilityLabel("進捗")
+        let side = CockpitCompactMark.slotSide
+        let stroke = CockpitCompactMark.stroke(for: side)
+        ZStack {
+            CockpitProgressHost(
+                model: model,
+                style: RingGaugeStyle(
+                    phase: model.phase,
+                    muted: model.isStale,
+                    trackColor: CockpitColors.ringTrack,
+                    lineWidth: stroke
+                )
+            )
+            Image(systemName: "tram.fill")
+                .font(.system(size: max(9, side * 0.38), weight: .bold))
+                .foregroundStyle(model.phase.accentColor)
+                .accessibilityHidden(true)
+        }
+        .frame(width: side, height: side)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityLabel("進捗")
     }
 }
