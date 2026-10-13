@@ -143,6 +143,65 @@ struct SessionManagerNudgeTests {
         #expect(manager.activeSession?.extensions.first?.workingSeconds == working)
     }
 
+    @Test func macExtendClosesTheIphonePromptAndUpdatesTheRide() throws {
+        let live = InMemoryLiveActivityManager()
+        let (manager, context, clock, _) = try SessionManagerFixtures.makeHarness(liveActivityManager: live)
+        try manager.startService()
+        let ticket = try SessionManagerFixtures.makeTicket(context, seconds: 30 * 60)
+        try manager.board(ticket: ticket)
+        let offset = try #require(manager.activeSession?.checkInOffsets.first)
+        clock.advance(by: offset + 1)
+        manager.reconcile()
+        #expect(manager.pendingCheckIn == .progress)
+        #expect(live.current?.checkInPrompt != nil)
+        let before = try #require(manager.activeSession?.budgetSecondsAtStart)
+
+        let ack = manager.applyNudgeCommand(answer(manager, choice: .willExtend, addSeconds: 600))
+        #expect(ack.ok == true)
+        #expect(manager.pendingCheckIn == nil)
+        #expect(manager.phase == .running)
+        #expect(manager.activeSession?.budgetSecondsAtStart == before + 600)
+        #expect(manager.activeSession?.checkInFiredCount == 1)
+        #expect(manager.activeSession?.checkInAnswers.count == 1)
+        #expect(live.current?.checkInPrompt == nil)
+        expectMacQuestionClosed(manager, now: clock.now)
+    }
+
+    @Test func answeredPromptStillReturnsToTheRide() throws {
+        let manager = try rideAtCheckIn()
+        let session = try #require(manager.activeSession)
+        let before = session.budgetSecondsAtStart
+        let ack = manager.applyNudgeCommand(answer(manager, choice: .willExtend, addSeconds: 600))
+        #expect(ack.ok == true)
+        session.pendingCheckIn = .progress
+
+        try manager.answerCheckIn(.stillOnIt)
+        #expect(manager.pendingCheckIn == nil)
+        #expect(manager.phase == .running)
+        #expect(session.budgetSecondsAtStart == before + 600)
+        #expect(session.extensions.count == 1)
+        #expect(session.checkInAnswers.count == 1)
+        #expect(session.checkInFiredCount == 1)
+        expectMacQuestionClosed(manager, now: manager.clock.now)
+    }
+
+    @Test func iphoneStillClosesTheMacQuestion() throws {
+        let manager = try rideAtCheckIn()
+        try manager.answerCheckIn(.stillOnIt)
+        #expect(manager.pendingCheckIn == nil)
+        #expect(manager.activeSession?.checkInFiredCount == 1)
+        expectMacQuestionClosed(manager, now: manager.clock.now)
+    }
+
+    @Test func iphoneWillExtendClosesTheMacQuestion() throws {
+        let manager = try rideAtCheckIn()
+        try manager.answerCheckIn(.willExtend)
+        #expect(manager.pendingCheckIn == nil)
+        #expect(manager.phase == .running)
+        #expect(manager.activeSession?.checkInAnswers.last?.answer == .willExtend)
+        expectMacQuestionClosed(manager, now: manager.clock.now)
+    }
+
     @Test func standingPauseRecordsTheOpenNudge() throws {
         let manager = try rideAtCheckIn()
         try manager.pause()
@@ -169,6 +228,27 @@ struct SessionManagerNudgeTests {
         #expect(manager.nudgeRingTick == 1)
         manager.reconcile()
         #expect(manager.nudgeRingTick == 1)
+    }
+
+    private func expectMacQuestionClosed(_ manager: SessionManager, now: Date) {
+        let snap = RideWireSnap.make(
+            sessionManager: manager,
+            settings: manager.settings,
+            rev: 1,
+            now: now
+        )
+        #expect(snap.nudge == nil)
+        #expect(snap.pendingCabin == nil)
+        let view = RideOverlayPresentation.make(
+            MenuBarInput(
+                pairing: .paired,
+                snap: snap,
+                now: Int(now.timeIntervalSince1970)
+            )
+        )
+        #expect(!view.showsNudgeChoices)
+        #expect(view.nudgePrompt == nil)
+        #expect(view.cabinPrompt == nil)
     }
 
     private func rideAtCheckIn() throws -> SessionManager {

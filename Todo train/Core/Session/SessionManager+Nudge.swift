@@ -319,6 +319,7 @@ extension SessionManager {
                 answeredOn: answeredOn
             )
             try save()
+            releaseAnsweredCheckInPrompt(session, now: at)
         case .alreadyDone:
             appendNudgeStamp(
                 on: session,

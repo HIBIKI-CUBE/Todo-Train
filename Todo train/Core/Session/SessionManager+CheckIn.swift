@@ -19,7 +19,10 @@ extension SessionManager {
             throw SessionError.noActiveSession
         }
         guard session.pendingCheckIn != nil else { return }
-        guard uiCanAnswer(session: session) else { return }
+        guard uiCanAnswer(session: session) else {
+            releaseAnsweredCheckInPrompt(session, now: now)
+            return
+        }
 
         let stamp = uiNudgeStamp(session: session)
         consumePendingCheckIn(
@@ -302,6 +305,23 @@ extension SessionManager {
         if collapsed.count <= 40 { return collapsed }
         let end = collapsed.index(collapsed.startIndex, offsetBy: 40)
         return String(collapsed[..<end])
+    }
+
+    /// 答えの出た問いかけが画面に残っているとき、表示だけ閉じる。新しい答えは足さない。
+    func releaseAnsweredCheckInPrompt(_ session: WorkSession, now: Date) {
+        guard session.pendingCheckIn != nil else { return }
+        guard !uiCanAnswer(session: session) else { return }
+        if session.pendingCheckIn == .progress, session.checkInFiredCount == 0 {
+            session.checkInFiredCount = 1
+        }
+        session.pendingCheckIn = nil
+        session.awayDueAt = nil
+        cancelAwayFireTask()
+        bumpCompanionSync()
+        _ = saveBestEffort()
+        reconcile(now: now)
+        guard session.isOpen else { return }
+        refreshRideSideEffects(for: session, now: now)
     }
 
     func consumePendingCheckIn(

@@ -63,6 +63,22 @@ struct MacNudgeTests {
         #expect(chrome.prompt == nil)
     }
 
+    @Test func answeredNudgeDoesNotFallBackToTheCabinPrompt() {
+        var snap = running
+        snap.pendingCabin = .progress
+        snap.checkInFiredCount = 0
+        snap.nudge = nil
+        snap.nudgePlan = [
+            WireNudgePlanItem(stage: .estimate, fireAt: 1_768_001_600, surface: .mac, rings: true)
+        ]
+        let view = RideOverlayPresentation.make(
+            MenuBarInput(pairing: .paired, snap: snap, now: 1_768_000_120)
+        )
+        #expect(!view.showsNudgeChoices)
+        #expect(view.nudgePrompt == nil)
+        #expect(view.cabinPrompt == nil)
+    }
+
     @Test func olderSnapStaysOnTheCabinPrompt() {
         var snap = running
         snap.pendingCabin = .progress
