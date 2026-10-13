@@ -152,7 +152,10 @@ public struct RideOverlayPresentation: Equatable, Sendable {
             winnerLine: bar.isSending ? nil : input.nudgeWinnerLine
         )
         let pausePrompt = input.pausePromptLine
-        let cabinPrompt = pausePrompt == nil && !nudge.showsChoices && cabin.showsPip && !bar.isSending
+        // A snap with a nudge plan owns the question. The older offset prompt stays for snaps without one.
+        let nudgeOwnsQuestion = snap.nudgePlan?.isEmpty == false
+        let legacyProgress = nudgeOwnsQuestion && cabin.kind == .progress
+        let cabinPrompt = pausePrompt == nil && !nudge.showsChoices && cabin.showsPip && !legacyProgress && !bar.isSending
             ? cabin.prompt
             : nil
         var phase = timerPhase(
