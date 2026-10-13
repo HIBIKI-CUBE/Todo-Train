@@ -2,8 +2,8 @@
 //  TimetableGuardLogic.swift
 //  Todo train
 //
-//  ATS: overlap of an adopted ダイヤ and a running ride. Pause is the net;
-//  driving stays with the person. Scores and "keep riding" are not here.
+//  Overlap of an adopted ダイヤ and a running ride. The net informs.
+//  It does not pause, board, or arrive. Driving stays with the person.
 //
 
 import Foundation
@@ -40,7 +40,6 @@ nonisolated enum TimetableRideState: Equatable, Sendable {
 nonisolated enum TimetableGuardEffect: Equatable, Sendable {
     case none
     case arm(blockID: UUID, notifiedAt: Date, protectionBoundary: Date)
-    case pauseAt(Date)
     case resolve
     case invalidate
 }
@@ -107,16 +106,13 @@ nonisolated enum TimetableGuardLogic {
             guard let overlapping, overlapping.id == openGuard.blockID else {
                 return .invalidate
             }
-            if now >= openGuard.protectionBoundary {
-                return .pauseAt(openGuard.protectionBoundary)
-            }
             return .none
         }
 
         guard let overlapping else { return .none }
         let boundary = protectionBoundary(blockStart: overlapping.startsAt, segmentStart: segmentStart)
         if now >= boundary {
-            return .pauseAt(boundary)
+            return .none
         }
         return .arm(
             blockID: overlapping.id,

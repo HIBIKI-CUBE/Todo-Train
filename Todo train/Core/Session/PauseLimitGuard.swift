@@ -14,7 +14,7 @@ nonisolated enum PauseLimitGuard {
         pausedCount < limit
     }
 
-    /// ATS が停めた枠は、占有が続くあいだ上限に数えない。
+    /// ダイヤを理由にした停車は、占有が続くあいだ上限に数えない。
     static func pausedCountTowardLimit(isHeld: [Bool]) -> Int {
         isHeld.filter { !$0 }.count
     }

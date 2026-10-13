@@ -18,7 +18,7 @@ final class SessionPresentation {
     var punctualityHapticTick: Int = 0
     /// Bumps when a 車内放送 panel appears.
     var checkInHapticTick: Int = 0
-    /// Shown in the 停車中 block after ATS. Cleared on 再乗車 / 発車.
+    /// Shown in the 停車中 block after a timetable pause. Cleared on 再乗車 / 発車.
     var timetableQuietMessage: String?
 
     var punctualityMoment: PunctualityMoment? { punctualityQueue.first }

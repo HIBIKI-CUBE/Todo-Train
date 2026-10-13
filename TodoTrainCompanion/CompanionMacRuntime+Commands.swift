@@ -2,7 +2,7 @@ import Foundation
 import TodoTrainSync
 
 extension CompanionMacRuntime {
-    /// PiP の停車と車内放送の停車は `user`。保護境界は `timetable` を渡す。
+    /// PiP の停車と車内放送の停車は `user`。ダイヤの時刻では送らない。
     func sendPause(heldBy: PauseHeldBy = .user) async {
         await sendRideCommand(.pause, heldBy: heldBy)
     }
@@ -31,6 +31,7 @@ extension CompanionMacRuntime {
         await sendRideCommand(.still)
     }
 
+    /// Older snaps may still carry `timetablePauseAt`. That time does not send pause.
     func maybeSendTimetablePause() {
         let view = overlayPresentation
         let pauseAt = snap?.timetablePauseAt

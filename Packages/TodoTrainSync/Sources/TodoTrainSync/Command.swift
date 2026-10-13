@@ -28,7 +28,7 @@ public struct CommandPlaintext: Codable, Equatable, Sendable {
     public var pipVisible: Bool?
     /// `presence` only. Unlocked, and the last input is inside the presence window.
     public var attending: Bool?
-    /// `pause` only. Absent on older Macs. `user` and `timetable` are applied; other values are `invalidPayload`.
+    /// `pause` only. Absent on older Macs, which is stored as `user`. `user` and `timetable` are applied; other values are `invalidPayload`. A timetable time does not choose the reason.
     public var heldBy: PauseHeldBy?
     /// `pauseInputReport` only. The open pause on the snap.
     public var pauseId: UUID?

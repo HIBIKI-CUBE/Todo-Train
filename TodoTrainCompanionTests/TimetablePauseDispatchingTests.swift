@@ -3,42 +3,23 @@ import Testing
 @testable import TodoTrainCompanion
 
 struct TimetablePauseDispatchingTests {
-    @Test func sendsOncePerBoundary() {
-        #expect(
-            TimetablePauseDispatching.shouldSend(
-                now: 200,
-                pauseAt: 180,
-                alreadySent: nil,
-                canPause: true,
-                isSending: false
+    @Test func timetableTimeDoesNotSendPause() {
+        for sample in [
+            (now: 200, pauseAt: Optional(180), alreadySent: Optional<Int>.none, canPause: true, isSending: false),
+            (now: 200, pauseAt: Optional(180), alreadySent: Optional(180), canPause: true, isSending: false),
+            (now: 100, pauseAt: Optional(180), alreadySent: Optional<Int>.none, canPause: true, isSending: false),
+            (now: 200, pauseAt: Optional(180), alreadySent: Optional<Int>.none, canPause: true, isSending: true),
+            (now: 180, pauseAt: Optional(180), alreadySent: Optional<Int>.none, canPause: true, isSending: false)
+        ] {
+            #expect(
+                !TimetablePauseDispatching.shouldSend(
+                    now: sample.now,
+                    pauseAt: sample.pauseAt,
+                    alreadySent: sample.alreadySent,
+                    canPause: sample.canPause,
+                    isSending: sample.isSending
+                )
             )
-        )
-        #expect(
-            !TimetablePauseDispatching.shouldSend(
-                now: 200,
-                pauseAt: 180,
-                alreadySent: 180,
-                canPause: true,
-                isSending: false
-            )
-        )
-        #expect(
-            !TimetablePauseDispatching.shouldSend(
-                now: 100,
-                pauseAt: 180,
-                alreadySent: nil,
-                canPause: true,
-                isSending: false
-            )
-        )
-        #expect(
-            !TimetablePauseDispatching.shouldSend(
-                now: 200,
-                pauseAt: 180,
-                alreadySent: nil,
-                canPause: true,
-                isSending: true
-            )
-        )
+        }
     }
 }

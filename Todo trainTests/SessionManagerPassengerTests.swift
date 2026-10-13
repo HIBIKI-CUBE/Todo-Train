@@ -34,7 +34,7 @@ struct SessionManagerPassengerTests {
         (try? context.fetch(FetchDescriptor<PassengerRide>())) ?? []
     }
 
-    @Test func ignoreLeavesNoRideAndATSStillStopsTheTicket() throws {
+    @Test func ignoreLeavesNoRideAndTheTicketKeepsRunning() throws {
         let (manager, context, clock, _) = try SessionManagerFixtures.makeHarness(now: start)
         try manager.startService()
         _ = insertBlock(context)
@@ -50,8 +50,9 @@ struct SessionManagerPassengerTests {
 
         clock.advance(by: 61)
         manager.reconcile()
-        #expect(manager.phase == .paused)
-        #expect(manager.activeSession?.timetableHeld == true)
+        #expect(manager.phase == .running)
+        #expect(manager.activeSession?.isPaused == false)
+        #expect(manager.activeSession?.timetableHeld == false)
         #expect(rides(context).isEmpty)
     }
 

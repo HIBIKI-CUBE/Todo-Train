@@ -75,7 +75,7 @@ extension SessionManager {
         pausedSessions.count
     }
 
-    /// 停車上限の分子。ATS が停めた枠は占有中は数えない。
+    /// 停車上限の分子。ダイヤを理由にした停車は占有中は数えない。
     var pausedCountTowardLimit: Int {
         PauseLimitGuard.pausedCountTowardLimit(isHeld: pausedSessions.map(\.timetableHeld))
     }

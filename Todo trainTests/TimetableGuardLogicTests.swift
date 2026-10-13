@@ -83,7 +83,7 @@ struct TimetableGuardLogicTests {
         #expect(effect == .none)
     }
 
-    @Test func afterGrace_pausesAtBoundary() {
+    @Test func afterGrace_keepsRunning() {
         let meeting = block(startOffset: -60)
         let boundary = now
         let open = TimetableOpenGuard(
@@ -99,23 +99,19 @@ struct TimetableGuardLogicTests {
             openGuard: open,
             now: now.addingTimeInterval(1)
         )
-        #expect(effect == .pauseAt(boundary))
+        #expect(effect == .none)
     }
 
-    @Test func noOpenGuardPastBoundary_stillPauses() {
+    @Test func noOpenGuardPastBoundary_doesNotPause() {
         let meeting = block(startOffset: -120)
         let segment = now.addingTimeInterval(-180)
-        let boundary = TimetableGuardLogic.protectionBoundary(
-            blockStart: meeting.startsAt,
-            segmentStart: segment
-        )
         let effect = TimetableGuardLogic.evaluate(
             ride: .running(sessionID: sessionID, segmentStart: segment),
             blocks: [meeting],
             openGuard: nil,
             now: now
         )
-        #expect(effect == .pauseAt(boundary))
+        #expect(effect == .none)
     }
 
     @Test func paused_resolvesOpenGuard() {

@@ -7,10 +7,6 @@ struct PauseHeldByTests {
     let session = UUID(uuidString: "11111111-1111-4111-8111-111111111111")!
     let boundary = 1_768_000_000
 
-    @Test func windowIsSixtySeconds() {
-        #expect(PauseReasonResolving.windowSeconds == 60)
-    }
-
     @Test func knownValuesMatchTheWireWords() {
         #expect(PauseHeldBy.knownRawValues == ["user", "timetable", "alarm", "switch", "passenger"])
         #expect(PauseHeldBy.user.rawValue == "user")
@@ -20,14 +16,14 @@ struct PauseHeldByTests {
     }
 
     @Test func explicitUserAndTimetableAreKept() {
-        #expect(PauseReasonResolving.resolve(heldBy: .user, arrivedAt: boundary, protectionBoundary: boundary) == .explicit(.user))
-        #expect(PauseReasonResolving.resolve(heldBy: .timetable, arrivedAt: boundary + 10_000, protectionBoundary: nil) == .explicit(.timetable))
+        #expect(PauseReasonResolving.resolve(heldBy: .user) == .explicit(.user))
+        #expect(PauseReasonResolving.resolve(heldBy: .timetable) == .explicit(.timetable))
     }
 
     @Test func macOnlyValuesAndUnknownAreInvalidPayload() {
         for heldBy in [PauseHeldBy.alarm, .rideSwitch, .passenger, .unknown("watch"), .unknown("")] {
             #expect(PauseReasonResolving.rejectsPauseCommand(heldBy))
-            #expect(PauseReasonResolving.resolve(heldBy: heldBy, arrivedAt: boundary, protectionBoundary: boundary) == .invalidPayload)
+            #expect(PauseReasonResolving.resolve(heldBy: heldBy) == .invalidPayload)
             let decision = RemotePauseEvaluating.evaluate(
                 openSessionId: session,
                 pausedCount: 0,
@@ -40,27 +36,8 @@ struct PauseHeldByTests {
         }
     }
 
-    @Test func missingHeldByInsideTheWindowInfersTimetable() {
-        for delta in [-60, 0, 60] {
-            let record = PauseReasonResolving.resolve(
-                heldBy: nil,
-                arrivedAt: boundary + delta,
-                protectionBoundary: boundary
-            )
-            #expect(record == .inferred(.timetable))
-        }
-    }
-
-    @Test func missingHeldByOutsideTheWindowInfersUser() {
-        for delta in [-61, 61, 10_000] {
-            let record = PauseReasonResolving.resolve(
-                heldBy: nil,
-                arrivedAt: boundary + delta,
-                protectionBoundary: boundary
-            )
-            #expect(record == .inferred(.user))
-        }
-        #expect(PauseReasonResolving.resolve(heldBy: nil, arrivedAt: boundary, protectionBoundary: nil) == .inferred(.user))
+    @Test func missingHeldByInfersUser() {
+        #expect(PauseReasonResolving.resolve(heldBy: nil) == .inferred(.user))
         #expect(!PauseReasonResolving.rejectsPauseCommand(nil))
     }
 

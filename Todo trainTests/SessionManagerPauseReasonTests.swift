@@ -64,15 +64,21 @@ struct SessionManagerPauseReasonTests {
         }
     }
 
-    @Test func atsProtectionPauseRecordsTimetable() throws {
-        try expectOpenPause(heldBy: .timetable, pausedOn: .iphone, inferred: false) { manager, context, clock, _ in
-            _ = insertBlock(context)
-            let ticket = try SessionManagerFixtures.makeTicket(context, seconds: 1800)
-            try manager.board(ticket: ticket)
-            clock.advance(by: 61)
-            manager.reconcile()
-            #expect(manager.activeSession?.timetableHeld == true)
-        }
+    @Test func adoptedOverlapDoesNotPause() throws {
+        let (manager, context, clock, _) = try SessionManagerFixtures.makeHarness(now: start)
+        try manager.startService()
+        _ = insertBlock(context)
+        let ticket = try SessionManagerFixtures.makeTicket(context, seconds: 1800)
+        try manager.board(ticket: ticket)
+        clock.advance(by: 61)
+        manager.reconcile()
+        clock.advance(by: 3_600)
+        manager.reconcile()
+        #expect(manager.phase == .running || manager.phase == .overtime)
+        #expect(manager.activeSession?.isPaused == false)
+        #expect(manager.activeSession?.pausedAt == nil)
+        #expect(manager.activeSession?.pauses.isEmpty == true)
+        #expect(manager.activeSession?.timetableHeld == false)
     }
 
     @Test func companionTimetableIsStoredAndOtherValuesAreRejected() throws {
@@ -110,10 +116,10 @@ struct SessionManagerPauseReasonTests {
         #expect(try openPause(held.activeSession).heldBy == .timetable)
     }
 
-    @Test func missingHeldByUsesArrivalNotCommandAt() throws {
-        try expectInferred(delta: 0, commandAtDelta: -10_000, heldBy: .timetable)
-        try expectInferred(delta: -60, commandAtDelta: 10_000, heldBy: .timetable)
-        try expectInferred(delta: 60, commandAtDelta: 0, heldBy: .timetable)
+    @Test func missingHeldByStaysUserBesideTheBoundary() throws {
+        try expectInferred(delta: 0, commandAtDelta: -10_000, heldBy: .user)
+        try expectInferred(delta: -60, commandAtDelta: 10_000, heldBy: .user)
+        try expectInferred(delta: 60, commandAtDelta: 0, heldBy: .user)
         try expectInferred(delta: 61, commandAtDelta: 0, heldBy: .user)
         try expectInferred(delta: -61, commandAtDelta: 0, heldBy: .user)
     }
