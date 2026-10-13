@@ -132,13 +132,17 @@ nonisolated enum CockpitFormat {
         return String(format: "%d:%02d", minutes, seconds)
     }
 
-    static func deadlineLabel(remaining: TimeInterval, deadline: Date?) -> String {
-        if remaining <= 0 { return "予定を超過" }
-        guard let deadline else { return "予定 —" }
+    static func scheduledLabel(deadline: Date?) -> String? {
+        guard let deadline else { return nil }
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "ja_JP")
         formatter.dateFormat = "予定 HH:mm"
         return formatter.string(from: deadline)
+    }
+
+    static func deadlineLabel(remaining: TimeInterval, deadline: Date?) -> String {
+        _ = remaining
+        return scheduledLabel(deadline: deadline) ?? "予定 —"
     }
 
     static func progress(elapsed: TimeInterval, budget: TimeInterval) -> Double {
@@ -148,10 +152,16 @@ nonisolated enum CockpitFormat {
 
     static func accessibilityTimerValue(remaining: TimeInterval, isStale: Bool, isOvertime: Bool) -> String {
         if isStale { return "表示の更新を待っています" }
-        if isOvertime || remaining < 0 { return "予定を超過" }
+        if isOvertime || remaining < 0 { return "予定の時刻を過ぎています" }
         let total = max(0, Int(remaining.rounded()))
         return "残り\(total / 60)分\(total % 60)秒"
     }
+}
+
+nonisolated enum CockpitChromeMode: Equatable {
+    case riding
+    case paused
+    case prompt(String)
 }
 
 /// Shared glanceable model for Session LA and Alarm LA.
@@ -165,6 +175,41 @@ nonisolated struct CockpitDisplayModel: Equatable {
     var pausedProgress: Double?
     var isStale: Bool
     var accessibilityTimer: String
+    var scheduledAt: Date? = nil
+    var checkInPrompt: String? = nil
+
+    var showsOvertimeMark: Bool {
+        switch clock {
+        case .overtime, .alert:
+            return true
+        default:
+            return phase == .overtime
+        }
+    }
+
+    var chromeMode: CockpitChromeMode {
+        if case .paused = clock { return .paused }
+        if showsOvertimeMark { return .riding }
+        if let checkInPrompt, !checkInPrompt.isEmpty {
+            return .prompt(checkInPrompt)
+        }
+        return .riding
+    }
+
+    /// Phase word under the title. Pause, the prompt, and overtime use the bottom row or the mark.
+    var inlineState: String? {
+        switch chromeMode {
+        case .riding where !showsOvertimeMark:
+            return headerState
+        default:
+            return nil
+        }
+    }
+
+    var gaugeCaption: String? {
+        if isStale { return "予定の確認中" }
+        return CockpitFormat.scheduledLabel(deadline: scheduledAt)
+    }
 
     static func session(
         title: String,
@@ -229,7 +274,9 @@ nonisolated struct CockpitDisplayModel: Equatable {
             clock: clock,
             phase: phase,
             headerState: headerState,
-            deadlineLabel: isPaused ? "停車中" : CockpitPresentation.deadlineLabel(from: snapshot),
+            deadlineLabel: isStale && !isOvertime
+                ? "予定の確認中"
+                : (CockpitFormat.scheduledLabel(deadline: deadline) ?? "予定 —"),
             budgetSeconds: budgetSeconds,
             pausedProgress: pausedProgress,
             isStale: isStale,
@@ -243,7 +290,9 @@ nonisolated struct CockpitDisplayModel: Equatable {
                     remaining: snapshot.remaining,
                     isStale: isStale,
                     isOvertime: isOvertime || snapshot.remaining <= 0
-                )
+                ),
+            scheduledAt: deadline,
+            checkInPrompt: hasPrompt ? prompt : nil
         )
     }
 }

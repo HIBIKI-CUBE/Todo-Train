@@ -55,6 +55,7 @@ struct FocusProgressBar: View {
     var occupancy: TimetableProgressOccupancy = .empty
     var pinch: Bool = false
     var overrun: Bool = false
+    var budgetSeconds: Int = 20 * 60
 
     private var clampedProgress: Double {
         min(max(progress, 0), 1)
@@ -62,49 +63,87 @@ struct FocusProgressBar: View {
 
     var body: some View {
         GeometryReader { proxy in
-            ZStack(alignment: .leading) {
-                Rectangle()
+            let width = proxy.size.width
+            let height = proxy.size.height
+            let planned = width * CGFloat(CockpitGaugeRange.plannedSpan)
+            let trackH: CGFloat = 6
+            let trackY = (height - trackH) / 2
+            let pointer = width * CGFloat(CockpitGaugeRange.trackFraction(progress: progress))
+            let plannedFill = min(pointer, planned)
+            let tail = max(pointer - planned, 0)
+            let fill = progress > 1 ? CockpitColors.red : phase.accentColor
+            ZStack(alignment: .topLeading) {
+                Capsule()
                     .fill(Color.white.opacity(0.08))
-                Rectangle()
-                    .fill(phase.accentColor)
-                    .frame(width: max(proxy.size.width * clampedProgress, progress > 0 ? 2 : 0))
-                if phase == .overtime, progress > 1 {
-                    Rectangle()
-                        .fill(TrainTheme.signalRed.opacity(0.45))
-                        .frame(width: 4)
-                        .frame(maxWidth: .infinity, alignment: .trailing)
+                    .frame(width: width, height: trackH)
+                    .offset(y: trackY)
+                Capsule()
+                    .fill(fill)
+                    .frame(width: max(plannedFill, progress > 0 ? 2 : 0), height: trackH)
+                    .offset(y: trackY)
+                if tail > 0 {
+                    Capsule()
+                        .fill(CockpitColors.red)
+                        .frame(width: tail, height: trackH)
+                        .offset(x: planned, y: trackY)
                 }
-                occupancyMarks(width: proxy.size.width, height: proxy.size.height)
+                occupancyMarks(plannedWidth: planned, trackH: trackH, trackY: trackY)
+                gaugeTicks(plannedWidth: planned, height: height, width: width)
+                if progress > 0 {
+                    let headW: CGFloat = 12
+                    let headH: CGFloat = 8
+                    TrainHeadShape()
+                        .fill(fill)
+                        .frame(width: headW, height: headH)
+                        .offset(
+                            x: min(max(pointer - headW * 0.72, 0), max(width - headW, 0)),
+                            y: (height - headH) / 2
+                        )
+                }
             }
         }
-        .frame(height: 10)
+        .frame(height: 14)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("進捗")
         .accessibilityValue("\(Int(clampedProgress * 100))パーセント")
     }
 
+    private func gaugeTicks(plannedWidth: CGFloat, height: CGFloat, width: CGFloat) -> some View {
+        let marks = CockpitGaugeTicks.fractions(budgetSeconds: budgetSeconds)
+        return ZStack(alignment: .topLeading) {
+            ForEach(Array(marks.enumerated()), id: \.offset) { _, tick in
+                let full = tick >= 0.999
+                let x = CGFloat(tick) * plannedWidth
+                Rectangle()
+                    .fill(full ? Color.white.opacity(0.92) : Color.white.opacity(0.5))
+                    .frame(width: full ? 1.5 : 1, height: full ? height : height * 0.72)
+                    .offset(x: min(max(x - 0.5, 0), max(width - 1.5, 0)), y: full ? 0 : height * 0.14)
+            }
+        }
+    }
+
     @ViewBuilder
-    private func occupancyMarks(width: CGFloat, height: CGFloat) -> some View {
+    private func occupancyMarks(plannedWidth: CGFloat, trackH: CGFloat, trackY: CGFloat) -> some View {
         let heat = pinch || overrun
         let band = heat ? LEDPhosphor.heat.opacity(overrun ? 0.5 : 0.42) : Color.white.opacity(0.28)
         let tick = heat ? LEDPhosphor.heat.opacity(0.95) : Color.white.opacity(0.92)
         if overrun, let start = occupancy.mark ?? occupancy.spanStart ?? occupancy.spanEnd {
             Rectangle()
                 .fill(LEDPhosphor.heat.opacity(0.22))
-                .frame(width: max(4, width * (1 - start)), height: height)
-                .offset(x: width * start)
+                .frame(width: max(4, plannedWidth * (1 - start)), height: trackH)
+                .offset(x: plannedWidth * start, y: trackY)
         }
         if let start = occupancy.spanStart, let end = occupancy.spanEnd, end > start {
             Capsule()
                 .fill(band)
-                .frame(width: max(6, width * (end - start)), height: height)
-                .offset(x: width * start)
+                .frame(width: max(6, plannedWidth * (end - start)), height: trackH)
+                .offset(x: plannedWidth * start, y: trackY)
         }
         if let mark = occupancy.mark {
             Capsule()
                 .fill(tick)
-                .frame(width: 5, height: height)
-                .offset(x: width * mark - 2.5)
+                .frame(width: 5, height: trackH)
+                .offset(x: plannedWidth * mark - 2.5, y: trackY)
         }
     }
 }

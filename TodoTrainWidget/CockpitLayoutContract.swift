@@ -240,3 +240,65 @@ nonisolated enum CockpitLayoutPolicy {
         return .compact
     }
 }
+
+/// Tick marks are fractions of the planned budget. The last mark is the full plan.
+nonisolated enum CockpitGaugeTicks {
+    static func fractions(budgetSeconds: Int, limited: Bool = false) -> [Double] {
+        if limited { return [0.5, 1] }
+        let budget = max(budgetSeconds, 1)
+        if budget < 5 * 60 {
+            return [0.25, 0.5, 0.75, 1]
+        }
+        let step: Int
+        if budget >= 20 * 60 {
+            step = 5 * 60
+        } else if budget >= 10 * 60 {
+            step = 2 * 60
+        } else {
+            step = 60
+        }
+        var marks: [Double] = []
+        var cursor = step
+        while cursor < budget, marks.count < 12 {
+            marks.append(Double(cursor) / Double(budget))
+            cursor += step
+        }
+        marks.append(1)
+        return marks
+    }
+}
+
+/// The track keeps a tail past the planned end so overtime can keep drawing.
+nonisolated enum CockpitGaugeRange {
+    /// Share of the track that is the planned budget. The rest is the overtime tail.
+    static let plannedSpan: Double = 0.8
+
+    static func trackFraction(progress: Double) -> Double {
+        min(max(progress, 0) * plannedSpan, 1)
+    }
+
+    /// Where `now` sits on the timer-interval track, including the overtime tail.
+    static func fractionAlongTrack(deadline: Date, budgetSeconds: Int, now: Date) -> Double {
+        let range = timerInterval(deadline: deadline, budgetSeconds: budgetSeconds)
+        let span = range.upperBound.timeIntervalSince(range.lowerBound)
+        guard span > 0 else { return 1 }
+        return min(max(now.timeIntervalSince(range.lowerBound) / span, 0), 1)
+    }
+
+    /// `ProgressView(timerInterval:)` from departure through the overtime tail.
+    static func timerInterval(deadline: Date, budgetSeconds: Int) -> ClosedRange<Date> {
+        let budget = TimeInterval(max(budgetSeconds, 1))
+        let overflow = budget * (1 - plannedSpan) / plannedSpan
+        let start = deadline.addingTimeInterval(-budget)
+        let end = deadline.addingTimeInterval(overflow)
+        if end >= start { return start...end }
+        return start...start
+    }
+
+    /// Counts up from the planned arrival. The upper bound only keeps the range valid.
+    static func countUp(since start: Date, now: Date = .now) -> ClosedRange<Date> {
+        let end = max(start.addingTimeInterval(6 * 3600), now.addingTimeInterval(60))
+        if end >= start { return start...end }
+        return now...now.addingTimeInterval(60)
+    }
+}

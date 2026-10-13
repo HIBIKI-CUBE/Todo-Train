@@ -105,6 +105,35 @@ final class FocusTimerPhaseTests: XCTestCase {
         )
         XCTAssertEqual(model.clock, .overtime)
         XCTAssertEqual(model.phase, .overtime)
+        XCTAssertTrue(model.showsOvertimeMark)
+        XCTAssertEqual(model.chromeMode, .riding)
+        XCTAssertNil(model.inlineState)
+        XCTAssertTrue(model.deadlineLabel.hasPrefix("予定 "))
+        XCTAssertFalse(model.deadlineLabel.contains("超過"))
+        XCTAssertFalse(model.accessibilityTimer.contains("超過"))
+    }
+
+    func testPausedAndPromptMoveTheBottomRow() {
+        let paused = CockpitDisplayModel.session(
+            title: "A",
+            deadline: Date().addingTimeInterval(90),
+            budgetSeconds: 300,
+            isOvertime: false,
+            isStale: false,
+            isPaused: true
+        )
+        XCTAssertEqual(paused.chromeMode, .paused)
+
+        let prompt = CockpitDisplayModel.session(
+            title: "A",
+            deadline: Date().addingTimeInterval(120),
+            budgetSeconds: 300,
+            isOvertime: false,
+            isStale: false,
+            checkInPrompt: "まだ乗ってる？"
+        )
+        XCTAssertEqual(prompt.chromeMode, .prompt("まだ乗ってる？"))
+        XCTAssertNil(prompt.inlineState)
     }
 
     func testCheckInPromptCanKeepTheTimerColor() {
