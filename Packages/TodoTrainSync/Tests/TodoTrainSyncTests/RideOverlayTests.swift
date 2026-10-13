@@ -437,6 +437,28 @@ struct RideOverlayGeometryTests {
         #expect(placement.state.corner == .bottomTrailing)
     }
 
+    @Test func occupancyMarksStayInsideTheAxis() {
+        let length = 280.0
+        let edge = RideOverlayGeometry.containedSpan(start: 0.99, end: 1, length: length, minimum: 6)
+        #expect(edge?.origin == length - 6)
+        #expect(edge?.length == 6)
+        let tick = RideOverlayGeometry.containedTick(position: 1, length: length, thickness: 5)
+        #expect(tick?.origin == length - 5)
+        #expect(tick?.length == 5)
+        let start = RideOverlayGeometry.containedTick(position: 0, length: length, thickness: 5)
+        #expect(start?.origin == 0)
+        #expect(start?.length == 5)
+        let mid = RideOverlayGeometry.containedSpan(start: 0.2, end: 0.5, length: length)
+        #expect(mid?.origin == 56)
+        #expect(mid?.length == 84)
+        let full = RideOverlayGeometry.containedSpan(start: 0, end: 1, length: length)
+        #expect(full?.origin == 0)
+        #expect(full?.length == length)
+        #expect(RideOverlayGeometry.containedSpan(start: 0.4, end: 0.4, length: length) == nil)
+        #expect(RideOverlayGeometry.containedSpan(start: 0.2, end: 0.5, length: 0) == nil)
+        #expect(RideOverlayGeometry.containedTick(position: 0.5, length: 0, thickness: 2) == nil)
+    }
+
     @Test func fillLengthKeepsASliverUntilEmpty() {
         #expect(RideOverlayGeometry.fillLength(progress: 0, total: 280) == 0)
         #expect(RideOverlayGeometry.fillLength(progress: 0.5, total: 280) == 140)

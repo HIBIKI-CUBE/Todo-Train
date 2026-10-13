@@ -48,6 +48,7 @@ struct CompanionRideOverlayView: View {
             width: CGFloat(RideOverlayGeometry.cardSize.width),
             height: CGFloat(RideOverlayGeometry.cardSize.height)
         )
+        .clipped()
         .accessibilityElement(children: .contain)
         .accessibilityLabel(
             presentation.showsArrivalGap
@@ -127,7 +128,9 @@ struct CompanionRideOverlayView: View {
                 classicColumn
             }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.black)
         .clipShape(cardShape)
         .overlay {
@@ -145,37 +148,62 @@ struct CompanionRideOverlayView: View {
                 .minimumScaleFactor(0.45)
                 .padding(.horizontal, 12)
                 .padding(.top, 10)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
             if let line = presentation.failureLine {
                 Text(line)
                     .font(.caption)
                     .foregroundStyle(RideOverlayPalette.overtime)
                     .lineLimit(2)
+                    .minimumScaleFactor(0.8)
                     .padding(.horizontal, 12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             } else if let prompt = presentation.cabinPrompt {
                 Text(prompt)
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(.white)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.6)
                     .padding(.horizontal, 12)
-            } else if let occupancy = presentation.occupancy {
-                occupancyStrip(occupancy)
-            } else if let line = presentation.nextBlockLine {
-                Text(line)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.85))
-                    .lineLimit(1)
-                    .padding(.horizontal, 12)
-            } else if let status = presentation.statusLine {
-                Text(status)
-                    .font(.caption)
-                    .foregroundStyle(.white.opacity(0.7))
-                    .lineLimit(1)
-                    .padding(.horizontal, 12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                scheduleSlot
             }
 
             Spacer(minLength: 0)
             bottomRow
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    /// One line, always the same height, so a schedule appearing does not move the title or the bar.
+    private var scheduleSlot: some View {
+        scheduleReadout
+            .padding(.horizontal, 12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(height: 24, alignment: .leading)
+            .clipped()
+    }
+
+    @ViewBuilder
+    private var scheduleReadout: some View {
+        if let occupancy = presentation.occupancy {
+            occupancyStrip(occupancy)
+        } else if let line = presentation.nextBlockLine {
+            Text(line)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.85))
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+        } else if let status = presentation.statusLine {
+            Text(status)
+                .font(.caption)
+                .foregroundStyle(.white.opacity(0.7))
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        } else {
+            Color.clear
+                .accessibilityHidden(true)
         }
     }
 
@@ -372,26 +400,28 @@ struct CompanionRideOverlayView: View {
     }
 
     private func occupancyStrip(_ occupancy: RideOccupancyInstrument) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 6) {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text(occupancy.prefix == "次" ? "次" : "いま")
-                .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(.white)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.7))
+                .frame(width: 28, alignment: .leading)
             Text(occupancy.title)
-                .font(.system(size: 16, weight: .semibold))
+                .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(.white)
                 .lineLimit(1)
-                .minimumScaleFactor(0.75)
-            Spacer(minLength: 4)
-            Text(occupancy.clock)
-                .font(.system(size: 14, weight: .semibold).monospacedDigit())
-                .foregroundStyle(.white.opacity(0.88))
-            if let minutes = occupancy.minutes {
-                Text("\(minutes)分")
-                    .font(.system(size: 13, weight: .semibold).monospacedDigit())
-                    .foregroundStyle(.white.opacity(0.88))
+                .minimumScaleFactor(0.6)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(occupancy.clock)
+                if let minutes = occupancy.minutes {
+                    Text("\(minutes)分")
+                }
             }
+            .font(.system(size: 13, weight: .semibold, design: .rounded).monospacedDigit())
+            .foregroundStyle(.white.opacity(0.7))
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
         }
-        .padding(.horizontal, 12)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(occupancy.spokenLine)
     }
@@ -459,17 +489,21 @@ struct CompanionRideOverlayView: View {
     @ViewBuilder
     private func occupancyProgressMarks(width: CGFloat, height: CGFloat) -> some View {
         if let occupancy = presentation.occupancy {
-            if let start = occupancy.spanStart, let end = occupancy.spanEnd, end > start {
-                Capsule()
-                    .fill(Color.white.opacity(0.28))
-                    .frame(width: max(6, width * (end - start)), height: height)
-                    .offset(x: width * start)
+            if let start = occupancy.spanStart, let end = occupancy.spanEnd, end > start,
+               let span = RideOverlayGeometry.containedSpan(start: start, end: end, length: width) {
+                let bandHeight = min(CGFloat(4), height)
+                Rectangle()
+                    .fill(Color.white.opacity(0.55))
+                    .frame(width: span.length, height: bandHeight)
+                    .frame(height: height, alignment: .top)
+                    .offset(x: span.origin)
             }
-            if let mark = occupancy.markPosition {
-                Capsule()
+            if let mark = occupancy.markPosition,
+               let tick = RideOverlayGeometry.containedTick(position: mark, length: width, thickness: 2) {
+                Rectangle()
                     .fill(Color.white.opacity(0.92))
-                    .frame(width: 5, height: height)
-                    .offset(x: width * mark - 2.5)
+                    .frame(width: tick.length, height: height)
+                    .offset(x: tick.origin)
             }
         }
     }
@@ -599,17 +633,19 @@ struct CompanionRideOverlayView: View {
     private func occupancyPeekMarks(height: CGFloat) -> some View {
         if let occupancy = presentation.occupancy {
             ZStack(alignment: .bottom) {
-                if let start = occupancy.spanStart, let end = occupancy.spanEnd, end > start {
+                if let start = occupancy.spanStart, let end = occupancy.spanEnd, end > start,
+                   let span = RideOverlayGeometry.containedSpan(start: start, end: end, length: height) {
                     Rectangle()
                         .fill(Color.white.opacity(0.28))
-                        .frame(height: max(4, height * (end - start)))
-                        .padding(.bottom, height * start)
+                        .frame(height: span.length)
+                        .padding(.bottom, span.origin)
                 }
-                if let mark = occupancy.markPosition {
-                    Capsule()
+                if let mark = occupancy.markPosition,
+                   let tick = RideOverlayGeometry.containedTick(position: mark, length: height, thickness: 2) {
+                    Rectangle()
                         .fill(Color.white.opacity(0.92))
-                        .frame(height: 5)
-                        .padding(.bottom, max(0, height * mark - 2.5))
+                        .frame(height: tick.length)
+                        .padding(.bottom, tick.origin)
                 }
             }
         }
@@ -654,3 +690,95 @@ enum RideOverlayPalette {
         presentation.timerPhase == .overtime ? .white : .black
     }
 }
+
+#if DEBUG
+@MainActor
+func ridePreview(_ presentation: RideOverlayPresentation) -> some View {
+    let model = CompanionRideOverlayModel()
+    model.presentation = presentation
+    return CompanionRideOverlayView(
+        model: model,
+        onPause: {},
+        onResume: {},
+        onStill: {},
+        onRestore: {},
+        onNudgeChoice: { _ in },
+        onExtendPreset: { _ in },
+        onCancelExtend: {},
+        onBoardReserved: {},
+        onCloseGap: {},
+        onPausePrompt: { _ in }
+    )
+}
+
+func rideSnap(
+    title: String,
+    nextTitle: String? = nil,
+    startsAt: Int? = nil,
+    endsAt: Int? = nil
+) -> RideOverlayPresentation {
+    let snap = SnapPlaintext(
+        rev: 1,
+        sessionId: UUID(uuidString: "00000000-0000-0000-0000-000000000001"),
+        ticketId: UUID(uuidString: "00000000-0000-0000-0000-000000000002"),
+        title: title,
+        phase: .running,
+        startedAt: 1_768_000_000,
+        estimatedSeconds: 1_500,
+        pausedAccumulated: 0,
+        pausedAt: nil,
+        boardedDeviceID: nil,
+        serviceActive: true,
+        cabinEnabled: false,
+        nextBlockTitle: nextTitle,
+        nextBlockStartsAt: startsAt,
+        nextBlockEndsAt: endsAt
+    )
+    return RideOverlayPresentation.make(
+        MenuBarInput(
+            pairing: .paired,
+            snap: snap,
+            now: 1_768_000_120,
+            cabinEnabledLocal: false
+        )
+    )
+}
+
+@MainActor
+func ridePreviewCanvas(_ presentation: RideOverlayPresentation) -> some View {
+    ridePreview(presentation)
+        .padding(24)
+        .background(Color(white: 0.32))
+}
+
+#Preview("予定なし") {
+    ridePreviewCanvas(rideSnap(title: "週次レポート"))
+}
+
+#Preview("短い予定") {
+    ridePreviewCanvas(
+        rideSnap(title: "週次レポート", nextTitle: "定例", startsAt: 1_768_000_400)
+    )
+}
+
+#Preview("長い予定") {
+    ridePreviewCanvas(
+        rideSnap(
+            title: "週次レポートの準備を終えてからレビューに入る",
+            nextTitle: "四半期の振り返りと次のスプリントの計画を書く",
+            startsAt: 1_768_003_780
+        )
+    )
+}
+
+#Preview("いまの占有") {
+    ridePreviewCanvas(
+        rideSnap(
+            title: "原稿",
+            nextTitle: "デザインレビュー",
+            startsAt: 1_768_000_000,
+            endsAt: 1_768_001_320
+        )
+    )
+}
+#endif
