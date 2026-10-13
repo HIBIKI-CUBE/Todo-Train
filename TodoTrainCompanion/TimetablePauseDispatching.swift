@@ -1,8 +1,6 @@
-import Foundation
-import TodoTrainSync
-
 enum TimetablePauseDispatching {
-    /// Send pause once per protection boundary. `alreadySent` is that boundary's unix time.
+    /// A timetable time does not send pause. The arguments stay so a caller
+    /// cannot treat `now >= pauseAt` as a reason to stop the ride.
     static func shouldSend(
         now: Int,
         pauseAt: Int?,
@@ -10,9 +8,7 @@ enum TimetablePauseDispatching {
         canPause: Bool,
         isSending: Bool
     ) -> Bool {
-        guard let pauseAt, now >= pauseAt else { return false }
-        guard canPause, !isSending else { return false }
-        guard alreadySent != pauseAt else { return false }
-        return true
+        _ = (now, pauseAt, alreadySent, canPause, isSending)
+        return false
     }
 }

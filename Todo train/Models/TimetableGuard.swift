@@ -2,7 +2,7 @@
 //  TimetableGuard.swift
 //  Todo train
 //
-//  ATS: 載せた枠と走行が重なったときの網。UI には出さない。
+//  載せた枠と走行が重なったときの知らせ。停車はしない。UI の名前には出さない。
 //
 
 import Foundation

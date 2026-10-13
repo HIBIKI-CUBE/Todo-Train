@@ -207,12 +207,6 @@ extension SessionManager {
         presentation.clearTimetableQuietMessage()
     }
 
-    func openTimetableProtectionBoundary(for sessionID: UUID) -> Date? {
-        fetchOpenTimetableGuard().flatMap { guardModel in
-            guardModel.sessionID == sessionID ? guardModel.protectionBoundary : nil
-        }
-    }
-
     func fetchActiveTimetableBlocks() -> [TimetableBlock] {
         fetchTimetableBlocks().filter(\.isActive)
     }
@@ -272,9 +266,6 @@ extension SessionManager {
                 blockID: blockID,
                 fireAt: notifiedAt
             )
-        case .pauseAt(let pauseAt):
-            openGuard?.resolvedAt = now
-            try? applyTimetableProtectionPause(at: pauseAt)
         case .resolve:
             let previousResolved = openGuard?.resolvedAt
             openGuard?.resolvedAt = now
@@ -292,24 +283,6 @@ extension SessionManager {
             }
             cancelTimetableNotification(sessionID: openGuard?.sessionID ?? activeSession?.id)
         }
-    }
-
-    private func applyTimetableProtectionPause(at pauseAt: Date) throws {
-        guard let session = activeSession, session.isOpen, !session.isPaused else { return }
-        let clamped = max(pauseAt, session.segmentStartedAt ?? session.startedAt)
-        flushToPaused(session, now: clamped, heldBy: .timetable, pausedOn: .iphone, heldByInferred: false)
-        session.timetableHeld = true
-        phase = .paused
-        timetableQuietMessage = TimetableCopy.quiet
-        noteCabinActivity(now: clamped, clearPendingIdle: true)
-        bumpCompanionSync()
-        if isAlarmKitEndBellActive {
-            alarmScheduler.pause(sessionID: session.id)
-        } else {
-            alarmScheduler.cancel(sessionID: session.id)
-        }
-        cancelTimetableNotification(sessionID: session.id)
-        try save()
     }
 
     private func scheduleTimetableNotification(guardID: UUID, blockID: UUID, fireAt: Date) {

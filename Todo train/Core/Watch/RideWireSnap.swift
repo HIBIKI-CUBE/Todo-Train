@@ -17,11 +17,6 @@ enum RideWireSnap {
         let nudge = sessionManager.nudgeSnapFields(now: now)
         let fit = sessionManager.timetableFit()
         let visible = fit.visibleOccupancy
-        let pauseAt = sessionManager.activeSession.flatMap { session -> Int? in
-            guard session.isOpen, !session.isPaused else { return nil }
-            return sessionManager.openTimetableProtectionBoundary(for: session.id)
-                .map { Int($0.timeIntervalSince1970) }
-        }
         var plaintext = CompanionSnapBuilding.snap(
             rev: rev,
             phase: sessionManager.phase,
@@ -33,7 +28,8 @@ enum RideWireSnap {
             nextBlockTitle: visible?.title,
             nextBlockStartsAt: visible.map { Int($0.startsAt.timeIntervalSince1970) },
             nextBlockEndsAt: visible.map { Int($0.endsAt.timeIntervalSince1970) },
-            timetablePauseAt: pauseAt,
+            // Older Macs paused when this field arrived. Overlap does not publish a pause time.
+            timetablePauseAt: nil,
             nudge: nudge.nudge,
             nudgePlan: nudge.plan,
             reserved: nudge.reserved,

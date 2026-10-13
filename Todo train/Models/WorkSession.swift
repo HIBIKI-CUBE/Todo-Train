@@ -44,7 +44,7 @@ final class WorkSession {
     var awayDueAt: Date?
     /// Device that boarded this ride. Alarms / 車内放送 / LA は自機だけ。
     var boardedDeviceID: String?
-    /// ATS が停めた停車。占有が続いているあいだは上限に数えない。
+    /// ダイヤを理由にした停車。占有が続いているあいだは上限に数えない。
     var timetableHeld: Bool = false
     /// 鳴らした声掛けの段。既定は空で、まだ読まない。
     var nudgeFiredStagesRaw: [String] = []

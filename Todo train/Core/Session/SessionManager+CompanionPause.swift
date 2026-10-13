@@ -11,19 +11,11 @@ enum CompanionPauseRejection: Error, Equatable {
 }
 
 extension SessionManager {
-    /// Apply a Mac `pause`. Missing `heldBy` is an older Mac and is inferred.
-    /// Arrival is this iPhone's clock, not `command.at`.
+    /// Apply a Mac `pause`. Missing `heldBy` is an older Mac and is the person's pause.
+    /// A timetable boundary does not change the reason.
     func applyCompanionPause(_ command: CommandPlaintext, now: Date? = nil) throws {
         let now = now ?? clock.now
-        let boundary = activeSession.flatMap { session -> Int? in
-            guard let date = openTimetableProtectionBoundary(for: session.id) else { return nil }
-            return Int(date.timeIntervalSince1970)
-        }
-        switch PauseReasonResolving.resolve(
-            heldBy: command.heldBy,
-            arrivedAt: Int(now.timeIntervalSince1970),
-            protectionBoundary: boundary
-        ) {
+        switch PauseReasonResolving.resolve(heldBy: command.heldBy) {
         case .invalidPayload:
             throw CompanionPauseRejection.invalidPayload
         case .explicit(let heldBy):

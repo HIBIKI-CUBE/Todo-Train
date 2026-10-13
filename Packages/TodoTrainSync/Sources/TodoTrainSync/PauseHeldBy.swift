@@ -59,14 +59,9 @@ extension PauseHeldBy: Codable {
 
 /// How a `pause` command becomes a stored reason.
 ///
-/// A missing `heldBy` is an older Mac. Arrival is the iPhone clock when the
-/// command is applied, not `command.at`. Within ±60 seconds of this ride's
-/// protection boundary the reason is `timetable`; otherwise `user`. The window
-/// is wide because reading a user pause as timetable only skips a later
-/// question, while the reverse would ask during a meeting.
+/// A missing `heldBy` is an older Mac. It is the person's pause (`user`).
+/// A timetable boundary does not change the reason. The clock does not pause.
 public enum PauseReasonResolving {
-    public static let windowSeconds = 60
-
     public enum Record: Equatable, Sendable {
         case explicit(PauseHeldBy)
         case inferred(PauseHeldBy)
@@ -78,18 +73,11 @@ public enum PauseReasonResolving {
         return !heldBy.isPauseCommandValue
     }
 
-    /// `arrivedAt` and `protectionBoundary` are Unix seconds. Nil boundary is `user`.
-    public static func resolve(
-        heldBy: PauseHeldBy?,
-        arrivedAt: Int,
-        protectionBoundary: Int?
-    ) -> Record {
+    /// Missing `heldBy` is `user`. Explicit `user` and `timetable` stay as sent.
+    public static func resolve(heldBy: PauseHeldBy?) -> Record {
         if let heldBy {
             if heldBy.isPauseCommandValue { return .explicit(heldBy) }
             return .invalidPayload
-        }
-        if let protectionBoundary, abs(arrivedAt - protectionBoundary) <= windowSeconds {
-            return .inferred(.timetable)
         }
         return .inferred(.user)
     }

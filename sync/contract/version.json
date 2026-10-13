@@ -1,7 +1,7 @@
 {
-  "contract": 13,
+  "contract": 14,
   "minReadable": 3,
-  "fingerprint": "522b4103a9e2f32218c7042f010d11142d312caafed71c8da7c71ff948227d51",
+  "fingerprint": "24fdd85597bcf247358844233697ca692c3f8a35b6e55652367c3ed1ab16c2f5",
   "history": [
     {
       "contract": 3,
@@ -57,6 +57,11 @@
       "contract": 13,
       "date": "2026-10-13",
       "note": "停車中の snap に測った秒を足し、記録は下げない"
+    },
+    {
+      "contract": 14,
+      "date": "2026-10-13",
+      "note": "予定の時刻では停車しない。理由の無い停車は user"
     }
   ]
 }

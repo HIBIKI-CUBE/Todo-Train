@@ -47,7 +47,7 @@ struct SessionManagerTimetableTests {
         #expect(manager.timetableQuietMessage == nil)
     }
 
-    @Test func overlap_armsThenPausesAtBoundary() throws {
+    @Test func overlap_armsAndKeepsTheRideRunning() throws {
         let notifier = InMemoryCheckInNotifier()
         let (manager, context, clock, _) = try SessionManagerFixtures.makeHarness(
             now: start,
@@ -69,17 +69,63 @@ struct SessionManagerTimetableTests {
         clock.advance(by: 61)
         manager.reconcile()
 
-        #expect(manager.phase == .paused)
-        #expect(manager.activeSession?.pausedAt == start.addingTimeInterval(60))
-        #expect(manager.activeSession?.elapsedSeconds(at: clock.now) == 60)
-        #expect(manager.timetableQuietMessage == TimetableCopy.quiet)
-        #expect(armed[0].resolvedAt != nil)
-        #expect(manager.activeSession?.timetableHeld == true)
+        #expect(manager.phase == .running)
+        #expect(manager.activeSession?.isPaused == false)
+        #expect(manager.activeSession?.pausedAt == nil)
+        #expect(manager.activeSession?.pauses.isEmpty == true)
+        #expect(manager.activeSession?.elapsedSeconds(at: clock.now) == 61)
+        #expect(manager.timetableQuietMessage == nil)
+        #expect(armed[0].resolvedAt == nil)
+        #expect(manager.activeSession?.timetableHeld == false)
         #expect(manager.pausedCountTowardLimit == 0)
-        #expect(manager.pausedTicketCount == 1)
+        #expect(manager.pausedTicketCount == 0)
     }
 
-    @Test func backgroundRecover_pausesAtBoundary() throws {
+    @Test func blockStartWhileRiding_doesNotPause() throws {
+        let (manager, context, clock, _) = try SessionManagerFixtures.makeHarness(now: start)
+        try manager.startService()
+        _ = insertBlock(context, startOffset: 300)
+        let ticket = try SessionManagerFixtures.makeTicket(context, seconds: 1800)
+        try manager.board(ticket: ticket)
+        #expect(manager.phase == .running)
+        #expect(try context.fetch(FetchDescriptor<TimetableGuard>()).isEmpty)
+
+        clock.advance(by: 300)
+        manager.reconcile()
+        #expect(manager.phase == .running)
+        #expect(try context.fetch(FetchDescriptor<TimetableGuard>()).count == 1)
+
+        clock.advance(by: 120)
+        manager.reconcile()
+        #expect(manager.phase == .running)
+        #expect(manager.activeSession?.pausedAt == nil)
+        #expect(manager.activeSession?.pauses.isEmpty == true)
+        #expect(manager.timetableQuietMessage == nil)
+    }
+
+    @Test func calendarNoticeStartWhileRiding_doesNotPause() async throws {
+        let board = InMemoryCalendarBoard()
+        board.events = [
+            calendarOccurrence(id: "n", calendar: "work", title: "定例", startOffset: 300)
+        ]
+        let (manager, context, clock, _) = try SessionManagerFixtures.makeHarness(
+            now: start,
+            calendarBoard: board
+        )
+        try manager.startService()
+        await manager.refreshCalendarBoard()
+        let ticket = try SessionManagerFixtures.makeTicket(context, seconds: 1800)
+        try manager.board(ticket: ticket)
+
+        clock.advance(by: 360)
+        manager.reconcile()
+        #expect(manager.phase == .running)
+        #expect(manager.activeSession?.isPaused == false)
+        #expect(manager.activeSession?.pauses.isEmpty == true)
+        #expect(try context.fetch(FetchDescriptor<TimetableGuard>()).isEmpty)
+    }
+
+    @Test func backgroundRecover_doesNotBackdateAPause() throws {
         let (manager, context, clock, _) = try SessionManagerFixtures.makeHarness(now: start)
         try manager.startService()
         _ = insertBlock(context, startOffset: 0)
@@ -89,9 +135,10 @@ struct SessionManagerTimetableTests {
         clock.advance(by: 180)
         manager.reconcile()
 
-        #expect(manager.phase == .paused)
-        #expect(manager.activeSession?.pausedAt == start.addingTimeInterval(60))
-        #expect(manager.timetableQuietMessage == TimetableCopy.quiet)
+        #expect(manager.phase == .running)
+        #expect(manager.activeSession?.pausedAt == nil)
+        #expect(manager.activeSession?.pauses.isEmpty == true)
+        #expect(manager.timetableQuietMessage == nil)
     }
 
     @Test func boardDuringAdoptedMeeting_stillArms() throws {
@@ -150,13 +197,14 @@ struct SessionManagerTimetableTests {
 
         clock.advance(by: 61)
         manager.reconcile()
-        #expect(manager.phase == .paused)
+        #expect(manager.phase == .running)
 
         clock.advance(by: 80)
         manager.reconcile()
         let open = try context.fetch(FetchDescriptor<TimetableGuard>()).filter(\.isOpen)
         #expect(open.isEmpty)
-        #expect(manager.phase == .paused)
+        #expect(manager.phase == .running)
+        #expect(manager.activeSession?.pauses.isEmpty == true)
     }
 
     @Test func endBell_usesEarlierOfBudgetAndNextBlock() throws {
@@ -227,13 +275,12 @@ struct SessionManagerTimetableTests {
     }
 
     @Test func resume_clearsQuietMessage() throws {
-        let (manager, context, clock, _) = try SessionManagerFixtures.makeHarness(now: start)
+        let (manager, context, _, _) = try SessionManagerFixtures.makeHarness(now: start)
         try manager.startService()
         _ = insertBlock(context, startOffset: 0)
         let ticket = try SessionManagerFixtures.makeTicket(context, seconds: 1800)
         try manager.board(ticket: ticket)
-        clock.advance(by: 61)
-        manager.reconcile()
+        try manager.pause(timetableHeld: true)
         #expect(manager.timetableQuietMessage == TimetableCopy.quiet)
 
         try manager.resume()
@@ -241,7 +288,7 @@ struct SessionManagerTimetableTests {
         #expect(manager.activeSession?.timetableHeld == false)
     }
 
-    @Test func resumeWithoutUnadopt_rearmsAndPausesAgain() throws {
+    @Test func resumeWithoutUnadopt_rearmsButDoesNotPause() throws {
         let (manager, context, clock, _) = try SessionManagerFixtures.makeHarness(now: start)
         try manager.startService()
         _ = insertBlock(context, startOffset: 0, duration: 1800)
@@ -249,8 +296,9 @@ struct SessionManagerTimetableTests {
         try manager.board(ticket: ticket)
         clock.advance(by: 61)
         manager.reconcile()
-        #expect(manager.phase == .paused)
+        #expect(manager.phase == .running)
 
+        try manager.pause()
         try manager.resume()
         #expect(manager.phase == .running)
         let armed = try context.fetch(FetchDescriptor<TimetableGuard>()).filter(\.isOpen)
@@ -258,7 +306,8 @@ struct SessionManagerTimetableTests {
 
         clock.advance(by: 61)
         manager.reconcile()
-        #expect(manager.phase == .paused)
+        #expect(manager.phase == .running)
+        #expect(manager.activeSession?.pausedAt == nil)
     }
 
     @Test func unadoptCurrent_whileRunning_letsRideContinue() throws {
@@ -279,14 +328,13 @@ struct SessionManagerTimetableTests {
         #expect(manager.timetableQuietMessage == nil)
     }
 
-    @Test func unadoptCurrent_afterAtsPause_resumeDoesNotRearm() throws {
+    @Test func unadoptWhilePaused_resumeDoesNotRearm() throws {
         let (manager, context, clock, _) = try SessionManagerFixtures.makeHarness(now: start)
         try manager.startService()
         _ = insertBlock(context, startOffset: 0, duration: 1800)
         let ticket = try SessionManagerFixtures.makeTicket(context, seconds: 1800)
         try manager.board(ticket: ticket)
-        clock.advance(by: 61)
-        manager.reconcile()
+        try manager.pause()
         #expect(manager.phase == .paused)
         #expect(manager.timetableFit().currentBlock != nil)
 
@@ -378,30 +426,24 @@ struct SessionManagerTimetableTests {
         #expect(manager.noticeOccurrences.isEmpty)
     }
 
-    @Test func atsHold_doesNotConsumePauseLimit() throws {
-        let (manager, context, clock, _) = try SessionManagerFixtures.makeHarness(now: start)
+    @Test func timetablePause_doesNotConsumePauseLimitWhileOccupancyContinues() throws {
+        let (manager, context, _, _) = try SessionManagerFixtures.makeHarness(now: start)
         try manager.startService()
         _ = insertBlock(context, startOffset: 0, duration: 3600)
         let a = try SessionManagerFixtures.makeTicket(context, title: "A", seconds: 1800)
         let b = try SessionManagerFixtures.makeTicket(context, title: "B", seconds: 1800)
-        let c = try SessionManagerFixtures.makeTicket(context, title: "C", seconds: 1800)
 
         try manager.board(ticket: a)
-        clock.advance(by: 61)
-        manager.reconcile()
+        try manager.pause(timetableHeld: true)
         #expect(manager.activeSession?.timetableHeld == true)
         #expect(manager.pausedCountTowardLimit == 0)
 
         try manager.board(ticket: b)
         #expect(manager.phase == .running)
-        clock.advance(by: 61)
-        manager.reconcile()
-        #expect(manager.pausedTicketCount == 2)
+        #expect(manager.activeSession?.ticket?.title == "B")
+        #expect(manager.activeSession?.isPaused == false)
+        #expect(manager.pausedTicketCount == 1)
         #expect(manager.pausedCountTowardLimit == 0)
-
-        try manager.board(ticket: c)
-        #expect(manager.phase == .running)
-        #expect(manager.activeSession?.ticket?.title == "C")
     }
 
     @Test func occupancyEnd_clearsQuietAndHold() throws {
@@ -410,12 +452,11 @@ struct SessionManagerTimetableTests {
         _ = insertBlock(context, startOffset: 0, duration: 180)
         let ticket = try SessionManagerFixtures.makeTicket(context, seconds: 1800)
         try manager.board(ticket: ticket)
-        clock.advance(by: 61)
-        manager.reconcile()
+        try manager.pause(timetableHeld: true)
         #expect(manager.timetableQuietMessage == TimetableCopy.quiet)
         #expect(manager.activeSession?.timetableHeld == true)
 
-        clock.advance(by: 130)
+        clock.advance(by: 181)
         manager.reconcile()
         #expect(manager.phase == .paused)
         #expect(manager.timetableQuietMessage == nil)
