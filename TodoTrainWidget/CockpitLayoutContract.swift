@@ -277,6 +277,14 @@ nonisolated enum CockpitGaugeRange {
         min(max(progress, 0) * plannedSpan, 1)
     }
 
+    /// Where `now` sits on the timer-interval track, including the overtime tail.
+    static func fractionAlongTrack(deadline: Date, budgetSeconds: Int, now: Date) -> Double {
+        let range = timerInterval(deadline: deadline, budgetSeconds: budgetSeconds)
+        let span = range.upperBound.timeIntervalSince(range.lowerBound)
+        guard span > 0 else { return 1 }
+        return min(max(now.timeIntervalSince(range.lowerBound) / span, 0), 1)
+    }
+
     /// `ProgressView(timerInterval:)` from departure through the overtime tail.
     static func timerInterval(deadline: Date, budgetSeconds: Int) -> ClosedRange<Date> {
         let budget = TimeInterval(max(budgetSeconds, 1))

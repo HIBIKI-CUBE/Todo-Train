@@ -91,7 +91,6 @@ struct CockpitActivityChrome<RideButton: View, ResumeButton: View, PromptButtons
                 titleBlock
                 Spacer(minLength: 4)
                 CockpitFaceTimer(model: model, metrics: metrics, limitedWidth: limitedWidth)
-                    .layoutPriority(1)
                 trailingSlot
             }
             .frame(maxHeight: metrics.fillsTimer ? .infinity : nil)
@@ -116,7 +115,7 @@ struct CockpitActivityChrome<RideButton: View, ResumeButton: View, PromptButtons
                     .font(.system(size: metrics.titleSize, weight: .semibold))
                     .foregroundStyle(CockpitColors.ink)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.7)
+                    .minimumScaleFactor(0.5)
                     .privacySensitive()
             }
             if model.showsOvertimeMark {
@@ -132,7 +131,6 @@ struct CockpitActivityChrome<RideButton: View, ResumeButton: View, PromptButtons
                     .minimumScaleFactor(0.8)
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     @ViewBuilder
@@ -201,11 +199,19 @@ struct CockpitFaceTimer: View {
         Group {
             if metrics.fillsTimer {
                 GeometryReader { geo in
-                    let fitted = min(metrics.timerSize, geo.size.width * 0.92, max(28, geo.size.height * 0.92))
+                    // "12:00" is about three ems wide. Fit the point size to the slot.
+                    let fitted = min(
+                        metrics.timerSize,
+                        geo.size.width / 3.15,
+                        max(22, geo.size.height * 0.9)
+                    )
                     timerText
                         .font(.system(size: fitted, weight: .bold))
+                        .minimumScaleFactor(0.4)
+                        .lineLimit(1)
                         .frame(width: geo.size.width, height: geo.size.height, alignment: .trailing)
                 }
+                .clipped()
             } else {
                 timerText
                     .font(.system(size: limitedWidth ? metrics.timerSize * 0.85 : metrics.timerSize, weight: .bold))
@@ -289,6 +295,7 @@ struct CockpitPausedBottom<Resume: View>: View {
                 .lineLimit(1)
             Spacer(minLength: 4)
             resume()
+                .layoutPriority(1)
         }
     }
 }
@@ -307,6 +314,7 @@ struct CockpitPromptBottom<Replies: View>: View {
                 .minimumScaleFactor(0.65)
                 .frame(maxWidth: .infinity, alignment: .leading)
             replies()
+                .layoutPriority(1)
         }
     }
 }
@@ -339,7 +347,7 @@ struct CockpitReplyLabel: View {
             Text(title)
                 .font(.system(size: 13, weight: .bold))
                 .lineLimit(1)
-                .minimumScaleFactor(0.8)
+                .minimumScaleFactor(0.5)
         }
         .foregroundStyle(tint)
         .padding(.horizontal, 8)
@@ -453,31 +461,55 @@ struct RingGaugeStyle: ProgressViewStyle {
     }
 }
 
+private struct CockpitFrozenGaugeKey: EnvironmentKey {
+    static let defaultValue: Double? = nil
+}
+
+extension EnvironmentValues {
+    /// When set, the gauge draws this track fraction instead of `ProgressView(timerInterval:)`.
+    /// ImageRenderer does not tick a timer interval, so previews freeze the train head here.
+    var cockpitFrozenGaugeFraction: Double? {
+        get { self[CockpitFrozenGaugeKey.self] }
+        set { self[CockpitFrozenGaugeKey.self] = newValue }
+    }
+}
+
 struct CockpitProgressHost<S: ProgressViewStyle>: View {
     let model: CockpitDisplayModel
     let style: S
+    @Environment(\.cockpitFrozenGaugeFraction) private var frozenFraction
 
     var body: some View {
         Group {
-            switch model.clock {
-            case .countdown(let end):
-                live(CockpitGaugeRange.timerInterval(deadline: end, budgetSeconds: model.budgetSeconds))
-            case .overtime, .alert:
-                if let start = model.scheduledAt {
-                    live(CockpitGaugeRange.timerInterval(deadline: start, budgetSeconds: model.budgetSeconds))
-                } else {
-                    ProgressView(value: 1.0)
-                        .progressViewStyle(style)
-                }
-            case .paused:
-                ProgressView(value: CockpitGaugeRange.trackFraction(progress: model.pausedProgress ?? 0))
+            if let frozenFraction {
+                ProgressView(value: min(max(frozenFraction, 0), 1))
                     .progressViewStyle(style)
-            case .stale:
-                ProgressView(value: 0)
-                    .progressViewStyle(style)
+            } else {
+                liveGauge
             }
         }
         .labelsHidden()
+    }
+
+    @ViewBuilder
+    private var liveGauge: some View {
+        switch model.clock {
+        case .countdown(let end):
+            live(CockpitGaugeRange.timerInterval(deadline: end, budgetSeconds: model.budgetSeconds))
+        case .overtime, .alert:
+            if let start = model.scheduledAt {
+                live(CockpitGaugeRange.timerInterval(deadline: start, budgetSeconds: model.budgetSeconds))
+            } else {
+                ProgressView(value: 1.0)
+                    .progressViewStyle(style)
+            }
+        case .paused:
+            ProgressView(value: CockpitGaugeRange.trackFraction(progress: model.pausedProgress ?? 0))
+                .progressViewStyle(style)
+        case .stale:
+            ProgressView(value: 0)
+                .progressViewStyle(style)
+        }
     }
 
     private func live(_ range: ClosedRange<Date>) -> some View {

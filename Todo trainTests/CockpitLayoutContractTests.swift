@@ -231,6 +231,33 @@ final class CockpitLayoutContractTests: XCTestCase {
             budget * 0.25,
             accuracy: 0.001
         )
+        XCTAssertEqual(
+            CockpitGaugeRange.fractionAlongTrack(
+                deadline: deadline,
+                budgetSeconds: 20 * 60,
+                now: deadline.addingTimeInterval(-12 * 60)
+            ),
+            8.0 / 25.0,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            CockpitGaugeRange.fractionAlongTrack(
+                deadline: deadline,
+                budgetSeconds: 20 * 60,
+                now: deadline
+            ),
+            0.8,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            CockpitGaugeRange.fractionAlongTrack(
+                deadline: deadline,
+                budgetSeconds: 20 * 60,
+                now: deadline.addingTimeInterval(budget * 0.25)
+            ),
+            1,
+            accuracy: 0.0001
+        )
     }
 
     func testIslandWidthContractsMatchHIG() {
