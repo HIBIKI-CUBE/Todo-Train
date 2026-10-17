@@ -14,7 +14,7 @@ struct OvertimeControlsView: View {
 
     var body: some View {
         GeometryReader { geo in
-            let row = FocusControlLayout.equalRowHeight(total: geo.size.height, rows: 5)
+            let row = FocusControlLayout.equalRowHeight(total: geo.size.height, rows: 4)
             VStack(spacing: 0) {
                 FocusControlButton(
                     title: "到着済み",
@@ -42,28 +42,31 @@ struct OvertimeControlsView: View {
 
                 FocusControlDivider()
 
-                FocusControlButton(
-                    title: "見積もり直す",
-                    systemImage: "slider.horizontal.3",
-                    fill: FocusPanel.fillRaised,
-                    foreground: FocusPanel.ink,
-                    prominence: .secondary,
-                    action: onReestimate
-                )
-                .accessibilityHint("進捗から見積もりを直します")
-                .frame(height: row)
+                HStack(spacing: 0) {
+                    FocusControlButton(
+                        title: "見積もり直す",
+                        systemImage: "slider.horizontal.3",
+                        fill: FocusPanel.fillRaised,
+                        foreground: FocusPanel.ink,
+                        prominence: .secondary,
+                        action: onReestimate
+                    )
+                    .accessibilityHint("進捗から見積もりを直します")
+                    .frame(maxWidth: .infinity)
 
-                FocusControlDivider()
+                    FocusControlVerticalDivider()
 
-                FocusControlButton(
-                    title: "割り込み",
-                    systemImage: "rectangle.stack.badge.plus",
-                    fill: FocusPanel.fillRaised,
-                    foreground: FocusPanel.ink,
-                    prominence: .secondary,
-                    action: onInterrupt
-                )
-                .accessibilityHint("割り込みの切符を発行します")
+                    FocusControlButton(
+                        title: "割り込み",
+                        systemImage: "rectangle.stack.badge.plus",
+                        fill: FocusPanel.fillRaised,
+                        foreground: FocusPanel.ink,
+                        prominence: .secondary,
+                        action: onInterrupt
+                    )
+                    .accessibilityHint("割り込みの切符を発行します")
+                    .frame(maxWidth: .infinity)
+                }
                 .frame(height: row)
 
                 FocusControlDivider()
@@ -79,7 +82,9 @@ struct OvertimeControlsView: View {
                 .accessibilityHint("いったん停車します")
                 .frame(height: row)
             }
+            .environment(\.verticalSizeClass, .compact)
             .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
+            .clipped()
         }
     }
 }

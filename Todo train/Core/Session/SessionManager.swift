@@ -98,6 +98,7 @@ final class SessionManager {
     var focusReestimatePreview: FocusReestimatePreviewConfiguration?
     var uiPreviewForcesFocusCover: Bool = false
     var uiPreviewLandscape: Bool = false
+    var uiPreviewSuppressMotion: Bool = false
     #endif
 
     var pauseLimit: Int { settings.pauseLimit }

@@ -30,6 +30,7 @@ struct FocusView: View {
 
     /// Portrait: controls take ~38% of height. Compact: right pane ~40% of width.
     private let portraitControlFraction: CGFloat = 0.38
+    private let expandedPortraitControlFraction: CGFloat = 0.44
     private let compactControlFraction: CGFloat = 0.40
 
     var body: some View {
@@ -91,18 +92,35 @@ struct FocusView: View {
                 overtimePulse = false
                 sessionManager.dismissReestimate()
             } else {
+                #if DEBUG
+                if sessionManager.uiPreviewSuppressMotion {
+                    overtimePulse = false
+                } else {
+                    overtimePulse = true
+                    overtimeHaptic += 1
+                    handleOvertimeSound()
+                }
+                #else
                 overtimePulse = true
                 overtimeHaptic += 1
                 handleOvertimeSound()
+                #endif
             }
         }
         .modifier(FocusKeepAwakeModifier(settingEnabled: settings.keepAwakeWhileChargingInFocus))
     }
 
+    private var portraitControlHeightFraction: CGFloat {
+        if sessionManager.reestimateRequest != nil || sessionManager.phase == .overtime {
+            return expandedPortraitControlFraction
+        }
+        return portraitControlFraction
+    }
+
     // MARK: - Dashboards
 
     private func portraitDashboard(size: CGSize) -> some View {
-        let controlHeight = size.height * portraitControlFraction
+        let controlHeight = size.height * portraitControlHeightFraction
         return VStack(spacing: 0) {
             PassengerFocusBand()
             headerStrip

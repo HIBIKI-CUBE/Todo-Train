@@ -102,6 +102,7 @@ enum FocusUIPreview {
             break
         }
         manager.uiPreviewLandscape = wantsLandscape
+        manager.uiPreviewSuppressMotion = true
     }
 }
 #endif

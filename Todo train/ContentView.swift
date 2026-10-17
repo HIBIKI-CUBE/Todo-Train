@@ -28,6 +28,9 @@ struct ContentView: View {
         @Bindable var transferCanvas = transferCanvas
         @Bindable var ticketMotion = ticketMotion
         tabViewWithOptionalPassengerAccessory
+        #if DEBUG
+        .focusUIPreviewOrientation()
+        #endif
         .environment(transferCanvas)
         .environment(ticketMotion)
         .environment(ArrivalForecastTraceLog.shared)
