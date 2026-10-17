@@ -69,7 +69,7 @@ struct OvertimeControlsView: View {
                 FocusControlDivider()
 
                 FocusControlButton(
-                    title: "停車する",
+                    title: "停車",
                     systemImage: "pause.fill",
                     fill: FocusPanel.fillRaised,
                     foreground: TrainTheme.signalAmber,

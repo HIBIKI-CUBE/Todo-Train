@@ -4,3 +4,7 @@ Packages/TodoTrainSync/Sources/TodoTrainSync/PauseInput.swift	車内放送
 Todo train/Core/Session/CheckInScheduling.swift	車内放送
 Todo train/Core/Passenger/*	乗客
 Todo train/Features/Passenger/*	乗客
+Todo train/Features/Focus/OvertimeControlsView.swift	運転士
+Todo train/Features/Focus/FocusReestimatePanel.swift	運転士
+Todo train/Features/Focus/FocusControlsView.swift	運転士
+Todo train/Features/Focus/CheckInControlsView.swift	運転士
