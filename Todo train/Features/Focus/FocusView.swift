@@ -314,7 +314,9 @@ struct FocusView: View {
                                 shownBandLowSeconds: low,
                                 shownBandHighSeconds: high,
                                 detailsOpened: details,
-                                promptId: ReestimatePromptID.remainingV1
+                                promptId: mode == .minutesOnly
+                                    ? ReestimatePromptID.remainingV1
+                                    : ReestimatePromptID.progressV1
                             )
                         }
                     },
