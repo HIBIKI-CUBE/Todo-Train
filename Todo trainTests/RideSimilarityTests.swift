@@ -208,13 +208,34 @@ struct RideSimilarityTests {
         )
         #expect(slack == 120)
 
+        let calendar = tokyo
+        // 2023-11-16 05:13 JST に発車。翌暦日のブロックだけを入れ、東京の暦日では翌日扱いになること。
+        let departedNextMorning = calendar.date(
+            from: DateComponents(year: 2023, month: 11, day: 16, hour: 5, minute: 13)
+        )!
+        let blockFollowingTokyoDay = calendar.date(
+            from: DateComponents(year: 2023, month: 11, day: 17, hour: 7, minute: 15)
+        )!
+        let blockFollowingTokyoDayEnd = calendar.date(
+            from: DateComponents(year: 2023, month: 11, day: 17, hour: 8, minute: 0)
+        )!
         let nextDay = RideSimilarity.slack(
-            departedAt: start.addingTimeInterval(22 * 3_600),
+            departedAt: departedNextMorning,
             blocks: [
-                .init(id: soon, startsAt: start.addingTimeInterval(120), endsAt: start.addingTimeInterval(200), isCancelled: false),
-                .init(id: later, startsAt: start.addingTimeInterval(86_400 + 120), endsAt: start.addingTimeInterval(86_400 + 200), isCancelled: false),
+                .init(
+                    id: soon,
+                    startsAt: start.addingTimeInterval(120),
+                    endsAt: start.addingTimeInterval(200),
+                    isCancelled: false
+                ),
+                .init(
+                    id: later,
+                    startsAt: blockFollowingTokyoDay,
+                    endsAt: blockFollowingTokyoDayEnd,
+                    isCancelled: false
+                ),
             ],
-            calendar: tokyo
+            calendar: calendar
         )
         #expect(nextDay == nil)
 

@@ -184,7 +184,7 @@ struct SessionManagerArrivalTests {
         #expect(ride.ticket?.id == other.id)
         #expect(ride.startedFrom == .arrivalSwipe)
         #expect(ride.outcome == nil)
-        #expect(ride.accumulatedActiveSeconds >= 110)
+        #expect(ride.elapsedSeconds(at: clock.now) >= 110)
     }
 
     @Test func closingAfterStamp_doesNotStartTheNextRide() throws {
