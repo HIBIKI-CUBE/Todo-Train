@@ -23,8 +23,10 @@ struct ServiceShutdownCover: View {
     @State private var prefaceHeight: CGFloat = 168
     @State private var viewportHeight: CGFloat = 0
     @State private var overviewSettled = false
+    @State private var bundleFocusIndex = 0
 
     private static let overviewID = "service-overview"
+    private static let bundleID = "ticket-stamp-bundle"
     private static let minimumClockHeight: CGFloat = 220
 
     private var pausedSessions: [WorkSession] {
@@ -50,6 +52,10 @@ struct ServiceShutdownCover: View {
 
     private var daySessions: [WorkSession] {
         sessionManager.workSessions(onDayKey: dayKey)
+    }
+
+    private var stampBundle: TicketStampBundleAssembly.DayBundle? {
+        sessionManager.ticketStampBundle(forCalendarDayKey: dayKey)
     }
 
     private var dayText: String {
@@ -140,6 +146,29 @@ struct ServiceShutdownCover: View {
                             FocusControlDivider()
                             overviewClock(now: now, height: clockHeight)
                                 .id(Self.overviewID)
+                            if let stampBundle {
+                                FocusControlDivider()
+                                ServiceCabinPanel(powered: true) {
+                                    TicketStampBundleDeckView(
+                                        stamps: stampBundle.stamps,
+                                        focusIndex: $bundleFocusIndex,
+                                        axis: .horizontal,
+                                        dayBoundaries: []
+                                    )
+                                    .padding(.vertical, 8)
+                                    .id(Self.bundleID)
+                                    .onAppear {
+                                        #if DEBUG
+                                        if sessionManager.uiPreviewBundleFocusIndex > 0 {
+                                            bundleFocusIndex = sessionManager.uiPreviewBundleFocusIndex
+                                            return
+                                        }
+                                        #endif
+                                        bundleFocusIndex = max(0, stampBundle.stamps.count - 1)
+                                    }
+                                }
+                                .allowsHitTesting(!poweringDown)
+                            }
                         }
 
                         if lamp >= .ready, !poweringDown {
@@ -178,6 +207,14 @@ struct ServiceShutdownCover: View {
                 .task(id: lamp >= .live) {
                     await pushOverview()
                 }
+                #if DEBUG
+                .task(id: sessionManager.uiPreviewShowsServiceShutdown) {
+                    guard sessionManager.uiPreviewShowsServiceShutdown else { return }
+                    overviewSettled = true
+                    try? await Task.sleep(for: .milliseconds(400))
+                    proxy.scrollTo(Self.bundleID, anchor: .center)
+                }
+                #endif
             }
         }
     }

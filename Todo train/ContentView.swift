@@ -69,6 +69,11 @@ struct ContentView: View {
         .onAppear {
             sessionManager.iphoneSceneActive = scenePhase == .active
             sessionManager.noteIphoneFocus(isFocusPresented)
+            #if DEBUG
+            if sessionManager.uiPreviewSelectHistoryTab {
+                rootTab = .history
+            }
+            #endif
             if !didRecoverOnLaunch {
                 recoverOnLaunch()
                 didRecoverOnLaunch = true

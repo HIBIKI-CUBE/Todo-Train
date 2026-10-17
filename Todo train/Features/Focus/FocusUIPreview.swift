@@ -64,6 +64,16 @@ enum FocusUIPreview {
     @MainActor
     static func bootstrap(manager: SessionManager, context: ModelContext) throws {
         guard let state = parsedState() else { return }
+        switch state {
+        case "shutdownBundle", "shutdownBundlePeel", "shutdownBundleLandscape", "shutdownBundlePeelLandscape",
+            "historyBundle", "historyBundleLandscape", "historyEmptyBundle":
+            try configureTicketBundlePreview(manager: manager, context: context, state: state)
+            manager.uiPreviewLandscape = wantsLandscape
+            return
+        default:
+            break
+        }
+
         try manager.startService()
         let ticket = Ticket(title: "スクショ用", estimatedSeconds: 45 * 60, sortOrder: 0)
         context.insert(ticket)

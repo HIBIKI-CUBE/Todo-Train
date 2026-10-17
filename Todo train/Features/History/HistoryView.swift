@@ -289,21 +289,41 @@ struct HistoryView: View {
             }
 
             GeometryReader { geo in
-                HistoryDayPager(
-                    sessionsByDay: sessionsByDay,
-                    dayStrip: dayStrip,
-                    selectedDay: $selectedDay,
-                    daysVisible: $daysVisible,
-                    minHeight: geo.size.height,
-                    viewportWidth: geo.size.width,
-                    onSelect: { session in
-                        selectedRideID = session.id
-                    },
-                    onReissue: reissue,
-                    onDelete: deleteSession,
-                    stripsByDay: timetableStripsByDay
-                )
-                .safeAreaPadding(.bottom)
+                ZStack(alignment: .trailing) {
+                    HistoryDayPager(
+                        sessionsByDay: sessionsByDay,
+                        dayStrip: dayStrip,
+                        selectedDay: $selectedDay,
+                        daysVisible: $daysVisible,
+                        minHeight: geo.size.height,
+                        viewportWidth: geo.size.width,
+                        onSelect: { session in
+                            selectedRideID = session.id
+                        },
+                        onReissue: reissue,
+                        onDelete: deleteSession,
+                        stripsByDay: timetableStripsByDay
+                    )
+                    .safeAreaPadding(.bottom)
+
+                    if rideDensity == .day {
+                        TicketStampBundleHistoryRail(
+                            bundles: sessionManager.ticketStampBundles(),
+                            selectedDayKey: Binding(
+                                get: { selectedDayKey },
+                                set: { key in
+                                    guard let date = HistoryStats.date(from: key, calendar: calendar) else { return }
+                                    selectedDay = calendar.startOfDay(for: date)
+                                }
+                            ),
+                            onSelectStamp: { stamp in
+                                selectedRideID = stamp.sessionID
+                            }
+                        )
+                        .frame(width: min(geo.size.width * 0.44, 220))
+                        .padding(.trailing, 2)
+                    }
+                }
             }
             .padding(.horizontal, rideDensity == .day ? TrainTheme.Space.md : TrainTheme.Space.xs)
         }
