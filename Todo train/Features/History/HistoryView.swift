@@ -133,6 +133,14 @@ struct HistoryView: View {
         sessionManager.ticketStampBundle(forCalendarDayKey: selectedDayKey)
     }
 
+    private var bundleViewerInitialDayKey: String {
+        #if DEBUG
+        sessionManager.uiPreviewBundleViewerDayKey ?? selectedDayKey
+        #else
+        selectedDayKey
+        #endif
+    }
+
     private var visibleDayKeys: Set<String> {
         Set(
             HistoryCanvasZoom.visibleDays(
@@ -230,7 +238,7 @@ struct HistoryView: View {
         .fullScreenCover(isPresented: $showBundleViewer) {
             TicketStampBundleViewer(
                 bundles: sessionManager.ticketStampBundles(),
-                initialDayKey: sessionManager.uiPreviewBundleViewerDayKey ?? selectedDayKey,
+                initialDayKey: bundleViewerInitialDayKey,
                 onSelectStamp: { stamp in
                     showBundleViewer = false
                     selectedRideID = stamp.sessionID
