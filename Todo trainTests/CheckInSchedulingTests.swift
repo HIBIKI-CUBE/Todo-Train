@@ -5,48 +5,45 @@
 
 import Foundation
 import Testing
+import TodoTrainSync
 @testable import Todo_train
 
 struct CheckInSchedulingTests {
     private let seed = UUID(uuidString: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE")!
 
     @Test func progressCount_shortTripHasNone() {
-        #expect(CheckInScheduling.progressCount(estimatedSeconds: 5 * 60) == 0)
-        #expect(CheckInScheduling.progressCount(estimatedSeconds: 10 * 60) == 0)
-        #expect(CheckInScheduling.offsets(estimatedSeconds: 600, seed: seed).isEmpty)
+        #expect(CheckInScheduling.progressCount(budgetSecondsAtStart: 5 * 60) == 0)
+        #expect(CheckInScheduling.progressCount(budgetSecondsAtStart: 10 * 60) == 0)
+        #expect(CheckInScheduling.offsets(budgetSecondsAtStart: 600, seed: seed).isEmpty)
     }
 
     @Test func progressCount_mediumHasOne() {
-        #expect(CheckInScheduling.progressCount(estimatedSeconds: 11 * 60) == 1)
-        #expect(CheckInScheduling.progressCount(estimatedSeconds: 15 * 60) == 1)
-        #expect(CheckInScheduling.progressCount(estimatedSeconds: 25 * 60) == 1)
-        #expect(CheckInScheduling.offsets(estimatedSeconds: 20 * 60, seed: seed).count == 1)
+        #expect(CheckInScheduling.progressCount(budgetSecondsAtStart: 11 * 60) == 1)
+        #expect(CheckInScheduling.progressCount(budgetSecondsAtStart: 15 * 60) == 1)
+        #expect(CheckInScheduling.progressCount(budgetSecondsAtStart: 25 * 60) == 1)
+        #expect(CheckInScheduling.offsets(budgetSecondsAtStart: 20 * 60, seed: seed).count == 1)
     }
 
-    @Test func progressCount_longHasTwo() {
-        #expect(CheckInScheduling.progressCount(estimatedSeconds: 30 * 60) == 2)
-        #expect(CheckInScheduling.progressCount(estimatedSeconds: 60 * 60) == 2)
-        #expect(CheckInScheduling.offsets(estimatedSeconds: 30 * 60, seed: seed).count == 2)
+    @Test func progressCount_longHasOne() {
+        #expect(CheckInScheduling.progressCount(budgetSecondsAtStart: 30 * 60) == 1)
+        #expect(CheckInScheduling.progressCount(budgetSecondsAtStart: 60 * 60) == 1)
+        #expect(CheckInScheduling.offsets(budgetSecondsAtStart: 30 * 60, seed: seed).count == 1)
     }
 
-    @Test func offsets_lieInsideBands_andAreStableForSeed() {
-        let first = CheckInScheduling.offsets(estimatedSeconds: 1800, seed: seed)
-        let again = CheckInScheduling.offsets(estimatedSeconds: 1800, seed: seed)
+    @Test func offsets_lieInsideBands_andAreStableForSeed() throws {
+        let first = CheckInScheduling.offsets(budgetSecondsAtStart: 1800, seed: seed)
+        let again = CheckInScheduling.offsets(budgetSecondsAtStart: 1800, seed: seed)
         #expect(first == again)
-        #expect(first.count == 2)
+        #expect(first.count == 1)
 
         let other = CheckInScheduling.offsets(
-            estimatedSeconds: 1800,
+            budgetSecondsAtStart: 1800,
             seed: UUID(uuidString: "BBBBBBBB-BBBB-CCCC-DDDD-EEEEEEEEEEEE")!
         )
         #expect(first != other)
 
-        let budget = 1800.0
-        #expect(first[0] >= budget * CheckInScheduling.firstBand.lowerBound)
-        #expect(first[0] <= budget * CheckInScheduling.firstBand.upperBound)
-        #expect(first[1] >= budget * CheckInScheduling.secondBand.lowerBound)
-        #expect(first[1] <= budget * CheckInScheduling.secondBand.upperBound)
-        #expect(first[0] < first[1])
+        let band = try #require(NudgePlanner.checkInBand(estimatedSeconds: 1800))
+        #expect(band.contains(first[0]))
     }
 
     @Test func unit_isStableAndInUnitInterval() {
@@ -111,8 +108,8 @@ struct CheckInSchedulingTests {
         )
     }
 
-    @Test func dueProgressOffset_secondOnlyAfterFirstFired() {
-        let offsets = [400.0, 800.0]
+    @Test func dueProgressOffset_onlyOneProgressCheckIn() {
+        let offsets = [400.0]
         #expect(
             CheckInScheduling.dueProgressOffset(
                 offsets: offsets,
@@ -126,15 +123,6 @@ struct CheckInSchedulingTests {
             CheckInScheduling.dueProgressOffset(
                 offsets: offsets,
                 firedCount: 1,
-                elapsedSeconds: 900,
-                remainingSeconds: 900,
-                hasPending: false
-            ) == 800
-        )
-        #expect(
-            CheckInScheduling.dueProgressOffset(
-                offsets: offsets,
-                firedCount: 2,
                 elapsedSeconds: 900,
                 remainingSeconds: 900,
                 hasPending: false

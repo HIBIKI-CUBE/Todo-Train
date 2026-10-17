@@ -5,10 +5,10 @@ public enum NudgeThresholds: Sendable {
     /// Mac is attending when the screen is unlocked and the last input is inside this window.
     public static let presenceWindow: TimeInterval = 2 * 60
     /// Stage 1 exists only when the estimate is strictly above this.
-    public static let checkInMinimumEstimate: TimeInterval = 10 * 60
-    public static let checkInBand: ClosedRange<Double> = 0.62...0.78
+    public static let checkInMinimumEstimate: TimeInterval = CheckInTiming.minimumEstimateSeconds
+    public static let checkInBand: ClosedRange<Double> = CheckInTiming.fractionBand
     /// Salt for `CabinBroadcastScheduling.unit(seed:salt:)`. Same ride id keeps one offset.
-    public static let checkInSalt: UInt64 = 1
+    public static let checkInSalt: UInt64 = CheckInTiming.rideSalt
     public static let approachFraction: Double = 0.17
     public static let approachMinimum: TimeInterval = 60
     public static let approachMaximum: TimeInterval = 3 * 60
@@ -132,6 +132,8 @@ public struct NudgeRideInput: Sendable, Equatable {
     public var passengerSince: Date?
     public var isPassenger: Bool
     public var estimatedSeconds: Int
+    /// Departure budget for stage 1. Defaults to `estimatedSeconds` when omitted.
+    public var budgetSecondsAtStart: Int
     public var rideID: UUID
     public var extensions: [NudgeExtension]
     public var alarmKitEndBell: Bool
@@ -150,6 +152,7 @@ public struct NudgeRideInput: Sendable, Equatable {
         passengerSince: Date? = nil,
         isPassenger: Bool = false,
         estimatedSeconds: Int,
+        budgetSecondsAtStart: Int? = nil,
         rideID: UUID,
         extensions: [NudgeExtension] = [],
         alarmKitEndBell: Bool = false,
@@ -165,6 +168,7 @@ public struct NudgeRideInput: Sendable, Equatable {
         self.passengerSince = passengerSince
         self.isPassenger = isPassenger
         self.estimatedSeconds = estimatedSeconds
+        self.budgetSecondsAtStart = budgetSecondsAtStart ?? estimatedSeconds
         self.rideID = rideID
         self.extensions = extensions
         self.alarmKitEndBell = alarmKitEndBell
@@ -242,19 +246,16 @@ public enum NudgePlanner: Sendable {
 
     /// Stage 1 band in working seconds. Nil when the estimate is 10 minutes or less.
     public static func checkInBand(estimatedSeconds: Int) -> ClosedRange<TimeInterval>? {
-        let estimate = TimeInterval(estimatedSeconds)
-        guard estimate > NudgeThresholds.checkInMinimumEstimate else { return nil }
-        let band = NudgeThresholds.checkInBand
-        return (estimate * band.lowerBound)...(estimate * band.upperBound)
+        guard let fraction = CheckInTiming.fractionBandRange(estimateSeconds: estimatedSeconds) else { return nil }
+        let floor = CheckInTiming.minimumRunningSeconds
+        let lower = max(fraction.lowerBound, floor)
+        let upper = max(fraction.upperBound, floor)
+        return lower...upper
     }
 
     /// Stable stage 1 offset for this ride. Nil when the estimate is 10 minutes or less.
     public static func checkInOffset(estimatedSeconds: Int, rideID: UUID) -> TimeInterval? {
-        guard checkInBand(estimatedSeconds: estimatedSeconds) != nil else { return nil }
-        let band = NudgeThresholds.checkInBand
-        let unit = CabinBroadcastScheduling.unit(seed: rideID, salt: NudgeThresholds.checkInSalt)
-        let fraction = band.lowerBound + (band.upperBound - band.lowerBound) * unit
-        return TimeInterval(estimatedSeconds) * fraction
+        CheckInTiming.offset(rideID: rideID, estimateSeconds: estimatedSeconds)
     }
 
     /// Working-second marks for the current estimate. Stages 2...6 follow that estimate.
@@ -266,6 +267,7 @@ public enum NudgePlanner: Sendable {
     public static func marks(
         estimatedSeconds: Int,
         rideID: UUID,
+        budgetSecondsAtStart: Int? = nil,
         extensions: [NudgeExtension] = [],
         startedAt: Date? = nil,
         activeSeconds: TimeInterval? = nil,
@@ -277,10 +279,11 @@ public enum NudgePlanner: Sendable {
         isPassenger: Bool = false
     ) -> [NudgeStageMark] {
         let estimate = TimeInterval(estimatedSeconds)
+        let departureBudget = budgetSecondsAtStart ?? estimatedSeconds
         guard estimate > 0 else { return [] }
         var marks: [NudgeStageMark] = []
         if let checkIn = placedCheckInOffset(
-            estimatedSeconds: estimatedSeconds,
+            budgetSecondsAtStart: departureBudget,
             rideID: rideID,
             extensions: extensions,
             startedAt: startedAt,
@@ -317,6 +320,7 @@ public enum NudgePlanner: Sendable {
         let marks = marks(
             estimatedSeconds: input.estimatedSeconds,
             rideID: input.rideID,
+            budgetSecondsAtStart: input.budgetSecondsAtStart,
             extensions: input.extensions,
             startedAt: input.startedAt,
             activeSeconds: elapsed,
@@ -422,7 +426,7 @@ public enum NudgePlanner: Sendable {
     /// With extensions, a point that had not been reached moves once onto the new estimate.
     /// A moved point at or before the live active second is omitted.
     private static func placedCheckInOffset(
-        estimatedSeconds: Int,
+        budgetSecondsAtStart: Int,
         rideID: UUID,
         extensions: [NudgeExtension],
         startedAt: Date?,
@@ -434,36 +438,25 @@ public enum NudgePlanner: Sendable {
         passengerSince: Date?,
         isPassenger: Bool
     ) -> TimeInterval? {
-        let ordered = extensions.sorted { $0.createdAt < $1.createdAt }
-        if ordered.isEmpty {
-            return checkInOffset(estimatedSeconds: estimatedSeconds, rideID: rideID)
+        guard let placed = checkInOffset(estimatedSeconds: budgetSecondsAtStart, rideID: rideID) else {
+            return nil
         }
-
-        var estimate = estimatedSeconds - ordered.reduce(0) { $0 + $1.addedSeconds }
+        let ordered = extensions.sorted { $0.createdAt < $1.createdAt }
         for item in ordered {
-            if let offset = checkInOffset(estimatedSeconds: estimate, rideID: rideID),
-               let elapsed = sampledActiveSeconds(
-                   at: item,
-                   startedAt: startedAt,
-                   pausedAccumulated: pausedAccumulated,
-                   pausedAt: pausedAt,
-                   isPaused: isPaused,
-                   passengerAccumulated: passengerAccumulated,
-                   passengerSince: passengerSince,
-                   isPassenger: isPassenger
-               ),
-               elapsed >= offset
+            if let elapsed = sampledActiveSeconds(
+                at: item,
+                startedAt: startedAt,
+                pausedAccumulated: pausedAccumulated,
+                pausedAt: pausedAt,
+                isPaused: isPaused,
+                passengerAccumulated: passengerAccumulated,
+                passengerSince: passengerSince,
+                isPassenger: isPassenger
+            ),
+               elapsed >= placed
             {
                 return nil
             }
-            estimate += item.addedSeconds
-        }
-
-        guard let placed = checkInOffset(estimatedSeconds: estimatedSeconds, rideID: rideID) else {
-            return nil
-        }
-        if let activeSeconds, placed <= activeSeconds {
-            return nil
         }
         return placed
     }

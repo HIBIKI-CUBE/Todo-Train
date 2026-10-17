@@ -56,7 +56,7 @@ final class WorkSession {
     var nudgeAnsweredAt: Date?
     /// 答えた端末。watch / iphone / mac。
     var nudgeAnsweredOnRaw: String?
-    /// 走行中の確認の位置。0.62〜0.78。
+    /// 走行中の確認の位置。発車時見積の 40〜50%（走行 5 分下限）。
     var checkInFraction: Double?
     /// JSON array of `NudgeEventRecord`. One row per stage, written when the stage is reached.
     var nudgeEventsJSON: String = "[]"

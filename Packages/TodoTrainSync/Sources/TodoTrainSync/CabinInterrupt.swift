@@ -86,12 +86,21 @@ public enum CabinInterruptWatch: Sendable {
         if snap.pendingCabin == .progress { return true }
         guard snap.phase == .running, let sessionId = snap.sessionId else { return false }
         let remaining = TimeInterval(snap.remainingSeconds(at: now) ?? 0)
+        guard remaining > CabinBroadcastScheduling.overtimeGuardSeconds else { return false }
+
+        if let plan = snap.nudgePlan {
+            guard firedCount == 0 else { return false }
+            guard let item = plan.first(where: { $0.stage == .checkIn }) else { return false }
+            return now >= item.fireAt
+        }
+
         let elapsed = TimeInterval(snap.elapsedActiveSeconds(at: now) ?? 0)
-        let offsets = CabinBroadcastScheduling.offsets(
-            estimatedSeconds: snap.estimatedSeconds ?? 0,
-            seed: sessionId
+        let budgetAtStart = snap.estimatedSeconds ?? 0
+        let offsets = CheckInTiming.progressOffsets(
+            rideID: sessionId,
+            budgetSecondsAtStart: budgetAtStart
         )
-        return CabinBroadcastScheduling.dueProgressOffset(
+        return CheckInTiming.dueProgressOffset(
             offsets: offsets,
             firedCount: firedCount,
             elapsedSeconds: elapsed,
