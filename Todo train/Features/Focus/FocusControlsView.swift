@@ -9,7 +9,7 @@ struct FocusControlsView: View {
     let onPause: () -> Void
     let onReserve: () -> Void
     let onArrive: () -> Void
-    let onExtendMenu: () -> Void
+    let onReestimate: () -> Void
     let onInterrupt: () -> Void
     var showsReserve: Bool = true
 
@@ -45,14 +45,14 @@ struct FocusControlsView: View {
                     FocusControlVerticalDivider()
 
                     FocusControlButton(
-                        title: "延長",
-                        systemImage: "plus",
+                        title: "見積もり直す",
+                        systemImage: "slider.horizontal.3",
                         fill: FocusPanel.fillRaised,
                         foreground: FocusPanel.ink,
                         prominence: .secondary,
-                        action: onExtendMenu
+                        action: onReestimate
                     )
-                    .accessibilityHint("見積もり時間を追加します。フォーカスは継続します。")
+                    .accessibilityHint("進捗から見積もりを直します")
                     .frame(maxWidth: .infinity)
                 }
                 .frame(height: row)

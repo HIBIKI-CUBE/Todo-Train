@@ -100,7 +100,7 @@ extension SessionManager {
                 title: title,
                 deadline: deadline,
                 isOvertime: remaining <= 0 && !session.isPaused,
-                budgetSeconds: session.budgetSecondsAtStart,
+                budgetSeconds: session.activeBudgetSeconds,
                 isPaused: session.isPaused,
                 pausedAt: session.pausedAt,
                 checkInPrompt: instrument.prompt,
@@ -215,7 +215,7 @@ extension SessionManager {
         guard !session.isPaused else { return }
         let elapsed = session.elapsedSeconds(at: now)
         let budgetFire = SessionEndSchedule.fireAt(
-            budgetSeconds: session.budgetSecondsAtStart,
+            budgetSeconds: session.activeBudgetSeconds,
             elapsedSeconds: elapsed,
             now: now
         )
@@ -265,7 +265,7 @@ extension SessionManager {
         }
         let elapsed = session.elapsedSeconds(at: now)
         guard let fireAt = OvertimeSchedule.fireAt(
-            budgetSeconds: session.budgetSecondsAtStart,
+            budgetSeconds: session.activeBudgetSeconds,
             elapsedSeconds: elapsed,
             now: now
         ) else {

@@ -223,7 +223,7 @@ extension SessionManager {
             passengerAccumulated: 0,
             passengerSince: passengerWhileRunning ? passenger?.boardedAt : nil,
             isPassenger: passengerWhileRunning,
-            estimatedSeconds: session.budgetSecondsAtStart,
+            estimatedSeconds: session.activeBudgetSeconds,
             rideID: session.id,
             extensions: session.extensions.map {
                 NudgeExtension(
@@ -307,8 +307,6 @@ extension SessionManager {
     ) throws {
         switch answer {
         case .willExtend:
-            let seconds = TimeInterval(addSeconds ?? 0)
-            try extend(by: seconds, now: at, nudgeID: nudgeID)
             appendNudgeStamp(
                 on: session,
                 stage: stage,
@@ -320,6 +318,13 @@ extension SessionManager {
             )
             try save()
             releaseAnsweredCheckInPrompt(session, now: at)
+            let surface: ReestimateSurface = answeredOn == "mac" ? .macPip : .iphonePortrait
+            presentReestimate(
+                trigger: .planEnd,
+                surface: surface,
+                input: answeredOn == "mac" ? .click : .touch,
+                remoteWillExtendReceived: true
+            )
         case .alreadyDone:
             appendNudgeStamp(
                 on: session,
@@ -398,7 +403,7 @@ extension SessionManager {
         guard !session.nudgeFiredStagesRaw.contains(NudgeStage.checkIn.rawValue) else { return }
         if let offset = nudgeMarks(input).first(where: { $0.stage == .checkIn })?.offset {
             session.checkInOffsetSeconds = [offset]
-            let budget = TimeInterval(max(session.budgetSecondsAtStart, 1))
+            let budget = TimeInterval(max(session.activeBudgetSeconds, 1))
             session.checkInFraction = offset / budget
         } else if !session.extensions.isEmpty {
             session.checkInOffsetSeconds = []

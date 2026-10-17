@@ -158,7 +158,7 @@ extension SessionManager {
             acknowledgeCabinStill()
             FocusPendingActionStore.consumeIfMatches(pending)
             return .still
-        case .arrive, .extend:
+        case .arrive, .reestimate:
             return nil
         }
     }

@@ -62,7 +62,7 @@ enum CompanionSnapBuilding {
             title: session.ticket?.title,
             phase: wirePhase(phase),
             startedAt: started,
-            estimatedSeconds: session.budgetSecondsAtStart,
+            estimatedSeconds: session.activeBudgetSeconds,
             pausedAccumulated: pausedAccumulated,
             pausedAt: pausedAtUnix,
             boardedDeviceID: session.boardedDeviceID,

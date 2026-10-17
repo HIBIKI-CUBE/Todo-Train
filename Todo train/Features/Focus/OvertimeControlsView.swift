@@ -8,11 +8,13 @@ import SwiftUI
 struct OvertimeControlsView: View {
     let onAlreadyDone: () -> Void
     let onJustFinished: () -> Void
-    let onExtend: () -> Void
+    let onReestimate: () -> Void
+    let onInterrupt: () -> Void
+    let onPause: () -> Void
 
     var body: some View {
         GeometryReader { geo in
-            let row = FocusControlLayout.equalRowHeight(total: geo.size.height, rows: 3)
+            let row = FocusControlLayout.equalRowHeight(total: geo.size.height, rows: 5)
             VStack(spacing: 0) {
                 FocusControlButton(
                     title: "到着済み",
@@ -41,14 +43,40 @@ struct OvertimeControlsView: View {
                 FocusControlDivider()
 
                 FocusControlButton(
-                    title: "延長",
-                    systemImage: "plus",
+                    title: "見積もり直す",
+                    systemImage: "slider.horizontal.3",
                     fill: FocusPanel.fillRaised,
                     foreground: FocusPanel.ink,
                     prominence: .secondary,
-                    action: onExtend
+                    action: onReestimate
                 )
-                .accessibilityHint("見積もり時間を追加します")
+                .accessibilityHint("進捗から見積もりを直します")
+                .frame(height: row)
+
+                FocusControlDivider()
+
+                FocusControlButton(
+                    title: "割り込みが入った",
+                    systemImage: "rectangle.stack.badge.plus",
+                    fill: FocusPanel.fillRaised,
+                    foreground: FocusPanel.ink,
+                    prominence: .secondary,
+                    action: onInterrupt
+                )
+                .accessibilityHint("割り込みの切符を発行します")
+                .frame(height: row)
+
+                FocusControlDivider()
+
+                FocusControlButton(
+                    title: "停車する",
+                    systemImage: "pause.fill",
+                    fill: FocusPanel.fillRaised,
+                    foreground: TrainTheme.signalAmber,
+                    prominence: .secondary,
+                    action: onPause
+                )
+                .accessibilityHint("いったん停車します")
                 .frame(height: row)
             }
             .frame(width: geo.size.width, height: geo.size.height, alignment: .top)

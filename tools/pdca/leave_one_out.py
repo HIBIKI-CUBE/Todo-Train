@@ -10,7 +10,8 @@ Estimators:
   global median of prior active seconds
   median of priors that share at least one tag id
   median of the first 3 and first 5 similarityCandidates (device order)
-  the rider's estimatedSecondsAtStart
+  the   rider's estimatedSecondsAtStart
+  the latest committed reestimate on the ride (judgment estimate)
 
 Usage:
   python3 tools/pdca/leave_one_out.py export.json
@@ -57,7 +58,21 @@ def load_rides(document: dict) -> list[dict]:
     rides = document.get("rides")
     if not isinstance(rides, list):
         raise SystemExit("rides が配列ではない")
-    return rides
+    by_ride: dict[str, list[dict]] = {}
+    for row in document.get("reestimates") or []:
+        if not isinstance(row, dict):
+            continue
+        ride_id = row.get("rideId")
+        if isinstance(ride_id, str):
+            by_ride.setdefault(ride_id, []).append(row)
+    enriched = []
+    for ride in rides:
+        if not isinstance(ride, dict) or "id" not in ride:
+            continue
+        copy = dict(ride)
+        copy["reestimates"] = by_ride.get(ride["id"], [])
+        enriched.append(copy)
+    return enriched
 
 
 def errors_for(rides: list[dict]) -> dict[str, list[float]]:
@@ -69,6 +84,7 @@ def errors_for(rides: list[dict]) -> dict[str, list[float]]:
         "top3": [],
         "top5": [],
         "rider": [],
+        "judgment": [],
     }
     for subject in pool:
         actual = float(subject["accumulatedActiveSeconds"])
@@ -105,7 +121,31 @@ def errors_for(rides: list[dict]) -> dict[str, list[float]]:
         estimate = subject.get("estimatedSecondsAtStart")
         if isinstance(estimate, (int, float)):
             named["rider"].append(abs(float(estimate) - actual))
+
+        judgment = judgment_estimate_seconds(subject)
+        if judgment is not None:
+            named["judgment"].append(abs(judgment - actual))
     return named
+
+
+def judgment_estimate_seconds(ride: dict) -> float | None:
+    """Active + last committed reestimate remaining; else estimatedSecondsAtStart."""
+    reestimates = ride.get("reestimates") or []
+    committed = [
+        item
+        for item in reestimates
+        if isinstance(item, dict) and not item.get("undoneAt")
+    ]
+    if committed:
+        last = max(committed, key=lambda item: item.get("committedAt", ""))
+        active = last.get("activeSeconds")
+        remaining = last.get("committedRemainingSeconds")
+        if isinstance(active, (int, float)) and isinstance(remaining, (int, float)):
+            return float(active) + float(remaining)
+    estimate = ride.get("estimatedSecondsAtStart")
+    if isinstance(estimate, (int, float)):
+        return float(estimate)
+    return None
 
 
 def summarize(samples: list[float]) -> tuple[float | None, float | None, int]:
@@ -123,6 +163,7 @@ def format_report(named: dict[str, list[float]]) -> str:
         ("top3", "上位3件の中央値"),
         ("top5", "上位5件の中央値"),
         ("rider", "乗務員の見積もり"),
+        ("judgment", "判定に使った見積もり"),
     ]
     lines = ["誤差は分。件数は、その推定が計算できた乗車。", ""]
     lines.append(f"{'推定':<16}{'平均誤差':>10}{'中央誤差':>10}{'件数':>8}")

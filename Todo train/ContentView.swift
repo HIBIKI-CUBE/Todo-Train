@@ -351,8 +351,8 @@ struct ContentView: View {
     private func applyPendingFocusAction(focusIsPresented: Bool? = nil) {
         let focusIsPresented = focusIsPresented ?? isFocusPresented
         guard let pending = FocusPendingActionStore.peek() else { return }
-        // Extend always needs Focus; leave the queue for FocusView.
-        if pending.kind == .extend { return }
+        // 見積もり直しは Focus が必要。キューは FocusView に任せる。
+        if pending.kind == .reestimate { return }
         if pending.kind == .pause || pending.kind == .resume {
             _ = sessionManager.applyPendingLiveActivityAction()
             return

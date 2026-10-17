@@ -148,7 +148,6 @@ struct ServiceShutdownCover: View {
 
                         if lamp >= .ready, !poweringDown {
                             pausedBlock
-                            unlabeledBlock
                             if !canConfirmEnd {
                                 FocusControlDivider()
                                 ServiceCabinPanel(powered: true) {

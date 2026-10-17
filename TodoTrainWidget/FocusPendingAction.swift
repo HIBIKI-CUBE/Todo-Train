@@ -8,7 +8,7 @@ import Foundation
 
 nonisolated enum FocusPendingActionKind: String, Codable, Sendable {
     case arrive
-    case extend
+    case reestimate
     case pause
     case resume
     case still
@@ -131,11 +131,11 @@ nonisolated enum FocusPendingActionStore {
         return true
     }
 
-    /// Drop stale LA arrive/extend handoffs before a fresh departure from the arrival ceremony.
-    static func discardArriveAndExtendHandoffs() {
+    /// Drop stale LA arrive/reestimate handoffs before a fresh departure from the arrival ceremony.
+    static func discardArriveAndReestimateHandoffs() {
         guard let pending = peek() else { return }
         switch pending.kind {
-        case .arrive, .extend:
+        case .arrive, .reestimate:
             defaults?.removeObject(forKey: suiteKey)
         case .pause, .resume, .still:
             break

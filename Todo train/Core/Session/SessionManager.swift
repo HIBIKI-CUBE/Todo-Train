@@ -91,6 +91,10 @@ final class SessionManager {
     /// Ephemeral UI chrome (haptics, quiet line, punctuality queue).
     let presentation = SessionPresentation()
 
+    var reestimateRequest: SessionManager.ReestimateRequest?
+    var focusUndoOffer: SessionManager.FocusUndoOffer?
+    var focusUndoTask: Task<Void, Never>?
+
     var pauseLimit: Int { settings.pauseLimit }
 
     func bumpCompanionSync() {

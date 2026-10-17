@@ -16,7 +16,6 @@ struct FocusView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(TicketMotionBridge.self) private var ticketMotion
 
-    @State private var showExtendChips = false
     @State private var showPauseLimitSheet = false
     @State private var showInterruptIssue = false
     @State private var showNextRideReserve = false
@@ -27,10 +26,7 @@ struct FocusView: View {
     @State private var overtimePulse = false
     @State private var nudgePulse = false
     @State private var overtimeHaptic = 0
-    @State private var extendReason: String?
     @State private var didConsumePendingAction = false
-
-    private let extendReasons = ServiceCabinSequence.extendReasons
 
     /// Portrait: controls take ~38% of height. Compact: right pane ~40% of width.
     private let portraitControlFraction: CGFloat = 0.38
@@ -93,7 +89,7 @@ struct FocusView: View {
             if newPhase != .overtime {
                 didPlayOvertimeSound = false
                 overtimePulse = false
-                showExtendChips = false
+                sessionManager.dismissReestimate()
             } else {
                 overtimePulse = true
                 overtimeHaptic += 1
@@ -252,7 +248,7 @@ struct FocusView: View {
                     occupancy: dispatched.occupancy,
                     pinch: clearance == .pinch,
                     overrun: clearance == .overrun,
-                    budgetSeconds: sessionManager.activeSession?.budgetSecondsAtStart ?? 1
+                    budgetSeconds: sessionManager.activeSession?.activeBudgetSeconds ?? 1
                 )
 
                 HStack(spacing: TrainTheme.Space.md) {
@@ -306,41 +302,42 @@ struct FocusView: View {
 
     private var controlSection: some View {
         Group {
-            if showExtendChips {
-                FocusExtendPanel(
-                    reasons: extendReasons,
-                    selectedReason: $extendReason,
-                    onExtend: { minutes in
-                        applyExtend(minutes: minutes)
-                    },
-                    onDismiss: {
-                        withAnimation(TrainTheme.Motion.soft) {
-                            showExtendChips = false
-                            extendReason = nil
+            if sessionManager.reestimateRequest != nil {
+                FocusReestimatePanel(
+                    activeSeconds: sessionManager.activeSession?.elapsedSeconds(at: .now) ?? 0,
+                    surface: sessionManager.reestimateSurface(
+                        isLandscape: verticalSizeClass == .compact
+                    ),
+                    onCommit: { mode, progress, remaining, low, high, details in
+                        run {
+                            try sessionManager.commitReestimate(
+                                mode: mode,
+                                progressAnswer: progress,
+                                committedRemainingSeconds: remaining,
+                                shownBandLowSeconds: low,
+                                shownBandHighSeconds: high,
+                                detailsOpened: details,
+                                promptId: ReestimatePromptID.remainingV1
+                            )
                         }
-                    }
+                    },
+                    onClose: { sessionManager.dismissReestimate() }
                 )
             } else if sessionManager.phase == .overtime {
                 OvertimeControlsView(
                     onAlreadyDone: { run { try sessionManager.arrive(resolution: .alreadyDone) } },
                     onJustFinished: { run { try sessionManager.arrive(resolution: .justFinished) } },
-                    onExtend: {
-                        withAnimation(TrainTheme.Motion.soft) {
-                            showExtendChips = true
-                        }
-                    }
+                    onReestimate: { openReestimate(trigger: .planEnd) },
+                    onInterrupt: { showInterruptIssue = true },
+                    onPause: { pauseWithUndo() }
                 )
             } else if sessionManager.pendingCheckIn == .progress {
                 CheckInControlsView(
                     prompt: sessionManager.checkInPromptLine,
                     onStillOnIt: { run { try sessionManager.answerCheckIn(.stillOnIt) } },
-                    onPause: { run { try sessionManager.answerCheckIn(.paused) } },
-                    onAlreadyDone: { run { try sessionManager.answerCheckIn(.alreadyDone) } },
-                    onWillExtend: {
+                    onReestimate: {
                         run { try sessionManager.answerCheckIn(.willExtend) }
-                        withAnimation(TrainTheme.Motion.soft) {
-                            showExtendChips = true
-                        }
+                        openReestimate(trigger: .checkIn)
                     }
                 )
             } else {
@@ -348,11 +345,7 @@ struct FocusView: View {
                     onPause: { run { try sessionManager.pause() } },
                     onReserve: { showNextRideReserve = true },
                     onArrive: { run { try sessionManager.arrive() } },
-                    onExtendMenu: {
-                        withAnimation(TrainTheme.Motion.soft) {
-                            showExtendChips.toggle()
-                        }
-                    },
+                    onReestimate: { openReestimate(trigger: .manual) },
                     onInterrupt: { showInterruptIssue = true },
                     showsReserve: showsNextRideReserve
                 )
@@ -360,6 +353,11 @@ struct FocusView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(FocusPanel.fill)
+        .overlay(alignment: .top) {
+            if let offer = sessionManager.focusUndoOffer {
+                focusUndoBar(offer)
+            }
+        }
     }
 
     // MARK: - Data
@@ -374,7 +372,7 @@ struct FocusView: View {
     }
 
     private var currentBudgetSeconds: TimeInterval {
-        TimeInterval(sessionManager.activeSession?.budgetSecondsAtStart ?? 1)
+        TimeInterval(sessionManager.activeSession?.activeBudgetSeconds ?? 1)
     }
 
     private var currentTimerPhase: FocusTimerPhase {
@@ -402,16 +400,16 @@ struct FocusView: View {
     }
 
     private var estimateMetaText: String? {
-        guard let budget = sessionManager.activeSession?.budgetSecondsAtStart,
-              let estimate = sessionManager.activeSession?.estimatedSecondsAtStart else {
-            return nil
+        guard let session = sessionManager.activeSession else { return nil }
+        let estimate = session.estimatedSecondsAtStart
+        let budget = session.activeBudgetSeconds
+        let reestimateCount = session.reestimateEvents.filter { $0.undoneAt == nil }.count
+        if reestimateCount > 0 {
+            return "見積もり \(estimate / 60)分 · 見積もり直し \(reestimateCount)回"
         }
-        let extensionMinutes = max(0, (budget - estimate) / 60)
-        if let caption = sessionManager.nudgeExtensionCaption {
-            return "見積もり \(estimate / 60)分 · \(caption)"
-        }
-        if extensionMinutes > 0 {
-            return "見積もり \(estimate / 60)分 · 延長 +\(extensionMinutes)分"
+        if budget > estimate {
+            let extra = (budget - estimate) / 60
+            return "見積もり \(estimate / 60)分 · 予定 +\(extra)分"
         }
         return "見積もり \(estimate / 60)分"
     }
@@ -439,7 +437,7 @@ struct FocusView: View {
 
     private func progressValue(at now: Date) -> Double {
         guard let session = sessionManager.activeSession else { return 0 }
-        let budget = max(TimeInterval(session.budgetSecondsAtStart), 1)
+        let budget = max(TimeInterval(session.activeBudgetSeconds), 1)
         return session.elapsedSeconds(at: now) / budget
     }
 
@@ -481,15 +479,45 @@ struct FocusView: View {
         return (fit, rows, progress, nil, nil)
     }
 
-    private func applyExtend(minutes: Int) {
+    private func openReestimate(trigger: ReestimateTrigger) {
+        sessionManager.presentReestimate(
+            trigger: trigger,
+            surface: sessionManager.reestimateSurface(isLandscape: verticalSizeClass == .compact)
+        )
+    }
+
+    private func pauseWithUndo() {
         run {
-            try sessionManager.extend(
-                by: TimeInterval(minutes * 60),
-                reason: extendReason
+            try sessionManager.pause()
+            sessionManager.focusUndoOffer = SessionManager.FocusUndoOffer(
+                message: "停車を取り消す",
+                eventID: UUID(),
+                expiresAt: Date().addingTimeInterval(5)
             )
+            sessionManager.scheduleFocusUndoExpiry(at: sessionManager.focusUndoOffer!.expiresAt)
         }
-        showExtendChips = false
-        extendReason = nil
+    }
+
+    private func focusUndoBar(_ offer: SessionManager.FocusUndoOffer) -> some View {
+        HStack {
+            Text(offer.message)
+                .font(.subheadline.weight(.semibold))
+            Spacer(minLength: 8)
+            Button("取り消し") {
+                if offer.message.contains("停車") {
+                    run { try sessionManager.undoPauseFromFocus() }
+                } else {
+                    run { try sessionManager.undoReestimate(eventID: offer.eventID) }
+                }
+                sessionManager.focusUndoOffer = nil
+            }
+            .font(.subheadline.weight(.bold))
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(FocusPanel.fillRaised.opacity(0.96))
+        .padding(.horizontal, 8)
+        .padding(.top, 6)
     }
 
     private func playNudgeRing() {
@@ -536,12 +564,10 @@ struct FocusView: View {
                     try sessionManager.arrive()
                 }
             }
-        case .extend:
+        case .reestimate:
             if FocusPendingActionStore.consumeIfMatches(action) {
                 didConsumePendingAction = true
-                withAnimation(TrainTheme.Motion.soft) {
-                    showExtendChips = true
-                }
+                openReestimate(trigger: .planEnd)
             }
         case .pause:
             if sessionManager.phase == .running || sessionManager.phase == .overtime {

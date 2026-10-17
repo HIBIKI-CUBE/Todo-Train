@@ -387,7 +387,7 @@ extension SessionManager {
             return
         }
         let working = nudgeWorkingSeconds(for: session, now: now)
-        session.budgetSecondsAtStart += added
+        session.currentBudgetSeconds = session.activeBudgetSeconds + added
         noteCabinActivity(now: now, clearPendingIdle: true)
         bumpCompanionSync()
         let record = SessionExtension(

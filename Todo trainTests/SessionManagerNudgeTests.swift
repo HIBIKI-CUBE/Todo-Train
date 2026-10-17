@@ -86,17 +86,17 @@ struct SessionManagerNudgeTests {
     @Test func sameWillExtendIsANoOp() throws {
         let manager = try rideAtCheckIn()
         let session = try #require(manager.activeSession)
-        let before = session.budgetSecondsAtStart
+        let before = session.activeBudgetSeconds
         let first = manager.applyNudgeCommand(answer(manager, choice: .willExtend, addSeconds: 600))
         #expect(first.ok == true)
-        #expect(session.budgetSecondsAtStart == before + 600)
-        let working = try #require(session.extensions.first?.workingSeconds)
-        #expect(working > 0)
+        #expect(session.activeBudgetSeconds == before)
+        #expect(session.extensions.isEmpty)
+        #expect(manager.reestimateRequest?.remoteWillExtendReceived == true)
 
         let second = manager.applyNudgeCommand(answer(manager, choice: .willExtend, addSeconds: 600))
         #expect(second.ok == true)
-        #expect(session.budgetSecondsAtStart == before + 600)
-        #expect(session.extensions.count == 1)
+        #expect(session.activeBudgetSeconds == before)
+        #expect(session.extensions.isEmpty)
     }
 
     @Test func extendStoresWorkingSecondsSoAFiredCheckInStaysPut() throws {
@@ -134,13 +134,13 @@ struct SessionManagerNudgeTests {
         manager.reconcile()
         let ack = manager.applyNudgeCommand(answer(manager, choice: .willExtend, addSeconds: 600))
         #expect(ack.ok == true)
-        let working = try #require(manager.activeSession?.extensions.first?.workingSeconds)
-        #expect(abs(working - (offset + 1)) < 2)
+        #expect(manager.activeSession?.extensions.isEmpty == true)
+        #expect(manager.reestimateRequest != nil)
 
         try manager.pause()
         clock.advance(by: 60 * 60)
         try manager.resume()
-        #expect(manager.activeSession?.extensions.first?.workingSeconds == working)
+        #expect(manager.activeSession?.extensions.isEmpty == true)
     }
 
     @Test func macExtendClosesTheIphonePromptAndUpdatesTheRide() throws {
@@ -154,13 +154,14 @@ struct SessionManagerNudgeTests {
         manager.reconcile()
         #expect(manager.pendingCheckIn == .progress)
         #expect(live.current?.checkInPrompt != nil)
-        let before = try #require(manager.activeSession?.budgetSecondsAtStart)
+        let before = try #require(manager.activeSession?.activeBudgetSeconds)
 
         let ack = manager.applyNudgeCommand(answer(manager, choice: .willExtend, addSeconds: 600))
         #expect(ack.ok == true)
         #expect(manager.pendingCheckIn == nil)
         #expect(manager.phase == .running)
-        #expect(manager.activeSession?.budgetSecondsAtStart == before + 600)
+        #expect(manager.activeSession?.activeBudgetSeconds == before)
+        #expect(manager.reestimateRequest != nil)
         #expect(manager.activeSession?.checkInFiredCount == 1)
         #expect(manager.activeSession?.checkInAnswers.count == 1)
         #expect(live.current?.checkInPrompt == nil)
@@ -170,7 +171,7 @@ struct SessionManagerNudgeTests {
     @Test func answeredPromptStillReturnsToTheRide() throws {
         let manager = try rideAtCheckIn()
         let session = try #require(manager.activeSession)
-        let before = session.budgetSecondsAtStart
+        let before = session.activeBudgetSeconds
         let ack = manager.applyNudgeCommand(answer(manager, choice: .willExtend, addSeconds: 600))
         #expect(ack.ok == true)
         session.pendingCheckIn = .progress
@@ -178,8 +179,8 @@ struct SessionManagerNudgeTests {
         try manager.answerCheckIn(.stillOnIt)
         #expect(manager.pendingCheckIn == nil)
         #expect(manager.phase == .running)
-        #expect(session.budgetSecondsAtStart == before + 600)
-        #expect(session.extensions.count == 1)
+        #expect(session.activeBudgetSeconds == before)
+        #expect(session.extensions.isEmpty)
         #expect(session.checkInAnswers.count == 1)
         #expect(session.checkInFiredCount == 1)
         expectMacQuestionClosed(manager, now: manager.clock.now)
