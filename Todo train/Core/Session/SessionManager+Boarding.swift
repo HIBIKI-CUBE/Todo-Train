@@ -36,6 +36,7 @@ extension SessionManager {
         let ticket = try TicketIssuer.issue(
             title: trimmed,
             estimatedSeconds: estimatedSeconds,
+            createdAt: now,
             into: modelContext
         )
         do {
@@ -351,7 +352,15 @@ extension SessionManager {
         bumpCompanionSync()
     }
 
-    func extend(by seconds: TimeInterval, reason: String? = nil, now: Date? = nil) throws {
+    /// UI の二度押しをまとめる。意図した連続延長（秒が違う）は妨げない。
+    private static let extendDoubleTapWindow: TimeInterval = 1
+
+    func extend(
+        by seconds: TimeInterval,
+        reason: String? = nil,
+        now: Date? = nil,
+        nudgeID: String? = nil
+    ) throws {
         let now = now ?? clock.now
         try refusePassengerDriving()
         guard let session = activeSession, session.isOpen else {
@@ -363,6 +372,20 @@ extension SessionManager {
         guard seconds > 0 else { return }
 
         let added = Int(seconds.rounded())
+        if let nudgeID {
+            let key = nudgeID.lowercased()
+            if session.checkInAnswers.contains(where: {
+                $0.nudgeID?.lowercased() == key
+                    && $0.answer == .willExtend
+                    && $0.addSeconds == added
+            }) {
+                return
+            }
+        } else if let recent = session.extensions.max(by: { $0.createdAt < $1.createdAt }),
+                  recent.addedSeconds == added,
+                  now.timeIntervalSince(recent.createdAt) < Self.extendDoubleTapWindow {
+            return
+        }
         let working = nudgeWorkingSeconds(for: session, now: now)
         session.budgetSecondsAtStart += added
         noteCabinActivity(now: now, clearPendingIdle: true)

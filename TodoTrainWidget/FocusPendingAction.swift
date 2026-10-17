@@ -130,4 +130,15 @@ nonisolated enum FocusPendingActionStore {
         defaults?.removeObject(forKey: suiteKey)
         return true
     }
+
+    /// Drop stale LA arrive/extend handoffs before a fresh departure from the arrival ceremony.
+    static func discardArriveAndExtendHandoffs() {
+        guard let pending = peek() else { return }
+        switch pending.kind {
+        case .arrive, .extend:
+            defaults?.removeObject(forKey: suiteKey)
+        case .pause, .resume, .still:
+            break
+        }
+    }
 }

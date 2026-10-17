@@ -168,6 +168,25 @@ struct SessionManagerArrivalTests {
         #expect(manager.reservedNextTicket() == nil)
     }
 
+    @Test func arrivalSwipeOtherTicket_keepsRideOpenUntilArrive() throws {
+        let (manager, context, clock, _) = try SessionManagerFixtures.makeHarness()
+        try manager.startService()
+        let riding = try SessionManagerFixtures.makeTicket(context, title: "今", seconds: 600)
+        let other = try SessionManagerFixtures.makeTicket(context, title: "別", seconds: 900)
+        try manager.board(ticket: riding)
+        let arrivedID = try #require(manager.activeSession?.id)
+        try manager.arrive()
+        try manager.recordArrivalStamp(sessionID: arrivedID, action: .otherTicket)
+        try manager.boardFromArrivalSwipe(ticketID: other.id)
+        clock.advance(by: 120)
+        manager.reconcile()
+        let ride = try #require(manager.activeSession)
+        #expect(ride.ticket?.id == other.id)
+        #expect(ride.startedFrom == .arrivalSwipe)
+        #expect(ride.outcome == nil)
+        #expect(ride.accumulatedActiveSeconds >= 110)
+    }
+
     @Test func closingAfterStamp_doesNotStartTheNextRide() throws {
         let (manager, context, _, _) = try SessionManagerFixtures.makeHarness()
         try manager.startService()

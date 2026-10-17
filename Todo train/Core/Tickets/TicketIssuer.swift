@@ -41,6 +41,7 @@ enum TicketIssuer {
     static func issue(
         title: String,
         estimatedSeconds: Int,
+        createdAt: Date? = nil,
         into context: ModelContext
     ) throws -> Ticket {
         let seconds = min(max(estimatedSeconds, 1), Ticket.maxEstimatedSeconds)
@@ -55,7 +56,8 @@ enum TicketIssuer {
         let ticket = Ticket(
             title: title,
             estimatedSeconds: seconds,
-            sortOrder: insertAt
+            sortOrder: insertAt,
+            createdAt: createdAt ?? .now
         )
         context.insert(ticket)
         orderedIDs.insert(ticket.id, at: insertAt)

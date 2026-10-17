@@ -133,7 +133,8 @@ extension SessionManager {
         // Membership sees every calendar so hiding a calendar does not 通過.
         let undo = persist(TimetableAdoption.refreshCalendarMembership(
             occurrences: fetched,
-            membership: loadMembership()
+            membership: loadMembership(),
+            membershipReconcileRange: start..<end
         ))
         noticeOccurrences = fetched.filter { occurrence in
             TimetableAdoption.isEligible(occurrence)

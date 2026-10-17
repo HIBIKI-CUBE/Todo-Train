@@ -308,7 +308,7 @@ extension SessionManager {
         switch answer {
         case .willExtend:
             let seconds = TimeInterval(addSeconds ?? 0)
-            try extend(by: seconds, now: at)
+            try extend(by: seconds, now: at, nudgeID: nudgeID)
             appendNudgeStamp(
                 on: session,
                 stage: stage,

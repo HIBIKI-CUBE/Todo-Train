@@ -82,11 +82,13 @@ AlarmKit のカウントダウン Live Activity を Watch のスマートスタ�
 | `previousRideId` / `nextRideId` | 同じ運行の前後の乗車 |
 | `issueToDepartSeconds` | 切符の `createdAt` から発車までの秒。切符が無いときは null |
 | `batchId` | 発券が近い切符の組。直前の切符との間隔が 15 分を超えたら新しい組。識別子はその組で一番早い切符の id |
-| `slackToNextTimetableBlockSeconds` | 発車以降に始まる、取り消されておらず長さのある時刻表ブロックまでの秒。確認待ちのブロックは含む。題名は読まない。無ければ null |
+| `slackToNextTimetableBlockSeconds` | 発車以降に始まる、取り消されておらず長さのある時刻表ブロックまでの秒。同じ運行日のブロックだけ。確認待ちのブロックは含む。題名は読まない。無ければ null |
 | `lineageGroupId` | 乗り継ぎでつながる切符の組。識別子は、組の中で UUID の文字列が最小の切符。つながっていなければその切符の id |
 | `similarityCandidates` | それより前の、条件を満たす乗車のうち上位 20 件。並びは採点の順。各件は乗車 id、合成した点数、手がかりごとの点数（`titleNGram`、`tag`、`lineage`、`hourBand`、`dayKind`） |
 
 `tagIds` は出す。名前は出さない。診断の書き出しは同期せず、タグの重なりを誤差の比較に使う。候補は 1 乗車あたり 20 件で、書き出し全体のバイト上限は置かない。
+
+`extensions` の各行に、延長した瞬間の実働 `workingSeconds` と任意の `reason` を足す。契約の版は上げない。題名は出さない。
 
 box では次が、書き出しだけから leave-one-out の誤差を出す。全体の中央値、タグが一つでも重なる乗車の中央値、候補の上位 3 件と 5 件の中央値、乗務員の見積もりの誤差を並べる。
 
