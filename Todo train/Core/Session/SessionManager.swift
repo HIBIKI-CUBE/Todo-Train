@@ -99,6 +99,12 @@ final class SessionManager {
     var uiPreviewForcesFocusCover: Bool = false
     var uiPreviewLandscape: Bool = false
     var uiPreviewSuppressMotion: Bool = false
+    var uiPreviewShowsServiceShutdown: Bool = false
+    var uiPreviewSelectHistoryTab: Bool = false
+    var uiPreviewShowsBundleViewer: Bool = false
+    var uiPreviewBundleViewerDayKey: String?
+    var uiPreviewBundleFocusIndex: Int = 0
+    var uiPreviewBundleViewerFlatIndex: Int?
     /// 印を押したあとの券面（穴・丸印・角判）を動きなしで出す。
     struct ArrivalUIPreviewStamp {
         var stampCommitted: Bool = true

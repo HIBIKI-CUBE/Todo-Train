@@ -215,6 +215,11 @@ struct HubView: View {
         .onAppear {
             presentServiceEndIfNeeded()
             warmForecasts()
+            #if DEBUG
+            if sessionManager.uiPreviewShowsServiceShutdown {
+                showServiceShutdownCover = true
+            }
+            #endif
         }
         .task {
             while !Task.isCancelled {

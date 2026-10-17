@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import TodoTrainTicketUI
 
 struct ServiceShutdownCover: View {
     @Environment(SessionManager.self) private var sessionManager
@@ -23,9 +24,11 @@ struct ServiceShutdownCover: View {
     @State private var prefaceHeight: CGFloat = 168
     @State private var viewportHeight: CGFloat = 0
     @State private var overviewSettled = false
+    @State private var bundleFocusIndex = 0
 
     private static let overviewID = "service-overview"
-    private static let minimumClockHeight: CGFloat = 220
+    private static let bundleID = "ticket-stamp-bundle"
+    private static let minimumClockHeight: CGFloat = 88
 
     private var pausedSessions: [WorkSession] {
         sessionManager.pausedSessions
@@ -50,6 +53,10 @@ struct ServiceShutdownCover: View {
 
     private var daySessions: [WorkSession] {
         sessionManager.workSessions(onDayKey: dayKey)
+    }
+
+    private var stampBundle: TicketStampBundleAssembly.DayBundle? {
+        sessionManager.ticketStampBundle(forCalendarDayKey: dayKey)
     }
 
     private var dayText: String {
@@ -124,59 +131,97 @@ struct ServiceShutdownCover: View {
 
     private func cabinBody(now: Date) -> some View {
         GeometryReader { geo in
-            let clockHeight = max(Self.minimumClockHeight, geo.size.height - prefaceHeight)
-            ScrollViewReader { proxy in
-                ScrollView {
-                    VStack(spacing: 0) {
-                        preface(now: now)
-                            .onGeometryChange(for: CGFloat.self) { proxy in
-                                proxy.size.height
-                            } action: { height in
-                                guard height > 1, abs(height - prefaceHeight) > 1 else { return }
-                                prefaceHeight = height
+            let bundleBand = stampBundle == nil
+                ? 0
+                : TicketStampBundleDeckView.shutdownBandHeight(
+                    containerWidth: geo.size.width,
+                    bandViewportHeight: max(120, geo.size.height * 0.38)
+                )
+            let scrollHeight = max(0, geo.size.height - bundleBand)
+            let clockHeight = max(
+                Self.minimumClockHeight,
+                scrollHeight - prefaceHeight - 4
+            )
+            VStack(spacing: 0) {
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(spacing: 0) {
+                            preface(now: now)
+                                .onGeometryChange(for: CGFloat.self) { proxy in
+                                    proxy.size.height
+                                } action: { height in
+                                    guard height > 1, abs(height - prefaceHeight) > 1 else { return }
+                                    prefaceHeight = height
+                                }
+
+                            if lamp >= .live {
+                                FocusControlDivider()
+                                overviewClock(now: now, height: clockHeight)
+                                    .id(Self.overviewID)
                             }
 
-                        if lamp >= .live {
-                            FocusControlDivider()
-                            overviewClock(now: now, height: clockHeight)
-                                .id(Self.overviewID)
-                        }
-
-                        if lamp >= .ready, !poweringDown {
-                            pausedBlock
-                            if !canConfirmEnd {
-                                FocusControlDivider()
-                                ServiceCabinPanel(powered: true) {
-                                    Text(endBlockedReason)
-                                        .font(.footnote)
-                                        .foregroundStyle(FocusPanel.muted)
+                            if lamp >= .ready, !poweringDown {
+                                pausedBlock
+                                if !canConfirmEnd {
+                                    FocusControlDivider()
+                                    ServiceCabinPanel(powered: true) {
+                                        Text(endBlockedReason)
+                                            .font(.footnote)
+                                            .foregroundStyle(FocusPanel.muted)
+                                    }
                                 }
                             }
                         }
                     }
-                }
-                .scrollIndicators(.hidden)
-                .onAppear { viewportHeight = geo.size.height }
-                .onChange(of: geo.size.height) { _, height in
-                    viewportHeight = height
-                }
-                .onChange(of: lamp) { _, newLamp in
-                    if newLamp < .live { overviewSettled = false }
-                }
-                .onChange(of: overviewSettled) { _, settled in
-                    guard settled else { return }
-                    let clock = max(Self.minimumClockHeight, viewportHeight - prefaceHeight)
-                    guard prefaceHeight + clock > viewportHeight + 8 else { return }
-                    if reduceMotion {
-                        proxy.scrollTo(Self.overviewID, anchor: .top)
-                    } else {
-                        withAnimation(ServiceCabinMotion.overviewPush) {
+                    .scrollIndicators(.hidden)
+                    .frame(height: scrollHeight)
+                    .onAppear { viewportHeight = scrollHeight }
+                    .onChange(of: scrollHeight) { _, height in
+                        viewportHeight = height
+                    }
+                    .onChange(of: lamp) { _, newLamp in
+                        if newLamp < .live { overviewSettled = false }
+                    }
+                    .onChange(of: overviewSettled) { _, settled in
+                        guard settled else { return }
+                        let clock = max(Self.minimumClockHeight, viewportHeight - prefaceHeight)
+                        guard prefaceHeight + clock > viewportHeight + 8 else { return }
+                        if reduceMotion {
                             proxy.scrollTo(Self.overviewID, anchor: .top)
+                        } else {
+                            withAnimation(ServiceCabinMotion.overviewPush) {
+                                proxy.scrollTo(Self.overviewID, anchor: .top)
+                            }
                         }
                     }
+                    .task(id: lamp >= .live) {
+                        await pushOverview()
+                    }
                 }
-                .task(id: lamp >= .live) {
-                    await pushOverview()
+
+                if let stampBundle, lamp >= .live {
+                    FocusControlDivider()
+                    ServiceCabinPanel(powered: true) {
+                        TicketStampBundleDeckView(
+                            stamps: stampBundle.stamps,
+                            focusIndex: $bundleFocusIndex,
+                            style: .shutdown,
+                            dayBoundaries: []
+                        )
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 2)
+                        .onAppear {
+                            #if DEBUG
+                            if sessionManager.uiPreviewShowsServiceShutdown {
+                                bundleFocusIndex = sessionManager.uiPreviewBundleFocusIndex
+                                return
+                            }
+                            #endif
+                            bundleFocusIndex = 0
+                        }
+                    }
+                    .frame(height: bundleBand)
+                    .allowsHitTesting(!poweringDown)
                 }
             }
         }
