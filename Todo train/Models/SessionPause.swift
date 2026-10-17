@@ -21,6 +21,8 @@ final class SessionPause {
     var macActiveSeconds: Double = 0
     var promptedAt: Date?
     var promptAnswerRaw: String?
+    /// 停車の取り消しを残す。記録は消さない。
+    var undoneAt: Date?
     var session: WorkSession?
 
     init(

@@ -25,7 +25,7 @@ struct FocusControlsView: View {
                     prominence: .primary,
                     action: onArrive
                 )
-                .accessibilityHint("切符を到着として閉じ、Hub に戻ります")
+                .accessibilityHint("切符を到着として閉じ、Hub を開きます")
                 .frame(height: row)
 
                 FocusControlDivider()
@@ -39,7 +39,7 @@ struct FocusControlsView: View {
                         prominence: .secondary,
                         action: onPause
                     )
-                    .accessibilityHint("セッションを停車し、Hub に戻ります。Live Activity から再乗車できます。")
+                    .accessibilityHint("セッションを停車し、Hub を開きます。Live Activity から再乗車できます。")
                     .frame(maxWidth: .infinity)
 
                     FocusControlVerticalDivider()

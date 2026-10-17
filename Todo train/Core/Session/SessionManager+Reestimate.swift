@@ -16,7 +16,13 @@ extension SessionManager {
         var remoteWillExtendReceived: Bool
     }
 
+    enum FocusUndoKind: Equatable {
+        case reestimate
+        case pause
+    }
+
     struct FocusUndoOffer: Equatable {
+        var kind: FocusUndoKind
         var message: String
         var eventID: UUID
         var expiresAt: Date
@@ -104,6 +110,7 @@ extension SessionManager {
         refreshRideSideEffects(for: session, now: now)
 
         focusUndoOffer = FocusUndoOffer(
+            kind: .reestimate,
             message: "見積もり直しを取り消す",
             eventID: record.id,
             expiresAt: now.addingTimeInterval(5)
@@ -131,9 +138,12 @@ extension SessionManager {
         }
     }
 
-    func undoPauseFromFocus(now: Date? = nil) throws {
+    func undoPauseFromFocus(pauseID: UUID, now: Date? = nil) throws {
         let now = now ?? clock.now
         guard phase == .paused, let session = activeSession, session.isPaused else { return }
+        if let pause = session.pauses.first(where: { $0.id == pauseID }) {
+            pause.undoneAt = now
+        }
         reopenPausedSession(session, now: now)
         try save()
         reconcile(now: now)

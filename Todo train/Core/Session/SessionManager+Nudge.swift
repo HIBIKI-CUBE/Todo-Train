@@ -112,17 +112,6 @@ extension SessionManager {
         return NudgePlanner.evaluate(nudgeInput(for: session, now: clock.now)).current
     }
 
-    /// Winning extension, as the instrument names it.
-    var nudgeExtensionCaption: String? {
-        guard let session = activeSession else { return nil }
-        guard let stamp = session.checkInAnswers.last(where: {
-            $0.answer == .willExtend && $0.addSeconds != nil
-        }) else { return nil }
-        let minutes = max(0, (stamp.addSeconds ?? 0) / 60)
-        let device = stamp.answeredOn == "mac" ? "Mac" : "iPhone"
-        return "延長 +\(minutes)（\(device)）"
-    }
-
     func applyNudgeCommand(_ command: CommandPlaintext) -> AckPlaintext {
         let now = clock.now
         let openID: UUID? = {
@@ -318,12 +307,14 @@ extension SessionManager {
             )
             try save()
             releaseAnsweredCheckInPrompt(session, now: at)
-            let surface: ReestimateSurface = answeredOn == "mac" ? .macPip : .iphonePortrait
+            let trigger: ReestimateTrigger = stage == .checkIn || session.pendingCheckIn != nil
+                ? .checkIn
+                : .planEnd
             presentReestimate(
-                trigger: .planEnd,
-                surface: surface,
-                input: answeredOn == "mac" ? .click : .touch,
-                remoteWillExtendReceived: true
+                trigger: trigger,
+                surface: reestimateSurface(isLandscape: false),
+                input: .touch,
+                remoteWillExtendReceived: answeredOn == "mac"
             )
         case .alreadyDone:
             appendNudgeStamp(

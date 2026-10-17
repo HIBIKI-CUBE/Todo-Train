@@ -194,6 +194,92 @@ struct AppModelContainerMigrationTests {
         #expect(pause.pausedOnRaw == "iphone")
     }
 
+    @Test func make_migratesV6WithoutRebuild() throws {
+        let url = Self.temporaryStoreURL()
+        defer { Self.removeStoreFiles(at: url) }
+        let started = Date(timeIntervalSince1970: 1_700_000_000)
+        let ticketID = UUID()
+        let sessionID = UUID()
+        try autoreleasepool {
+            let schema = Schema(versionedSchema: AppSchemaV6.self)
+            let container = try ModelContainer(
+                for: schema,
+                configurations: [ModelConfiguration(schema: schema, url: url)]
+            )
+            let ticket = AppSchemaV6.Ticket(
+                id: ticketID,
+                title: "残す切符",
+                estimatedSeconds: 1_200,
+                sortOrder: 1
+            )
+            container.mainContext.insert(ticket)
+            let session = AppSchemaV6.WorkSession(
+                id: sessionID,
+                startedAt: started,
+                estimatedSecondsAtStart: 1_200,
+                ticket: ticket
+            )
+            session.budgetSecondsAtStart = 1_500
+            session.accumulatedActiveSeconds = 400
+            session.nudgeEventsJSON = "[{\"stage\":\"checkIn\"}]"
+            container.mainContext.insert(session)
+            container.mainContext.insert(
+                AppSchemaV6.SessionExtension(
+                    addedSeconds: 300,
+                    reason: "延長",
+                    createdAt: started.addingTimeInterval(200),
+                    workingSeconds: 200,
+                    session: session
+                )
+            )
+            container.mainContext.insert(
+                AppSchemaV6.SessionPause(
+                    startedAt: started.addingTimeInterval(100),
+                    endedAt: started.addingTimeInterval(200),
+                    session: session
+                )
+            )
+            let blockStart = started.addingTimeInterval(3_600)
+            container.mainContext.insert(
+                TimetableBlock(
+                    title: "1on1",
+                    startsAt: blockStart,
+                    endsAt: blockStart.addingTimeInterval(1_800),
+                    source: .manual
+                )
+            )
+            container.mainContext.insert(
+                PassengerRide(
+                    intervalId: "interval-1",
+                    title: "客",
+                    intervalStart: blockStart,
+                    intervalEnd: blockStart.addingTimeInterval(1_800),
+                    boardedAt: blockStart,
+                    source: .manualInterval
+                )
+            )
+            try container.mainContext.save()
+        }
+        AppModelContainer.rebuildCount = 0
+        let created = try Self.creationDate(of: url)
+        let migrated = try AppModelContainer.make(storeURL: url)
+        #expect(AppModelContainer.rebuildCount == 0)
+        #expect(try Self.creationDate(of: url) == created)
+        #expect(try migrated.mainContext.fetch(FetchDescriptor<Ticket>()).count == 1)
+        #expect(try migrated.mainContext.fetch(FetchDescriptor<TimetableBlock>()).count == 1)
+        #expect(try migrated.mainContext.fetch(FetchDescriptor<PassengerRide>()).count == 1)
+        let session = try #require(
+            try migrated.mainContext.fetch(FetchDescriptor<WorkSession>()).first { $0.id == sessionID }
+        )
+        #expect(session.ticket?.title == "残す切符")
+        #expect(session.currentBudgetSeconds == 1_500)
+        #expect(session.budgetSecondsAtStart == 1_200)
+        #expect(session.reestimateEventsJSON == "[]")
+        #expect(session.nudgeEventsJSON.contains("checkIn"))
+        #expect(session.extensions.count == 1)
+        #expect(session.pauses.count == 1)
+    }
+
     @Test func frozenV3_1HashesMatchThePostPR71Store() throws {
         let url = Self.temporaryStoreURL()
         defer { Self.removeStoreFiles(at: url) }

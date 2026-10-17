@@ -853,6 +853,7 @@ private enum PDCAContract {
         "lineages",
         "checkIns",
         "nudges",
+        "reestimates",
         "timetableBlocks",
         "timetableGuards",
         "passengerRides",
@@ -870,6 +871,7 @@ private enum PDCAContract {
         "lineages",
         "checkIns",
         "nudges",
+        "reestimates",
         "timetableBlocks",
         "timetableGuards",
         "passengerRides",
@@ -883,7 +885,8 @@ private enum PDCAContract {
     ]
     static let rideKeys: Set<String> = [
         "id", "ticketId", "startedAt", "endedAt", "accumulatedActiveSeconds",
-        "estimatedSecondsAtStart", "budgetSecondsAtStart", "outcome",
+        "estimatedSecondsAtStart", "budgetSecondsAtStart",
+        "currentBudgetSeconds", "preArrivalIdleSeconds", "outcome",
         "overtimeResolution", "timetableHeld", "checkInFiredCount",
         "arrivalAction", "arrivalStampedAt", "startedFrom",
         "pauseInputSeconds", "excludedFromForecast",
@@ -899,6 +902,7 @@ private enum PDCAContract {
         "id", "rideId", "startedAt", "endedAt",
         "heldBy", "pausedOn", "heldByInferred",
         "macSampledSeconds", "macActiveSeconds", "promptedAt", "promptAnswer",
+        "undoneAt",
     ]
     static let nudgeKeys: Set<String> = [
         "rideId", "stage", "firedAt", "surface", "rang", "skipped", "cancelledAt",

@@ -10,17 +10,15 @@ private let progressStops = [10, 20, 30, 40, 50, 60, 70, 80, 90]
 
 struct FocusReestimatePanel: View {
     let activeSeconds: TimeInterval
-    let surface: ReestimateSurface
     let onCommit: (ReestimateMode, Double?, Int, Int?, Int?, Bool) -> Void
+    let onArriveAtFullProgress: () -> Void
     let onClose: () -> Void
 
-    @Environment(\.verticalSizeClass) private var verticalSizeClass
     @State private var stage: Stage = .progress
     @State private var progressValue = 0
     @State private var remainingMinutes = 0
     @State private var detailsOpen = false
     @State private var inputsLocked = false
-    @State private var confirmPulse = 0
 
     private enum Stage {
         case progress
@@ -28,13 +26,20 @@ struct FocusReestimatePanel: View {
     }
 
     private var progressAnswer: Double? {
-        guard progressValue > 0 else { return nil }
+        guard progressValue > 0, progressValue < 100 else { return nil }
         return Double(progressValue) / 100.0
     }
 
     private var band: ReestimateBand.ShownBand? {
         guard let progressAnswer else { return nil }
         return ReestimateBand.shown(activeSeconds: activeSeconds, progress: progressAnswer)
+    }
+
+    private var bandRangeMinutes: ClosedRange<Int>? {
+        guard let band, let span = ReestimateBand.remainingSpan(activeSeconds: activeSeconds, band: band) else {
+            return nil
+        }
+        return span.lowRemainingMinutes...span.highRemainingMinutes
     }
 
     var body: some View {
@@ -49,7 +54,9 @@ struct FocusReestimatePanel: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(FocusPanel.fill)
-        .sensoryFeedback(.impact(weight: .medium), trigger: confirmPulse)
+        .onAppear {
+            lockInputsBriefly()
+        }
     }
 
     private var header: some View {
@@ -96,12 +103,13 @@ struct FocusReestimatePanel: View {
                     minutes: $progressValue,
                     stopMinutes: progressStops + [100],
                     maxMinutes: 100,
+                    startsAtLeftUnselected: true,
                     minimumCommitTranslation: 24,
                     requiresDragToCommit: true,
                     accessibilityLabelText: "進捗",
                     onCommit: {
                         if progressValue == 100 {
-                            onCommit(.progress, 1.0, 0, nil, nil, false)
+                            onArriveAtFullProgress()
                         } else if progressValue > 0 {
                             beginRemaining(minutesOnly: false)
                         }
@@ -128,12 +136,12 @@ struct FocusReestimatePanel: View {
                 EstimateSnapGauge(
                     minutes: $remainingMinutes,
                     startsAtLeftUnselected: true,
+                    bandRangeMinutes: bandRangeMinutes,
                     minimumCommitTranslation: 24,
                     requiresDragToCommit: true,
                     accessibilityLabelText: "残り時間",
                     onCommit: {
                         guard remainingMinutes > 0 else { return }
-                        confirmPulse += 1
                         let low = band?.lowTotalSeconds
                         let high = band?.highTotalSeconds
                         onCommit(
@@ -186,6 +194,11 @@ struct FocusReestimatePanel: View {
             stage = .remaining
             remainingMinutes = 0
         }
+        lockInputsBriefly()
+    }
+
+    private func lockInputsBriefly() {
+        inputsLocked = true
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(300))
             inputsLocked = false

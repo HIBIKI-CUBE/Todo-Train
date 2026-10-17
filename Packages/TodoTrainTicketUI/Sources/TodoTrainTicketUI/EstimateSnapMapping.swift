@@ -171,4 +171,25 @@ public enum EstimateSnapMapping {
         if stops.contains(minutes) { return minutes }
         return snap(rawMinutes: Double(minutes), stops: stops)
     }
+
+    /// 縦方向が主ななぞりは確定しない。
+    public static func isPrimarilyVerticalDrag(dx: CGFloat, dy: CGFloat) -> Bool {
+        abs(dy) > abs(dx)
+    }
+
+    public static func shouldCommitScrub(
+        requiresDragToCommit: Bool,
+        translation: CGFloat,
+        minimumTranslation: CGFloat,
+        isPrimarilyVertical: Bool,
+        startAnchoredMinutes: Int,
+        endAnchoredMinutes: Int,
+        startsAtLeftUnselected: Bool
+    ) -> Bool {
+        if requiresDragToCommit, translation < minimumTranslation { return false }
+        if requiresDragToCommit, isPrimarilyVertical { return false }
+        if startsAtLeftUnselected, endAnchoredMinutes <= 0, startAnchoredMinutes <= 0 { return false }
+        if endAnchoredMinutes == startAnchoredMinutes { return false }
+        return endAnchoredMinutes > 0 || !startsAtLeftUnselected
+    }
 }

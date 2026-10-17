@@ -143,6 +143,17 @@ struct SessionManagerNudgeTests {
         #expect(manager.activeSession?.extensions.isEmpty == true)
     }
 
+    @Test func macWillExtendAtCheckIn_recordsIPhoneReestimatePrompt() throws {
+        let manager = try rideAtCheckIn()
+        let ack = manager.applyNudgeCommand(answer(manager, choice: .willExtend, addSeconds: 600))
+        #expect(ack.ok == true)
+        let request = try #require(manager.reestimateRequest)
+        #expect(request.trigger == .checkIn)
+        #expect(request.input == .touch)
+        #expect(request.remoteWillExtendReceived == true)
+        #expect(request.surface == .iphonePortrait || request.surface == .iphoneLandscape)
+    }
+
     @Test func macExtendClosesTheIphonePromptAndUpdatesTheRide() throws {
         let live = InMemoryLiveActivityManager()
         let (manager, context, clock, _) = try SessionManagerFixtures.makeHarness(liveActivityManager: live)

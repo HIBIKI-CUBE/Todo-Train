@@ -156,6 +156,7 @@ nonisolated enum PDCAExport {
         var promptedAt: PDCANull<Date>
         /// `resume` / `keepPaused` / `none`、または保存されたままの文字列。
         var promptAnswer: PDCANull<String>
+        var undoneAt: PDCANull<Date>
     }
 
     struct ExtensionRow: Encodable {
@@ -439,7 +440,8 @@ nonisolated enum PDCAExport {
                         macSampledSeconds: pause.macSampledSeconds,
                         macActiveSeconds: pause.macActiveSeconds,
                         promptedAt: PDCANull(pause.promptedAt),
-                        promptAnswer: PDCANull(pause.promptAnswerRaw)
+                        promptAnswer: PDCANull(pause.promptAnswerRaw),
+                        undoneAt: PDCANull(pause.undoneAt)
                     )
                 )
             }

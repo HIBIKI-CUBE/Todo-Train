@@ -47,6 +47,8 @@
 		F086C122302B4E710022EBAD /* Todo train/App/AppSchemaV4+Frozen.swift in Sources */ = {isa = PBXBuildFile; fileRef = F086D122302B4E710022EBAD /* Todo train/App/AppSchemaV4+Frozen.swift */; };
 		F086C123302B4E710022EBAD /* Todo train/App/AppSchemaV5+Frozen.swift in Sources */ = {isa = PBXBuildFile; fileRef = F086D123302B4E710022EBAD /* Todo train/App/AppSchemaV5+Frozen.swift */; };
 		F086C124302B4E710022EBAD /* Todo train/Models/NudgeEventRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = F086D124302B4E710022EBAD /* Todo train/Models/NudgeEventRecord.swift */; };
+		F086C125302B4E710022EBAD /* Todo train/App/AppSchemaV6+Frozen.swift in Sources */ = {isa = PBXBuildFile; fileRef = F086D125302B4E710022EBAD /* Todo train/App/AppSchemaV6+Frozen.swift */; };
+		F086C126302B4E710022EBAD /* Todo train/Core/Estimate/ReestimateRecords.swift in Sources */ = {isa = PBXBuildFile; fileRef = F086D126302B4E710022EBAD /* Todo train/Core/Estimate/ReestimateRecords.swift */; };
 		W0971004302B4E730022EB01 /* TodoTrainSync in Frameworks */ = {isa = PBXBuildFile; productRef = W0971002302B4E730022EB01 /* TodoTrainSync */; };
 		W0972E8C302B4E730022EB01 /* TodoTrainWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = W0972101302B4E730022EB01 /* TodoTrainWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		W097B213302B4E710022EB01 /* BuildInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = F086B201302B4E710022EBAD /* BuildInfo.swift */; };
@@ -143,6 +145,8 @@
 		F086D122302B4E710022EBAD /* Todo train/App/AppSchemaV4+Frozen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Todo train/App/AppSchemaV4+Frozen.swift"; sourceTree = "<group>"; };
 		F086D123302B4E710022EBAD /* Todo train/App/AppSchemaV5+Frozen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Todo train/App/AppSchemaV5+Frozen.swift"; sourceTree = "<group>"; };
 		F086D124302B4E710022EBAD /* Todo train/Models/NudgeEventRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Todo train/Models/NudgeEventRecord.swift"; sourceTree = "<group>"; };
+		F086D125302B4E710022EBAD /* Todo train/App/AppSchemaV6+Frozen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Todo train/App/AppSchemaV6+Frozen.swift"; sourceTree = "<group>"; };
+		F086D126302B4E710022EBAD /* Todo train/Core/Estimate/ReestimateRecords.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Todo train/Core/Estimate/ReestimateRecords.swift"; sourceTree = "<group>"; };
 		W0972101302B4E730022EB01 /* TodoTrainWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TodoTrainWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -335,7 +339,9 @@
 				F086D102302B4E710022EBAD /* Todo train/App/AppSchema.swift */,
 				F086D122302B4E710022EBAD /* Todo train/App/AppSchemaV4+Frozen.swift */,
 				F086D123302B4E710022EBAD /* Todo train/App/AppSchemaV5+Frozen.swift */,
+				F086D125302B4E710022EBAD /* Todo train/App/AppSchemaV6+Frozen.swift */,
 				F086D124302B4E710022EBAD /* Todo train/Models/NudgeEventRecord.swift */,
+				F086D126302B4E710022EBAD /* Todo train/Core/Estimate/ReestimateRecords.swift */,
 				F086D103302B4E710022EBAD /* Todo train/App/AppStoreSnapshot.swift */,
 				F086D104302B4E710022EBAD /* Todo train/App/CloudKitSync.swift */,
 				F086D105302B4E710022EBAD /* Todo train/Core/Diagnostics/LocalWireBuild.swift */,
@@ -709,7 +715,9 @@
 				F086C102302B4E710022EBAD /* Todo train/App/AppSchema.swift in Sources */,
 				F086C122302B4E710022EBAD /* Todo train/App/AppSchemaV4+Frozen.swift in Sources */,
 				F086C123302B4E710022EBAD /* Todo train/App/AppSchemaV5+Frozen.swift in Sources */,
+				F086C125302B4E710022EBAD /* Todo train/App/AppSchemaV6+Frozen.swift in Sources */,
 				F086C124302B4E710022EBAD /* Todo train/Models/NudgeEventRecord.swift in Sources */,
+				F086C126302B4E710022EBAD /* Todo train/Core/Estimate/ReestimateRecords.swift in Sources */,
 				F086C103302B4E710022EBAD /* Todo train/App/AppStoreSnapshot.swift in Sources */,
 				F086C104302B4E710022EBAD /* Todo train/App/CloudKitSync.swift in Sources */,
 				F086C105302B4E710022EBAD /* Todo train/Core/Diagnostics/LocalWireBuild.swift in Sources */,

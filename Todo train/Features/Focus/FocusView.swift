@@ -305,9 +305,6 @@ struct FocusView: View {
             if sessionManager.reestimateRequest != nil {
                 FocusReestimatePanel(
                     activeSeconds: sessionManager.activeSession?.elapsedSeconds(at: .now) ?? 0,
-                    surface: sessionManager.reestimateSurface(
-                        isLandscape: verticalSizeClass == .compact
-                    ),
                     onCommit: { mode, progress, remaining, low, high, details in
                         run {
                             try sessionManager.commitReestimate(
@@ -319,6 +316,14 @@ struct FocusView: View {
                                 detailsOpened: details,
                                 promptId: ReestimatePromptID.remainingV1
                             )
+                        }
+                    },
+                    onArriveAtFullProgress: {
+                        sessionManager.dismissReestimate()
+                        if sessionManager.phase == .overtime {
+                            run { try sessionManager.arrive(resolution: .justFinished) }
+                        } else {
+                            run { try sessionManager.arrive() }
                         }
                     },
                     onClose: { sessionManager.dismissReestimate() }
@@ -342,7 +347,7 @@ struct FocusView: View {
                 )
             } else {
                 FocusControlsView(
-                    onPause: { run { try sessionManager.pause() } },
+                    onPause: { pauseWithUndo() },
                     onReserve: { showNextRideReserve = true },
                     onArrive: { run { try sessionManager.arrive() } },
                     onReestimate: { openReestimate(trigger: .manual) },
@@ -403,15 +408,7 @@ struct FocusView: View {
         guard let session = sessionManager.activeSession else { return nil }
         let estimate = session.estimatedSecondsAtStart
         let budget = session.activeBudgetSeconds
-        let reestimateCount = session.reestimateEvents.filter { $0.undoneAt == nil }.count
-        if reestimateCount > 0 {
-            return "見積もり \(estimate / 60)分 · 見積もり直し \(reestimateCount)回"
-        }
-        if budget > estimate {
-            let extra = (budget - estimate) / 60
-            return "見積もり \(estimate / 60)分 · 予定 +\(extra)分"
-        }
-        return "見積もり \(estimate / 60)分"
+        return "見積もり \(estimate / 60)分 · 予定 \(budget / 60)分"
     }
 
     private var cabinPhase: FocusTimerPhase {
@@ -489,12 +486,15 @@ struct FocusView: View {
     private func pauseWithUndo() {
         run {
             try sessionManager.pause()
+            let pauseID = sessionManager.activeSession?.pauses.first(where: { $0.endedAt == nil })?.id ?? UUID()
+            let expiresAt = sessionManager.clock.now.addingTimeInterval(5)
             sessionManager.focusUndoOffer = SessionManager.FocusUndoOffer(
+                kind: .pause,
                 message: "停車を取り消す",
-                eventID: UUID(),
-                expiresAt: Date().addingTimeInterval(5)
+                eventID: pauseID,
+                expiresAt: expiresAt
             )
-            sessionManager.scheduleFocusUndoExpiry(at: sessionManager.focusUndoOffer!.expiresAt)
+            sessionManager.scheduleFocusUndoExpiry(at: expiresAt)
         }
     }
 
@@ -504,9 +504,10 @@ struct FocusView: View {
                 .font(.subheadline.weight(.semibold))
             Spacer(minLength: 8)
             Button("取り消し") {
-                if offer.message.contains("停車") {
-                    run { try sessionManager.undoPauseFromFocus() }
-                } else {
+                switch offer.kind {
+                case .pause:
+                    run { try sessionManager.undoPauseFromFocus(pauseID: offer.eventID) }
+                case .reestimate:
                     run { try sessionManager.undoReestimate(eventID: offer.eventID) }
                 }
                 sessionManager.focusUndoOffer = nil

@@ -41,6 +41,19 @@ struct ContentView: View {
                 }
             }
         }
+        .overlay(alignment: .top) {
+            if let offer = sessionManager.focusUndoOffer, !isFocusPresented {
+                FocusUndoBanner(offer: offer) {
+                    switch offer.kind {
+                    case .pause:
+                        try? sessionManager.undoPauseFromFocus(pauseID: offer.eventID)
+                    case .reestimate:
+                        try? sessionManager.undoReestimate(eventID: offer.eventID)
+                    }
+                    sessionManager.focusUndoOffer = nil
+                }
+            }
+        }
         .safeAreaInset(edge: .bottom, spacing: 8) {
             if let message = undoCenter.bannerMessage {
                 DeletionUndoBanner(message: message) {

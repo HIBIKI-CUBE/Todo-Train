@@ -52,10 +52,6 @@ struct ServiceShutdownCover: View {
         sessionManager.workSessions(onDayKey: dayKey)
     }
 
-    private var unlabeled: [SessionExtension] {
-        ServiceCabinSequence.unlabeledExtensions(in: daySessions)
-    }
-
     private var dayText: String {
         DayKeyFormatting.displayDay(from: dayKey)
     }
@@ -317,36 +313,6 @@ struct ServiceShutdownCover: View {
         }
     }
 
-    @ViewBuilder
-    private var unlabeledBlock: some View {
-        if unlabeled.isEmpty {
-            EmptyView()
-        } else {
-            FocusControlDivider()
-            ServiceCabinPanel(powered: true) {
-                VStack(alignment: .leading, spacing: TrainTheme.Space.md) {
-                    ForEach(unlabeled, id: \.id) { item in
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text(unlabeledCaption(item))
-                                .font(.subheadline.monospacedDigit())
-                                .foregroundStyle(FocusPanel.ink)
-                            HStack(spacing: 8) {
-                                ForEach(ServiceCabinSequence.extendReasons, id: \.self) { reason in
-                                    Button(reason) {
-                                        sessionManager.setExtensionReason(reason, on: item)
-                                    }
-                                    .font(.caption.weight(.semibold))
-                                    .buttonStyle(.bordered)
-                                    .tint(.white)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
     private var endBlockedReason: String {
         if sessionManager.phase == .running || sessionManager.phase == .overtime {
             return "走行中は運行終了できません。"
@@ -355,12 +321,6 @@ struct ServiceShutdownCover: View {
             return "停車中を途中下車または放棄してから終了できます。"
         }
         return ""
-    }
-
-    private func unlabeledCaption(_ item: SessionExtension) -> String {
-        let minutes = max(item.addedSeconds / 60, 1)
-        let title = item.session?.ticket?.title ?? "延長"
-        return "\(title) +\(minutes)分"
     }
 
     private func occupancyInstrument(now: Date) -> (

@@ -6,10 +6,13 @@
 import Foundation
 
 enum ReestimateBand {
+    private static let gaugeMaxRemainingMinutes = 60
+
     struct ShownBand: Equatable {
         var lowTotalSeconds: Int
         var highTotalSeconds: Int
         var headline: String
+        var clippedAtMaxRemaining: Bool
     }
 
     /// 走行時間 ÷（答え±5%）だけで帯を作る。
@@ -23,35 +26,77 @@ enum ReestimateBand {
         let highDenom = max(p - 0.05, 0.01)
         let lowTotal = Int((activeSeconds / lowDenom).rounded())
         let highTotal = Int((activeSeconds / highDenom).rounded())
-        let headline = headline(lowMinutes: lowTotal / 60, highMinutes: highTotal / 60)
+        let span = remainingSpan(activeSeconds: activeSeconds, lowTotalSeconds: lowTotal, highTotalSeconds: highTotal)
+        let clipped = span?.clippedAtMax == true
+        let headline = headline(
+            progress: p,
+            activeSeconds: activeSeconds,
+            lowMinutes: lowTotal / 60,
+            highMinutes: highTotal / 60,
+            clippedAtMaxRemaining: clipped
+        )
         return ShownBand(
             lowTotalSeconds: lowTotal,
             highTotalSeconds: highTotal,
-            headline: headline
+            headline: headline,
+            clippedAtMaxRemaining: clipped
         )
     }
 
-    static func headline(lowMinutes: Int, highMinutes: Int) -> String {
+    static func headline(
+        progress: Double,
+        activeSeconds: TimeInterval,
+        lowMinutes: Int,
+        highMinutes: Int,
+        clippedAtMaxRemaining: Bool
+    ) -> String {
         let low = max(lowMinutes, 1)
         let high = max(highMinutes, low)
-        if high >= 60 && high - low >= 20 {
-            return "全体60分以上"
+        if clippedAtMaxRemaining {
+            return "全体\(low)分以上"
         }
-        if low == high {
-            return "全体\(low)分前後"
+        if progress >= 0.3 {
+            let totalMinutes = activeSeconds / progress / 60.0
+            let rounded = max(5, Int((totalMinutes / 5.0).rounded()) * 5)
+            return "全体\(rounded)分前後"
         }
         return "全体\(low)〜\(high)分"
+    }
+
+    struct RemainingSpan: Equatable {
+        var lowRemainingMinutes: Int
+        var highRemainingMinutes: Int
+        var clippedAtMax: Bool
     }
 
     /// 残り時間ゲージ用。帯の全体秒から、今の走行を引いた残りの幅。
     static func remainingSpan(
         activeSeconds: TimeInterval,
         band: ShownBand
-    ) -> (lowRemainingMinutes: Int, highRemainingMinutes: Int)? {
-        let lowRemain = max(0, band.lowTotalSeconds - Int(activeSeconds.rounded()))
-        let highRemain = max(0, band.highTotalSeconds - Int(activeSeconds.rounded()))
+    ) -> RemainingSpan? {
+        remainingSpan(
+            activeSeconds: activeSeconds,
+            lowTotalSeconds: band.lowTotalSeconds,
+            highTotalSeconds: band.highTotalSeconds
+        )
+    }
+
+    static func remainingSpan(
+        activeSeconds: TimeInterval,
+        lowTotalSeconds: Int,
+        highTotalSeconds: Int
+    ) -> RemainingSpan? {
+        let active = Int(activeSeconds.rounded())
+        let lowRemain = max(0, lowTotalSeconds - active)
+        let highRemain = max(0, highTotalSeconds - active)
         let lowMin = max(1, (lowRemain + 59) / 60)
         let highMin = max(lowMin, (highRemain + 59) / 60)
-        return (lowMin, min(highMin, 60))
+        let cappedHigh = min(highMin, gaugeMaxRemainingMinutes)
+        let clipped = highMin > gaugeMaxRemainingMinutes
+        return RemainingSpan(
+            lowRemainingMinutes: min(lowMin, gaugeMaxRemainingMinutes),
+            highRemainingMinutes: cappedHigh,
+            clippedAtMax: clipped
+        )
     }
 }

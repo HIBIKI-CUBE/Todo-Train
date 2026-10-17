@@ -73,6 +73,9 @@ struct AppStoreSnapshot: Sendable {
         var accumulatedActiveSeconds: TimeInterval
         var estimatedSecondsAtStart: Int
         var budgetSecondsAtStart: Int
+        var currentBudgetSeconds: Int = 0
+        var reestimateEventsJSON: String = "[]"
+        var preArrivalIdleSeconds: Int?
         var outcomeRaw: String?
         var overtimeResolutionRaw: String?
         var arrivalActionRaw: String?
@@ -213,6 +216,9 @@ struct AppStoreSnapshot: Sendable {
                 accumulatedActiveSeconds: session.accumulatedActiveSeconds,
                 estimatedSecondsAtStart: session.estimatedSecondsAtStart,
                 budgetSecondsAtStart: session.budgetSecondsAtStart,
+                currentBudgetSeconds: session.currentBudgetSeconds,
+                reestimateEventsJSON: session.reestimateEventsJSON,
+                preArrivalIdleSeconds: session.preArrivalIdleSeconds,
                 outcomeRaw: session.outcomeRaw,
                 overtimeResolutionRaw: session.overtimeResolutionRaw,
                 arrivalActionRaw: session.arrivalActionRaw,
@@ -342,6 +348,11 @@ struct AppStoreSnapshot: Sendable {
             session.pausedAt = row.pausedAt
             session.accumulatedActiveSeconds = row.accumulatedActiveSeconds
             session.budgetSecondsAtStart = row.budgetSecondsAtStart
+            session.currentBudgetSeconds = row.currentBudgetSeconds > 0
+                ? row.currentBudgetSeconds
+                : max(row.budgetSecondsAtStart, row.estimatedSecondsAtStart)
+            session.reestimateEventsJSON = row.reestimateEventsJSON
+            session.preArrivalIdleSeconds = row.preArrivalIdleSeconds
             session.outcomeRaw = row.outcomeRaw
             session.overtimeResolutionRaw = row.overtimeResolutionRaw
             session.arrivalActionRaw = row.arrivalActionRaw

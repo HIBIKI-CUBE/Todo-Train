@@ -494,12 +494,12 @@ enum AppSchemaV6: VersionedSchema {
 
     static var models: [any PersistentModel.Type] {
         [
-            Ticket.self,
-            WorkSession.self,
-            SessionExtension.self,
-            SessionPause.self,
-            Tag.self,
-            TaskLineage.self,
+            AppSchemaV6.Ticket.self,
+            AppSchemaV6.WorkSession.self,
+            AppSchemaV6.SessionExtension.self,
+            AppSchemaV6.SessionPause.self,
+            AppSchemaV6.Tag.self,
+            AppSchemaV6.TaskLineage.self,
             ServiceDay.self,
             TimetableBlock.self,
             TimetableGuard.self,
@@ -513,7 +513,19 @@ enum AppSchemaV7: VersionedSchema {
     static var versionIdentifier: Schema.Version { Schema.Version(7, 0, 0) }
 
     static var models: [any PersistentModel.Type] {
-        AppSchemaV6.models
+        [
+            Ticket.self,
+            WorkSession.self,
+            SessionExtension.self,
+            SessionPause.self,
+            Tag.self,
+            TaskLineage.self,
+            ServiceDay.self,
+            TimetableBlock.self,
+            TimetableGuard.self,
+            TimetableSeriesRule.self,
+            PassengerRide.self,
+        ]
     }
 }
 

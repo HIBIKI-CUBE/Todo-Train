@@ -56,7 +56,7 @@ struct OvertimeControlsView: View {
                 FocusControlDivider()
 
                 FocusControlButton(
-                    title: "割り込みが入った",
+                    title: "割り込み",
                     systemImage: "rectangle.stack.badge.plus",
                     fill: FocusPanel.fillRaised,
                     foreground: FocusPanel.ink,

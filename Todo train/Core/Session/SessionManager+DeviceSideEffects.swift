@@ -237,7 +237,7 @@ extension SessionManager {
             sessionID: session.id,
             ticketTitle: title,
             fireAt: fireAt,
-            budgetSeconds: session.budgetSecondsAtStart
+            budgetSeconds: session.activeBudgetSeconds
         )
     }
 

@@ -101,4 +101,40 @@ struct EstimateSnapMappingTests {
         #expect(scrub.displayFraction < finger)
         #expect(scrub.displayFraction > from)
     }
+
+    @Test func shouldCommitScrub_rejectsVerticalShortOrSameStop() {
+        #expect(
+            EstimateSnapMapping.shouldCommitScrub(
+                requiresDragToCommit: true,
+                translation: 30,
+                minimumTranslation: 24,
+                isPrimarilyVertical: true,
+                startAnchoredMinutes: 0,
+                endAnchoredMinutes: 10,
+                startsAtLeftUnselected: true
+            ) == false
+        )
+        #expect(
+            EstimateSnapMapping.shouldCommitScrub(
+                requiresDragToCommit: true,
+                translation: 30,
+                minimumTranslation: 24,
+                isPrimarilyVertical: false,
+                startAnchoredMinutes: 20,
+                endAnchoredMinutes: 20,
+                startsAtLeftUnselected: false
+            ) == false
+        )
+        #expect(
+            EstimateSnapMapping.shouldCommitScrub(
+                requiresDragToCommit: true,
+                translation: 30,
+                minimumTranslation: 24,
+                isPrimarilyVertical: false,
+                startAnchoredMinutes: 0,
+                endAnchoredMinutes: 20,
+                startsAtLeftUnselected: true
+            ) == true
+        )
+    }
 }

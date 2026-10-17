@@ -10,7 +10,7 @@ Estimators:
   global median of prior active seconds
   median of priors that share at least one tag id
   median of the first 3 and first 5 similarityCandidates (device order)
-  the   rider's estimatedSecondsAtStart
+  the rider's estimatedSecondsAtStart
   the latest committed reestimate on the ride (judgment estimate)
 
 Usage:
