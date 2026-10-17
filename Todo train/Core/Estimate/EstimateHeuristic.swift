@@ -111,7 +111,7 @@ enum EstimateHeuristic {
                 startedAt: session.startedAt,
                 activeSeconds: session.accumulatedActiveSeconds,
                 estimatedSeconds: session.estimatedSecondsAtStart,
-                budgetSeconds: session.budgetSecondsAtStart,
+                budgetSeconds: session.activeBudgetSeconds,
                 extensionAddedSeconds: added,
                 extensionReasons: reasons,
                 punctuality: Punctuality.classify(session),

@@ -8,7 +8,8 @@ import SwiftUI
 enum FocusControlLayout {
     static func equalRowHeight(total: CGFloat, rows: Int) -> CGFloat {
         let lines = CGFloat(rows - 1) * FocusPanel.hairlineWidth
-        return max((total - lines) / CGFloat(rows), 44)
+        let available = max(total - lines, 0)
+        return available / CGFloat(max(rows, 1))
     }
 }
 

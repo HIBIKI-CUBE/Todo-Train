@@ -7,6 +7,7 @@
 //  V4 で声掛けの段と停車の列を既定値のまま足す。
 //  V5 で延長の時点の実働秒を足す。V4 の乗車グラフは AppSchemaV4+Frozen.swift。
 //  V6 で声掛けの記録を既定の空配列で足す。V5 の乗車グラフは AppSchemaV5+Frozen.swift。
+//  V7 で見積もり直しの JSON・到着前の無操作秒数・現在の予算を足す。budgetSecondsAtStart は発車時固定。
 //
 
 import Foundation
@@ -493,6 +494,26 @@ enum AppSchemaV6: VersionedSchema {
 
     static var models: [any PersistentModel.Type] {
         [
+            AppSchemaV6.Ticket.self,
+            AppSchemaV6.WorkSession.self,
+            AppSchemaV6.SessionExtension.self,
+            AppSchemaV6.SessionPause.self,
+            AppSchemaV6.Tag.self,
+            AppSchemaV6.TaskLineage.self,
+            ServiceDay.self,
+            TimetableBlock.self,
+            TimetableGuard.self,
+            TimetableSeriesRule.self,
+            PassengerRide.self,
+        ]
+    }
+}
+
+enum AppSchemaV7: VersionedSchema {
+    static var versionIdentifier: Schema.Version { Schema.Version(7, 0, 0) }
+
+    static var models: [any PersistentModel.Type] {
+        [
             Ticket.self,
             WorkSession.self,
             SessionExtension.self,
@@ -518,11 +539,20 @@ enum AppMigrationPlan: SchemaMigrationPlan {
             AppSchemaV4.self,
             AppSchemaV5.self,
             AppSchemaV6.self,
+            AppSchemaV7.self,
         ]
     }
 
     static var stages: [MigrationStage] {
-        [migrateV1toV2, migrateV2toV3, migrateV3toV3_1, migrateV3_1toV4, migrateV4toV5, migrateV5toV6]
+        [
+            migrateV1toV2,
+            migrateV2toV3,
+            migrateV3toV3_1,
+            migrateV3_1toV4,
+            migrateV4toV5,
+            migrateV5toV6,
+            migrateV6toV7,
+        ]
     }
 
     /// 既存エンティティはそのまま。ダイヤ3型を空テーブルとして足す。
@@ -563,5 +593,25 @@ enum AppMigrationPlan: SchemaMigrationPlan {
     static let migrateV5toV6 = MigrationStage.lightweight(
         fromVersion: AppSchemaV5.self,
         toVersion: AppSchemaV6.self
+    )
+
+    /// 見積もり直しの記録・現在の予算・到着前の無操作秒数。
+    static let migrateV6toV7 = MigrationStage.custom(
+        fromVersion: AppSchemaV6.self,
+        toVersion: AppSchemaV7.self,
+        willMigrate: { _ in },
+        didMigrate: { context in
+            let sessions = (try? context.fetch(FetchDescriptor<WorkSession>())) ?? []
+            for session in sessions {
+                if session.currentBudgetSeconds <= 0 {
+                    session.currentBudgetSeconds = max(
+                        session.budgetSecondsAtStart,
+                        session.estimatedSecondsAtStart
+                    )
+                }
+                session.budgetSecondsAtStart = session.estimatedSecondsAtStart
+            }
+            try? context.save()
+        }
     )
 }

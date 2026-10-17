@@ -147,7 +147,8 @@ struct SessionManagerServiceTests {
         manager.reconcile()
 
         #expect(manager.phase == .running)
-        #expect(manager.activeSession?.budgetSecondsAtStart == 180)
+        #expect(manager.activeSession?.currentBudgetSeconds == 180)
+        #expect(manager.activeSession?.budgetSecondsAtStart == 60)
         #expect(manager.remainingSeconds > 0)
     }
 

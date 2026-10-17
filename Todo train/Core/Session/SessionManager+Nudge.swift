@@ -112,17 +112,6 @@ extension SessionManager {
         return NudgePlanner.evaluate(nudgeInput(for: session, now: clock.now)).current
     }
 
-    /// Winning extension, as the instrument names it.
-    var nudgeExtensionCaption: String? {
-        guard let session = activeSession else { return nil }
-        guard let stamp = session.checkInAnswers.last(where: {
-            $0.answer == .willExtend && $0.addSeconds != nil
-        }) else { return nil }
-        let minutes = max(0, (stamp.addSeconds ?? 0) / 60)
-        let device = stamp.answeredOn == "mac" ? "Mac" : "iPhone"
-        return "延長 +\(minutes)（\(device)）"
-    }
-
     func applyNudgeCommand(_ command: CommandPlaintext) -> AckPlaintext {
         let now = clock.now
         let openID: UUID? = {
@@ -223,7 +212,7 @@ extension SessionManager {
             passengerAccumulated: 0,
             passengerSince: passengerWhileRunning ? passenger?.boardedAt : nil,
             isPassenger: passengerWhileRunning,
-            estimatedSeconds: session.budgetSecondsAtStart,
+            estimatedSeconds: session.activeBudgetSeconds,
             rideID: session.id,
             extensions: session.extensions.map {
                 NudgeExtension(
@@ -307,8 +296,6 @@ extension SessionManager {
     ) throws {
         switch answer {
         case .willExtend:
-            let seconds = TimeInterval(addSeconds ?? 0)
-            try extend(by: seconds, now: at, nudgeID: nudgeID)
             appendNudgeStamp(
                 on: session,
                 stage: stage,
@@ -320,6 +307,15 @@ extension SessionManager {
             )
             try save()
             releaseAnsweredCheckInPrompt(session, now: at)
+            let trigger: ReestimateTrigger = stage == .checkIn || session.pendingCheckIn != nil
+                ? .checkIn
+                : .planEnd
+            presentReestimate(
+                trigger: trigger,
+                surface: reestimateSurface(isLandscape: false),
+                input: .touch,
+                remoteWillExtendReceived: answeredOn == "mac"
+            )
         case .alreadyDone:
             appendNudgeStamp(
                 on: session,
@@ -398,7 +394,7 @@ extension SessionManager {
         guard !session.nudgeFiredStagesRaw.contains(NudgeStage.checkIn.rawValue) else { return }
         if let offset = nudgeMarks(input).first(where: { $0.stage == .checkIn })?.offset {
             session.checkInOffsetSeconds = [offset]
-            let budget = TimeInterval(max(session.budgetSecondsAtStart, 1))
+            let budget = TimeInterval(max(session.activeBudgetSeconds, 1))
             session.checkInFraction = offset / budget
         } else if !session.extensions.isEmpty {
             session.checkInOffsetSeconds = []

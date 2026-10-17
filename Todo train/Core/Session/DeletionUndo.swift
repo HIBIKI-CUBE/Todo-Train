@@ -38,6 +38,9 @@ enum DeletionUndo {
         var accumulatedActiveSeconds: TimeInterval
         var estimatedSecondsAtStart: Int
         var budgetSecondsAtStart: Int
+        var currentBudgetSeconds: Int = 0
+        var reestimateEventsJSON: String = "[]"
+        var preArrivalIdleSeconds: Int?
         var outcomeRaw: String?
         var overtimeResolutionRaw: String?
         var arrivalActionRaw: String?
@@ -123,6 +126,9 @@ enum DeletionUndo {
             accumulatedActiveSeconds: session.accumulatedActiveSeconds,
             estimatedSecondsAtStart: session.estimatedSecondsAtStart,
             budgetSecondsAtStart: session.budgetSecondsAtStart,
+            currentBudgetSeconds: session.currentBudgetSeconds,
+            reestimateEventsJSON: session.reestimateEventsJSON,
+            preArrivalIdleSeconds: session.preArrivalIdleSeconds,
             outcomeRaw: session.outcomeRaw,
             overtimeResolutionRaw: session.overtimeResolutionRaw,
             arrivalActionRaw: session.arrivalActionRaw,
@@ -225,6 +231,11 @@ enum DeletionUndo {
         session.accumulatedActiveSeconds = record.accumulatedActiveSeconds
         session.estimatedSecondsAtStart = record.estimatedSecondsAtStart
         session.budgetSecondsAtStart = record.budgetSecondsAtStart
+        session.currentBudgetSeconds = record.currentBudgetSeconds > 0
+            ? record.currentBudgetSeconds
+            : max(record.budgetSecondsAtStart, record.estimatedSecondsAtStart)
+        session.reestimateEventsJSON = record.reestimateEventsJSON
+        session.preArrivalIdleSeconds = record.preArrivalIdleSeconds
         session.outcomeRaw = record.outcomeRaw
         session.overtimeResolutionRaw = record.overtimeResolutionRaw
         session.arrivalActionRaw = record.arrivalActionRaw

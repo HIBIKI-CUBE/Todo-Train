@@ -42,7 +42,7 @@ extension SessionManager {
 
     /// 検札後の券面を右スワイプしたときの発車。`issueAndBoard` は使わない。
     func boardFromArrivalSwipe(ticketID: UUID, now: Date? = nil) throws {
-        FocusPendingActionStore.discardArriveAndExtendHandoffs()
+        FocusPendingActionStore.discardArriveAndReestimateHandoffs()
         try boardNamedTicket(ticketID, now: now, startedFrom: .arrivalSwipe)
     }
 

@@ -194,6 +194,186 @@ struct AppModelContainerMigrationTests {
         #expect(pause.pausedOnRaw == "iphone")
     }
 
+    @Test func make_migratesV6WithoutRebuild() throws {
+        let url = Self.temporaryStoreURL()
+        defer { Self.removeStoreFiles(at: url) }
+        let started = Date(timeIntervalSince1970: 1_700_000_000)
+        let endedTicketID = UUID()
+        let runningTicketID = UUID()
+        let endedSessionID = UUID()
+        let runningSessionID = UUID()
+        let guardSessionID = endedSessionID
+        let dayKey = "2026-10-11"
+        try autoreleasepool {
+            let schema = Schema(versionedSchema: AppSchemaV6.self)
+            let container = try ModelContainer(
+                for: schema,
+                configurations: [ModelConfiguration(schema: schema, url: url)]
+            )
+            let context = container.mainContext
+            let tag = AppSchemaV6.Tag(name: "青", colorHex: "#2255AA", sortOrder: 1)
+            context.insert(tag)
+
+            let endedTicket = AppSchemaV6.Ticket(
+                id: endedTicketID,
+                title: "終わった切符",
+                estimatedSeconds: 1_200,
+                sortOrder: 1
+            )
+            endedTicket.tags = [tag]
+            context.insert(endedTicket)
+
+            let child = AppSchemaV6.Ticket(title: "乗り継ぎ先", estimatedSeconds: 600, sortOrder: 2)
+            context.insert(child)
+            context.insert(
+                AppSchemaV6.TaskLineage(
+                    kindRaw: LineageKind.continuation.rawValue,
+                    parent: endedTicket,
+                    child: child,
+                    createdAt: started.addingTimeInterval(600)
+                )
+            )
+
+            let runningTicket = AppSchemaV6.Ticket(
+                id: runningTicketID,
+                title: "走行中",
+                estimatedSeconds: 900,
+                sortOrder: 3
+            )
+            context.insert(runningTicket)
+
+            let day = ServiceDay(startedAt: started, calendarDayKey: dayKey)
+            context.insert(day)
+
+            let ended = AppSchemaV6.WorkSession(
+                id: endedSessionID,
+                startedAt: started,
+                estimatedSecondsAtStart: 1_200,
+                ticket: endedTicket
+            )
+            ended.endedAt = started.addingTimeInterval(1_000)
+            ended.outcomeRaw = SessionOutcome.arrived.rawValue
+            ended.budgetSecondsAtStart = 1_500
+            ended.accumulatedActiveSeconds = 1_000
+            ended.nudgeEventsJSON = "[{\"stage\":\"checkIn\"}]"
+            context.insert(ended)
+            context.insert(
+                AppSchemaV6.SessionExtension(
+                    addedSeconds: 300,
+                    reason: "延長",
+                    createdAt: started.addingTimeInterval(200),
+                    workingSeconds: 200,
+                    session: ended
+                )
+            )
+            let endedPause = AppSchemaV6.SessionPause(
+                startedAt: started.addingTimeInterval(100),
+                endedAt: started.addingTimeInterval(200),
+                session: ended
+            )
+            endedPause.heldByRaw = "timetable"
+            context.insert(endedPause)
+
+            let running = AppSchemaV6.WorkSession(
+                id: runningSessionID,
+                startedAt: started.addingTimeInterval(1_200),
+                estimatedSecondsAtStart: 900,
+                ticket: runningTicket
+            )
+            running.budgetSecondsAtStart = 1_200
+            running.accumulatedActiveSeconds = 300
+            context.insert(running)
+            context.insert(
+                AppSchemaV6.SessionExtension(
+                    addedSeconds: 300,
+                    reason: "割り込み",
+                    createdAt: started.addingTimeInterval(1_400),
+                    workingSeconds: 150,
+                    session: running
+                )
+            )
+
+            let blockStart = started.addingTimeInterval(3_600)
+            let block = TimetableBlock(
+                title: "1on1",
+                startsAt: blockStart,
+                endsAt: blockStart.addingTimeInterval(1_800),
+                source: .manual
+            )
+            context.insert(block)
+            context.insert(
+                TimetableGuard(
+                    sessionID: guardSessionID,
+                    blockID: block.id,
+                    notifiedAt: started,
+                    protectionBoundary: blockStart.addingTimeInterval(120)
+                )
+            )
+            context.insert(
+                TimetableSeriesRule(
+                    recurrenceIdentifier: "series-v6",
+                    title: "毎週",
+                    adopted: true
+                )
+            )
+            context.insert(
+                PassengerRide(
+                    intervalId: "interval-1",
+                    title: "客",
+                    intervalStart: blockStart,
+                    intervalEnd: blockStart.addingTimeInterval(1_800),
+                    boardedAt: blockStart,
+                    source: .manualInterval
+                )
+            )
+            try context.save()
+        }
+        AppModelContainer.rebuildCount = 0
+        let created = try Self.creationDate(of: url)
+        let migrated = try AppModelContainer.make(storeURL: url)
+        #expect(AppModelContainer.rebuildCount == 0)
+        #expect(try Self.creationDate(of: url) == created)
+
+        #expect(try migrated.mainContext.fetch(FetchDescriptor<Ticket>()).count == 3)
+        #expect(try migrated.mainContext.fetch(FetchDescriptor<ServiceDay>()).count == 1)
+        #expect(try migrated.mainContext.fetch(FetchDescriptor<TimetableBlock>()).count == 1)
+        #expect(try migrated.mainContext.fetch(FetchDescriptor<TimetableGuard>()).count == 1)
+        #expect(try migrated.mainContext.fetch(FetchDescriptor<TimetableSeriesRule>()).count == 1)
+        #expect(try migrated.mainContext.fetch(FetchDescriptor<PassengerRide>()).count == 1)
+        #expect(try migrated.mainContext.fetch(FetchDescriptor<Todo_train.Tag>()).count == 1)
+        #expect(try migrated.mainContext.fetch(FetchDescriptor<TaskLineage>()).count == 1)
+        #expect(try migrated.mainContext.fetch(FetchDescriptor<WorkSession>()).count == 2)
+
+        let ended = try #require(
+            try migrated.mainContext.fetch(FetchDescriptor<WorkSession>()).first { $0.id == endedSessionID }
+        )
+        let running = try #require(
+            try migrated.mainContext.fetch(FetchDescriptor<WorkSession>()).first { $0.id == runningSessionID }
+        )
+
+        #expect(ended.ticket?.title == "終わった切符")
+        #expect(ended.ticket?.tags.map(\.name) == ["青"])
+        #expect(ended.endedAt != nil)
+        #expect(ended.outcomeRaw == SessionOutcome.arrived.rawValue)
+        #expect(ended.currentBudgetSeconds == 1_500)
+        #expect(ended.budgetSecondsAtStart == 1_200)
+        #expect(ended.estimatedSecondsAtStart == 1_200)
+        #expect(ended.reestimateEventsJSON == "[]")
+        #expect(ended.nudgeEventsJSON.contains("checkIn"))
+        #expect(ended.extensions.count == 1)
+        #expect(ended.extensions.first?.reason == "延長")
+        #expect(ended.extensions.first?.workingSeconds == 200)
+        #expect(ended.pauses.count == 1)
+        #expect(ended.pauses.first?.heldByRaw == "timetable")
+        #expect(ended.pauses.first?.undoneAt == nil)
+
+        #expect(running.currentBudgetSeconds == 1_200)
+        #expect(running.budgetSecondsAtStart == 900)
+        #expect(running.estimatedSecondsAtStart == 900)
+        #expect(running.extensions.first?.reason == "割り込み")
+        #expect(running.extensions.first?.workingSeconds == 150)
+    }
+
     @Test func frozenV3_1HashesMatchThePostPR71Store() throws {
         let url = Self.temporaryStoreURL()
         defer { Self.removeStoreFiles(at: url) }

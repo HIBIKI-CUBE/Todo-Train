@@ -26,21 +26,21 @@ struct FocusPendingActionTests {
         try body()
     }
 
-    @Test func discardArriveAndExtendHandoffs_clearsQueuedArrive() throws {
+    @Test func discardArriveAndReestimateHandoffs_clearsQueuedArrive() throws {
         try withIsolatedStore {
             FocusPendingActionStore.enqueue(
                 FocusPendingAction(kind: .arrive, sessionID: UUID(), createdAt: .now)
             )
-            FocusPendingActionStore.discardArriveAndExtendHandoffs()
+            FocusPendingActionStore.discardArriveAndReestimateHandoffs()
             #expect(FocusPendingActionStore.peek() == nil)
         }
     }
 
-    @Test func discardArriveAndExtendHandoffs_leavesPauseQueued() throws {
+    @Test func discardArriveAndReestimateHandoffs_leavesPauseQueued() throws {
         try withIsolatedStore {
             let pause = FocusPendingAction(kind: .pause, sessionID: UUID(), createdAt: .now)
             FocusPendingActionStore.enqueue(pause)
-            FocusPendingActionStore.discardArriveAndExtendHandoffs()
+            FocusPendingActionStore.discardArriveAndReestimateHandoffs()
             #expect(FocusPendingActionStore.peek() == pause)
         }
     }

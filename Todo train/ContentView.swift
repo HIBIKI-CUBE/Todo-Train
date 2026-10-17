@@ -28,6 +28,10 @@ struct ContentView: View {
         @Bindable var transferCanvas = transferCanvas
         @Bindable var ticketMotion = ticketMotion
         tabViewWithOptionalPassengerAccessory
+        #if DEBUG
+        .focusUIPreviewOrientation()
+        .focusUIPreviewQuickAddSheet()
+        #endif
         .environment(transferCanvas)
         .environment(ticketMotion)
         .environment(ArrivalForecastTraceLog.shared)
@@ -333,6 +337,15 @@ struct ContentView: View {
     }
 
     private func syncFocusPresentation() {
+        #if DEBUG
+        if FocusUIPreview.isActive {
+            let shouldShow = sessionManager.uiPreviewForcesFocusCover
+            if isFocusPresented != shouldShow {
+                isFocusPresented = shouldShow
+            }
+            return
+        }
+        #endif
         let shouldShow = sessionManager.shouldPresentFocusCover
             && !ticketMotion.suppressFocusCover
         if isFocusPresented != shouldShow {
@@ -351,8 +364,8 @@ struct ContentView: View {
     private func applyPendingFocusAction(focusIsPresented: Bool? = nil) {
         let focusIsPresented = focusIsPresented ?? isFocusPresented
         guard let pending = FocusPendingActionStore.peek() else { return }
-        // Extend always needs Focus; leave the queue for FocusView.
-        if pending.kind == .extend { return }
+        // 見積もり直しは Focus が必要。キューは FocusView に任せる。
+        if pending.kind == .reestimate { return }
         if pending.kind == .pause || pending.kind == .resume {
             _ = sessionManager.applyPendingLiveActivityAction()
             return
@@ -398,6 +411,12 @@ struct ContentView: View {
     }
 
     private func recoverOnLaunch() {
+        #if DEBUG
+        if FocusUIPreview.isActive {
+            syncFocusPresentation()
+            return
+        }
+        #endif
         do {
             try sessionManager.recoverOnLaunch()
         } catch {

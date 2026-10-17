@@ -30,6 +30,7 @@ nonisolated enum PDCAExport {
         var lineages: [LineageRow]
         var checkIns: [CheckInRow]
         var nudges: [NudgeRow]
+        var reestimates: [ReestimateRow]
         var timetableBlocks: [TimetableBlockRow]
         var timetableGuards: [TimetableGuardRow]
         var passengerRides: [PassengerRideRow]
@@ -94,6 +95,8 @@ nonisolated enum PDCAExport {
         var accumulatedActiveSeconds: TimeInterval
         var estimatedSecondsAtStart: Int
         var budgetSecondsAtStart: Int
+        var currentBudgetSeconds: Int
+        var preArrivalIdleSeconds: PDCANull<Int>
         var outcome: PDCANull<String>
         var overtimeResolution: PDCANull<String>
         var timetableHeld: Bool
@@ -153,6 +156,7 @@ nonisolated enum PDCAExport {
         var promptedAt: PDCANull<Date>
         /// `resume` / `keepPaused` / `none`、または保存されたままの文字列。
         var promptAnswer: PDCANull<String>
+        var undoneAt: PDCANull<Date>
     }
 
     struct ExtensionRow: Encodable {
@@ -195,6 +199,26 @@ nonisolated enum PDCAExport {
             try container.encodeIfPresent(answeredStage, forKey: .answeredStage)
             try container.encodeIfPresent(answeredOn, forKey: .answeredOn)
         }
+    }
+
+    struct ReestimateRow: Encodable {
+        var rideId: UUID
+        var reestimateIndex: Int
+        var trigger: String
+        var surface: String
+        var input: String
+        var promptId: String
+        var mode: String
+        var committedAt: Date
+        var activeSeconds: Double
+        var overrunSeconds: Double
+        var progressAnswer: PDCANull<Double>
+        var committedRemainingSeconds: Int
+        var shownBandLowSeconds: PDCANull<Int>
+        var shownBandHighSeconds: PDCANull<Int>
+        var detailsOpened: Bool
+        var undoneAt: PDCANull<Date>
+        var remoteWillExtendReceived: Bool
     }
 
     struct NudgeRow: Encodable {
@@ -356,6 +380,7 @@ nonisolated enum PDCAExport {
         var extensionRows: [ExtensionRow] = []
         var checkInRows: [CheckInRow] = []
         var nudgeRows: [NudgeRow] = []
+        var reestimateRows: [ReestimateRow] = []
         rideRows.reserveCapacity(orderedSessions.count)
 
         for session in orderedSessions {
@@ -374,6 +399,8 @@ nonisolated enum PDCAExport {
                     accumulatedActiveSeconds: session.accumulatedActiveSeconds,
                     estimatedSecondsAtStart: session.estimatedSecondsAtStart,
                     budgetSecondsAtStart: session.budgetSecondsAtStart,
+                    currentBudgetSeconds: session.activeBudgetSeconds,
+                    preArrivalIdleSeconds: PDCANull(session.preArrivalIdleSeconds),
                     outcome: PDCANull(session.outcome?.rawValue),
                     overtimeResolution: PDCANull(session.overtimeResolution?.rawValue),
                     timetableHeld: session.timetableHeld,
@@ -413,7 +440,8 @@ nonisolated enum PDCAExport {
                         macSampledSeconds: pause.macSampledSeconds,
                         macActiveSeconds: pause.macActiveSeconds,
                         promptedAt: PDCANull(pause.promptedAt),
-                        promptAnswer: PDCANull(pause.promptAnswerRaw)
+                        promptAnswer: PDCANull(pause.promptAnswerRaw),
+                        undoneAt: PDCANull(pause.undoneAt)
                     )
                 )
             }
@@ -431,6 +459,7 @@ nonisolated enum PDCAExport {
             }
             checkInRows.append(contentsOf: checkIns(from: session.checkInAnswersJSON, rideId: session.id))
             nudgeRows.append(contentsOf: nudges(from: session))
+            reestimateRows.append(contentsOf: reestimates(from: session))
         }
 
         pauseRows.sort { byDateThenID($0.startedAt, $0.id, $1.startedAt, $1.id) }
@@ -501,6 +530,7 @@ nonisolated enum PDCAExport {
             lineages: lineageRows,
             checkIns: checkInRows,
             nudges: nudgeRows,
+            reestimates: reestimateRows,
             timetableBlocks: blockRows,
             timetableGuards: guardRows,
             passengerRides: passengerRideRows,
@@ -724,6 +754,30 @@ nonisolated enum PDCAExport {
                 answeredAt: record.answeredAt,
                 answeredStage: record.answeredStage,
                 answeredOn: record.answeredOn
+            )
+        }
+    }
+
+    private static func reestimates(from session: WorkSession) -> [ReestimateRow] {
+        session.reestimateEvents.map { event in
+            ReestimateRow(
+                rideId: session.id,
+                reestimateIndex: event.reestimateIndex,
+                trigger: event.trigger.rawValue,
+                surface: event.surface.rawValue,
+                input: event.input.rawValue,
+                promptId: event.promptId,
+                mode: event.mode.rawValue,
+                committedAt: event.committedAt,
+                activeSeconds: event.activeSeconds,
+                overrunSeconds: event.overrunSeconds,
+                progressAnswer: PDCANull(event.progressAnswer),
+                committedRemainingSeconds: event.committedRemainingSeconds,
+                shownBandLowSeconds: PDCANull(event.shownBandLowSeconds),
+                shownBandHighSeconds: PDCANull(event.shownBandHighSeconds),
+                detailsOpened: event.detailsOpened,
+                undoneAt: PDCANull(event.undoneAt),
+                remoteWillExtendReceived: event.remoteWillExtendReceived
             )
         }
     }

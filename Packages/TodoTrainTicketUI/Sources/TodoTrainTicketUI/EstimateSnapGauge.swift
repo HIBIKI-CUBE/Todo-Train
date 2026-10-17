@@ -13,6 +13,15 @@ import UIKit
 public struct EstimateSnapGauge: View {
     @Binding var minutes: Int
     public var highlightedMinutes: Int?
+    public var stopMinutes: [Int]
+    public var maxMinutes: Int
+    /// 左端の未選択から始める（残り時間の見積もり直し）。
+    public var startsAtLeftUnselected: Bool
+    /// 残り時間の見積もり直し用。分単位の帯（ゲージ上に淡く描く）。
+    public var bandRangeMinutes: ClosedRange<Int>?
+    public var minimumCommitTranslation: CGFloat
+    public var requiresDragToCommit: Bool
+    public var accessibilityLabelText: String
     /// When true, finger-up issues a ticket — quiet detent so sheet owns celebration.
     public var willIssue: () -> Bool = { false }
     public var onCommit: (() -> Void)?
@@ -21,22 +30,38 @@ public struct EstimateSnapGauge: View {
     public init(
         minutes: Binding<Int>,
         highlightedMinutes: Int? = nil,
+        stopMinutes: [Int] = EstimateSnapMapping.stops,
+        maxMinutes: Int = EstimateSnapMapping.maxMinutes,
+        startsAtLeftUnselected: Bool = false,
+        bandRangeMinutes: ClosedRange<Int>? = nil,
+        minimumCommitTranslation: CGFloat = 10,
+        requiresDragToCommit: Bool = false,
+        accessibilityLabelText: String = "見積もり",
         willIssue: @escaping () -> Bool = { false },
         onCommit: (() -> Void)? = nil,
         onLongPress: (() -> Void)? = nil
     ) {
         _minutes = minutes
         self.highlightedMinutes = highlightedMinutes
+        self.stopMinutes = stopMinutes
+        self.maxMinutes = maxMinutes
+        self.startsAtLeftUnselected = startsAtLeftUnselected
+        self.bandRangeMinutes = bandRangeMinutes
+        self.minimumCommitTranslation = minimumCommitTranslation
+        self.requiresDragToCommit = requiresDragToCommit
+        self.accessibilityLabelText = accessibilityLabelText
         self.willIssue = willIssue
         self.onCommit = onCommit
         self.onLongPress = onLongPress
     }
 
-    @State private var displayFraction: CGFloat = 0.5
-    @State private var anchoredMinutes: Int = 30
+    @State private var displayFraction: CGFloat = 0
+    @State private var anchoredMinutes: Int = 0
     @State private var isDragging = false
     @State private var selectionPulse = 0
     @State private var impactPulse = 0
+    @State private var confirmPulse = 0
+    @State private var dragStartAnchoredMinutes = 0
     @State private var suppressCommit = false
 
     private let trackHeight: CGFloat = 48
@@ -59,8 +84,18 @@ public struct EstimateSnapGauge: View {
                     .frame(width: fillWidth, height: trackHeight)
                     .allowsHitTesting(false)
 
-                ForEach(EstimateSnapMapping.stops, id: \.self) { stop in
-                    let x = EstimateSnapMapping.fraction(minutes: stop) * width
+                if let bandRangeMinutes {
+                    let lowX = EstimateSnapMapping.fraction(minutes: bandRangeMinutes.lowerBound, maxMinutes: maxMinutes) * width
+                    let highX = EstimateSnapMapping.fraction(minutes: bandRangeMinutes.upperBound, maxMinutes: maxMinutes) * width
+                    Capsule()
+                        .fill(TicketGaugeInk.rail.opacity(0.14))
+                        .frame(width: max(highX - lowX, 4), height: trackHeight)
+                        .offset(x: lowX)
+                        .allowsHitTesting(false)
+                }
+
+                ForEach(stopMinutes, id: \.self) { stop in
+                    let x = EstimateSnapMapping.fraction(minutes: stop, maxMinutes: maxMinutes) * width
                     let isActive = anchoredMinutes == stop
                     let isHighlighted = highlightedMinutes == stop
                     Circle()
@@ -102,12 +137,15 @@ public struct EstimateSnapGauge: View {
             syncToMinutes(newValue, animated: true)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("見積もり")
+        .accessibilityLabel(accessibilityLabelText)
         .accessibilityValue("\(minutes)分")
         .accessibilityAdjustableAction { direction in
-            let stops = EstimateSnapMapping.stops
+            let stops = stopMinutes
             guard let index = stops.firstIndex(of: anchoredMinutes)
-                    ?? stops.firstIndex(of: EstimateSnapMapping.snap(rawMinutes: Double(minutes)))
+                    ?? stops.firstIndex(of: EstimateSnapMapping.snap(
+                        rawMinutes: Double(minutes),
+                        stops: stops
+                    ))
             else { return }
             let issuingContext = willIssue()
             switch direction {
@@ -135,6 +173,7 @@ public struct EstimateSnapGauge: View {
         }
         .sensoryFeedback(.selection, trigger: selectionPulse)
         .sensoryFeedback(.impact(weight: .medium, intensity: 1.0), trigger: impactPulse)
+        .sensoryFeedback(.impact(weight: .light, intensity: 1.0), trigger: confirmPulse)
     }
 
     private func scrubGesture(width: CGFloat) -> some Gesture {
@@ -144,16 +183,28 @@ public struct EstimateSnapGauge: View {
                 if !isDragging {
                     isDragging = true
                     anchoredMinutes = resolvedAnchor(minutes)
+                    dragStartAnchoredMinutes = startsAtLeftUnselected && minutes <= 0 ? 0 : anchoredMinutes
                 }
                 let issuingContext = willIssue()
                 let finger = EstimateSnapMapping.unboundedFraction(
                     x: value.location.x,
                     width: width
                 )
-                let scrub = EstimateSnapMapping.stickyScrub(
-                    fingerFraction: finger,
-                    anchoredMinutes: anchoredMinutes
-                )
+                let scrub: EstimateSnapMapping.StickyScrub
+                if startsAtLeftUnselected, minutes <= 0, anchoredMinutes <= 0 {
+                    scrub = EstimateSnapMapping.scrubFromUnselected(
+                        fingerFraction: finger,
+                        stops: stopMinutes,
+                        maxMinutes: maxMinutes
+                    )
+                } else {
+                    scrub = EstimateSnapMapping.stickyScrub(
+                        fingerFraction: finger,
+                        anchoredMinutes: anchoredMinutes,
+                        stops: stopMinutes,
+                        maxMinutes: maxMinutes
+                    )
+                }
                 if scrub.didEscape {
                     // Title ready → issue path owns celebration; quiet detent while scrubbing.
                     applyEscape(
@@ -174,7 +225,10 @@ public struct EstimateSnapGauge: View {
 
                 if suppressCommit {
                     withAnimation(TicketGaugeInk.snap) {
-                        displayFraction = EstimateSnapMapping.fraction(minutes: anchoredMinutes)
+                        displayFraction = EstimateSnapMapping.fraction(
+                            minutes: anchoredMinutes,
+                            maxMinutes: maxMinutes
+                        )
                         isDragging = false
                     }
                     return
@@ -182,9 +236,33 @@ public struct EstimateSnapGauge: View {
 
                 let issuing = willIssue()
                 let translation = hypot(value.translation.width, value.translation.height)
+                let primarilyVertical = EstimateSnapMapping.isPrimarilyVerticalDrag(
+                    dx: value.translation.width,
+                    dy: value.translation.height
+                )
+
+                if !EstimateSnapMapping.shouldCommitScrub(
+                    requiresDragToCommit: requiresDragToCommit,
+                    translation: translation,
+                    minimumTranslation: minimumCommitTranslation,
+                    isPrimarilyVertical: primarilyVertical,
+                    startAnchoredMinutes: dragStartAnchoredMinutes,
+                    endAnchoredMinutes: anchoredMinutes,
+                    startsAtLeftUnselected: startsAtLeftUnselected
+                ) {
+                    withAnimation(TicketGaugeInk.soft) {
+                        syncToMinutes(minutes, animated: false)
+                    }
+                    isDragging = false
+                    return
+                }
 
                 if translation < 10 {
-                    let tapped = EstimateSnapMapping.stop(forFingerFraction: finger)
+                    let tapped = EstimateSnapMapping.snap(
+                        fraction: EstimateSnapMapping.fraction(x: value.location.x, width: width),
+                        stops: stopMinutes,
+                        maxMinutes: maxMinutes
+                    )
                     if tapped != anchoredMinutes {
                         applyEscape(
                             to: tapped,
@@ -195,7 +273,10 @@ public struct EstimateSnapGauge: View {
                 }
 
                 minutes = anchoredMinutes
-                let landed = EstimateSnapMapping.fraction(minutes: anchoredMinutes)
+                if requiresDragToCommit {
+                    playConfirmHaptic()
+                }
+                let landed = EstimateSnapMapping.fraction(minutes: anchoredMinutes, maxMinutes: maxMinutes)
 
                 if issuing {
                     displayFraction = landed
@@ -217,7 +298,7 @@ public struct EstimateSnapGauge: View {
         if playHaptic {
             impactPulse += 1
         }
-        let target = EstimateSnapMapping.fraction(minutes: stop)
+        let target = EstimateSnapMapping.fraction(minutes: stop, maxMinutes: maxMinutes)
         if animated {
             withAnimation(TicketGaugeInk.snap) {
                 displayFraction = target
@@ -230,9 +311,14 @@ public struct EstimateSnapGauge: View {
     }
 
     private func syncToMinutes(_ value: Int, animated: Bool) {
+        if startsAtLeftUnselected, value <= 0 {
+            anchoredMinutes = 0
+            displayFraction = 0
+            return
+        }
         let stop = resolvedAnchor(value)
         anchoredMinutes = stop
-        let target = EstimateSnapMapping.fraction(minutes: stop)
+        let target = EstimateSnapMapping.fraction(minutes: stop, maxMinutes: maxMinutes)
         if animated {
             withAnimation(TicketGaugeInk.snap) {
                 displayFraction = target
@@ -243,8 +329,16 @@ public struct EstimateSnapGauge: View {
     }
 
     private func resolvedAnchor(_ value: Int) -> Int {
-        if EstimateSnapMapping.stops.contains(value) { return value }
-        return EstimateSnapMapping.snap(rawMinutes: Double(value))
+        if stopMinutes.contains(value) { return value }
+        return EstimateSnapMapping.snap(rawMinutes: Double(value), stops: stopMinutes)
+    }
+
+    private func playConfirmHaptic() {
+        confirmPulse += 1
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(80))
+            confirmPulse += 1
+        }
     }
 }
 

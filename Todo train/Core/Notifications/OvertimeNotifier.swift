@@ -67,6 +67,9 @@ final class OvertimeNotifier: NSObject, OvertimeNotifying, UNUserNotificationCen
     }
 
     func requestAuthorizationIfNeeded() {
+        #if DEBUG
+        if FocusUIPreview.skipsNotificationAuthorization { return }
+        #endif
         configure()
         Task {
             let settings = await center.notificationSettings()

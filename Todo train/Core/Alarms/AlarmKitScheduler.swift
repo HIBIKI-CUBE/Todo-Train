@@ -46,6 +46,9 @@ final class AlarmKitScheduler: AlarmScheduling {
     }
 
     func requestAuthorizationIfNeeded() {
+        #if DEBUG
+        if FocusUIPreview.skipsNotificationAuthorization { return }
+        #endif
         Task {
             _ = try? await AlarmManager.shared.requestAuthorization()
         }
@@ -139,6 +142,9 @@ final class AlarmKitScheduler: AlarmScheduling {
         fireAt: Date,
         budgetSeconds: Int
     ) async {
+        #if DEBUG
+        if FocusUIPreview.skipsNotificationAuthorization { return }
+        #endif
         if AlarmManager.shared.authorizationState == .notDetermined {
             _ = try? await AlarmManager.shared.requestAuthorization()
         }

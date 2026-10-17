@@ -31,13 +31,14 @@ public enum EstimateSnapMapping {
     }
 
     /// 0...1 from minutes (clamped). 30 → 0.5, 60 → 1.
-    public static func fraction(minutes: Int) -> CGFloat {
-        let clamped = min(max(minutes, 0), maxMinutes)
-        return CGFloat(clamped) / CGFloat(maxMinutes)
+    public static func fraction(minutes: Int, maxMinutes: Int = EstimateSnapMapping.maxMinutes) -> CGFloat {
+        let cap = max(maxMinutes, 1)
+        let clamped = min(max(minutes, 0), cap)
+        return CGFloat(clamped) / CGFloat(cap)
     }
 
     /// Raw minutes from a 0...1 fraction (before snap).
-    public static func rawMinutes(fraction: CGFloat) -> Double {
+    public static func rawMinutes(fraction: CGFloat, maxMinutes: Int = EstimateSnapMapping.maxMinutes) -> Double {
         let clamped = min(max(fraction, 0), 1)
         return Double(clamped) * Double(maxMinutes)
     }
@@ -54,6 +55,23 @@ public enum EstimateSnapMapping {
 
     public static func snap(fraction: CGFloat) -> Int {
         snap(rawMinutes: rawMinutes(fraction: fraction))
+    }
+
+    public static func snap(
+        fraction: CGFloat,
+        stops: [Int],
+        maxMinutes: Int = EstimateSnapMapping.maxMinutes
+    ) -> Int {
+        snap(rawMinutes: rawMinutes(fraction: fraction, maxMinutes: maxMinutes), stops: stops)
+    }
+
+    public static func snap(rawMinutes: Double, stops: [Int]) -> Int {
+        stops.min(by: { lhs, rhs in
+            let dL = abs(Double(lhs) - rawMinutes)
+            let dR = abs(Double(rhs) - rawMinutes)
+            if dL == dR { return lhs < rhs }
+            return dL < dR
+        }) ?? (stops.first ?? 30)
     }
 
     /// Fraction from an X position within a track width (clamped 0…1).
@@ -96,18 +114,20 @@ public enum EstimateSnapMapping {
     /// Sticky detent scrub: stretch away from `anchoredMinutes`, escape only past hysteresis.
     public static func stickyScrub(
         fingerFraction: CGFloat,
-        anchoredMinutes: Int
+        anchoredMinutes: Int,
+        stops: [Int] = EstimateSnapMapping.stops,
+        maxMinutes: Int = EstimateSnapMapping.maxMinutes
     ) -> StickyScrub {
         let finger = rubberBand(fingerFraction)
-        let anchor = resolvedAnchor(anchoredMinutes)
-        let anchorF = fraction(minutes: anchor)
+        let anchor = resolvedAnchor(anchoredMinutes, stops: stops, maxMinutes: maxMinutes)
+        let anchorF = fraction(minutes: anchor, maxMinutes: maxMinutes)
         guard let index = stops.firstIndex(of: anchor) else {
             return StickyScrub(displayFraction: anchorF, anchoredMinutes: anchor, didEscape: false)
         }
 
         if finger > anchorF, index + 1 < stops.count {
             let next = stops[index + 1]
-            let nextF = fraction(minutes: next)
+            let nextF = fraction(minutes: next, maxMinutes: maxMinutes)
             let gap = nextF - anchorF
             guard gap > 0 else {
                 return StickyScrub(displayFraction: anchorF, anchoredMinutes: anchor, didEscape: false)
@@ -122,7 +142,7 @@ public enum EstimateSnapMapping {
 
         if finger < anchorF, index > 0 {
             let prev = stops[index - 1]
-            let prevF = fraction(minutes: prev)
+            let prevF = fraction(minutes: prev, maxMinutes: maxMinutes)
             let gap = anchorF - prevF
             guard gap > 0 else {
                 return StickyScrub(displayFraction: anchorF, anchoredMinutes: anchor, didEscape: false)
@@ -143,8 +163,59 @@ public enum EstimateSnapMapping {
         return StickyScrub(displayFraction: display, anchoredMinutes: anchor, didEscape: false)
     }
 
-    private static func resolvedAnchor(_ minutes: Int) -> Int {
+    private static func resolvedAnchor(
+        _ minutes: Int,
+        stops: [Int] = EstimateSnapMapping.stops,
+        maxMinutes: Int = EstimateSnapMapping.maxMinutes
+    ) -> Int {
         if stops.contains(minutes) { return minutes }
-        return snap(rawMinutes: Double(minutes))
+        return snap(rawMinutes: Double(minutes), stops: stops)
+    }
+
+    /// 縦方向が主ななぞりは確定しない。
+    public static func isPrimarilyVerticalDrag(dx: CGFloat, dy: CGFloat) -> Bool {
+        abs(dy) > abs(dx)
+    }
+
+    public static func shouldCommitScrub(
+        requiresDragToCommit: Bool,
+        translation: CGFloat,
+        minimumTranslation: CGFloat,
+        isPrimarilyVertical: Bool,
+        startAnchoredMinutes: Int,
+        endAnchoredMinutes: Int,
+        startsAtLeftUnselected: Bool
+    ) -> Bool {
+        guard requiresDragToCommit else { return true }
+        if translation < minimumTranslation { return false }
+        if isPrimarilyVertical { return false }
+        if startsAtLeftUnselected, endAnchoredMinutes <= 0, startAnchoredMinutes <= 0 { return false }
+        if endAnchoredMinutes == startAnchoredMinutes { return false }
+        return endAnchoredMinutes > 0 || !startsAtLeftUnselected
+    }
+
+    /// 左端未選択（0 分）から、最初の止まり位置へ吸い付くまでのなぞり。
+    public static func scrubFromUnselected(
+        fingerFraction: CGFloat,
+        stops: [Int],
+        maxMinutes: Int = EstimateSnapMapping.maxMinutes
+    ) -> StickyScrub {
+        let finger = rubberBand(fingerFraction)
+        guard let first = stops.first else {
+            return StickyScrub(displayFraction: 0, anchoredMinutes: 0, didEscape: false)
+        }
+        let firstF = fraction(minutes: first, maxMinutes: maxMinutes)
+        guard firstF > 0 else {
+            return StickyScrub(displayFraction: firstF, anchoredMinutes: first, didEscape: true)
+        }
+        if finger <= 0 {
+            return StickyScrub(displayFraction: 0, anchoredMinutes: 0, didEscape: false)
+        }
+        let progress = finger / firstF
+        if progress >= stickyEscapeProgress {
+            return StickyScrub(displayFraction: firstF, anchoredMinutes: first, didEscape: true)
+        }
+        let display = finger * stickyStretch
+        return StickyScrub(displayFraction: display, anchoredMinutes: 0, didEscape: false)
     }
 }

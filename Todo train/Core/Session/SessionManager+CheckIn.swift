@@ -12,7 +12,7 @@ import UIKit
 #endif
 
 extension SessionManager {
-    /// 車内放送 4 択. `willExtend` only acknowledges; Focus shows the extend panel.
+    /// 車内放送 4 択。`willExtend` は見積もり直しのパネルを開く。
     func answerCheckIn(_ answer: CheckInAnswerKind, now: Date? = nil) throws {
         let now = now ?? clock.now
         guard let session = activeSession, session.isOpen else {

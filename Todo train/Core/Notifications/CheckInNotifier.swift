@@ -261,6 +261,9 @@ final class CheckInNotifier: CheckInNotifying {
     }
 
     func requestAuthorizationIfNeeded() {
+        #if DEBUG
+        if FocusUIPreview.skipsNotificationAuthorization { return }
+        #endif
         Task {
             let settings = await center.notificationSettings()
             guard settings.authorizationStatus == .notDetermined else { return }
