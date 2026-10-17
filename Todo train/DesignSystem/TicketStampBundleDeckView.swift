@@ -28,11 +28,17 @@ struct TicketStampBundleDeckView: View {
     @State private var selectionPulse = 0
     @State private var boundaryPulse = 0
 
-    /// `focusIndex` = いま手前の切符（古い方から数える）。
+    private static let fanStep: CGFloat = 16
+    private static let fanDegrees: Double = 4
+    private static let maxFanDepth = 4
+    private static let maxVisibleCards = 5
+
+    /// `focusIndex` = いま手前の切符（古い方から数える）。扇は手前 + 奥 4 枚まで。
     private var visibleStamps: [TicketStampBundleAssembly.Stamp] {
         let end = min(focusIndex + 1, stamps.count)
         guard end > 0 else { return [] }
-        return Array(stamps.prefix(end))
+        let start = max(0, end - Self.maxVisibleCards)
+        return Array(stamps[start..<end])
     }
 
     var body: some View {
@@ -71,17 +77,19 @@ struct TicketStampBundleDeckView: View {
         GeometryReader { geo in
             let metrics = layoutMetrics(in: geo.size)
             let centerNudge = fanCenterNudge(metrics: metrics)
+            let alignment: Alignment = style == .historyStrip ? .bottomLeading : .bottom
             ZStack {
                 ForEach(Array(visibleStamps.enumerated()), id: \.element.id) { offset, stamp in
                     let depth = visibleStamps.count - 1 - offset
                     let isFront = depth == 0
-                    StampedMarsTicketFace(stamp: stamp, scale: metrics.scale, showsLogLines: style != .historyStrip)
-                        .frame(width: metrics.ticketWidth, height: metrics.ticketHeight)
+                    let showsLogs = isFront && style == .viewer
+                    StampedMarsTicketFace(stamp: stamp, scale: metrics.scale, showsLogLines: showsLogs)
+                        .frame(width: metrics.ticketWidth, height: metrics.ticketHeight, alignment: .bottom)
                         .rotationEffect(
-                            .degrees(fanRotation(depth: depth, metrics: metrics)),
+                            .degrees(fanRotation(depth: depth)),
                             anchor: .bottom
                         )
-                        .offset(fanOffset(depth: depth, drag: dragOffset, metrics: metrics))
+                        .offset(fanOffset(depth: depth, drag: dragOffset))
                         .zIndex(Double(offset))
                         .onTapGesture {
                             onSelect(stamp)
@@ -93,19 +101,26 @@ struct TicketStampBundleDeckView: View {
                 }
             }
             .offset(x: centerNudge)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: alignment)
             .contentShape(Rectangle())
-            .gesture(style == .historyStrip ? nil : panGesture(in: geo.size, metrics: metrics))
+            .gesture(style == .historyStrip ? nil : panGesture(metrics: metrics))
         }
-        .frame(height: bandHeight)
+        .modifier(DeckBandHeightModifier(style: style))
         .clipped()
     }
 
-    private var bandHeight: CGFloat {
-        switch style {
-        case .shutdown: 124
-        case .historyStrip: 120
-        case .viewer: 280
+    private struct DeckBandHeightModifier: ViewModifier {
+        var style: TicketStampBundleDeckStyle
+
+        func body(content: Content) -> some View {
+            switch style {
+            case .shutdown:
+                content.frame(maxHeight: .infinity)
+            case .historyStrip:
+                content.frame(height: 140)
+            case .viewer:
+                content.frame(height: 280)
+            }
         }
     }
 
@@ -113,82 +128,63 @@ struct TicketStampBundleDeckView: View {
         var ticketWidth: CGFloat
         var ticketHeight: CGFloat
         var scale: CGFloat
-        var fanStep: CGFloat
-        var fanSpread: Double
-        var maxFanCards: Int
     }
 
     private func layoutMetrics(in size: CGSize) -> LayoutMetrics {
         let baseWidth: CGFloat = 300
-        let baseHeight = MarsTicketSpec.height(forWidth: baseWidth)
-        let visibleCount = min(visibleStamps.count, style == .shutdown ? 5 : 3)
         switch style {
         case .shutdown:
-            let pad: CGFloat = 24
-            let maxW = max(80, size.width - pad)
-            let maxH = max(60, size.height - 8)
-            var scale = min(maxW / baseWidth, maxH / baseHeight, 1)
-            var fanStep: CGFloat = 9
-            let ticketW = baseWidth * scale
-            let fanExtent = ticketW + CGFloat(max(0, visibleCount - 1)) * fanStep * scale
-            if fanExtent > maxW {
-                let squeeze = maxW / fanExtent
-                scale *= squeeze
-                fanStep *= squeeze
+            let targetW = min(size.width * 0.72, 340)
+            var scale = targetW / baseWidth
+            var ticketH = MarsTicketSpec.height(forWidth: baseWidth) * scale
+            let maxH = max(72, size.height - 10)
+            if ticketH > maxH {
+                scale = maxH / MarsTicketSpec.height(forWidth: baseWidth)
+                ticketH = maxH
             }
             return LayoutMetrics(
                 ticketWidth: baseWidth * scale,
-                ticketHeight: baseHeight * scale,
-                scale: scale,
-                fanStep: fanStep,
-                fanSpread: 2.0,
-                maxFanCards: 4
+                ticketHeight: ticketH,
+                scale: scale
             )
         case .historyStrip:
-            let maxW = max(60, size.width - 24)
-            let maxH = max(50, size.height - 8)
-            let scale = min(maxW / baseWidth, maxH / baseHeight, 0.38)
+            let ticketW: CGFloat = 200
+            let ticketH: CGFloat = 110
             return LayoutMetrics(
-                ticketWidth: baseWidth * scale,
-                ticketHeight: baseHeight * scale,
-                scale: scale,
-                fanStep: 5,
-                fanSpread: 1.4,
-                maxFanCards: 3
+                ticketWidth: ticketW,
+                ticketHeight: ticketH,
+                scale: ticketW / baseWidth
             )
         case .viewer:
             let targetW = size.width * 0.8
             let scale = min(targetW / baseWidth, 1)
             return LayoutMetrics(
                 ticketWidth: baseWidth * scale,
-                ticketHeight: baseHeight * scale,
-                scale: scale,
-                fanStep: 12,
-                fanSpread: 3.0,
-                maxFanCards: 5
+                ticketHeight: MarsTicketSpec.height(forWidth: baseWidth) * scale,
+                scale: scale
             )
         }
     }
 
-    private func fanRotation(depth: Int, metrics: LayoutMetrics) -> Double {
-        let capped = min(depth, metrics.maxFanCards)
-        return -Double(capped) * metrics.fanSpread
+    private func fanRotation(depth: Int) -> Double {
+        let capped = min(depth, Self.maxFanDepth)
+        guard capped > 0 else { return 0 }
+        return -Double(capped) * Self.fanDegrees
     }
 
-    private func fanOffset(depth: Int, drag: CGFloat, metrics: LayoutMetrics) -> CGSize {
-        let capped = min(depth, metrics.maxFanCards)
-        let primary = -CGFloat(capped) * metrics.fanStep + drag * 0.28
-        return CGSize(width: primary, height: CGFloat(capped) * 2)
+    private func fanOffset(depth: Int, drag: CGFloat) -> CGSize {
+        let capped = min(depth, Self.maxFanDepth)
+        let primary = -CGFloat(capped) * Self.fanStep + drag * 0.28
+        return CGSize(width: primary, height: CGFloat(capped) * 1.5)
     }
 
-    /// 扇の左寄りを補正して、手前の切符を帯の中央に寄せる。
     private func fanCenterNudge(metrics: LayoutMetrics) -> CGFloat {
         guard style == .shutdown || style == .viewer else { return 0 }
-        let depth = min(max(0, visibleStamps.count - 1), metrics.maxFanCards)
-        return CGFloat(depth) * metrics.fanStep * 0.5
+        let depth = min(max(0, visibleStamps.count - 1), Self.maxFanDepth)
+        return CGFloat(depth) * Self.fanStep * 0.5
     }
 
-    private func panGesture(in size: CGSize, metrics: LayoutMetrics) -> some Gesture {
+    private func panGesture(metrics: LayoutMetrics) -> some Gesture {
         DragGesture(minimumDistance: 8)
             .onChanged { value in
                 dragOffset = value.translation.width
@@ -200,7 +196,7 @@ struct TicketStampBundleDeckView: View {
                 var steps = 0
                 if abs(velocity) > 900 {
                     steps = velocity > 0 ? -1 : 1
-                } else                 if delta > threshold {
+                } else if delta > threshold {
                     steps = 1
                 } else if delta < -threshold {
                     steps = -1
@@ -238,5 +234,14 @@ struct TicketStampBundleDeckView: View {
         } else {
             selectionPulse += 1
         }
+    }
+
+    /// 運行終了の束帯の高さ（コンソール直上）。
+    static func shutdownBandHeight(containerWidth: CGFloat, bandViewportHeight: CGFloat) -> CGFloat {
+        let targetW = min(containerWidth * 0.72, 340)
+        var ticketH = MarsTicketSpec.height(forWidth: targetW)
+        let maxH = max(72, bandViewportHeight - 8)
+        ticketH = min(ticketH, maxH)
+        return ticketH + 14
     }
 }

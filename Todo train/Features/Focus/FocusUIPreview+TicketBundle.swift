@@ -135,6 +135,7 @@ extension FocusUIPreview {
         manager.activeSession = nil
         manager.phase = .idle
         manager.uiPreviewSuppressMotion = true
+        manager.uiPreviewBundleViewerFlatIndex = nil
 
         switch state {
         case "shutdownBundle", "shutdownBundleLandscape":
@@ -155,6 +156,7 @@ extension FocusUIPreview {
             manager.uiPreviewSelectHistoryTab = true
             manager.uiPreviewShowsBundleViewer = true
             manager.uiPreviewBundleViewerDayKey = dayKey
+            manager.uiPreviewBundleViewerFlatIndex = 0
         default:
             break
         }

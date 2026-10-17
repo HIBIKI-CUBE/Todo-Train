@@ -8,6 +8,7 @@ import SwiftUI
 struct TicketStampBundleViewer: View {
     let bundles: [TicketStampBundleAssembly.DayBundle]
     let initialDayKey: String
+    var initialFlatIndex: Int?
     var onSelectStamp: (TicketStampBundleAssembly.Stamp) -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -189,6 +190,11 @@ struct TicketStampBundleViewer: View {
     }
 
     private func syncFlatIndexToInitialDay() {
+        if let forced = initialFlatIndex, flat.indices.contains(forced) {
+            flatIndex = forced
+            deckFocusIndex = localFocus
+            return
+        }
         guard let bundle = TicketStampBundleAssembly.bundle(forCalendarDayKey: initialDayKey, in: bundles),
               let index = flat.firstIndex(where: { $0.stamp.serviceDayID == bundle.serviceDayID })
         else {

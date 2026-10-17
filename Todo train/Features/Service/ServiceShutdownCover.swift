@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import TodoTrainTicketUI
 
 struct ServiceShutdownCover: View {
     @Environment(SessionManager.self) private var sessionManager
@@ -27,8 +28,7 @@ struct ServiceShutdownCover: View {
 
     private static let overviewID = "service-overview"
     private static let bundleID = "ticket-stamp-bundle"
-    private static let bundleBandHeight: CGFloat = 124
-    private static let minimumClockHeight: CGFloat = 120
+    private static let minimumClockHeight: CGFloat = 88
 
     private var pausedSessions: [WorkSession] {
         sessionManager.pausedSessions
@@ -131,7 +131,12 @@ struct ServiceShutdownCover: View {
 
     private func cabinBody(now: Date) -> some View {
         GeometryReader { geo in
-            let bundleBand = stampBundle == nil ? 0 : Self.bundleBandHeight
+            let bundleBand = stampBundle == nil
+                ? 0
+                : TicketStampBundleDeckView.shutdownBandHeight(
+                    containerWidth: geo.size.width,
+                    bandViewportHeight: max(120, geo.size.height * 0.38)
+                )
             let scrollHeight = max(0, geo.size.height - bundleBand)
             let clockHeight = max(
                 Self.minimumClockHeight,

@@ -141,6 +141,14 @@ struct HistoryView: View {
         #endif
     }
 
+    private var bundleViewerInitialFlatIndex: Int? {
+        #if DEBUG
+        sessionManager.uiPreviewBundleViewerFlatIndex
+        #else
+        nil
+        #endif
+    }
+
     private var visibleDayKeys: Set<String> {
         Set(
             HistoryCanvasZoom.visibleDays(
@@ -239,6 +247,7 @@ struct HistoryView: View {
             TicketStampBundleViewer(
                 bundles: sessionManager.ticketStampBundles(),
                 initialDayKey: bundleViewerInitialDayKey,
+                initialFlatIndex: bundleViewerInitialFlatIndex,
                 onSelectStamp: { stamp in
                     showBundleViewer = false
                     selectedRideID = stamp.sessionID
@@ -315,7 +324,7 @@ struct HistoryView: View {
                     }
                 }
                 .buttonStyle(.plain)
-                .frame(height: 120)
+                .frame(height: 140)
                 .padding(.horizontal, TrainTheme.Space.md)
                 .padding(.bottom, TrainTheme.Space.sm)
                 .accessibilityLabel("この日の切符の束")

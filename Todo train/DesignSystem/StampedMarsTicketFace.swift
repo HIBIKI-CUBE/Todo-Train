@@ -26,28 +26,39 @@ struct StampedMarsTicketFace: View {
         )
     }
 
+    private var baseTicketSize: CGSize {
+        let width: CGFloat = 300
+        return CGSize(width: width, height: MarsTicketSpec.height(forWidth: width))
+    }
+
     var body: some View {
-        MarsTicketView(content: content, density: .celebration)
-            .scaleEffect(scale)
-            .overlay {
-                MarsTicketUsedMarks(
-                    punctuality: stamp.punctuality,
-                    stampSettled: settled.stampImpact,
-                    innerRingSolid: stamp.punctuality == .onTime,
-                    sealTier: stamp.sealTier,
-                    sealSeason: stamp.stampSeason,
-                    sealTimeOfDay: stamp.stampTimeOfDay,
-                    sealSettled: settled.sealImpact
-                )
+        ZStack {
+            MarsTicketView(content: content, density: .celebration)
+            MarsTicketUsedMarks(
+                punctuality: stamp.punctuality,
+                stampSettled: settled.stampImpact,
+                innerRingSolid: stamp.punctuality == .onTime,
+                sealTier: stamp.sealTier,
+                sealSeason: stamp.stampSeason,
+                sealTimeOfDay: stamp.stampTimeOfDay,
+                sealSettled: settled.sealImpact
+            )
+            if showsLogLines {
+                logLines
+                    .padding(10)
+                    .frame(width: baseTicketSize.width - 20, alignment: .leading)
+                    .frame(maxHeight: 36, alignment: .bottomLeading)
+                    .clipped()
+                    .frame(width: baseTicketSize.width, height: baseTicketSize.height, alignment: .bottomLeading)
             }
-            .overlay(alignment: .bottomLeading) {
-                if showsLogLines {
-                    logLines
-                        .padding(8 * max(scale, 0.65))
-                }
-            }
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(accessibilityLabel)
+        }
+        .frame(width: baseTicketSize.width, height: baseTicketSize.height)
+        .background(MarsTicketSpec.paper)
+        .compositingGroup()
+        .drawingGroup(opaque: true)
+        .scaleEffect(scale, anchor: .bottom)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityLabel)
     }
 
     private var logLines: some View {

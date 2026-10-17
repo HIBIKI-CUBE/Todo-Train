@@ -59,45 +59,14 @@ if [[ ! -x "$VERIFY_PY" ]]; then
   VERIFY_PY="$ROOT/tools/wording/.venv/bin/python"
 fi
 
+CROP_PY="$ROOT/tools/screenshots/pr158-crop.py"
+chmod +x "$CROP_PY"
+
 crop_region() {
   local src="$1"
   local out="$2"
   local mode="$3"
-  "$VERIFY_PY" - "$SHOT_DIR/$src" "$CROP_DIR/$out" "$mode" <<'PY'
-import sys
-from pathlib import Path
-from PIL import Image
-
-path = Path(sys.argv[1])
-out = Path(sys.argv[2])
-mode = sys.argv[3]
-im = Image.open(path).convert("RGB")
-w, h = im.size
-logical_w = 402.0
-scale = w / logical_w
-
-def box_from_fractions(x0f, y0f, x1f, y1f):
-    return (int(w * x0f), int(h * y0f), int(w * x1f), int(h * y1f))
-
-if mode == "shutdown":
-    box = box_from_fractions(0.06, 0.50, 0.94, 0.91)
-elif mode == "history-day":
-    box = box_from_fractions(0.05, 0.30, 0.95, 0.36)
-elif mode == "viewer":
-    box = box_from_fractions(0.08, 0.12, 0.92, 0.72)
-else:
-    raise SystemExit(f"unknown mode {mode}")
-
-crop = im.crop(box)
-crop.save(out)
-pixels = list(crop.getdata())
-avg = sum(sum(p) for p in pixels) / (3 * len(pixels))
-dark = sum(1 for p in pixels if sum(p) < 80)
-if avg > 248 and dark < len(pixels) * 0.015:
-    print(f"FAIL crop {path.name}: too bright avg={avg:.1f}", file=sys.stderr)
-    sys.exit(1)
-print(f"OK crop {path.name} -> {out.name} ({box})")
-PY
+  "$VERIFY_PY" "$CROP_PY" "$mode" "$SHOT_DIR/$src" "$CROP_DIR/$out"
 }
 
 capture shutdown-bundle-portrait.png shutdownBundle 0

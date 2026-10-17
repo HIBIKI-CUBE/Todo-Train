@@ -104,6 +104,7 @@ final class SessionManager {
     var uiPreviewShowsBundleViewer: Bool = false
     var uiPreviewBundleViewerDayKey: String?
     var uiPreviewBundleFocusIndex: Int = 0
+    var uiPreviewBundleViewerFlatIndex: Int?
     /// 印を押したあとの券面（穴・丸印・角判）を動きなしで出す。
     struct ArrivalUIPreviewStamp {
         var stampCommitted: Bool = true
