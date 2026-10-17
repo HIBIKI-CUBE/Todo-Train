@@ -9,11 +9,11 @@ import Testing
 struct ReestimateBandTests {
     @Test func headline_usesRoundedTotalWhenProgressAtLeast30Percent() {
         let band = ReestimateBand.shown(activeSeconds: 1_800, progress: 0.4)
-        #expect(band?.headline == "全体45分前後")
+        #expect(band?.headline == "全体75分前後")
     }
 
     @Test func headline_usesRangeWhenProgressBelow30Percent() {
-        let band = ReestimateBand.shown(activeSeconds: 1_800, progress: 0.2)
+        let band = ReestimateBand.shown(activeSeconds: 600, progress: 0.2)
         #expect(band?.headline.contains("〜") == true)
         #expect(band?.headline.contains("前後") == false)
     }
