@@ -256,6 +256,7 @@ struct CabinInterruptWatchTests {
     @Test func elapsedDueWithoutPendingShowsPip() {
         var snap = running
         snap.pendingCabin = nil
+        snap.nudgePlan = nil
         snap.checkInFiredCount = 0
         let offsets = CheckInTiming.progressOffsets(
             rideID: snap.sessionId!,
@@ -270,6 +271,66 @@ struct CabinInterruptWatchTests {
         )
         #expect(interrupt.isDue)
         #expect(interrupt.showsPip)
+    }
+
+    @Test func planCheckInInFutureIgnoresShrunkEstimate() {
+        let started = 1_768_000_000
+        var snap = running
+        snap.pendingCabin = nil
+        snap.startedAt = started
+        snap.estimatedSeconds = 30 * 60
+        snap.checkInFiredCount = 0
+        let offsets = CheckInTiming.progressOffsets(
+            rideID: snap.sessionId!,
+            budgetSecondsAtStart: snap.estimatedSeconds!
+        )
+        let localDueAt = started + Int(offsets[0].rounded(.towardZero)) + 1
+        let planFireAt = localDueAt + 600
+        snap.nudgePlan = [
+            WireNudgePlanItem(
+                stage: .checkIn,
+                fireAt: planFireAt,
+                surface: .none,
+                rings: false
+            ),
+        ]
+        let now = localDueAt
+        let interrupt = CabinInterruptWatch.evaluate(
+            snap: snap,
+            now: now,
+            localEnabled: true,
+            optimisticFiredCount: 0
+        )
+        #expect(!interrupt.isDue)
+    }
+
+    @Test func planWithoutCheckInIsNeverProgressDue() {
+        let started = 1_768_000_000
+        var snap = running
+        snap.pendingCabin = nil
+        snap.startedAt = started
+        snap.estimatedSeconds = 30 * 60
+        snap.checkInFiredCount = 0
+        let offsets = CheckInTiming.progressOffsets(
+            rideID: snap.sessionId!,
+            budgetSecondsAtStart: snap.estimatedSeconds!
+        )
+        let now = started + Int(offsets[0].rounded(.towardZero)) + 1
+        snap.nudgePlan = [
+            WireNudgePlanItem(
+                stage: .approach,
+                fireAt: started + 2_000,
+                surface: .none,
+                rings: false
+            ),
+        ]
+        let interrupt = CabinInterruptWatch.evaluate(
+            snap: snap,
+            now: now,
+            localEnabled: true,
+            optimisticFiredCount: 0
+        )
+        #expect(!interrupt.isDue)
     }
 
     @Test func optimisticIdleConsumeHidesNotification() {
