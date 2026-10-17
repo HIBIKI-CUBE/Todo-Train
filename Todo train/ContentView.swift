@@ -12,6 +12,7 @@ import UIKit
 
 struct ContentView: View {
     @Environment(SessionManager.self) private var sessionManager
+    @Environment(AppSettings.self) private var settings
     @Environment(DeletionUndoCenter.self) private var undoCenter
     @Environment(CompanionSyncRuntime.self) private var companion
     @Environment(\.scenePhase) private var scenePhase
@@ -235,6 +236,7 @@ struct ContentView: View {
                     )
                     // fullScreenCover より後ろの overlay には、その手前の environment が届かない。
                     .environment(ticketMotion)
+                    .environment(settings)
                     .id(moment.id)
                 case .onTimeService:
                     if !isFocusPresented {

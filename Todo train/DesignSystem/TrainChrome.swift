@@ -56,6 +56,8 @@ struct FocusProgressBar: View {
     var pinch: Bool = false
     var overrun: Bool = false
     var budgetSeconds: Int = 20 * 60
+    /// On-time home band as fractions of the planned budget (0…1+).
+    var homeBand: (start: Double, end: Double)? = nil
 
     private var clampedProgress: Double {
         min(max(progress, 0), 1)
@@ -87,6 +89,7 @@ struct FocusProgressBar: View {
                         .frame(width: tail, height: trackH)
                         .offset(x: planned, y: trackY)
                 }
+                homeBandMark(plannedWidth: planned, trackH: trackH, trackY: trackY)
                 occupancyMarks(plannedWidth: planned, trackH: trackH, trackY: trackY)
                 gaugeTicks(plannedWidth: planned, height: height, width: width)
                 if progress > 0 {
@@ -119,6 +122,19 @@ struct FocusProgressBar: View {
                     .frame(width: full ? 1.5 : 1, height: full ? height : height * 0.72)
                     .offset(x: min(max(x - 0.5, 0), max(width - 1.5, 0)), y: full ? 0 : height * 0.14)
             }
+        }
+    }
+
+    @ViewBuilder
+    private func homeBandMark(plannedWidth: CGFloat, trackH: CGFloat, trackY: CGFloat) -> some View {
+        if let homeBand {
+            let startX = plannedWidth * CGFloat(min(max(homeBand.start, 0), 1))
+            let endX = plannedWidth * CGFloat(min(max(homeBand.end, 0), 1.25))
+            let bandWidth = max(endX - startX, 4)
+            Capsule()
+                .fill(Color.white.opacity(0.14))
+                .frame(width: bandWidth, height: trackH + 4)
+                .offset(x: startX, y: trackY - 2)
         }
     }
 
