@@ -18,6 +18,16 @@ struct ReestimateBandTests {
         #expect(band?.headline.contains("前後") == false)
     }
 
+    @Test func shown_totalSpanUsesFivePercentBandAtHalfProgress() throws {
+        let band = try #require(ReestimateBand.shown(activeSeconds: 600, progress: 0.5))
+        #expect(band.lowTotalSeconds == 1_091)
+        #expect(band.highTotalSeconds == 1_333)
+    }
+
+    @Test func shown_isNilBelowThreeMinutesActive() {
+        #expect(ReestimateBand.shown(activeSeconds: 179, progress: 0.5) == nil)
+    }
+
     @Test func headline_clipsAtGaugeMaxRemaining() {
         let headline = ReestimateBand.headline(
             progress: 0.2,

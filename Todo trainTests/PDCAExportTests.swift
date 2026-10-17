@@ -293,6 +293,118 @@ struct PDCAExportTests {
         #expect(rides.count == 3)
     }
 
+    @Test func exportJSON_exportsReestimateRowsAndPauseUndoneAt() throws {
+        let container = try AppModelContainer.make(inMemory: true)
+        let context = ModelContext(container)
+        let ticket = Ticket(title: "見積もり", estimatedSeconds: 1_800)
+        context.insert(ticket)
+        let rideID = UUID()
+        let started = PDCAFixture.dayStart
+        let session = WorkSession(
+            id: rideID,
+            startedAt: started,
+            estimatedSecondsAtStart: 1_800,
+            ticket: ticket
+        )
+        let committed = started.addingTimeInterval(400)
+        let undoneAt = started.addingTimeInterval(500)
+        session.reestimateEvents = [
+            ReestimateEventRecord(
+                reestimateIndex: 1,
+                trigger: .manual,
+                surface: .iphonePortrait,
+                input: .touch,
+                promptId: ReestimatePromptID.remainingV1,
+                mode: .minutesOnly,
+                committedAt: committed,
+                activeSeconds: 400,
+                overrunSeconds: 0,
+                progressAnswer: nil,
+                committedRemainingSeconds: 900,
+                shownBandLowSeconds: 1_000,
+                shownBandHighSeconds: 1_200,
+                detailsOpened: false
+            ),
+            ReestimateEventRecord(
+                reestimateIndex: 2,
+                trigger: .checkIn,
+                surface: .iphoneLandscape,
+                input: .touch,
+                promptId: ReestimatePromptID.progressV1,
+                mode: .progress,
+                committedAt: committed.addingTimeInterval(60),
+                activeSeconds: 460,
+                overrunSeconds: 10,
+                progressAnswer: 0.5,
+                committedRemainingSeconds: 600,
+                shownBandLowSeconds: 1_100,
+                shownBandHighSeconds: 1_300,
+                detailsOpened: true,
+                undoneAt: undoneAt
+            ),
+        ]
+        context.insert(session)
+        let pause = SessionPause(
+            startedAt: started.addingTimeInterval(100),
+            endedAt: started.addingTimeInterval(200),
+            session: session
+        )
+        pause.undoneAt = undoneAt
+        context.insert(pause)
+        try context.save()
+
+        let object = try jsonObject(
+            try PDCAExport.jsonData(in: context, exportedAt: PDCAFixture.exportedAt)
+        )
+        let reestimates = try rows(object, "reestimates")
+        #expect(reestimates.count == 2)
+        expectExactKeys(reestimates, PDCAContract.reestimateKeys)
+
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let sample = PDCAExport.ReestimateRow(
+            rideId: rideID,
+            reestimateIndex: 1,
+            trigger: ReestimateTrigger.manual.rawValue,
+            surface: ReestimateSurface.iphonePortrait.rawValue,
+            input: ReestimateInput.touch.rawValue,
+            promptId: ReestimatePromptID.remainingV1,
+            mode: ReestimateMode.minutesOnly.rawValue,
+            committedAt: committed,
+            activeSeconds: 0,
+            overrunSeconds: 0,
+            progressAnswer: PDCANull<Double>(nil),
+            committedRemainingSeconds: 0,
+            shownBandLowSeconds: PDCANull<Int>(nil),
+            shownBandHighSeconds: PDCANull<Int>(nil),
+            detailsOpened: false,
+            undoneAt: PDCANull<Date>(nil),
+            remoteWillExtendReceived: false
+        )
+        let sampleKeys = Set(
+            try #require(
+                JSONSerialization.jsonObject(with: try encoder.encode(sample)) as? [String: Any]
+            ).keys
+        )
+        #expect(PDCAContract.reestimateKeys == sampleKeys)
+        for row in reestimates {
+            #expect(Set(row.keys) == sampleKeys)
+        }
+
+        let active = try #require(reestimates.first { isNull($0["undoneAt"]) })
+        #expect(active["rideId"] as? String == rideID.uuidString)
+        #expect(number(active, "reestimateIndex") == 1)
+        #expect(active["mode"] as? String == "minutesOnly")
+
+        let undone = try #require(reestimates.first { !isNull($0["undoneAt"]) })
+        #expect(number(undone, "reestimateIndex") == 2)
+        #expect(date(undone, "undoneAt") == undoneAt)
+
+        let pauses = try rows(object, "pauses")
+        #expect(pauses.count == 1)
+        #expect(date(pauses[0], "undoneAt") == undoneAt)
+    }
+
     @Test func exportJSON_assignsServiceDayByContainingInterval() throws {
         let container = try AppModelContainer.make(inMemory: true)
         let context = ModelContext(container)
@@ -914,6 +1026,12 @@ private enum PDCAContract {
         "id", "kind", "createdAt", "fromRideId", "parentTicketId", "childTicketId", "aiGenerated",
     ]
     static let checkInKeys: Set<String> = ["rideId", "kind", "answer", "answeredAt"]
+    static let reestimateKeys: Set<String> = [
+        "rideId", "reestimateIndex", "trigger", "surface", "input", "promptId", "mode",
+        "committedAt", "activeSeconds", "overrunSeconds", "progressAnswer",
+        "committedRemainingSeconds", "shownBandLowSeconds", "shownBandHighSeconds",
+        "detailsOpened", "undoneAt", "remoteWillExtendReceived",
+    ]
     static let blockKeys: Set<String> = [
         "id", "startsAt", "endsAt", "source", "adoptionScope", "isCancelled", "needsReview",
     ]

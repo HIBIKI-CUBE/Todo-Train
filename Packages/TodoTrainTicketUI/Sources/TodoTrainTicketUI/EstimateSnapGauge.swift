@@ -190,12 +190,21 @@ public struct EstimateSnapGauge: View {
                     x: value.location.x,
                     width: width
                 )
-                let scrub = EstimateSnapMapping.stickyScrub(
-                    fingerFraction: finger,
-                    anchoredMinutes: anchoredMinutes,
-                    stops: stopMinutes,
-                    maxMinutes: maxMinutes
-                )
+                let scrub: EstimateSnapMapping.StickyScrub
+                if startsAtLeftUnselected, minutes <= 0, anchoredMinutes <= 0 {
+                    scrub = EstimateSnapMapping.scrubFromUnselected(
+                        fingerFraction: finger,
+                        stops: stopMinutes,
+                        maxMinutes: maxMinutes
+                    )
+                } else {
+                    scrub = EstimateSnapMapping.stickyScrub(
+                        fingerFraction: finger,
+                        anchoredMinutes: anchoredMinutes,
+                        stops: stopMinutes,
+                        maxMinutes: maxMinutes
+                    )
+                }
                 if scrub.didEscape {
                     // Title ready → issue path owns celebration; quiet detent while scrubbing.
                     applyEscape(

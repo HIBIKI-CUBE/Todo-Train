@@ -112,6 +112,35 @@ struct DeletionUndoTests {
         #expect(restoredPause.endedAt == Date(timeIntervalSince1970: 1_700_001_800))
     }
 
+    @Test func restoreSession_keepsReestimateBudgetAndIdleFields() throws {
+        let context = try makeContext()
+        let ticket = Ticket(title: "見積もり", estimatedSeconds: 1_800)
+        context.insert(ticket)
+        let session = WorkSession(
+            startedAt: Date(timeIntervalSince1970: 1_700_000_000),
+            estimatedSecondsAtStart: 1_800,
+            ticket: ticket
+        )
+        session.currentBudgetSeconds = 2_400
+        session.reestimateEventsJSON = "[{\"id\":\"\(UUID().uuidString)\"}]"
+        session.preArrivalIdleSeconds = 42
+        let savedReestimateJSON = session.reestimateEventsJSON
+        context.insert(session)
+        try context.save()
+
+        let record = DeletionUndo.captureSession(session)
+        context.delete(session)
+        try context.save()
+
+        DeletionUndo.restoreSession(record, onto: ticket, into: context)
+        try context.save()
+
+        let restored = try #require(try context.fetch(FetchDescriptor<WorkSession>()).first)
+        #expect(restored.currentBudgetSeconds == 2_400)
+        #expect(restored.reestimateEventsJSON == savedReestimateJSON)
+        #expect(restored.preArrivalIdleSeconds == 42)
+    }
+
     @Test func undoCenter_undoRunsRestoreOnce() {
         let center = DeletionUndoCenter()
         var restored = 0

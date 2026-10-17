@@ -186,10 +186,36 @@ public enum EstimateSnapMapping {
         endAnchoredMinutes: Int,
         startsAtLeftUnselected: Bool
     ) -> Bool {
-        if requiresDragToCommit, translation < minimumTranslation { return false }
-        if requiresDragToCommit, isPrimarilyVertical { return false }
+        guard requiresDragToCommit else { return true }
+        if translation < minimumTranslation { return false }
+        if isPrimarilyVertical { return false }
         if startsAtLeftUnselected, endAnchoredMinutes <= 0, startAnchoredMinutes <= 0 { return false }
         if endAnchoredMinutes == startAnchoredMinutes { return false }
         return endAnchoredMinutes > 0 || !startsAtLeftUnselected
+    }
+
+    /// 左端未選択（0 分）から、最初の止まり位置へ吸い付くまでのなぞり。
+    public static func scrubFromUnselected(
+        fingerFraction: CGFloat,
+        stops: [Int],
+        maxMinutes: Int = EstimateSnapMapping.maxMinutes
+    ) -> StickyScrub {
+        let finger = rubberBand(fingerFraction)
+        guard let first = stops.first else {
+            return StickyScrub(displayFraction: 0, anchoredMinutes: 0, didEscape: false)
+        }
+        let firstF = fraction(minutes: first, maxMinutes: maxMinutes)
+        guard firstF > 0 else {
+            return StickyScrub(displayFraction: firstF, anchoredMinutes: first, didEscape: true)
+        }
+        if finger <= 0 {
+            return StickyScrub(displayFraction: 0, anchoredMinutes: 0, didEscape: false)
+        }
+        let progress = finger / firstF
+        if progress >= stickyEscapeProgress {
+            return StickyScrub(displayFraction: firstF, anchoredMinutes: first, didEscape: true)
+        }
+        let display = finger * stickyStretch
+        return StickyScrub(displayFraction: display, anchoredMinutes: 0, didEscape: false)
     }
 }

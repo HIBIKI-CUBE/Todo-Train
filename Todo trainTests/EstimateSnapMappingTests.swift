@@ -102,6 +102,41 @@ struct EstimateSnapMappingTests {
         #expect(scrub.displayFraction > from)
     }
 
+    @Test func shouldCommitScrub_alwaysCommitsWhenDragNotRequired() {
+        #expect(
+            EstimateSnapMapping.shouldCommitScrub(
+                requiresDragToCommit: false,
+                translation: 0,
+                minimumTranslation: 24,
+                isPrimarilyVertical: true,
+                startAnchoredMinutes: 30,
+                endAnchoredMinutes: 30,
+                startsAtLeftUnselected: false
+            )
+        )
+    }
+
+    @Test func scrubFromUnselected_staysAtZeroUntilFirstStopEscape() {
+        let firstF = EstimateSnapMapping.fraction(minutes: 5)
+        let before = firstF * (EstimateSnapMapping.stickyEscapeProgress - 0.05)
+        let scrub = EstimateSnapMapping.scrubFromUnselected(
+            fingerFraction: before,
+            stops: EstimateSnapMapping.stops
+        )
+        #expect(scrub.anchoredMinutes == 0)
+        #expect(scrub.didEscape == false)
+        #expect(scrub.displayFraction > 0)
+        #expect(scrub.displayFraction < firstF)
+
+        let past = firstF * (EstimateSnapMapping.stickyEscapeProgress + 0.05)
+        let escaped = EstimateSnapMapping.scrubFromUnselected(
+            fingerFraction: past,
+            stops: EstimateSnapMapping.stops
+        )
+        #expect(escaped.didEscape == true)
+        #expect(escaped.anchoredMinutes == 5)
+    }
+
     @Test func shouldCommitScrub_rejectsVerticalShortOrSameStop() {
         #expect(
             EstimateSnapMapping.shouldCommitScrub(
