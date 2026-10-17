@@ -24,35 +24,67 @@ struct Todo_trainApp: App {
             let container = try AppModelContainer.make(inMemory: usePreviewStore)
             self.container = container
             let context = container.mainContext
+            #if DEBUG
+            let uiPreviewLaunch = FocusUIPreview.isActive
+            #else
+            let uiPreviewLaunch = false
+            #endif
             #if canImport(ActivityKit)
-            let liveActivity: any LiveActivityManaging = LiveActivityManager.shared
+            let liveActivity: any LiveActivityManaging = uiPreviewLaunch
+                ? NoOpLiveActivityManager()
+                : LiveActivityManager.shared
             #else
             let liveActivity: any LiveActivityManaging = NoOpLiveActivityManager()
             #endif
             #if canImport(AlarmKit)
-            let alarmScheduler: any AlarmScheduling = AlarmKitScheduler.shared
+            let alarmScheduler: any AlarmScheduling = uiPreviewLaunch
+                ? NoOpAlarmScheduler()
+                : AlarmKitScheduler.shared
             #else
             let alarmScheduler: any AlarmScheduling = NoOpAlarmScheduler()
+            #endif
+            #if DEBUG
+            let overtimeNotifier: any OvertimeNotifying = uiPreviewLaunch
+                ? NoOpOvertimeNotifier()
+                : OvertimeNotifier.shared
+            let checkInNotifier: any CheckInNotifying = uiPreviewLaunch
+                ? NoOpCheckInNotifier()
+                : CheckInNotifier.shared
+            #else
+            let overtimeNotifier: any OvertimeNotifying = OvertimeNotifier.shared
+            let checkInNotifier: any CheckInNotifying = CheckInNotifier.shared
+            #endif
+            #if DEBUG
+            let calendarBoard: (any CalendarBoard)? = uiPreviewLaunch ? InMemoryCalendarBoard() : nil
+            #else
+            let calendarBoard: (any CalendarBoard)? = nil
             #endif
             let manager = SessionManager(
                 modelContext: context,
                 settings: AppSettings.shared,
-                overtimeNotifier: OvertimeNotifier.shared,
-                checkInNotifier: CheckInNotifier.shared,
+                overtimeNotifier: overtimeNotifier,
+                checkInNotifier: checkInNotifier,
                 coachingEngine: CoachingEngineFactory.make(),
                 liveActivityManager: liveActivity,
-                alarmScheduler: alarmScheduler
+                alarmScheduler: alarmScheduler,
+                calendarBoard: calendarBoard
             )
             _sessionManager = State(initialValue: manager)
             AppRuntime.modelContainer = container
             AppRuntime.sessionManager = manager
-            WatchSessionBridge.shared.activate()
+            if !uiPreviewLaunch {
+                WatchSessionBridge.shared.activate()
+            }
             #if canImport(AlarmKit)
-            AlarmKitScheduler.shared.bind(sessionManager: manager)
+            if !uiPreviewLaunch {
+                AlarmKitScheduler.shared.bind(sessionManager: manager)
+            }
             #endif
-            OvertimeNotifier.shared.sessionManager = manager
-            OvertimeNotifier.shared.configure()
-            CheckInNotifier.shared.configure()
+            if !uiPreviewLaunch {
+                OvertimeNotifier.shared.sessionManager = manager
+                OvertimeNotifier.shared.configure()
+                CheckInNotifier.shared.configure()
+            }
             SessionPauseRuntime.pauser = manager
             RideControlRuntime.installed = manager
             #if DEBUG

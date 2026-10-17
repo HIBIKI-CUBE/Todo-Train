@@ -38,6 +38,9 @@ enum FocusUIPreview {
 
     static var isActive: Bool { parsedState() != nil }
 
+    /// DEBUG スクショ用。通知・AlarmKit の許可ダイアログを出さない。
+    static var skipsNotificationAuthorization: Bool { isActive }
+
     @MainActor
     static func bootstrap(manager: SessionManager, context: ModelContext) throws {
         guard let state = parsedState() else { return }

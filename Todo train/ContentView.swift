@@ -44,27 +44,29 @@ struct ContentView: View {
                 }
             }
         }
-        .overlay(alignment: .top) {
-            if let offer = sessionManager.focusUndoOffer, !isFocusPresented {
-                FocusUndoBanner(offer: offer) {
-                    switch offer.kind {
-                    case .pause:
-                        try? sessionManager.undoPauseFromFocus(pauseID: offer.eventID)
-                    case .reestimate:
-                        try? sessionManager.undoReestimate(eventID: offer.eventID)
-                    }
-                    sessionManager.focusUndoOffer = nil
-                }
-            }
-        }
         .safeAreaInset(edge: .bottom, spacing: 8) {
-            if let message = undoCenter.bannerMessage {
-                DeletionUndoBanner(message: message) {
-                    undoCenter.undo()
+            VStack(spacing: 8) {
+                if let offer = sessionManager.focusUndoOffer, !isFocusPresented {
+                    FocusUndoBanner(offer: offer) {
+                        switch offer.kind {
+                        case .pause:
+                            try? sessionManager.undoPauseFromFocus(pauseID: offer.eventID)
+                        case .reestimate:
+                            try? sessionManager.undoReestimate(eventID: offer.eventID)
+                        }
+                        sessionManager.focusUndoOffer = nil
+                    }
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
-                .padding(.horizontal, TrainTheme.Space.lg)
-                .transition(.move(edge: .bottom).combined(with: .opacity))
+                if let message = undoCenter.bannerMessage {
+                    DeletionUndoBanner(message: message) {
+                        undoCenter.undo()
+                    }
+                    .padding(.horizontal, TrainTheme.Space.lg)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
             }
+            .animation(TrainTheme.Motion.soft, value: sessionManager.focusUndoOffer?.eventID)
         }
         .animation(TrainTheme.Motion.soft, value: passengerOfferMotion)
         .animation(.easeInOut(duration: 0.25), value: undoCenter.bannerMessage)
