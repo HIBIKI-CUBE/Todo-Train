@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import TodoTrainSync
 
 /// How an arrived session sits against its published timetable (original estimate).
 nonisolated enum ArrivalPunctuality: Equatable, Sendable {
@@ -57,64 +58,73 @@ struct PunctualityMoment: Identifiable, Equatable, Sendable {
 }
 
 enum Punctuality {
-    /// Allowed early margin as a fraction of the original estimate.
-    static let earlyRatio: Double = 0.15
-    /// Floor so a 5-minute ticket still has a real window (~45s).
-    static let minimumSlackSeconds: TimeInterval = 45
-    /// Clock jitter when tapping 到着 at the last beat.
-    static let lateGraceSeconds: TimeInterval = 0.5
-
-    static func slack(estimateSeconds: Int) -> TimeInterval {
-        let estimate = TimeInterval(max(estimateSeconds, 1))
-        return max(estimate * earlyRatio, minimumSlackSeconds)
+    static func rideInput(for session: WorkSession) -> PunctualityJudgment.RideInput {
+        let reestimates = session.reestimateEvents
+            .filter { $0.undoneAt == nil }
+            .map {
+                PunctualityJudgment.ReestimateCommit(
+                    reestimateIndex: $0.reestimateIndex,
+                    activeSeconds: $0.activeSeconds,
+                    committedRemainingSeconds: $0.committedRemainingSeconds
+                )
+            }
+        return PunctualityJudgment.RideInput(
+            arrived: session.outcome == .arrived,
+            activeSeconds: session.accumulatedActiveSeconds,
+            estimatedSecondsAtStart: session.estimatedSecondsAtStart,
+            reestimates: reestimates
+        )
     }
 
-    /// Classify against the **original** estimate, not the extended budget.
-    /// Flavors copy (定時到着 / 早着). Completion is praised regardless.
+    static func judgment(for session: WorkSession) -> PunctualityJudgment.Judgment {
+        PunctualityJudgment.judge(rideInput(for: session))
+    }
+
     static func classify(
         outcome: SessionOutcome?,
         elapsedSeconds: TimeInterval,
         estimateSeconds: Int,
-        overtimeResolution: OvertimeResolution?
+        overtimeResolution: OvertimeResolution?,
+        reestimates: [PunctualityJudgment.ReestimateCommit] = []
     ) -> ArrivalPunctuality {
         guard outcome == .arrived else { return .notApplicable }
-        if overtimeResolution != nil { return .late }
-
-        let estimate = TimeInterval(max(estimateSeconds, 1))
-        if elapsedSeconds > estimate + lateGraceSeconds {
-            return .late
-        }
-
-        let lowerBound = estimate - slack(estimateSeconds: estimateSeconds)
-        if elapsedSeconds < lowerBound {
-            return .early
-        }
-        return .onTime
+        let input = PunctualityJudgment.RideInput(
+            arrived: true,
+            activeSeconds: elapsedSeconds,
+            estimatedSecondsAtStart: estimateSeconds,
+            reestimates: reestimates
+        )
+        return mapOutcome(PunctualityJudgment.judge(input).outcome)
     }
 
     static func classify(_ session: WorkSession) -> ArrivalPunctuality {
-        classify(
-            outcome: session.outcome,
-            elapsedSeconds: session.accumulatedActiveSeconds,
-            estimateSeconds: session.estimatedSecondsAtStart,
-            overtimeResolution: session.overtimeResolution
-        )
+        mapOutcome(judgment(for: session).outcome)
+    }
+
+    private static func mapOutcome(_ outcome: PunctualityJudgment.Outcome) -> ArrivalPunctuality {
+        switch outcome {
+        case .onTime: .onTime
+        case .early: .early
+        case .late: .late
+        case .notApplicable: .notApplicable
+        }
     }
 
     /// On or ahead of the published timetable (not delayed).
     static func isAheadOfSchedule(_ punctuality: ArrivalPunctuality) -> Bool {
-        switch punctuality {
-        case .onTime, .early: true
-        case .late, .notApplicable: false
-        }
+        punctuality == .onTime
     }
 
     /// A service is on-time when it had at least one arrival and none were late.
-    /// 早着 counts — finishing ahead is good. Empty days do not qualify.
+    /// 早着は定時運行に入れない。Empty days do not qualify.
     static func isOnTimeService(arrivedSessions: [WorkSession]) -> Bool {
         let arrived = arrivedSessions.filter { $0.outcome == .arrived }
         guard !arrived.isEmpty else { return false }
-        return arrived.allSatisfy { isAheadOfSchedule(classify($0)) }
+        return arrived.allSatisfy { classify($0) == .onTime }
+    }
+
+    static func judgedEstimateSeconds(for session: WorkSession) -> Int {
+        Int(judgment(for: session).judgedTotalSeconds.rounded())
     }
 
     static func displayLabel(for session: WorkSession) -> String {
@@ -149,6 +159,15 @@ enum Punctuality {
         case .late, .notApplicable:
             nil
         }
+    }
+
+    static func arrivalCaption(for session: WorkSession) -> String? {
+        let punctuality = classify(session)
+        return arrivalCaption(
+            punctuality: punctuality,
+            estimateSeconds: judgedEstimateSeconds(for: session),
+            actualSeconds: session.accumulatedActiveSeconds
+        )
     }
 
     static func durationCaption(estimateSeconds: Int, actualSeconds: TimeInterval) -> String {

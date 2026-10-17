@@ -23,7 +23,7 @@ struct ArrivalPraise: Equatable, Sendable {
     /// 同時に起きているよいこと。定時と早着はどちらか一つ。
     var count: Int {
         var total = 0
-        if punctuality == .onTime || punctuality == .early {
+        if punctuality == .onTime {
             total += 1
         }
         if alreadyDone { total += 1 }

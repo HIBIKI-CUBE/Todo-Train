@@ -412,6 +412,7 @@ extension SessionManager {
         guard let session = activeSession, session.isOpen else {
             throw SessionError.noActiveSession
         }
+        session.preArrivalIdleSeconds = preArrivalIdleSeconds(at: now)
         if let resolution {
             session.overtimeResolution = resolution
         }

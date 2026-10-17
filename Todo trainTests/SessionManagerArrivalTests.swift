@@ -26,6 +26,19 @@ struct SessionManagerArrivalTests {
         #expect(ride.arrivalStampedAt == nil)
     }
 
+    @Test func arrive_recordsPreArrivalIdleBeforeCloseTouchesActivity() throws {
+        let (manager, context, clock, _) = try SessionManagerFixtures.makeHarness()
+        try manager.startService()
+        let ticket = try SessionManagerFixtures.makeTicket(context, seconds: 600)
+        try manager.board(ticket: ticket)
+        let rideID = try #require(manager.activeSession?.id)
+        clock.advance(by: 120)
+        try manager.arrive()
+
+        let ride = try #require(manager.fetchWorkSession(id: rideID))
+        #expect(ride.preArrivalIdleSeconds == 120)
+    }
+
     @Test func recordArrivalStamp_doesNotBoardOrExtend() throws {
         let (manager, context, clock, _) = try SessionManagerFixtures.makeHarness()
         try manager.startService()
