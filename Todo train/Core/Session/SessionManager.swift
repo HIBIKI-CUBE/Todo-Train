@@ -99,6 +99,12 @@ final class SessionManager {
     var uiPreviewForcesFocusCover: Bool = false
     var uiPreviewLandscape: Bool = false
     var uiPreviewSuppressMotion: Bool = false
+    struct ArrivalUIPreviewStamp {
+        var punctuality: ArrivalPunctuality
+        var sealTier: PunctualityJudgment.OnTimeSealTier?
+        var showsRideLog: Bool = true
+    }
+    var arrivalUIPreviewStamp: ArrivalUIPreviewStamp?
     #endif
 
     var pauseLimit: Int { settings.pauseLimit }

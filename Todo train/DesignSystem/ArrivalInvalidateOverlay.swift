@@ -8,6 +8,7 @@
 
 import SwiftData
 import SwiftUI
+import TodoTrainSync
 #if canImport(UIKit)
 import UIKit
 #endif
@@ -22,7 +23,9 @@ struct ArrivalInvalidateOverlay: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(SessionManager.self) private var sessionManager
+    @Environment(AppSettings.self) private var settings
     @Environment(TicketMotionBridge.self) private var ticketMotion
+    @AppStorage(PunctualityFirstTimeTips.sealStorageKey) private var sawSealTip = false
     @Namespace private var fallbackZoom
 
     @State private var deck = ArrivalDeck(reserved: nil)
@@ -34,12 +37,17 @@ struct ArrivalInvalidateOverlay: View {
     @State private var enter: CGFloat = 0
     /// 0…1 ink on the arrived ticket.
     @State private var impact: CGFloat = 0
+    @State private var sealImpact: CGFloat = 0
+    #if DEBUG
+    @State private var previewSealTier: PunctualityJudgment.OnTimeSealTier?
+    #endif
     @State private var stampSeated = false
     @State private var ticketNudge: CGFloat = 0
     @State private var phosphor: CGFloat = 0
     @State private var praise = ArrivalPraise.plain
     @State private var baseHaptic = 0
     @State private var praiseHaptic = 0
+    @State private var sealHaptic = 0
     @State private var stampGeneration = 0
     @State private var choiceHaptic = 0
     @State private var openHaptic = 0
@@ -187,6 +195,8 @@ struct ArrivalInvalidateOverlay: View {
                     VStack(spacing: 12) {
                         arrivedTicket(arrival: arrival)
                             .frame(width: width, height: ticketHeight)
+                        arrivalRideLog
+                            .frame(width: width, alignment: .leading)
                         choiceColumn(punctuality: arrival.punctuality)
                             .frame(width: width, alignment: .leading)
                     }
@@ -200,8 +210,11 @@ struct ArrivalInvalidateOverlay: View {
         .opacity(Double(max(0, enter)))
         .sensoryFeedback(.impact(weight: .heavy, intensity: 1), trigger: baseHaptic)
         .sensoryFeedback(.impact(flexibility: .rigid, intensity: 1), trigger: praiseHaptic)
+        .sensoryFeedback(.impact(flexibility: .rigid, intensity: 1), trigger: sealHaptic)
         .onAppear {
+            applyArrivalPreviewIfNeeded(punctuality: arrival.punctuality)
             announceIfNeeded(arrival: arrival)
+            speakOnTimeIfNeeded(punctuality: arrival.punctuality)
             runEntrance()
         }
     }
@@ -226,7 +239,11 @@ struct ArrivalInvalidateOverlay: View {
             MarsTicketUsedMarks(
                 punctuality: arrival.punctuality,
                 stampSettled: impact,
-                innerRingSolid: praise.innerRingSolid
+                innerRingSolid: praise.innerRingSolid,
+                sealTier: resolvedSealTier(for: arrival.punctuality),
+                sealSeason: stampSeason,
+                sealTimeOfDay: stampTimeOfDay,
+                sealSettled: sealImpact
             )
             .opacity(impact > 0.01 ? 1 : 0)
             .allowsHitTesting(false)
@@ -356,9 +373,76 @@ struct ArrivalInvalidateOverlay: View {
         .buttonStyle(ArrivalStampButtonStyle(reduceMotion: reduceMotion, seated: stampSeated))
         .disabled(!deck.canStamp)
         .opacity(deck.canStamp ? 1 : 0.45)
-        .accessibilityLabel("\(stampCenterLabel(punctuality))の印")
+        .accessibilityLabel(
+            PunctualityPresentation.stampAccessibilityLabel(
+                punctuality: punctuality,
+                includesCornerSeal: false
+            )
+        )
         .accessibilityHint(deck.canStamp ? "印を押します" : "行き先を決めると押せます")
     }
+
+    @ViewBuilder
+    private var arrivalRideLog: some View {
+        if let session = arrivedSession {
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(Array(PunctualityPresentation.rideLogLines(for: session).enumerated()), id: \.offset) { _, line in
+                    Text(line.text)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.white.opacity(0.72))
+                }
+                if punctualityShowsSealTip {
+                    Text(PunctualityFirstTimeTips.sealLine)
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.white.opacity(0.55))
+                        .onAppear {
+                            if !sawSealTip { sawSealTip = true }
+                        }
+                }
+            }
+        }
+    }
+
+    private var arrivedSession: WorkSession? {
+        moment.arrivedSessionID.flatMap { sessionManager.fetchWorkSession(id: $0) }
+    }
+
+    private var stampSeason: PunctualityJudgment.StampSeason {
+        let ended = arrivedSession?.endedAt ?? sessionManager.clock.now
+        return PunctualityJudgment.stampSeason(at: ended)
+    }
+
+    private var stampTimeOfDay: PunctualityJudgment.StampTimeOfDay {
+        let ended = arrivedSession?.endedAt ?? sessionManager.clock.now
+        return PunctualityJudgment.stampTimeOfDay(at: ended)
+    }
+
+    private func resolvedSealTier(for punctuality: ArrivalPunctuality) -> PunctualityJudgment.OnTimeSealTier? {
+        #if DEBUG
+        if let previewSealTier { return previewSealTier }
+        #endif
+        guard punctuality == .onTime, let session = arrivedSession else { return nil }
+        return Punctuality.judgment(for: session).sealTier
+    }
+
+    private var punctualityShowsSealTip: Bool {
+        guard let arrival else { return false }
+        return arrival.punctuality == .onTime && sealImpact > 0.5 && !sawSealTip
+    }
+
+    #if DEBUG
+    private func applyArrivalPreviewIfNeeded(punctuality: ArrivalPunctuality) {
+        guard let preview = sessionManager.arrivalUIPreviewStamp else { return }
+        praise = ArrivalPraise(punctuality: preview.punctuality, alreadyDone: false, nextWasReserved: false, continuedFromStamp: false)
+        impact = 1
+        previewSealTier = preview.sealTier
+        sealImpact = preview.sealTier == nil ? 0 : 1
+        deck.markStamped()
+        stampSeated = true
+    }
+    #else
+    private func applyArrivalPreviewIfNeeded(punctuality: ArrivalPunctuality) {}
+    #endif
 
     private var otherTicketPicker: some View {
         NavigationStack {
@@ -472,6 +556,7 @@ struct ArrivalInvalidateOverlay: View {
                 return
             }
         }
+        StampSoundPlayer.playStampThud()
         stampError = ""
         deck.markStamped()
         praise = praise(for: punctuality)
@@ -482,11 +567,14 @@ struct ArrivalInvalidateOverlay: View {
             baseHaptic += 1
         }
         let returnsToHub = action == nil
+        let onTime = punctuality == .onTime
         stampGeneration += 1
         let generation = stampGeneration
         if reduceMotion {
             impact = 1
+            sealImpact = onTime ? 1 : 0
             phosphor = praise.count > 0 ? 1 : 0
+            if onTime { sealHaptic += 1 }
             scheduleHold(generation: generation, returnsToHub: returnsToHub)
             return
         }
@@ -497,6 +585,16 @@ struct ArrivalInvalidateOverlay: View {
         } completion: {
             withAnimation(MarsTicketSpec.ArrivalMotion.slam) {
                 ticketNudge = 0
+            }
+            if onTime {
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(120))
+                    guard generation == stampGeneration else { return }
+                    sealHaptic += 1
+                    withAnimation(MarsTicketSpec.ArrivalMotion.descend) {
+                        sealImpact = 1
+                    }
+                }
             }
             scheduleHold(generation: generation, returnsToHub: returnsToHub)
         }
@@ -551,6 +649,14 @@ struct ArrivalInvalidateOverlay: View {
         UIAccessibility.post(notification: .announcement, argument: accessibilityText(arrival: arrival))
         #endif
     }
+
+    private func speakOnTimeIfNeeded(punctuality: ArrivalPunctuality) {
+        guard punctuality == .onTime else { return }
+        CabinVoiceSpeaker.speakDriverLine(
+            PunctualityPresentation.onTimeArrivalVoiceLine(),
+            enabled: settings.cabinAnnouncementsEnabled
+        )
+    }
 }
 
 /// Punch hole + small circular stamp (≤ ~1/5 of ticket).
@@ -558,6 +664,10 @@ struct MarsTicketUsedMarks: View {
     var punctuality: ArrivalPunctuality = .late
     var stampSettled: CGFloat = 1
     var innerRingSolid: Bool = false
+    var sealTier: PunctualityJudgment.OnTimeSealTier?
+    var sealSeason: PunctualityJudgment.StampSeason = .spring
+    var sealTimeOfDay: PunctualityJudgment.StampTimeOfDay = .afternoon
+    var sealSettled: CGFloat = 0
 
     var body: some View {
         GeometryReader { geo in
@@ -580,9 +690,24 @@ struct MarsTicketUsedMarks: View {
                     .opacity(Double(stampSettled))
                     .rotationEffect(.degrees(-12))
                     .position(seat)
+
+                if let sealTier {
+                    OnTimeCornerSealMark(
+                        tier: sealTier,
+                        season: sealSeason,
+                        timeOfDay: sealTimeOfDay,
+                        settled: sealSettled
+                    )
+                }
             }
         }
         .allowsHitTesting(false)
+        .accessibilityLabel(
+            PunctualityPresentation.stampAccessibilityLabel(
+                punctuality: punctuality,
+                includesCornerSeal: sealTier != nil && sealSettled > 0.5
+            )
+        )
     }
 
     private func stampDisk(size: CGFloat) -> some View {

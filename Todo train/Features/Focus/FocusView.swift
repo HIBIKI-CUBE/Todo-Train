@@ -27,6 +27,7 @@ struct FocusView: View {
     @State private var nudgePulse = false
     @State private var overtimeHaptic = 0
     @State private var didConsumePendingAction = false
+    @AppStorage(PunctualityFirstTimeTips.homeStorageKey) private var sawHomeTip = false
 
     /// Portrait: controls take ~38% of height. Compact: right pane ~40% of width.
     private let portraitControlFraction: CGFloat = 0.38
@@ -258,15 +259,31 @@ struct FocusView: View {
                 predictedArrival: nil
             )
             let reservedRide = showsNextRideReserve ? sessionManager.reservedNextTicket() : nil
+            let punctuality = punctualityInstrument(now: context.date)
 
             VStack(spacing: 0) {
+                if let punctuality {
+                    PunctualityHomeMeterRow(
+                        judgment: punctuality.judgment,
+                        activeSeconds: punctuality.activeSeconds,
+                        budgetSeconds: punctuality.budgetSeconds,
+                        sealTier: punctuality.sealTier,
+                        showsFirstTimeTip: !sawHomeTip
+                    )
+                    .padding(.top, 8)
+                    .onAppear {
+                        if !sawHomeTip { sawHomeTip = true }
+                    }
+                }
+
                 FocusProgressBar(
                     progress: dispatched.progress,
                     phase: phase,
                     occupancy: dispatched.occupancy,
                     pinch: clearance == .pinch,
                     overrun: clearance == .overrun,
-                    budgetSeconds: sessionManager.activeSession?.activeBudgetSeconds ?? 1
+                    budgetSeconds: punctuality?.budgetSeconds ?? sessionManager.activeSession?.activeBudgetSeconds ?? 1,
+                    homeBand: punctuality?.homeBand
                 )
 
                 HStack(spacing: TrainTheme.Space.md) {
@@ -472,6 +489,31 @@ struct FocusView: View {
     private func deadlineLabel(remaining: TimeInterval, now: Date) -> String {
         let deadline = now.addingTimeInterval(remaining)
         return CockpitFormat.scheduledLabel(deadline: deadline) ?? "予定 —"
+    }
+
+    private func punctualityInstrument(now: Date) -> (
+        judgment: PunctualityJudgment.Judgment,
+        activeSeconds: TimeInterval,
+        budgetSeconds: Int,
+        sealTier: PunctualityJudgment.OnTimeSealTier?,
+        homeBand: (start: Double, end: Double)?
+    )? {
+        guard let session = sessionManager.activeSession, session.isOpen else { return nil }
+        let judgment = Punctuality.judgment(for: session)
+        let active = session.elapsedSeconds(at: now)
+        let budget = max(session.activeBudgetSeconds, 1)
+        let commits = session.reestimateEvents
+            .filter { $0.undoneAt == nil }
+            .map {
+                PunctualityJudgment.ReestimateCommit(
+                    reestimateIndex: $0.reestimateIndex,
+                    activeSeconds: $0.activeSeconds,
+                    committedRemainingSeconds: $0.committedRemainingSeconds
+                )
+            }
+        let tier = PunctualityPresentation.ridingSealTier(judgment: judgment, reestimates: commits)
+        let band = PunctualityPresentation.homeBandFractions(judgment: judgment, budgetSeconds: budget)
+        return (judgment, active, budget, tier, band)
     }
 
     private func occupancyInstrument(now: Date) -> (

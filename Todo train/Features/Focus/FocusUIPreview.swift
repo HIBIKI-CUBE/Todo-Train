@@ -7,6 +7,7 @@
 
 import Foundation
 import SwiftData
+import TodoTrainSync
 
 struct FocusReestimatePreviewConfiguration {
     enum Stage {
@@ -101,11 +102,122 @@ enum FocusUIPreview {
             )
             manager.uiPreviewForcesFocusCover = false
 
+        case "homeSignalGreen":
+            session.estimatedSecondsAtStart = 30 * 60
+            session.currentBudgetSeconds = 30 * 60
+            session.accumulatedActiveSeconds = 8 * 60
+            manager.uiPreviewForcesFocusCover = true
+
+        case "homeSignalYellow":
+            session.estimatedSecondsAtStart = 30 * 60
+            session.currentBudgetSeconds = 30 * 60
+            session.accumulatedActiveSeconds = 28 * 60
+            manager.uiPreviewForcesFocusCover = true
+
+        case "homeSignalOff":
+            session.estimatedSecondsAtStart = 30 * 60
+            session.currentBudgetSeconds = 30 * 60
+            session.accumulatedActiveSeconds = 35 * 60
+            manager.uiPreviewForcesFocusCover = true
+
+        case "arrivalOnTimeTicketing", "arrivalOnTimeEarly", "arrivalOnTimeLate", "arrivalNotOnTime", "arrivalLateLog":
+            try configureArrivalPreview(
+                manager: manager,
+                session: session,
+                state: state
+            )
+
         default:
             break
         }
         manager.uiPreviewLandscape = wantsLandscape
         manager.uiPreviewSuppressMotion = true
+    }
+
+    @MainActor
+    private static func configureArrivalPreview(
+        manager: SessionManager,
+        session: WorkSession,
+        state: String
+    ) throws {
+        manager.uiPreviewForcesFocusCover = false
+        switch state {
+        case "arrivalOnTimeTicketing":
+            session.estimatedSecondsAtStart = 30 * 60
+            session.accumulatedActiveSeconds = 29 * 60 + 50
+            try manager.arrive()
+            manager.arrivalUIPreviewStamp = SessionManager.ArrivalUIPreviewStamp(
+                punctuality: .onTime,
+                sealTier: .ticketing
+            )
+        case "arrivalOnTimeEarly":
+            session.estimatedSecondsAtStart = 30 * 60
+            session.accumulatedActiveSeconds = 10 * 60
+            manager.presentReestimate(trigger: .manual, surface: .iphonePortrait)
+            try manager.commitReestimate(
+                mode: .minutesOnly,
+                progressAnswer: nil,
+                committedRemainingSeconds: 20 * 60,
+                shownBandLowSeconds: nil,
+                shownBandHighSeconds: nil,
+                detailsOpened: false,
+                promptId: ReestimatePromptID.remainingV1
+            )
+            session.accumulatedActiveSeconds = 29 * 60 + 30
+            try manager.arrive()
+            manager.arrivalUIPreviewStamp = SessionManager.ArrivalUIPreviewStamp(
+                punctuality: .onTime,
+                sealTier: .earlyReestimate
+            )
+        case "arrivalOnTimeLate":
+            session.estimatedSecondsAtStart = 30 * 60
+            session.accumulatedActiveSeconds = 18 * 60
+            manager.presentReestimate(trigger: .manual, surface: .iphonePortrait)
+            try manager.commitReestimate(
+                mode: .minutesOnly,
+                progressAnswer: nil,
+                committedRemainingSeconds: 12 * 60,
+                shownBandLowSeconds: nil,
+                shownBandHighSeconds: nil,
+                detailsOpened: false,
+                promptId: ReestimatePromptID.remainingV1
+            )
+            session.accumulatedActiveSeconds = 29 * 60 + 20
+            try manager.arrive()
+            manager.arrivalUIPreviewStamp = SessionManager.ArrivalUIPreviewStamp(
+                punctuality: .onTime,
+                sealTier: .lateReestimate
+            )
+        case "arrivalNotOnTime":
+            session.estimatedSecondsAtStart = 30 * 60
+            session.accumulatedActiveSeconds = 5 * 60
+            try manager.arrive()
+            manager.arrivalUIPreviewStamp = SessionManager.ArrivalUIPreviewStamp(
+                punctuality: .early,
+                sealTier: nil
+            )
+        case "arrivalLateLog":
+            session.estimatedSecondsAtStart = 45 * 60
+            session.accumulatedActiveSeconds = 20 * 60
+            manager.presentReestimate(trigger: .manual, surface: .iphonePortrait)
+            try manager.commitReestimate(
+                mode: .progress,
+                progressAnswer: 0.4,
+                committedRemainingSeconds: 25 * 60,
+                shownBandLowSeconds: nil,
+                shownBandHighSeconds: nil,
+                detailsOpened: false,
+                promptId: ReestimatePromptID.progressV1
+            )
+            session.accumulatedActiveSeconds = 58 * 60
+            try manager.arrive(resolution: .justFinished)
+            manager.arrivalUIPreviewStamp = SessionManager.ArrivalUIPreviewStamp(
+                punctuality: .late,
+                sealTier: nil
+            )
+        default:
+            break
+        }
     }
 }
 #endif
