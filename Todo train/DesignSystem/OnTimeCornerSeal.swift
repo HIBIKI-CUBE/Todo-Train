@@ -80,7 +80,7 @@ struct OnTimeCornerSealMark: View {
 
     var body: some View {
         GeometryReader { geo in
-            let size = min(geo.size.width, geo.size.height) * 0.22
+            let size = min(geo.size.width, geo.size.height) * 0.30
             OnTimeCornerSealGlyph(tier: tier, season: season, timeOfDay: timeOfDay)
                 .frame(width: size, height: size)
                 .scaleEffect(0.7 + 0.3 * settled)

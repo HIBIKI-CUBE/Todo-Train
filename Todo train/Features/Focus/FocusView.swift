@@ -32,7 +32,7 @@ struct FocusView: View {
     /// Portrait: controls take ~38% of height. Compact: right pane ~40% of width.
     private let portraitControlFraction: CGFloat = 0.38
     private let expandedPortraitControlFraction: CGFloat = 0.44
-    private let compactControlFraction: CGFloat = 0.40
+    private let compactControlFraction: CGFloat = 0.46
 
     var body: some View {
         ZStack {
@@ -43,7 +43,7 @@ struct FocusView: View {
 
             GeometryReader { geo in
                 if verticalSizeClass == .compact {
-                    compactDashboard(size: geo.size)
+                    compactDashboard(proxy: geo)
                 } else {
                     portraitDashboard(size: geo.size)
                 }
@@ -137,7 +137,8 @@ struct FocusView: View {
         .safeAreaPadding(.top, 4)
     }
 
-    private func compactDashboard(size: CGSize) -> some View {
+    private func compactDashboard(proxy: GeometryProxy) -> some View {
+        let size = proxy.size
         let controlWidth = size.width * compactControlFraction
         return HStack(spacing: 0) {
             VStack(spacing: 0) {
@@ -157,8 +158,9 @@ struct FocusView: View {
                 .frame(width: controlWidth)
                 .frame(maxHeight: .infinity)
         }
+        .background(FocusPanel.fill.ignoresSafeArea(edges: .trailing))
+        .padding(.trailing, -proxy.safeAreaInsets.trailing)
         .safeAreaPadding(.leading, 4)
-        .safeAreaPadding(.trailing, 4)
     }
 
     // MARK: - Panels
@@ -511,7 +513,7 @@ struct FocusView: View {
                     committedRemainingSeconds: $0.committedRemainingSeconds
                 )
             }
-        let tier = PunctualityPresentation.ridingSealTier(judgment: judgment, reestimates: commits)
+        let tier = PunctualityPresentation.ridingSealSampleTier(judgment: judgment, reestimates: commits)
         let band = PunctualityPresentation.homeBandFractions(judgment: judgment, budgetSeconds: budget)
         return (judgment, active, budget, tier, band)
     }

@@ -8,6 +8,9 @@
 import Foundation
 import SwiftData
 import TodoTrainSync
+#if canImport(UIKit)
+import UIKit
+#endif
 
 struct FocusReestimatePreviewConfiguration {
     enum Stage {
@@ -41,6 +44,25 @@ enum FocusUIPreview {
 
     /// DEBUG スクショ用。通知・AlarmKit の許可ダイアログを出さない。
     static var skipsNotificationAuthorization: Bool { isActive }
+
+    /// 到着オーバーレイの UI テスト／スクショ待ち受け用。
+    static let arrivalOverlayReadyNotification = Notification.Name("FocusUIPreview.arrivalOverlayReady")
+    static let arrivalOverlayAccessibilityID = "FocusUIPreview.ArrivalOverlay"
+
+    /// 車内放送の TTS はスクショ起動では鳴らさない（シミュレーターで描画が止まることがある）。
+    static var skipsDriverVoice: Bool { isActive }
+
+    #if canImport(UIKit)
+    static func requestLandscapeOrientationIfNeeded() {
+        guard isActive, wantsLandscape else { return }
+        guard let scene = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .first(where: { $0.activationState == .foregroundActive || $0.activationState == .foregroundInactive })
+            ?? UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first
+        else { return }
+        scene.requestGeometryUpdate(.iOS(interfaceOrientations: .landscapeRight)) { _ in }
+    }
+    #endif
 
     @MainActor
     static func bootstrap(manager: SessionManager, context: ModelContext) throws {
@@ -116,7 +138,8 @@ enum FocusUIPreview {
 
         case "homeSignalOff":
             session.estimatedSecondsAtStart = 30 * 60
-            session.currentBudgetSeconds = 30 * 60
+            session.budgetSecondsAtStart = 45 * 60
+            session.currentBudgetSeconds = 45 * 60
             session.accumulatedActiveSeconds = 35 * 60
             manager.uiPreviewForcesFocusCover = true
 
@@ -157,7 +180,7 @@ enum FocusUIPreview {
             try manager.commitReestimate(
                 mode: .minutesOnly,
                 progressAnswer: nil,
-                committedRemainingSeconds: 20 * 60,
+                committedRemainingSeconds: 40 * 60,
                 shownBandLowSeconds: nil,
                 shownBandHighSeconds: nil,
                 detailsOpened: false,
@@ -197,19 +220,20 @@ enum FocusUIPreview {
                 sealTier: nil
             )
         case "arrivalLateLog":
-            session.estimatedSecondsAtStart = 45 * 60
-            session.accumulatedActiveSeconds = 20 * 60
+            session.estimatedSecondsAtStart = 30 * 60
+            session.currentBudgetSeconds = 30 * 60
+            session.accumulatedActiveSeconds = 12 * 60
             manager.presentReestimate(trigger: .manual, surface: .iphonePortrait)
             try manager.commitReestimate(
                 mode: .progress,
                 progressAnswer: 0.4,
-                committedRemainingSeconds: 25 * 60,
+                committedRemainingSeconds: 38 * 60,
                 shownBandLowSeconds: nil,
                 shownBandHighSeconds: nil,
                 detailsOpened: false,
                 promptId: ReestimatePromptID.progressV1
             )
-            session.accumulatedActiveSeconds = 58 * 60
+            session.accumulatedActiveSeconds = 52 * 60
             try manager.arrive(resolution: .justFinished)
             manager.arrivalUIPreviewStamp = SessionManager.ArrivalUIPreviewStamp(
                 punctuality: .late,

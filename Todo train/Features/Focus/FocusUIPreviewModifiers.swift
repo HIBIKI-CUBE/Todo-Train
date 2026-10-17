@@ -11,18 +11,15 @@ private struct FocusUIPreviewLandscapeOrientation: ViewModifier {
     func body(content: Content) -> some View {
         content
             .onAppear {
-                guard FocusUIPreview.isActive, FocusUIPreview.wantsLandscape else { return }
-                requestLandscape()
+                FocusUIPreview.requestLandscapeOrientationIfNeeded()
             }
-    }
-
-    private func requestLandscape() {
-        guard let scene = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene })
-            .first(where: { $0.activationState == .foregroundActive || $0.activationState == .foregroundInactive })
-            ?? UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first
-        else { return }
-        scene.requestGeometryUpdate(.iOS(interfaceOrientations: .landscapeRight)) { _ in }
+            .task {
+                guard FocusUIPreview.isActive, FocusUIPreview.wantsLandscape else { return }
+                for _ in 0..<6 {
+                    FocusUIPreview.requestLandscapeOrientationIfNeeded()
+                    try? await Task.sleep(for: .milliseconds(350))
+                }
+            }
     }
 }
 

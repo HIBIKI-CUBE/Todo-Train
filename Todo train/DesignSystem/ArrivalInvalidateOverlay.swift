@@ -216,7 +216,34 @@ struct ArrivalInvalidateOverlay: View {
             announceIfNeeded(arrival: arrival)
             speakOnTimeIfNeeded(punctuality: arrival.punctuality)
             runEntrance()
+            markArrivalOverlayReadyIfNeeded()
+            requestPreviewLandscapeIfNeeded()
         }
+        .task {
+            #if DEBUG
+            guard FocusUIPreview.isActive, FocusUIPreview.wantsLandscape else { return }
+            for _ in 0..<6 {
+                FocusUIPreview.requestLandscapeOrientationIfNeeded()
+                try? await Task.sleep(for: .milliseconds(350))
+            }
+            #endif
+        }
+        #if DEBUG
+        .accessibilityIdentifier(FocusUIPreview.arrivalOverlayAccessibilityID)
+        #endif
+    }
+
+    private func requestPreviewLandscapeIfNeeded() {
+        #if DEBUG
+        FocusUIPreview.requestLandscapeOrientationIfNeeded()
+        #endif
+    }
+
+    private func markArrivalOverlayReadyIfNeeded() {
+        #if DEBUG
+        guard FocusUIPreview.isActive else { return }
+        NotificationCenter.default.post(name: FocusUIPreview.arrivalOverlayReadyNotification, object: nil)
+        #endif
     }
 
     private func arrivedTicket(
@@ -652,6 +679,9 @@ struct ArrivalInvalidateOverlay: View {
 
     private func speakOnTimeIfNeeded(punctuality: ArrivalPunctuality) {
         guard punctuality == .onTime else { return }
+        #if DEBUG
+        if FocusUIPreview.skipsDriverVoice { return }
+        #endif
         CabinVoiceSpeaker.speakDriverLine(
             PunctualityPresentation.onTimeArrivalVoiceLine(),
             enabled: settings.cabinAnnouncementsEnabled
@@ -698,6 +728,7 @@ struct MarsTicketUsedMarks: View {
                         timeOfDay: sealTimeOfDay,
                         settled: sealSettled
                     )
+                    .zIndex(1)
                 }
             }
         }

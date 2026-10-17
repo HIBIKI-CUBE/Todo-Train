@@ -72,13 +72,10 @@ struct PunctualityHomeMeterRow: View {
     }
 
     private var combinedAccessibilityLabel: String {
-        var parts = [PunctualityPresentation.signalAccessibilityLabel(
+        PunctualityPresentation.homeMeterAccessibilityLabel(
             judgment: judgment,
-            activeSeconds: activeSeconds
-        )]
-        if let sealTier {
-            parts.append(PunctualityPresentation.sealSampleAccessibilityLabel(tier: sealTier))
-        }
-        return parts.joined(separator: "、")
+            activeSeconds: activeSeconds,
+            sealTier: sealTier
+        )
     }
 }

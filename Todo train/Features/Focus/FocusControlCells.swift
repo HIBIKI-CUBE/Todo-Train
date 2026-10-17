@@ -52,14 +52,20 @@ struct FocusControlLabel: View {
     var body: some View {
         let compact = verticalSizeClass == .compact
         Group {
-            if compact {
-                HStack(spacing: 12) {
+            if compact && prominence == .secondary {
+                VStack(spacing: 6) {
+                    icon
+                    titleText
+                }
+                .padding(.horizontal, 6)
+            } else if compact {
+                HStack(spacing: 8) {
                     icon
                     titleText
                         .multilineTextAlignment(.leading)
                     Spacer(minLength: 0)
                 }
-                .padding(.horizontal, 16)
+                .padding(.horizontal, 12)
             } else {
                 VStack(spacing: 10) {
                     icon
@@ -79,10 +85,13 @@ struct FocusControlLabel: View {
     }
 
     private var titleText: some View {
-        Text(title)
+        let isCompact = verticalSizeClass == .compact
+        return Text(title)
             .font(.system(size: titleSize, weight: .bold, design: .default))
-            .lineLimit(1)
-            .minimumScaleFactor(0.75)
+            .lineLimit(isCompact && prominence == .secondary ? 2 : 1)
+            .minimumScaleFactor(0.8)
+            .fixedSize(horizontal: false, vertical: true)
+            .multilineTextAlignment(isCompact ? (prominence == .secondary ? .center : .leading) : .center)
     }
 
     private var iconSize: CGFloat {
@@ -96,7 +105,7 @@ struct FocusControlLabel: View {
     private var titleSize: CGFloat {
         switch prominence {
         case .primary: verticalSizeClass == .compact ? 20 : 24
-        case .secondary: verticalSizeClass == .compact ? 18 : 22
+        case .secondary: verticalSizeClass == .compact ? 16 : 22
         case .tertiary: verticalSizeClass == .compact ? 17 : 20
         }
     }

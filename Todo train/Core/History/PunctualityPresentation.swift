@@ -17,6 +17,15 @@ enum PunctualityFirstTimeTips {
 }
 
 enum PunctualityPresentation {
+    /// 走行中の判見本。ホームを過ぎた（信号消灯）あとは出さない。
+    static func ridingSealSampleTier(
+        judgment: PunctualityJudgment.Judgment,
+        reestimates: [PunctualityJudgment.ReestimateCommit]
+    ) -> PunctualityJudgment.OnTimeSealTier? {
+        guard judgment.signal != .off else { return nil }
+        return ridingSealTier(judgment: judgment, reestimates: reestimates)
+    }
+
     static func ridingSealTier(
         judgment: PunctualityJudgment.Judgment,
         reestimates: [PunctualityJudgment.ReestimateCommit]
@@ -71,6 +80,18 @@ enum PunctualityPresentation {
         }
     }
 
+    static func homeMeterAccessibilityLabel(
+        judgment: PunctualityJudgment.Judgment,
+        activeSeconds: TimeInterval,
+        sealTier: PunctualityJudgment.OnTimeSealTier?
+    ) -> String {
+        var parts = [signalAccessibilityLabel(judgment: judgment, activeSeconds: activeSeconds)]
+        if let sealTier, judgment.signal != .off {
+            parts.append(sealSampleAccessibilityLabel(tier: sealTier))
+        }
+        return parts.joined(separator: "、")
+    }
+
     static func sealSampleAccessibilityLabel(
         tier: PunctualityJudgment.OnTimeSealTier
     ) -> String {
@@ -106,7 +127,7 @@ enum PunctualityPresentation {
         lines.append(RideLogLine(text: "最初の見積もり \(originalMinutes)分"))
 
         let activeReestimates = session.reestimateEvents.filter { $0.undoneAt == nil }
-        if let last = activeReestimates.last {
+        if !activeReestimates.isEmpty, let last = activeReestimates.last {
             let total = Int(last.activeSeconds.rounded()) + last.committedRemainingSeconds
             lines.append(RideLogLine(text: "見積もり直し \(max(total, 0) / 60)分"))
         }
@@ -129,9 +150,20 @@ enum PunctualityPresentation {
         else { return nil }
         let answeredTenth = Int((progress * 10).rounded())
         guard answeredTenth > 0 else { return nil }
-        let impliedTotal = event.activeSeconds / progress
-        guard impliedTotal > 0 else { return nil }
-        let actualTenth = Int(((session.accumulatedActiveSeconds / impliedTotal) * 10).rounded())
-        return "\(answeredTenth)割と答えた時点 → 実際は全体の\(max(actualTenth, 0))割"
+        let actualTenth = actualProgressTenth(
+            answerActiveSeconds: event.activeSeconds,
+            arrivalActiveSeconds: session.accumulatedActiveSeconds
+        )
+        return "\(answeredTenth)割と答えた時点 → 実際は全体の\(actualTenth)割"
+    }
+
+    /// 答えた時点の走行秒 ÷ 到着時の走行秒 → 0…10 割（四捨五入）。
+    static func actualProgressTenth(
+        answerActiveSeconds: TimeInterval,
+        arrivalActiveSeconds: TimeInterval
+    ) -> Int {
+        guard arrivalActiveSeconds > 0, answerActiveSeconds >= 0 else { return 0 }
+        let tenth = (answerActiveSeconds / arrivalActiveSeconds) * 10
+        return min(10, max(0, Int(tenth.rounded())))
     }
 }
