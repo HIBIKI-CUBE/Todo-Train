@@ -123,19 +123,16 @@ nonisolated enum AwayInterruptChannel: Equatable, Sendable {
 }
 
 enum CheckInScheduling: Sendable {
-    static let shortTripMaxSeconds = CabinBroadcastScheduling.shortTripMaxSeconds
-    static let singleCheckInMaxSeconds = CabinBroadcastScheduling.singleCheckInMaxSeconds
-    static let firstBand = CabinBroadcastScheduling.firstBand
-    static let secondBand = CabinBroadcastScheduling.secondBand
-    static let awayDelayRange: ClosedRange<TimeInterval> = 45...90
+    static let shortTripMaxSeconds = Int(CheckInTiming.minimumEstimateSeconds)
+    static let awayDelayRange = CheckInNotificationSchedule.awayDelayRange
     static let overtimeGuardSeconds = CabinBroadcastScheduling.overtimeGuardSeconds
 
-    static func progressCount(estimatedSeconds: Int) -> Int {
-        CabinBroadcastScheduling.progressCount(estimatedSeconds: estimatedSeconds)
+    static func progressCount(budgetSecondsAtStart: Int) -> Int {
+        CheckInTiming.fractionBandRange(estimateSeconds: budgetSecondsAtStart) == nil ? 0 : 1
     }
 
-    static func offsets(estimatedSeconds: Int, seed: UUID) -> [TimeInterval] {
-        CabinBroadcastScheduling.offsets(estimatedSeconds: estimatedSeconds, seed: seed)
+    static func offsets(budgetSecondsAtStart: Int, seed: UUID) -> [TimeInterval] {
+        CheckInTiming.progressOffsets(rideID: seed, budgetSecondsAtStart: budgetSecondsAtStart)
     }
 
     static func awayInterruptChannel(
@@ -150,9 +147,7 @@ enum CheckInScheduling: Sendable {
     }
 
     static func awayDelay(seed: UUID, salt: UInt64 = 99) -> TimeInterval {
-        let t = CabinBroadcastScheduling.unit(seed: seed, salt: salt)
-        return awayDelayRange.lowerBound
-            + (awayDelayRange.upperBound - awayDelayRange.lowerBound) * t
+        CheckInNotificationSchedule.awayDelay(seed: seed, salt: salt)
     }
 
     static func dueProgressOffset(
@@ -162,7 +157,7 @@ enum CheckInScheduling: Sendable {
         remainingSeconds: TimeInterval,
         hasPending: Bool
     ) -> TimeInterval? {
-        CabinBroadcastScheduling.dueProgressOffset(
+        CheckInTiming.dueProgressOffset(
             offsets: offsets,
             firedCount: firedCount,
             elapsedSeconds: elapsedSeconds,
@@ -176,7 +171,11 @@ enum CheckInScheduling: Sendable {
         elapsedSeconds: TimeInterval,
         now: Date
     ) -> Date? {
-        CabinBroadcastScheduling.wallFireAt(offset: offset, elapsedSeconds: elapsedSeconds, now: now)
+        CheckInNotificationSchedule.progressFireAt(
+            offset: offset,
+            elapsedSeconds: elapsedSeconds,
+            now: now
+        )
     }
 
     static func unit(seed: UUID, salt: UInt64) -> Double {

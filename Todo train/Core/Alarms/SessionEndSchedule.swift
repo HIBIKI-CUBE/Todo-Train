@@ -4,6 +4,7 @@
 //
 
 import Foundation
+import TodoTrainSync
 
 /// When a running session's budget will be reached (end bell / AlarmKit target).
 enum SessionEndSchedule {
@@ -12,7 +13,7 @@ enum SessionEndSchedule {
     elapsedSeconds: TimeInterval,
     now: Date
   ) -> Date? {
-    OvertimeSchedule.fireAt(
+    RideEndNotificationSchedule.fireAt(
       budgetSeconds: budgetSeconds,
       elapsedSeconds: elapsedSeconds,
       now: now
@@ -23,12 +24,13 @@ enum SessionEndSchedule {
     budgetSeconds: Int,
     elapsedSeconds: TimeInterval
   ) -> TimeInterval? {
-    let remaining = TimeInterval(budgetSeconds) - elapsedSeconds
-    guard remaining > 0 else { return nil }
-    return remaining
+    RideEndNotificationSchedule.countdownSeconds(
+      budgetSeconds: budgetSeconds,
+      elapsedSeconds: elapsedSeconds
+    )
   }
 
   static func alarmID(sessionID: UUID) -> UUID {
-    sessionID
+    RideEndNotificationSchedule.alarmID(sessionID: sessionID)
   }
 }

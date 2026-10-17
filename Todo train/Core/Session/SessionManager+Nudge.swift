@@ -213,6 +213,7 @@ extension SessionManager {
             passengerSince: passengerWhileRunning ? passenger?.boardedAt : nil,
             isPassenger: passengerWhileRunning,
             estimatedSeconds: session.activeBudgetSeconds,
+            budgetSecondsAtStart: session.budgetSecondsAtStart,
             rideID: session.id,
             extensions: session.extensions.map {
                 NudgeExtension(
@@ -416,6 +417,7 @@ extension SessionManager {
         NudgePlanner.marks(
             estimatedSeconds: input.estimatedSeconds,
             rideID: input.rideID,
+            budgetSecondsAtStart: input.budgetSecondsAtStart,
             extensions: input.extensions,
             startedAt: input.startedAt,
             activeSeconds: NudgePlanner.workingElapsed(input),

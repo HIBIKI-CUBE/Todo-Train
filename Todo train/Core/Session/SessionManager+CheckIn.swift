@@ -125,11 +125,11 @@ extension SessionManager {
         guard fetchOpenPassengerRide() == nil else { return }
         guard !timetableFit(at: now).shouldSuppressAway else { return }
 
-        let delay = CheckInScheduling.awayDelay(
+        let fireAt = CheckInNotificationSchedule.awayFireAt(
+            now: now,
             seed: session.id,
             salt: UInt64(session.checkInFiredCount) &+ 99
         )
-        let fireAt = now.addingTimeInterval(delay)
         session.awayDueAt = fireAt
         guard saveBestEffort() else {
             session.awayDueAt = nil
@@ -261,9 +261,10 @@ extension SessionManager {
     // MARK: - Check-in
 
     func applyCheckInSchedule(to session: WorkSession, title: String, estimatedSeconds: Int) {
-        if let offset = NudgePlanner.checkInOffset(estimatedSeconds: estimatedSeconds, rideID: session.id) {
+        let budgetAtStart = session.budgetSecondsAtStart > 0 ? session.budgetSecondsAtStart : estimatedSeconds
+        if let offset = NudgePlanner.checkInOffset(estimatedSeconds: budgetAtStart, rideID: session.id) {
             session.checkInOffsetSeconds = [offset]
-            session.checkInFraction = offset / TimeInterval(max(estimatedSeconds, 1))
+            session.checkInFraction = offset / TimeInterval(max(budgetAtStart, 1))
         } else {
             session.checkInOffsetSeconds = []
             session.checkInFraction = nil

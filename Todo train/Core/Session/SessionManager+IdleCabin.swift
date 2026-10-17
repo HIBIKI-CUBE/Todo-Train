@@ -135,7 +135,7 @@ extension SessionManager {
             return
         }
 
-        if let fireAt = CabinIdleScheduling.wallFireAt(
+        if let fireAt = CheckInNotificationSchedule.idleFireAt(
             firedCount: day.cabinIdleFiredCount,
             elapsedSinceActivity: elapsed,
             seed: day.id,

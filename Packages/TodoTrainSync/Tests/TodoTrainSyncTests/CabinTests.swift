@@ -6,22 +6,16 @@ import Testing
 struct CabinBroadcastSchedulingTests {
     private let seed = UUID(uuidString: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE")!
 
-    @Test func progressCountMatchesBands() {
+    @Test func legacyBroadcastBandsStayForIdleSalt() {
         #expect(CabinBroadcastScheduling.progressCount(estimatedSeconds: 10 * 60) == 0)
         #expect(CabinBroadcastScheduling.progressCount(estimatedSeconds: 11 * 60) == 1)
         #expect(CabinBroadcastScheduling.progressCount(estimatedSeconds: 30 * 60) == 2)
     }
 
-    @Test func offsetsAreStableAndInsideBands() {
-        let first = CabinBroadcastScheduling.offsets(estimatedSeconds: 1800, seed: seed)
-        let again = CabinBroadcastScheduling.offsets(estimatedSeconds: 1800, seed: seed)
-        #expect(first == again)
-        #expect(first.count == 2)
-        let budget = 1800.0
-        #expect(first[0] >= budget * CabinBroadcastScheduling.firstBand.lowerBound)
-        #expect(first[0] <= budget * CabinBroadcastScheduling.firstBand.upperBound)
-        #expect(first[1] >= budget * CabinBroadcastScheduling.secondBand.lowerBound)
-        #expect(first[0] < first[1])
+    @Test func checkInTimingMatchesNudgePlanner() {
+        let offset = CheckInTiming.offset(rideID: seed, estimateSeconds: 1800)
+        let nudge = NudgePlanner.checkInOffset(estimatedSeconds: 1800, rideID: seed)
+        #expect(offset == nudge)
     }
 }
 
@@ -116,9 +110,9 @@ struct CabinInterruptWatchTests {
 
     @Test func sameSeedMatchesOffsets() {
         let seed = running.sessionId!
-        let offsets = CabinBroadcastScheduling.offsets(
-            estimatedSeconds: running.estimatedSeconds!,
-            seed: seed
+        let offsets = CheckInTiming.progressOffsets(
+            rideID: seed,
+            budgetSecondsAtStart: running.estimatedSeconds!
         )
         #expect(!offsets.isEmpty)
     }
@@ -263,9 +257,9 @@ struct CabinInterruptWatchTests {
         var snap = running
         snap.pendingCabin = nil
         snap.checkInFiredCount = 0
-        let offsets = CabinBroadcastScheduling.offsets(
-            estimatedSeconds: snap.estimatedSeconds!,
-            seed: snap.sessionId!
+        let offsets = CheckInTiming.progressOffsets(
+            rideID: snap.sessionId!,
+            budgetSecondsAtStart: snap.estimatedSeconds!
         )
         let fireAt = 1_768_000_000 + Int(offsets[0].rounded(.towardZero)) + 1
         let interrupt = CabinInterruptWatch.evaluate(

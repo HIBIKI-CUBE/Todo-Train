@@ -14,14 +14,14 @@ struct NudgeStageTableTests {
         #expect(NudgePlanner.handoffInterval(estimatedSeconds: five) == 60)
 
         let fifteenBand = NudgePlanner.checkInBand(estimatedSeconds: fifteen)
-        #expect(fifteenBand?.lowerBound == TimeInterval(fifteen) * 0.62)
-        #expect(fifteenBand?.upperBound == TimeInterval(fifteen) * 0.78)
+        #expect(fifteenBand?.lowerBound == max(TimeInterval(fifteen) * 0.40, CheckInTiming.minimumRunningSeconds))
+        #expect(fifteenBand?.upperBound == max(TimeInterval(fifteen) * 0.50, CheckInTiming.minimumRunningSeconds))
         #expect(abs(NudgePlanner.approachRemaining(estimatedSeconds: fifteen) - 153) < 0.001)
         #expect(abs(NudgePlanner.handoffInterval(estimatedSeconds: fifteen) - 63) < 0.001)
 
         let thirtyBand = NudgePlanner.checkInBand(estimatedSeconds: thirty)
-        #expect(thirtyBand?.lowerBound == TimeInterval(thirty) * 0.62)
-        #expect(thirtyBand?.upperBound == TimeInterval(thirty) * 0.78)
+        #expect(thirtyBand?.lowerBound == TimeInterval(thirty) * 0.40)
+        #expect(thirtyBand?.upperBound == TimeInterval(thirty) * 0.50)
         #expect(NudgePlanner.approachRemaining(estimatedSeconds: thirty) == 180)
         #expect(NudgePlanner.handoffInterval(estimatedSeconds: thirty) == 120)
     }
@@ -31,8 +31,8 @@ struct NudgeStageTableTests {
         let marks = NudgePlanner.marks(estimatedSeconds: 30 * 60, rideID: ride)
         #expect(marks.map(\.stage) == [.checkIn, .approach, .estimate, .handoff1, .handoff2, .handoff3])
         let checkIn = marks[0].offset
-        #expect(checkIn >= TimeInterval(30 * 60) * 0.62)
-        #expect(checkIn <= TimeInterval(30 * 60) * 0.78)
+        #expect(checkIn >= TimeInterval(30 * 60) * 0.40)
+        #expect(checkIn <= TimeInterval(30 * 60) * 0.50)
         #expect(marks[1].offset == TimeInterval(30 * 60) - 180)
         #expect(marks[2].offset == TimeInterval(30 * 60))
         #expect(marks[3].offset == TimeInterval(30 * 60) + 120)
@@ -61,13 +61,13 @@ struct NudgeCheckInPlacementTests {
         #expect(evaluation == repeated)
     }
 
-    @Test func differentRidesSpreadInsideTheBand() {
+    @Test func differentRidesSpreadInsideTheBand() throws {
         let estimate = 30 * 60
         let offsets = (0..<24).map { index in
             let ride = UUID(uuidString: String(format: "00000000-0000-0000-0000-%012x", index))!
             return NudgePlanner.checkInOffset(estimatedSeconds: estimate, rideID: ride)
         }
-        let band = TimeInterval(estimate) * 0.62...TimeInterval(estimate) * 0.78
+        let band = try #require(NudgePlanner.checkInBand(estimatedSeconds: estimate))
         #expect(offsets.allSatisfy { offset in
             guard let offset else { return false }
             return band.contains(offset)
@@ -151,7 +151,7 @@ struct NudgeFreezeExtensionTests {
     }
 
     @Test func anUnextendedCheckInStaysCurrentAfterItHasPassed() {
-        // 15 min: stage 1 is at most 702s, approach is at 747s.
+        // 15 min: stage 1 is at most 450s, approach is at 747s.
         let now = start.addingTimeInterval(720)
         let evaluation = NudgePlanner.evaluate(
             rideInput(estimatedSeconds: 15 * 60, rideID: ride, startedAt: start, now: now)
@@ -189,16 +189,16 @@ struct NudgeFreezeExtensionTests {
         #expect(extended.plan.allSatisfy { $0.stage != .checkIn })
     }
 
-    @Test func extensionBeforeCheckInReplacesItOnTheNewEstimate() throws {
-        // 20 min stage 1 is at least 744s. At 60s it has not fired.
-        // 40 min stage 1 is at least 1488s, so the new point is still ahead.
+    @Test func extensionBeforeCheckInKeepsDepartureOffset() throws {
         let elapsed: TimeInterval = 60
         let now = start.addingTimeInterval(elapsed)
+        let departureBudget = 20 * 60
         let extendedEstimate = 40 * 60
-        let placed = try #require(NudgePlanner.checkInOffset(estimatedSeconds: extendedEstimate, rideID: ride))
+        let placed = try #require(NudgePlanner.checkInOffset(estimatedSeconds: departureBudget, rideID: ride))
         let evaluation = NudgePlanner.evaluate(
             rideInput(
                 estimatedSeconds: extendedEstimate,
+                budgetSecondsAtStart: departureBudget,
                 rideID: ride,
                 startedAt: start,
                 extensions: [NudgeExtension(addedSeconds: 20 * 60, createdAt: now)],
@@ -218,6 +218,7 @@ struct NudgeFreezeExtensionTests {
         let table = NudgePlanner.marks(
             estimatedSeconds: extendedEstimate,
             rideID: ride,
+            budgetSecondsAtStart: departureBudget,
             extensions: [NudgeExtension(addedSeconds: 20 * 60, createdAt: now)],
             startedAt: start,
             activeSeconds: elapsed
@@ -245,21 +246,24 @@ struct NudgeFreezeExtensionTests {
     }
 
     @Test func replacedCheckInAtTheActiveSecondIsSkipped() throws {
+        let departureBudget = 20 * 60
         let extendedEstimate = 40 * 60
-        let placed = try #require(NudgePlanner.checkInOffset(estimatedSeconds: extendedEstimate, rideID: ride))
+        let placed = try #require(NudgePlanner.checkInOffset(estimatedSeconds: departureBudget, rideID: ride))
         let extensionAt = start.addingTimeInterval(60)
         let atPoint = NudgePlanner.marks(
             estimatedSeconds: extendedEstimate,
             rideID: ride,
+            budgetSecondsAtStart: departureBudget,
             extensions: [NudgeExtension(addedSeconds: 20 * 60, createdAt: extensionAt)],
             startedAt: start,
             activeSeconds: placed
         )
-        #expect(!atPoint.contains { $0.stage == .checkIn })
+        #expect(atPoint.contains { $0.stage == .checkIn })
 
         let passed = NudgePlanner.evaluate(
             rideInput(
                 estimatedSeconds: extendedEstimate,
+                budgetSecondsAtStart: departureBudget,
                 rideID: ride,
                 startedAt: start,
                 extensions: [NudgeExtension(addedSeconds: 20 * 60, createdAt: extensionAt)],
@@ -267,11 +271,12 @@ struct NudgeFreezeExtensionTests {
             )
         )
         #expect(!passed.plan.contains { $0.stage == .checkIn })
-        #expect(passed.current != .checkIn)
+        #expect(passed.current == .checkIn)
 
         let justBefore = NudgePlanner.evaluate(
             rideInput(
                 estimatedSeconds: extendedEstimate,
+                budgetSecondsAtStart: departureBudget,
                 rideID: ride,
                 startedAt: start,
                 extensions: [NudgeExtension(addedSeconds: 20 * 60, createdAt: extensionAt)],
@@ -334,14 +339,15 @@ struct NudgeFreezeExtensionTests {
         #expect(evaluation.current != .checkIn)
     }
 
-    @Test func twoExtensionsBeforeCheckInPlaceItOnceOnTheFinalEstimate() throws {
-        // Both stamps are before 20 min stage 1 (at least 744s) and before 30 min stage 1 (at least 1116s).
+    @Test func twoExtensionsBeforeCheckInKeepDepartureOffset() throws {
         let firstAt = start.addingTimeInterval(60)
         let secondAt = start.addingTimeInterval(120)
+        let departureBudget = 20 * 60
         let finalEstimate = 40 * 60
         let evaluation = NudgePlanner.evaluate(
             rideInput(
                 estimatedSeconds: finalEstimate,
+                budgetSecondsAtStart: departureBudget,
                 rideID: ride,
                 startedAt: start,
                 extensions: [
@@ -353,7 +359,7 @@ struct NudgeFreezeExtensionTests {
         )
         let checkIns = evaluation.plan.filter { $0.stage == .checkIn }
         #expect(checkIns.count == 1)
-        let placed = try #require(NudgePlanner.checkInOffset(estimatedSeconds: finalEstimate, rideID: ride))
+        let placed = try #require(NudgePlanner.checkInOffset(estimatedSeconds: departureBudget, rideID: ride))
         #expect(checkIns.first?.fireAt == secondAt.addingTimeInterval(placed - 120))
     }
 
@@ -364,6 +370,7 @@ struct NudgeFreezeExtensionTests {
         let evaluation = NudgePlanner.evaluate(
             rideInput(
                 estimatedSeconds: 30 * 60,
+                budgetSecondsAtStart: 15 * 60,
                 rideID: ride,
                 startedAt: start,
                 pausedAccumulated: 800,
@@ -372,18 +379,21 @@ struct NudgeFreezeExtensionTests {
             )
         )
         #expect(evaluation.workingElapsed == 200)
-        let placed = try #require(NudgePlanner.checkInOffset(estimatedSeconds: 30 * 60, rideID: ride))
+        let placed = try #require(
+            NudgePlanner.checkInOffset(estimatedSeconds: 15 * 60, rideID: ride)
+        )
         let checkIn = try #require(evaluation.plan.first { $0.stage == .checkIn })
         #expect(checkIn.fireAt == now.addingTimeInterval(placed - 200))
     }
 
     @Test func openPauseAfterExtensionDoesNotCountAsFired() throws {
         let extensionAt = start.addingTimeInterval(100)
-        let pausedAt = start.addingTimeInterval(500)
+        let pausedAt = start.addingTimeInterval(300)
         let now = start.addingTimeInterval(800)
         let evaluation = NudgePlanner.evaluate(
             rideInput(
                 estimatedSeconds: 40 * 60,
+                budgetSecondsAtStart: 20 * 60,
                 rideID: ride,
                 startedAt: start,
                 pausedAt: pausedAt,
@@ -392,20 +402,21 @@ struct NudgeFreezeExtensionTests {
                 now: now
             )
         )
-        #expect(evaluation.workingElapsed == 500)
+        #expect(evaluation.workingElapsed == 300)
         #expect(evaluation.isFrozen)
-        let placed = try #require(NudgePlanner.checkInOffset(estimatedSeconds: 40 * 60, rideID: ride))
+        let placed = try #require(NudgePlanner.checkInOffset(estimatedSeconds: 20 * 60, rideID: ride))
         let checkIn = try #require(evaluation.plan.first { $0.stage == .checkIn })
-        #expect(checkIn.fireAt == now.addingTimeInterval(placed - 500))
+        #expect(checkIn.fireAt == now.addingTimeInterval(placed - 300))
     }
 
     @Test func openPassengerIntervalAfterExtensionDoesNotCountAsFired() throws {
         let extensionAt = start.addingTimeInterval(100)
-        let passengerSince = start.addingTimeInterval(500)
+        let passengerSince = start.addingTimeInterval(300)
         let now = start.addingTimeInterval(800)
         let evaluation = NudgePlanner.evaluate(
             rideInput(
                 estimatedSeconds: 40 * 60,
+                budgetSecondsAtStart: 20 * 60,
                 rideID: ride,
                 startedAt: start,
                 passengerSince: passengerSince,
@@ -414,11 +425,11 @@ struct NudgeFreezeExtensionTests {
                 now: now
             )
         )
-        #expect(evaluation.workingElapsed == 500)
+        #expect(evaluation.workingElapsed == 300)
         #expect(evaluation.isFrozen)
-        let placed = try #require(NudgePlanner.checkInOffset(estimatedSeconds: 40 * 60, rideID: ride))
+        let placed = try #require(NudgePlanner.checkInOffset(estimatedSeconds: 20 * 60, rideID: ride))
         let checkIn = try #require(evaluation.plan.first { $0.stage == .checkIn })
-        #expect(checkIn.fireAt == now.addingTimeInterval(placed - 500))
+        #expect(checkIn.fireAt == now.addingTimeInterval(placed - 300))
     }
 
     @Test func recordedWorkingSecondsKeepAFiredCheckInFromReturning() {
@@ -445,12 +456,11 @@ struct NudgeFreezeExtensionTests {
     }
 
     @Test func nilWorkingSecondsFallsBackToTheRideClock() {
-        // The same later pause is subtracted from the ride clock when the reading was not stored.
-        // 400 active seconds is still before the original 15 min stage 1, so that stage is placed again.
         let extensionAt = start.addingTimeInterval(800)
         let evaluation = NudgePlanner.evaluate(
             rideInput(
                 estimatedSeconds: 30 * 60,
+                budgetSecondsAtStart: 15 * 60,
                 rideID: ride,
                 startedAt: start,
                 pausedAccumulated: 400,
@@ -460,7 +470,7 @@ struct NudgeFreezeExtensionTests {
                 now: start.addingTimeInterval(1_210)
             )
         )
-        #expect(evaluation.plan.contains { $0.stage == .checkIn })
+        #expect(!evaluation.plan.contains { $0.stage == .checkIn })
     }
 }
 
@@ -651,6 +661,7 @@ struct NudgeGapTests {
 
 private func rideInput(
     estimatedSeconds: Int,
+    budgetSecondsAtStart: Int? = nil,
     rideID: UUID,
     startedAt: Date = Date(timeIntervalSince1970: 1_700_000_000),
     pausedAccumulated: TimeInterval = 0,
@@ -674,6 +685,7 @@ private func rideInput(
         passengerSince: passengerSince,
         isPassenger: isPassenger,
         estimatedSeconds: estimatedSeconds,
+        budgetSecondsAtStart: budgetSecondsAtStart,
         rideID: rideID,
         extensions: extensions,
         alarmKitEndBell: alarmKitEndBell,
