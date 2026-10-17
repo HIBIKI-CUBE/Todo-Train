@@ -167,12 +167,8 @@ enum FocusUIPreview {
         switch state {
         case "arrivalOnTimeTicketing":
             session.estimatedSecondsAtStart = 30 * 60
-            session.accumulatedActiveSeconds = 29 * 60 + 50
+            session.accumulatedActiveSeconds = 30 * 60
             try manager.arrive()
-            manager.arrivalUIPreviewStamp = SessionManager.ArrivalUIPreviewStamp(
-                punctuality: .onTime,
-                sealTier: .ticketing
-            )
         case "arrivalOnTimeEarly":
             session.estimatedSecondsAtStart = 30 * 60
             session.accumulatedActiveSeconds = 10 * 60
@@ -186,39 +182,27 @@ enum FocusUIPreview {
                 detailsOpened: false,
                 promptId: ReestimatePromptID.remainingV1
             )
-            session.accumulatedActiveSeconds = 29 * 60 + 30
+            session.accumulatedActiveSeconds = 50 * 60
             try manager.arrive()
-            manager.arrivalUIPreviewStamp = SessionManager.ArrivalUIPreviewStamp(
-                punctuality: .onTime,
-                sealTier: .earlyReestimate
-            )
         case "arrivalOnTimeLate":
             session.estimatedSecondsAtStart = 30 * 60
-            session.accumulatedActiveSeconds = 18 * 60
+            session.accumulatedActiveSeconds = 25 * 60
             manager.presentReestimate(trigger: .manual, surface: .iphonePortrait)
             try manager.commitReestimate(
                 mode: .minutesOnly,
                 progressAnswer: nil,
-                committedRemainingSeconds: 12 * 60,
+                committedRemainingSeconds: 15 * 60,
                 shownBandLowSeconds: nil,
                 shownBandHighSeconds: nil,
                 detailsOpened: false,
                 promptId: ReestimatePromptID.remainingV1
             )
-            session.accumulatedActiveSeconds = 29 * 60 + 20
+            session.accumulatedActiveSeconds = 40 * 60
             try manager.arrive()
-            manager.arrivalUIPreviewStamp = SessionManager.ArrivalUIPreviewStamp(
-                punctuality: .onTime,
-                sealTier: .lateReestimate
-            )
         case "arrivalNotOnTime":
             session.estimatedSecondsAtStart = 30 * 60
             session.accumulatedActiveSeconds = 5 * 60
             try manager.arrive()
-            manager.arrivalUIPreviewStamp = SessionManager.ArrivalUIPreviewStamp(
-                punctuality: .early,
-                sealTier: nil
-            )
         case "arrivalLateLog":
             session.estimatedSecondsAtStart = 30 * 60
             session.currentBudgetSeconds = 30 * 60
@@ -233,15 +217,12 @@ enum FocusUIPreview {
                 detailsOpened: false,
                 promptId: ReestimatePromptID.progressV1
             )
-            session.accumulatedActiveSeconds = 52 * 60
+            session.accumulatedActiveSeconds = 58 * 60
             try manager.arrive(resolution: .justFinished)
-            manager.arrivalUIPreviewStamp = SessionManager.ArrivalUIPreviewStamp(
-                punctuality: .late,
-                sealTier: nil
-            )
         default:
             break
         }
+        manager.arrivalUIPreviewStamp = SessionManager.ArrivalUIPreviewStamp(stampCommitted: true)
     }
 }
 #endif

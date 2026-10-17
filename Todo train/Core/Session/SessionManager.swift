@@ -99,10 +99,9 @@ final class SessionManager {
     var uiPreviewForcesFocusCover: Bool = false
     var uiPreviewLandscape: Bool = false
     var uiPreviewSuppressMotion: Bool = false
+    /// 印を押したあとの券面（穴・丸印・角判）を動きなしで出す。
     struct ArrivalUIPreviewStamp {
-        var punctuality: ArrivalPunctuality
-        var sealTier: PunctualityJudgment.OnTimeSealTier?
-        var showsRideLog: Bool = true
+        var stampCommitted: Bool = true
     }
     var arrivalUIPreviewStamp: ArrivalUIPreviewStamp?
     #endif

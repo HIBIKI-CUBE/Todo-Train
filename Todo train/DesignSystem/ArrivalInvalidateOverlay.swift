@@ -38,9 +38,6 @@ struct ArrivalInvalidateOverlay: View {
     /// 0…1 ink on the arrived ticket.
     @State private var impact: CGFloat = 0
     @State private var sealImpact: CGFloat = 0
-    #if DEBUG
-    @State private var previewSealTier: PunctualityJudgment.OnTimeSealTier?
-    #endif
     @State private var stampSeated = false
     @State private var ticketNudge: CGFloat = 0
     @State private var phosphor: CGFloat = 0
@@ -212,10 +209,10 @@ struct ArrivalInvalidateOverlay: View {
         .sensoryFeedback(.impact(flexibility: .rigid, intensity: 1), trigger: praiseHaptic)
         .sensoryFeedback(.impact(flexibility: .rigid, intensity: 1), trigger: sealHaptic)
         .onAppear {
+            runEntrance()
             applyArrivalPreviewIfNeeded(punctuality: arrival.punctuality)
             announceIfNeeded(arrival: arrival)
             speakOnTimeIfNeeded(punctuality: arrival.punctuality)
-            runEntrance()
             markArrivalOverlayReadyIfNeeded()
             requestPreviewLandscapeIfNeeded()
         }
@@ -445,9 +442,6 @@ struct ArrivalInvalidateOverlay: View {
     }
 
     private func resolvedSealTier(for punctuality: ArrivalPunctuality) -> PunctualityJudgment.OnTimeSealTier? {
-        #if DEBUG
-        if let previewSealTier { return previewSealTier }
-        #endif
         guard punctuality == .onTime, let session = arrivedSession else { return nil }
         return Punctuality.judgment(for: session).sealTier
     }
@@ -459,11 +453,17 @@ struct ArrivalInvalidateOverlay: View {
 
     #if DEBUG
     private func applyArrivalPreviewIfNeeded(punctuality: ArrivalPunctuality) {
-        guard let preview = sessionManager.arrivalUIPreviewStamp else { return }
-        praise = ArrivalPraise(punctuality: preview.punctuality, alreadyDone: false, nextWasReserved: false, continuedFromStamp: false)
-        impact = 1
-        previewSealTier = preview.sealTier
-        sealImpact = preview.sealTier == nil ? 0 : 1
+        guard let preview = sessionManager.arrivalUIPreviewStamp, preview.stampCommitted else { return }
+        let session = arrivedSession
+        praise = ArrivalPraise(
+            punctuality: punctuality,
+            alreadyDone: session?.overtimeResolution == .alreadyDone,
+            nextWasReserved: false,
+            continuedFromStamp: false
+        )
+        let settled = ArrivalStampCommitEffects.settledVisuals(punctuality: punctuality)
+        impact = settled.stampImpact
+        sealImpact = settled.sealImpact
         deck.markStamped()
         stampSeated = true
     }
@@ -594,32 +594,32 @@ struct ArrivalInvalidateOverlay: View {
             baseHaptic += 1
         }
         let returnsToHub = action == nil
-        let onTime = punctuality == .onTime
         stampGeneration += 1
         let generation = stampGeneration
+        let settled = ArrivalStampCommitEffects.settledVisuals(punctuality: punctuality)
         if reduceMotion {
-            impact = 1
-            sealImpact = onTime ? 1 : 0
+            impact = settled.stampImpact
+            sealImpact = settled.sealImpact
             phosphor = praise.count > 0 ? 1 : 0
-            if onTime { sealHaptic += 1 }
+            if settled.sealImpact > 0 { sealHaptic += 1 }
             scheduleHold(generation: generation, returnsToHub: returnsToHub)
             return
         }
         withAnimation(MarsTicketSpec.ArrivalMotion.slam) {
-            impact = 1
+            impact = settled.stampImpact
             phosphor = praise.count > 0 ? 1 : 0
             ticketNudge = MarsTicketSpec.ArrivalMotion.nudgeAmplitude
         } completion: {
             withAnimation(MarsTicketSpec.ArrivalMotion.slam) {
                 ticketNudge = 0
             }
-            if onTime {
+            if settled.sealImpact > 0 {
                 Task { @MainActor in
                     try? await Task.sleep(for: .milliseconds(120))
                     guard generation == stampGeneration else { return }
                     sealHaptic += 1
                     withAnimation(MarsTicketSpec.ArrivalMotion.descend) {
-                        sealImpact = 1
+                        sealImpact = settled.sealImpact
                     }
                 }
             }
@@ -686,6 +686,15 @@ struct ArrivalInvalidateOverlay: View {
             PunctualityPresentation.onTimeArrivalVoiceLine(),
             enabled: settings.cabinAnnouncementsEnabled
         )
+    }
+}
+
+/// `commitStamp` が印と角判を落とし終えたあとの見え方（プレビューと reduceMotion も同じ）。
+enum ArrivalStampCommitEffects {
+    static func settledVisuals(punctuality: ArrivalPunctuality) -> (stampImpact: CGFloat, sealImpact: CGFloat) {
+        let stamp: CGFloat = 1
+        let seal: CGFloat = punctuality == .onTime ? 1 : 0
+        return (stamp, seal)
     }
 }
 
