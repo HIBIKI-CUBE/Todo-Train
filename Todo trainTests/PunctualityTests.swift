@@ -6,14 +6,15 @@
 import Foundation
 import SwiftData
 import Testing
+import TodoTrainSync
 @testable import Todo_train
 
 struct PunctualityTests {
-    @Test func slack_usesFifteenPercentWithFloor() {
-        #expect(Punctuality.slack(estimateSeconds: 300) == 45) // 5分: floor
-        #expect(Punctuality.slack(estimateSeconds: 600) == 90) // 10分: 15%
-        #expect(Punctuality.slack(estimateSeconds: 1800) == 270) // 30分: 15%
-        #expect(Punctuality.slack(estimateSeconds: 3600) == 540) // 60分: 15%
+    @Test func band_usesFifteenPercentWithOneMinuteFloor() {
+        #expect(PunctualityJudgment.bandHalfWidth(bandBasisSeconds: 300) == 60)
+        #expect(PunctualityJudgment.bandHalfWidth(bandBasisSeconds: 600) == 90)
+        #expect(PunctualityJudgment.bandHalfWidth(bandBasisSeconds: 1_800) == 270)
+        #expect(PunctualityJudgment.bandHalfWidth(bandBasisSeconds: 3_600) == 540)
     }
 
     @Test func classify_onTime_nearEstimate() {
@@ -43,7 +44,7 @@ struct PunctualityTests {
         )
     }
 
-    @Test func classify_early_isAheadOfSchedule() {
+    @Test func classify_early_isNotOnTimeService() {
         #expect(
             Punctuality.classify(
                 outcome: .arrived,
@@ -52,19 +53,11 @@ struct PunctualityTests {
                 overtimeResolution: nil
             ) == .early
         )
-        #expect(Punctuality.isAheadOfSchedule(.early))
+        #expect(!Punctuality.isAheadOfSchedule(.early))
         #expect(Punctuality.arrivalHeadline(.early) == "早着")
     }
 
-    @Test func classify_late_whenOvertimeOrPastEstimate() {
-        #expect(
-            Punctuality.classify(
-                outcome: .arrived,
-                elapsedSeconds: 280,
-                estimateSeconds: 300,
-                overtimeResolution: .justFinished
-            ) == .late
-        )
+    @Test func classify_late_whenPastBand() {
         #expect(
             Punctuality.classify(
                 outcome: .arrived,
@@ -72,6 +65,17 @@ struct PunctualityTests {
                 estimateSeconds: 300,
                 overtimeResolution: nil
             ) == .late
+        )
+    }
+
+    @Test func classify_overtimeResolution_aloneIsNotLate() {
+        #expect(
+            Punctuality.classify(
+                outcome: .arrived,
+                elapsedSeconds: 280,
+                estimateSeconds: 300,
+                overtimeResolution: .justFinished
+            ) == .onTime
         )
     }
 
@@ -102,19 +106,26 @@ struct PunctualityTests {
         )
     }
 
-    @Test func classify_usesOriginalEstimate_notExtendedBudget() {
-        // 延長して予算を足しても、当初 30 分より長く乗れば定時ではない。
+    @Test func classify_usesJudgedEstimate_withReestimate() {
+        let reestimates = [
+            PunctualityJudgment.ReestimateCommit(
+                reestimateIndex: 1,
+                activeSeconds: 600,
+                committedRemainingSeconds: 1_200
+            ),
+        ]
         #expect(
             Punctuality.classify(
                 outcome: .arrived,
-                elapsedSeconds: 2_100,
-                estimateSeconds: 1_800,
-                overtimeResolution: nil
-            ) == .late
+                elapsedSeconds: 1_750,
+                estimateSeconds: 600,
+                overtimeResolution: nil,
+                reestimates: reestimates
+            ) == .onTime
         )
     }
 
-    @Test func isOnTimeService_allowsEarlyAndRejectsLate() throws {
+    @Test func isOnTimeService_rejectsEarlyAndLate() throws {
         let container = try AppModelContainer.make(inMemory: true)
         let context = ModelContext(container)
         let ticket = Ticket(title: "T", estimatedSeconds: 600)
@@ -134,8 +145,8 @@ struct PunctualityTests {
         early.accumulatedActiveSeconds = 60
         context.insert(early)
 
-        #expect(Punctuality.isOnTimeService(arrivedSessions: [onTime, early]))
-        #expect(Punctuality.isOnTimeService(arrivedSessions: [early]))
+        #expect(!Punctuality.isOnTimeService(arrivedSessions: [onTime, early]))
+        #expect(!Punctuality.isOnTimeService(arrivedSessions: [early]))
         #expect(!Punctuality.isOnTimeService(arrivedSessions: []))
 
         let late = WorkSession(startedAt: .now, estimatedSecondsAtStart: 600, ticket: ticket)

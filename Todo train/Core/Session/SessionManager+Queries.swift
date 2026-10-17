@@ -70,7 +70,7 @@ extension SessionManager {
             PunctualityMoment(
                 kind: .arrival(
                     title: title,
-                    estimateSeconds: session.estimatedSecondsAtStart,
+                    estimateSeconds: Punctuality.judgedEstimateSeconds(for: session),
                     actualSeconds: session.accumulatedActiveSeconds,
                     punctuality: Punctuality.classify(session)
                 ),

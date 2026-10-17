@@ -12,6 +12,12 @@ import UIKit
 #endif
 
 extension SessionManager {
+    func preArrivalIdleSeconds(at now: Date) -> Int? {
+        guard let day = activeServiceDay ?? fetchOpenServiceDay() else { return nil }
+        let activity = day.lastCabinActivityAt ?? day.startedAt
+        return max(0, Int(now.timeIntervalSince(activity).rounded()))
+    }
+
     func noteCabinActivity(now: Date? = nil, clearPendingIdle: Bool = true) {
         let now = now ?? clock.now
         guard let day = activeServiceDay ?? fetchOpenServiceDay(), day.isOpen else { return }

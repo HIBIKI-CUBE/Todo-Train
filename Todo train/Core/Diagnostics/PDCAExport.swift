@@ -130,6 +130,12 @@ nonisolated enum PDCAExport {
         var lineageGroupId: PDCANull<UUID>
         /// それより前の、予測に使える乗車のうち点数の上位。文字は入れない。
         var similarityCandidates: [SimilarityCandidateRow]
+        var judgedEstimateSource: PunctualityJudgment.JudgedEstimateSourceExport
+        var judgmentBandHalfWidthSeconds: Double
+        var arrivalJudgement: PunctualityJudgment.ArrivalJudgementExport
+        var onTimeSealTier: PDCANull<String>
+        var stampSeason: PDCANull<String>
+        var stampTimeOfDay: PDCANull<String>
     }
 
     struct SimilarityCandidateRow: Encodable, Equatable {
@@ -390,6 +396,8 @@ nonisolated enum PDCAExport {
                 }
             )
             let note = annotations[session.id]
+            let punctuality = Punctuality.judgment(for: session)
+            let endedAt = session.endedAt
             rideRows.append(
                 RideRow(
                     id: session.id,
@@ -424,7 +432,17 @@ nonisolated enum PDCAExport {
                     batchId: PDCANull(note?.batchId),
                     slackToNextTimetableBlockSeconds: PDCANull(note?.slackToNextTimetableBlockSeconds),
                     lineageGroupId: PDCANull(note?.lineageGroupId),
-                    similarityCandidates: note?.similarityCandidates ?? []
+                    similarityCandidates: note?.similarityCandidates ?? [],
+                    judgedEstimateSource: punctuality.exportSource,
+                    judgmentBandHalfWidthSeconds: punctuality.bandHalfWidth,
+                    arrivalJudgement: punctuality.arrivalJudgement,
+                    onTimeSealTier: PDCANull(punctuality.sealTier?.rawValue),
+                    stampSeason: PDCANull(
+                        endedAt.map { PunctualityJudgment.stampSeason(at: $0).rawValue }
+                    ),
+                    stampTimeOfDay: PDCANull(
+                        endedAt.map { PunctualityJudgment.stampTimeOfDay(at: $0).rawValue }
+                    )
                 )
             )
             for pause in session.pauses {

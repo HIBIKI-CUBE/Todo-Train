@@ -129,19 +129,29 @@ def errors_for(rides: list[dict]) -> dict[str, list[float]]:
 
 
 def judgment_estimate_seconds(ride: dict) -> float | None:
-    """Active + last committed reestimate remaining; else estimatedSecondsAtStart."""
+    """Latest reestimate committed >=5m (running) before arrival; else estimatedSecondsAtStart."""
+    arrival = ride.get("accumulatedActiveSeconds")
+    if not isinstance(arrival, (int, float)):
+        return None
+    arrival_active = float(arrival)
     reestimates = ride.get("reestimates") or []
     committed = [
         item
         for item in reestimates
         if isinstance(item, dict) and not item.get("undoneAt")
     ]
-    if committed:
-        last = max(committed, key=lambda item: item.get("committedAt", ""))
-        active = last.get("activeSeconds")
-        remaining = last.get("committedRemainingSeconds")
-        if isinstance(active, (int, float)) and isinstance(remaining, (int, float)):
-            return float(active) + float(remaining)
+    eligible = []
+    for item in committed:
+        active = item.get("activeSeconds")
+        remaining = item.get("committedRemainingSeconds")
+        if not isinstance(active, (int, float)) or not isinstance(remaining, (int, float)):
+            continue
+        if arrival_active - float(active) < 300:
+            continue
+        eligible.append(item)
+    if eligible:
+        last = max(eligible, key=lambda item: item.get("reestimateIndex", 0))
+        return float(last["activeSeconds"]) + float(last["committedRemainingSeconds"])
     estimate = ride.get("estimatedSecondsAtStart")
     if isinstance(estimate, (int, float)):
         return float(estimate)

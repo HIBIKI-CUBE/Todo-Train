@@ -1019,6 +1019,8 @@ private enum PDCAContract {
         "secondsSincePreviousArrival", "previousRideId", "nextRideId",
         "issueToDepartSeconds", "batchId", "slackToNextTimetableBlockSeconds",
         "lineageGroupId", "similarityCandidates",
+        "judgedEstimateSource", "judgmentBandHalfWidthSeconds", "arrivalJudgement",
+        "onTimeSealTier", "stampSeason", "stampTimeOfDay",
     ]
     static let similarityCandidateKeys: Set<String> = [
         "rideId", "score", "titleNGram", "tag", "lineage", "hourBand", "dayKind",

@@ -39,7 +39,7 @@ struct ArrivalPraiseTests {
 
     @Test func twoGoodsFillThePaper() {
         let praise = ArrivalPraise(
-            punctuality: .early,
+            punctuality: .onTime,
             alreadyDone: false,
             nextWasReserved: true,
             continuedFromStamp: false
@@ -47,7 +47,7 @@ struct ArrivalPraiseTests {
         #expect(praise.count == 2)
         #expect(praise.spread == .paper)
         #expect(praise.innerRingSolid == false)
-        #expect(praise.ink == .early)
+        #expect(praise.ink == .onTime)
     }
 
     @Test func threeGoodsSolidifyTheInnerRing() {
