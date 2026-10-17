@@ -13,17 +13,18 @@ struct FocusUndoBanner: View {
         HStack(alignment: .center, spacing: 12) {
             Text(offer.recordedStatusLine)
                 .font(.subheadline.weight(.semibold))
-                .foregroundStyle(FocusPanel.ink)
+                .foregroundStyle(.primary)
             Spacer(minLength: 8)
             Button("取り消す", action: onUndo)
-                .font(.subheadline.weight(.bold))
+                .font(.subheadline.weight(.semibold))
+                .tint(TrainTheme.rail)
                 .frame(minWidth: 44, minHeight: 44)
         }
         .padding(.horizontal, TrainTheme.Space.lg)
-        .padding(.vertical, 8)
+        .padding(.vertical, TrainTheme.Space.sm)
         .frame(maxWidth: .infinity)
-        .background(FocusPanel.fillRaised)
-        .accessibilityElement(children: .combine)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: TrainTheme.Radius.control, style: .continuous))
+        .accessibilityElement(children: .contain)
         .accessibilityLabel("\(offer.recordedStatusLine)、取り消す")
     }
 }

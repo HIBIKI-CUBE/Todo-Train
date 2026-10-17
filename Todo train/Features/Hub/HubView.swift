@@ -246,6 +246,28 @@ struct HubView: View {
                 warmForecasts()
             }
         }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            focusUndoBannerInset
+        }
+        .animation(TrainTheme.Motion.soft, value: sessionManager.focusUndoOffer?.eventID)
+    }
+
+    @ViewBuilder
+    private var focusUndoBannerInset: some View {
+        if let offer = sessionManager.focusUndoOffer, !isFocusCoverPresented {
+            FocusUndoBanner(offer: offer) {
+                switch offer.kind {
+                case .pause:
+                    try? sessionManager.undoPauseFromFocus(pauseID: offer.eventID)
+                case .reestimate:
+                    try? sessionManager.undoReestimate(eventID: offer.eventID)
+                }
+                sessionManager.focusUndoOffer = nil
+            }
+            .padding(.horizontal, TrainTheme.Space.lg)
+            .padding(.bottom, TrainTheme.Space.sm)
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+        }
     }
 
     // MARK: - Portrait
