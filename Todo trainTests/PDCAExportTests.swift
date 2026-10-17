@@ -11,7 +11,7 @@ import TodoTrainSync
 
 @MainActor
 struct PDCAExportTests {
-    @Test func exportJSON_containsNoTitlesReasonsPromptsTagNamesCalendarOrDeviceIDs() throws {
+    @Test func exportJSON_containsNoTitlesPromptsTagNamesCalendarOrDeviceIDs() throws {
         let fixture = try PDCAFixture.make()
         let data = try fixture.jsonData()
         let text = try #require(String(data: data, encoding: .utf8))
@@ -23,6 +23,20 @@ struct PDCAExportTests {
         var keys = Set<String>()
         collectKeys(object, into: &keys)
         #expect(keys.isDisjoint(with: PDCAFixture.forbiddenKeys))
+    }
+
+    @Test func exportJSON_extensionReasonsAreAllowedVocabularyOrNull() throws {
+        let fixture = try PDCAFixture.make()
+        let object = try jsonObject(try fixture.jsonData())
+        let extensions = try rows(object, "extensions")
+        let allowed = Set(ServiceCabinSequence.extendReasons)
+        for extensionRow in extensions {
+            if let reason = extensionRow["reason"] as? String {
+                #expect(allowed.contains(reason))
+            } else {
+                #expect(isNull(extensionRow["reason"]))
+            }
+        }
     }
 
     @Test func exportJSON_buildUsesContainerSchemaAndOmitsPeerUntilMacSendsOne() throws {
@@ -673,7 +687,6 @@ private struct PDCAFixture {
     static let forbiddenKeys: Set<String> = [
         "title",
         "name",
-        "reason",
         "checkInPromptLine",
         "boardedDeviceID",
         "calendarEventIdentifier",
