@@ -208,6 +208,8 @@ struct PDCAExportTests {
         let extensionRow = try #require(row(extensions, id: fixture.extensionID))
         #expect(extensionRow["rideId"] as? String == fixture.resumedRideID.uuidString)
         #expect(number(extensionRow, "addedSeconds") == 600)
+        #expect(number(extensionRow, "workingSeconds") == 1_100)
+        #expect(extensionRow["reason"] as? String == "作業増")
 
         let lineage = try #require(row(lineages, id: fixture.lineageID))
         #expect(lineage["kind"] as? String == "continuation")
@@ -542,7 +544,6 @@ private struct PDCAFixture {
     static let secrets = [
         "SECRET_TICKET_TITLE_ZX9",
         "SECRET_TAG_NAME_ZX9",
-        "SECRET_EXTEND_REASON_ZX9",
         "SECRET_CHECKIN_PROMPT_ZX9",
         "SECRET_ANSWER_PROMPT_ZX9",
         "SECRET_BLOCK_TITLE_ZX9",
@@ -699,8 +700,9 @@ private struct PDCAFixture {
             SessionExtension(
                 id: extensionID,
                 addedSeconds: 600,
-                reason: "SECRET_EXTEND_REASON_ZX9",
+                reason: "作業増",
                 createdAt: dayStart.addingTimeInterval(500),
+                workingSeconds: 1_100,
                 session: resumed
             )
         )
@@ -901,7 +903,9 @@ private enum PDCAContract {
     static let nudgeKeys: Set<String> = [
         "rideId", "stage", "firedAt", "surface", "rang", "skipped", "cancelledAt",
     ]
-    static let extensionKeys: Set<String> = ["id", "rideId", "addedSeconds", "createdAt"]
+    static let extensionKeys: Set<String> = [
+        "id", "rideId", "addedSeconds", "createdAt", "workingSeconds", "reason",
+    ]
     static let lineageKeys: Set<String> = [
         "id", "kind", "createdAt", "fromRideId", "parentTicketId", "childTicketId", "aiGenerated",
     ]

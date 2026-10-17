@@ -115,7 +115,10 @@ nonisolated enum TimetableAdoption {
 
     static func refreshCalendarMembership(
         occurrences: [CalendarOccurrence],
-        membership: TimetableMembership
+        membership: TimetableMembership,
+        /// Calendar fetch window. Active calendar blocks outside this range are not reconciled
+        /// (they stay as stored — past blocks are not cancelled for missing from a narrow fetch).
+        membershipReconcileRange: Range<Date>? = nil
     ) -> TimetableMembership {
         var blocks = membership.blocks
         let rules = membership.rules
@@ -130,6 +133,11 @@ nonisolated enum TimetableAdoption {
 
         for index in blocks.indices where blocks[index].source == .calendar && blocks[index].isActive {
             let block = blocks[index]
+            if let range = membershipReconcileRange {
+                guard block.endsAt > range.lowerBound, block.startsAt < range.upperBound else {
+                    continue
+                }
+            }
             let stillPresent = eligible.contains { matches(occurrence: $0, block: block) }
             if !stillPresent {
                 blocks[index].isCancelled = true

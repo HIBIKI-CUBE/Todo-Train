@@ -347,6 +347,30 @@ struct SessionManagerBoardingTests {
         #expect(manager.phase == .idle)
     }
 
+    @Test func issueAndBoard_usesOneClockForTicketCreatedAtAndRideStart() throws {
+        let (manager, _, clock, _) = try SessionManagerFixtures.makeHarness()
+        try manager.startService()
+        let at = clock.now
+        try manager.issueAndBoard(title: "同期", estimatedSeconds: 600)
+        let ticket = try #require(manager.activeSession?.ticket)
+        #expect(ticket.createdAt == at)
+        #expect(manager.activeSession?.startedAt == at)
+        #expect((manager.activeSession?.startedAt ?? .distantPast) >= ticket.createdAt)
+    }
+
+    @Test func extend_coalescesDoubleTapWithinOneSecond() throws {
+        let (manager, context, clock, _) = try SessionManagerFixtures.makeHarness()
+        try manager.startService()
+        let ticket = try SessionManagerFixtures.makeTicket(context, seconds: 600)
+        try manager.board(ticket: ticket)
+        try manager.extend(by: 300, reason: "作業増")
+        clock.advance(by: 0.5)
+        try manager.extend(by: 300, reason: "作業増")
+        #expect(manager.activeSession?.extensions.count == 1)
+        try manager.extend(by: 180)
+        #expect(manager.activeSession?.extensions.count == 2)
+    }
+
     @Test func issueAndBoard_startsANewRide() throws {
         let (manager, _, _, _) = try SessionManagerFixtures.makeHarness()
         try manager.startService()

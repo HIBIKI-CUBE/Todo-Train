@@ -151,6 +151,42 @@ struct TimetableAdoptionTests {
         #expect(membership.rules[0].adopted == false)
     }
 
+    @Test func refresh_doesNotCancelPastCalendarBlocksOutsideFetchRange() {
+        let past = occurrence(id: "past", startOffset: -86_400)
+        var membership = TimetableAdoption.adoptOccurrence(
+            past,
+            scope: .occurrence,
+            membership: TimetableMembership(blocks: [], rules: [])
+        )
+        let fetchStart = start
+        let fetchEnd = start.addingTimeInterval(172_800)
+        membership = TimetableAdoption.refreshCalendarMembership(
+            occurrences: [],
+            membership: membership,
+            membershipReconcileRange: fetchStart..<fetchEnd
+        )
+        #expect(membership.blocks.count == 1)
+        #expect(membership.blocks[0].isActive)
+        #expect(membership.blocks[0].isCancelled == false)
+    }
+
+    @Test func refresh_stillCancelsMissingCalendarBlockInsideFetchRange() {
+        let occ = occurrence()
+        var membership = TimetableAdoption.adoptOccurrence(
+            occ,
+            scope: .occurrence,
+            membership: TimetableMembership(blocks: [], rules: [])
+        )
+        let fetchStart = start
+        let fetchEnd = start.addingTimeInterval(172_800)
+        membership = TimetableAdoption.refreshCalendarMembership(
+            occurrences: [],
+            membership: membership,
+            membershipReconcileRange: fetchStart..<fetchEnd
+        )
+        #expect(membership.blocks[0].isCancelled)
+    }
+
     @Test func calendarTimeChange_marksNeedsReview() {
         let occ = occurrence()
         var membership = TimetableAdoption.adoptOccurrence(

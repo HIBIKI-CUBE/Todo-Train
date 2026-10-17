@@ -160,6 +160,8 @@ nonisolated enum PDCAExport {
         var rideId: UUID
         var addedSeconds: Int
         var createdAt: Date
+        var workingSeconds: PDCANull<Double>
+        var reason: PDCANull<String>
     }
 
     struct LineageRow: Encodable {
@@ -421,7 +423,9 @@ nonisolated enum PDCAExport {
                         id: item.id,
                         rideId: session.id,
                         addedSeconds: item.addedSeconds,
-                        createdAt: item.createdAt
+                        createdAt: item.createdAt,
+                        workingSeconds: PDCANull(item.workingSeconds),
+                        reason: PDCANull(item.reason)
                     )
                 )
             }
@@ -582,7 +586,12 @@ nonisolated enum PDCAExport {
                 batchId: ticketID.flatMap { batches[$0] },
                 slackToNextTimetableBlockSeconds: RideSimilarity.slack(
                     departedAt: session.startedAt,
-                    blocks: blocks
+                    blocks: blocks,
+                    calendar: calendar,
+                    serviceDay: serviceDayRange(
+                        for: matchingServiceDayID(startedAt: session.startedAt, serviceDays: serviceDays),
+                        serviceDays: serviceDays
+                    )
                 ),
                 lineageGroupId: ticketID.map { groups[$0] ?? $0 },
                 similarityCandidates: (candidates[session.id] ?? []).map(candidateRow)
@@ -684,6 +693,12 @@ nonisolated enum PDCAExport {
 
     /// `startedAt` が `[ServiceDay.startedAt, endedAt)` に入る運行。重なれば開始が遅い方。暦日キーでは選ばない。
     @MainActor
+    private static func serviceDayRange(for id: UUID?, serviceDays: [ServiceDay]) -> Range<Date>? {
+        guard let id, let day = serviceDays.first(where: { $0.id == id }) else { return nil }
+        let end = day.endedAt ?? .distantFuture
+        return day.startedAt..<end
+    }
+
     private static func matchingServiceDayID(startedAt: Date, serviceDays: [ServiceDay]) -> UUID? {
         serviceDays
             .filter { day in

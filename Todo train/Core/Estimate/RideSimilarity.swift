@@ -291,9 +291,28 @@ enum RideSimilarity {
     }
 
     /// 発車以降に始まる、取り消されておらず長さのあるブロックまでの秒。確認待ちも含む。題名は見ない。
-    static func slack(departedAt: Date, blocks: [Occupancy]) -> TimeInterval? {
+    /// 同じ運行日（`serviceDay` が無いときは暦日）のブロックだけを見る。
+    static func slack(
+        departedAt: Date,
+        blocks: [Occupancy],
+        calendar: Calendar = .current,
+        serviceDay: Range<Date>? = nil
+    ) -> TimeInterval? {
+        let dayStart: Date
+        let dayEnd: Date
+        if let serviceDay {
+            dayStart = serviceDay.lowerBound
+            dayEnd = serviceDay.upperBound
+        } else {
+            dayStart = calendar.startOfDay(for: departedAt)
+            dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart) ?? dayStart.addingTimeInterval(86_400)
+        }
         let upcoming = blocks.filter { block in
-            !block.isCancelled && block.endsAt > block.startsAt && block.startsAt >= departedAt
+            !block.isCancelled
+                && block.endsAt > block.startsAt
+                && block.startsAt >= departedAt
+                && block.startsAt >= dayStart
+                && block.startsAt < dayEnd
         }
         guard let next = upcoming.min(by: { lhs, rhs in
             if lhs.startsAt != rhs.startsAt { return lhs.startsAt < rhs.startsAt }

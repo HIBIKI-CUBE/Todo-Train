@@ -208,6 +208,16 @@ struct RideSimilarityTests {
         )
         #expect(slack == 120)
 
+        let nextDay = RideSimilarity.slack(
+            departedAt: start.addingTimeInterval(22 * 3_600),
+            blocks: [
+                .init(id: soon, startsAt: start.addingTimeInterval(120), endsAt: start.addingTimeInterval(200), isCancelled: false),
+                .init(id: later, startsAt: start.addingTimeInterval(86_400 + 120), endsAt: start.addingTimeInterval(86_400 + 200), isCancelled: false),
+            ],
+            calendar: tokyo
+        )
+        #expect(nextDay == nil)
+
         let day = UUID()
         let early = UUID()
         let late = UUID()

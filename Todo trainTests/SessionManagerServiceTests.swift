@@ -151,6 +151,25 @@ struct SessionManagerServiceTests {
         #expect(manager.remainingSeconds > 0)
     }
 
+    @Test func extend_workingSecondsNeverExceedFinalActiveAfterPauseResume() throws {
+        let (manager, context, clock, _) = try SessionManagerFixtures.makeHarness()
+        try manager.startService()
+        let ticket = try SessionManagerFixtures.makeTicket(context, seconds: 30 * 60)
+        try manager.board(ticket: ticket)
+        clock.advance(by: 80)
+        try manager.pause()
+        clock.advance(by: 400)
+        try manager.resume()
+        clock.advance(by: 40)
+        manager.reconcile()
+        try manager.extend(by: 300)
+        let sessionID = try #require(manager.activeSession?.id)
+        let working = try #require(manager.activeSession?.extensions.first?.workingSeconds)
+        try manager.arrive()
+        let session = try #require(manager.fetchWorkSession(id: sessionID))
+        #expect(working <= session.accumulatedActiveSeconds + 1)
+    }
+
     @Test func extend_recordsReason() throws {
         let (manager, context, _, _) = try SessionManagerFixtures.makeHarness()
         try manager.startService()
