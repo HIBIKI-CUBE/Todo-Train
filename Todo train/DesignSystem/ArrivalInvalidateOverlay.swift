@@ -212,7 +212,6 @@ struct ArrivalInvalidateOverlay: View {
             runEntrance()
             applyArrivalPreviewIfNeeded(punctuality: arrival.punctuality)
             announceIfNeeded(arrival: arrival)
-            speakOnTimeIfNeeded(punctuality: arrival.punctuality)
             markArrivalOverlayReadyIfNeeded()
             requestPreviewLandscapeIfNeeded()
         }
@@ -677,16 +676,6 @@ struct ArrivalInvalidateOverlay: View {
         #endif
     }
 
-    private func speakOnTimeIfNeeded(punctuality: ArrivalPunctuality) {
-        guard punctuality == .onTime else { return }
-        #if DEBUG
-        if FocusUIPreview.skipsDriverVoice { return }
-        #endif
-        CabinVoiceSpeaker.speakDriverLine(
-            PunctualityPresentation.onTimeArrivalVoiceLine(),
-            enabled: settings.cabinAnnouncementsEnabled
-        )
-    }
 }
 
 /// `commitStamp` が印と角判を落とし終えたあとの見え方（プレビューと reduceMotion も同じ）。

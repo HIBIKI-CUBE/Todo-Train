@@ -49,9 +49,6 @@ enum FocusUIPreview {
     static let arrivalOverlayReadyNotification = Notification.Name("FocusUIPreview.arrivalOverlayReady")
     static let arrivalOverlayAccessibilityID = "FocusUIPreview.ArrivalOverlay"
 
-    /// 車内放送の TTS はスクショ起動では鳴らさない（シミュレーターで描画が止まることがある）。
-    static var skipsDriverVoice: Bool { isActive }
-
     #if canImport(UIKit)
     static func requestLandscapeOrientationIfNeeded() {
         guard isActive, wantsLandscape else { return }

@@ -115,8 +115,6 @@ enum PunctualityPresentation {
         return "\(center)の印"
     }
 
-    static func onTimeArrivalVoiceLine() -> String { "定時到着です" }
-
     struct RideLogLine: Equatable, Sendable {
         var text: String
     }
