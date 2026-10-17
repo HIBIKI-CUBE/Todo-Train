@@ -32,9 +32,9 @@ extension SessionManager.FocusUndoOffer {
     var recordedStatusLine: String {
         switch kind {
         case .pause:
-            return "停車を記録した"
+            return "停車を記録しました"
         case .reestimate:
-            return "見積もり直しを記録した"
+            return "見積もり直しを記録しました"
         }
     }
 }
