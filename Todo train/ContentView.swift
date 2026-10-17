@@ -30,6 +30,7 @@ struct ContentView: View {
         tabViewWithOptionalPassengerAccessory
         #if DEBUG
         .focusUIPreviewOrientation()
+        .focusUIPreviewQuickAddSheet()
         #endif
         .environment(transferCanvas)
         .environment(ticketMotion)

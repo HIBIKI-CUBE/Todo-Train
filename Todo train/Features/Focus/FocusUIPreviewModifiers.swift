@@ -30,5 +30,19 @@ extension View {
     func focusUIPreviewOrientation() -> some View {
         modifier(FocusUIPreviewLandscapeOrientation())
     }
+
+    func focusUIPreviewQuickAddSheet() -> some View {
+        modifier(FocusUIPreviewQuickAddSheet())
+    }
+}
+
+private struct FocusUIPreviewQuickAddSheet: ViewModifier {
+    @State private var presented = FocusUIPreview.parsedState() == "quickAdd"
+
+    func body(content: Content) -> some View {
+        content.sheet(isPresented: $presented) {
+            QuickAddSheet(onSingleIssued: nil)
+        }
+    }
 }
 #endif

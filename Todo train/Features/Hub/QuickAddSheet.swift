@@ -131,7 +131,15 @@ struct QuickAddSheet: View {
                     .presentationDragIndicator(.visible)
             }
             .onAppear {
+                #if DEBUG
+                if ProcessInfo.processInfo.arguments.contains("-uiPreviewQuickAddContinuous") {
+                    continuousDump = true
+                } else {
+                    continuousDump = false
+                }
+                #else
                 continuousDump = false
+                #endif
                 if !didSeedEstimate {
                     pendingMinutes = estimateSuggestion?.minutes
                         ?? settings.lastIssuedEstimateMinutes
@@ -158,6 +166,7 @@ struct QuickAddSheet: View {
             focusNonce: titleFocusNonce,
             onSubmit: submitFromReturn
         )
+        .accessibilityIdentifier("quickAdd.title")
         .fixedSize(horizontal: false, vertical: true)
         .padding(.horizontal, TrainTheme.Space.md)
         .padding(.vertical, TrainTheme.Space.lg)
@@ -263,6 +272,7 @@ struct QuickAddSheet: View {
                         Toggle(isOn: $continuousDump) {
                             Text("連続掃き出し")
                         }
+                        .accessibilityIdentifier("quickAdd.continuousDump")
                         .font(.subheadline.weight(.semibold))
                         .tint(TrainTheme.rail)
                         .accessibilityHint("オンにするとシートを開いたまま速く発行できます。オフにすると1枚発行して閉じ、Hub で切符を見せます。")
@@ -289,6 +299,7 @@ struct QuickAddSheet: View {
                     }
                 }
             )
+            .accessibilityIdentifier("quickAdd.gauge")
             .padding(.bottom, TrainTheme.Space.xs)
         }
         .padding(.horizontal, TrainTheme.Space.lg)
