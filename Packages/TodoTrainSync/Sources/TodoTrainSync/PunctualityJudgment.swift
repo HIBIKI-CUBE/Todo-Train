@@ -192,7 +192,7 @@ public enum PunctualityJudgment: Sendable {
 
         let sealTier: OnTimeSealTier? = {
             guard outcome == .onTime else { return nil }
-            return sealTier(
+            return computeSealTier(
                 source: arrivalSource,
                 arrivalActiveSeconds: elapsed,
                 reestimates: sorted
@@ -336,7 +336,7 @@ public enum PunctualityJudgment: Sendable {
         }
     }
 
-    private static func sealTier(
+    private static func computeSealTier(
         source: JudgedEstimateSource,
         arrivalActiveSeconds: TimeInterval,
         reestimates: [ReestimateCommit]
