@@ -328,7 +328,14 @@ struct FocusView: View {
                             run { try sessionManager.arrive() }
                         }
                     },
-                    onClose: { sessionManager.dismissReestimate() }
+                    onClose: { sessionManager.dismissReestimate() },
+                    previewConfiguration: {
+                        #if DEBUG
+                        return sessionManager.focusReestimatePreview
+                        #else
+                        return nil
+                        #endif
+                    }()
                 )
             } else if sessionManager.phase == .overtime {
                 OvertimeControlsView(
@@ -479,9 +486,14 @@ struct FocusView: View {
     }
 
     private func openReestimate(trigger: ReestimateTrigger) {
+        #if DEBUG
+        let landscape = sessionManager.uiPreviewLandscape || verticalSizeClass == .compact
+        #else
+        let landscape = verticalSizeClass == .compact
+        #endif
         sessionManager.presentReestimate(
             trigger: trigger,
-            surface: sessionManager.reestimateSurface(isLandscape: verticalSizeClass == .compact)
+            surface: sessionManager.reestimateSurface(isLandscape: landscape)
         )
     }
 

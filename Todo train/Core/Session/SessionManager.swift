@@ -94,6 +94,11 @@ final class SessionManager {
     var reestimateRequest: SessionManager.ReestimateRequest?
     var focusUndoOffer: SessionManager.FocusUndoOffer?
     var focusUndoTask: Task<Void, Never>?
+    #if DEBUG
+    var focusReestimatePreview: FocusReestimatePreviewConfiguration?
+    var uiPreviewForcesFocusCover: Bool = false
+    var uiPreviewLandscape: Bool = false
+    #endif
 
     var pauseLimit: Int { settings.pauseLimit }
 

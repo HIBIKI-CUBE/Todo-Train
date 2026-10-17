@@ -346,6 +346,15 @@ struct ContentView: View {
     }
 
     private func syncFocusPresentation() {
+        #if DEBUG
+        if FocusUIPreview.isActive {
+            let shouldShow = sessionManager.uiPreviewForcesFocusCover
+            if isFocusPresented != shouldShow {
+                isFocusPresented = shouldShow
+            }
+            return
+        }
+        #endif
         let shouldShow = sessionManager.shouldPresentFocusCover
             && !ticketMotion.suppressFocusCover
         if isFocusPresented != shouldShow {
@@ -411,6 +420,12 @@ struct ContentView: View {
     }
 
     private func recoverOnLaunch() {
+        #if DEBUG
+        if FocusUIPreview.isActive {
+            syncFocusPresentation()
+            return
+        }
+        #endif
         do {
             try sessionManager.recoverOnLaunch()
         } catch {

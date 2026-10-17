@@ -14,15 +14,42 @@ struct FocusReestimatePanel: View {
     let onArriveAtFullProgress: () -> Void
     let onClose: () -> Void
 
-    @State private var stage: Stage = .progress
-    @State private var progressValue = 0
-    @State private var remainingMinutes = 0
+    @State private var stage: Stage
+    @State private var progressValue: Int
+    @State private var remainingMinutes: Int
     @State private var detailsOpen = false
     @State private var inputsLocked = false
 
     private enum Stage {
         case progress
         case remaining
+    }
+
+    init(
+        activeSeconds: TimeInterval,
+        onCommit: @escaping (ReestimateMode, Double?, Int, Int?, Int?, Bool) -> Void,
+        onArriveAtFullProgress: @escaping () -> Void,
+        onClose: @escaping () -> Void,
+        previewConfiguration: FocusReestimatePreviewConfiguration? = nil
+    ) {
+        self.activeSeconds = activeSeconds
+        self.onCommit = onCommit
+        self.onArriveAtFullProgress = onArriveAtFullProgress
+        self.onClose = onClose
+        if let previewConfiguration {
+            switch previewConfiguration.stage {
+            case .progress:
+                _stage = State(initialValue: .progress)
+            case .remaining:
+                _stage = State(initialValue: .remaining)
+            }
+            _progressValue = State(initialValue: previewConfiguration.progressValue)
+            _remainingMinutes = State(initialValue: previewConfiguration.remainingMinutes)
+        } else {
+            _stage = State(initialValue: .progress)
+            _progressValue = State(initialValue: 0)
+            _remainingMinutes = State(initialValue: 0)
+        }
     }
 
     private var progressAnswer: Double? {

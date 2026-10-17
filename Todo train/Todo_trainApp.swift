@@ -16,7 +16,12 @@ struct Todo_trainApp: App {
 
     init() {
         do {
-            let container = try AppModelContainer.make(inMemory: false)
+            #if DEBUG
+            let usePreviewStore = FocusUIPreview.isActive
+            #else
+            let usePreviewStore = false
+            #endif
+            let container = try AppModelContainer.make(inMemory: usePreviewStore)
             self.container = container
             let context = container.mainContext
             #if canImport(ActivityKit)
@@ -56,6 +61,9 @@ struct Todo_trainApp: App {
                 if !existing.contains(where: { $0.endedAt != nil }) {
                     HistoryPreviewSeed.insertSampleWeek(into: context)
                 }
+            }
+            if FocusUIPreview.isActive {
+                try FocusUIPreview.bootstrap(manager: manager, context: context)
             }
             #endif
         } catch {
