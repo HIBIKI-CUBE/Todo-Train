@@ -139,15 +139,46 @@ extension FocusUIPreview {
         switch state {
         case "shutdownBundle", "shutdownBundleLandscape":
             manager.uiPreviewShowsServiceShutdown = true
-            manager.uiPreviewBundleFocusIndex = 4
+            manager.uiPreviewBundleFocusIndex = 0
         case "shutdownBundlePeel", "shutdownBundlePeelLandscape":
             manager.uiPreviewShowsServiceShutdown = true
             manager.uiPreviewBundleFocusIndex = 1
         case "historyBundle", "historyBundleLandscape":
             manager.uiPreviewSelectHistoryTab = true
+        case "historyBundleViewer", "historyBundleViewerLandscape":
+            manager.uiPreviewSelectHistoryTab = true
+            manager.uiPreviewShowsBundleViewer = true
+            manager.uiPreviewBundleViewerDayKey = dayKey
+        case "historyBundleViewerBoundary", "historyBundleViewerBoundaryLandscape":
+            insertPriorDayBundle(context: context, calendar: calendar)
+            try context.save()
+            manager.uiPreviewSelectHistoryTab = true
+            manager.uiPreviewShowsBundleViewer = true
+            manager.uiPreviewBundleViewerDayKey = dayKey
         default:
             break
         }
+    }
+
+    @MainActor
+    private static func insertPriorDayBundle(context: ModelContext, calendar: Calendar) {
+        let prior = calendar.date(from: DateComponents(year: 2026, month: 10, day: 10, hour: 9))
+            ?? Date()
+        let key = ServiceDay.dayKey(for: prior, calendar: calendar)
+        let day = ServiceDay(startedAt: prior, calendarDayKey: key)
+        context.insert(day)
+        let ticket = Ticket(title: "前日の切符", estimatedSeconds: 20 * 60, sortOrder: 0)
+        context.insert(ticket)
+        let start = prior.addingTimeInterval(3600)
+        let session = WorkSession(startedAt: start, estimatedSecondsAtStart: 20 * 60, ticket: ticket)
+        session.endedAt = start.addingTimeInterval(20 * 60)
+        session.accumulatedActiveSeconds = 20 * 60
+        session.outcome = .arrived
+        session.arrivalStampedAt = session.endedAt
+        session.arrivalAction = .nextRide
+        context.insert(session)
+        ticket.closedAt = session.endedAt
+        ticket.closureKind = .arrived
     }
 }
 #endif

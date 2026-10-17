@@ -28,6 +28,8 @@ struct HistoryView: View {
     @State private var didFocusInitialDay = false
     @State private var isSearchPresented = false
     @State private var daysVisible: CGFloat = 1
+    @State private var showBundleViewer = false
+    @State private var bundleStripFocusIndex = 0
     @FocusState private var searchFieldFocused: Bool
 
     init(focusDay: Date? = nil) {
@@ -127,6 +129,10 @@ struct HistoryView: View {
         HistoryRideDensity(daysVisible: daysVisible)
     }
 
+    private var dayStampBundle: TicketStampBundleAssembly.DayBundle? {
+        sessionManager.ticketStampBundle(forCalendarDayKey: selectedDayKey)
+    }
+
     private var visibleDayKeys: Set<String> {
         Set(
             HistoryCanvasZoom.visibleDays(
@@ -212,8 +218,25 @@ struct HistoryView: View {
             }
         }
         .errorAlert(isPresented: $showError, message: errorMessage)
-        .onAppear(perform: focusInitialDayIfNeeded)
+        .onAppear {
+            focusInitialDayIfNeeded()
+            #if DEBUG
+            if sessionManager.uiPreviewShowsBundleViewer {
+                showBundleViewer = true
+            }
+            #endif
+        }
         .sensoryFeedback(.selection, trigger: selectedDayKey)
+        .fullScreenCover(isPresented: $showBundleViewer) {
+            TicketStampBundleViewer(
+                bundles: sessionManager.ticketStampBundles(),
+                initialDayKey: sessionManager.uiPreviewBundleViewerDayKey ?? selectedDayKey,
+                onSelectStamp: { stamp in
+                    showBundleViewer = false
+                    selectedRideID = stamp.sessionID
+                }
+            )
+        }
     }
 
     private var searchFieldRow: some View {
@@ -269,6 +292,28 @@ struct HistoryView: View {
                 .padding(.bottom, TrainTheme.Space.sm)
             }
 
+            if rideDensity == .day, let bundle = dayStampBundle, !bundle.stamps.isEmpty {
+                Button {
+                    showBundleViewer = true
+                } label: {
+                    TicketStampBundleDeckView(
+                        stamps: bundle.stamps,
+                        focusIndex: $bundleStripFocusIndex,
+                        style: .historyStrip
+                    )
+                    .allowsHitTesting(false)
+                    .onAppear {
+                        bundleStripFocusIndex = max(0, bundle.stamps.count - 1)
+                    }
+                }
+                .buttonStyle(.plain)
+                .frame(height: 120)
+                .padding(.horizontal, TrainTheme.Space.md)
+                .padding(.bottom, TrainTheme.Space.sm)
+                .accessibilityLabel("この日の切符の束")
+                .accessibilityHint("開いて切符をめくれます")
+            }
+
             if !selectedDayPassengerRides.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
                     ForEach(selectedDayPassengerRides, id: \.id) { ride in
@@ -289,41 +334,21 @@ struct HistoryView: View {
             }
 
             GeometryReader { geo in
-                ZStack(alignment: .trailing) {
-                    HistoryDayPager(
-                        sessionsByDay: sessionsByDay,
-                        dayStrip: dayStrip,
-                        selectedDay: $selectedDay,
-                        daysVisible: $daysVisible,
-                        minHeight: geo.size.height,
-                        viewportWidth: geo.size.width,
-                        onSelect: { session in
-                            selectedRideID = session.id
-                        },
-                        onReissue: reissue,
-                        onDelete: deleteSession,
-                        stripsByDay: timetableStripsByDay
-                    )
-                    .safeAreaPadding(.bottom)
-
-                    if rideDensity == .day {
-                        TicketStampBundleHistoryRail(
-                            bundles: sessionManager.ticketStampBundles(),
-                            selectedDayKey: Binding(
-                                get: { selectedDayKey },
-                                set: { key in
-                                    guard let date = HistoryStats.date(from: key, calendar: calendar) else { return }
-                                    selectedDay = calendar.startOfDay(for: date)
-                                }
-                            ),
-                            onSelectStamp: { stamp in
-                                selectedRideID = stamp.sessionID
-                            }
-                        )
-                        .frame(width: min(geo.size.width * 0.44, 220))
-                        .padding(.trailing, 2)
-                    }
-                }
+                HistoryDayPager(
+                    sessionsByDay: sessionsByDay,
+                    dayStrip: dayStrip,
+                    selectedDay: $selectedDay,
+                    daysVisible: $daysVisible,
+                    minHeight: geo.size.height,
+                    viewportWidth: geo.size.width,
+                    onSelect: { session in
+                        selectedRideID = session.id
+                    },
+                    onReissue: reissue,
+                    onDelete: deleteSession,
+                    stripsByDay: timetableStripsByDay
+                )
+                .safeAreaPadding(.bottom)
             }
             .padding(.horizontal, rideDensity == .day ? TrainTheme.Space.md : TrainTheme.Space.xs)
         }

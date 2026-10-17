@@ -1,24 +1,31 @@
 //
-//  TicketStampBundleHistoryRail.swift
+//  TicketStampBundleViewer.swift
 //  Todo train
 //
 
 import SwiftUI
 
-struct TicketStampBundleHistoryRail: View {
+struct TicketStampBundleViewer: View {
     let bundles: [TicketStampBundleAssembly.DayBundle]
-    @Binding var selectedDayKey: String
+    let initialDayKey: String
     var onSelectStamp: (TicketStampBundleAssembly.Stamp) -> Void
 
+    @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     @State private var flatIndex: Int = 0
     @State private var deckFocusIndex: Int = 0
-    @State private var edgeDrag: CGFloat = 0
     @State private var selectionPulse = 0
     @State private var boundaryPulse = 0
 
     private var flat: [TicketStampBundleAssembly.FlatStamp] {
         TicketStampBundleAssembly.flatten(bundles)
+    }
+
+    private var dayBoundaryIndices: Set<Int> {
+        Set(flat.enumerated().compactMap { index, item in
+            item.dayBoundaryBefore ? index : nil
+        })
     }
 
     private var currentBundle: TicketStampBundleAssembly.DayBundle? {
@@ -35,23 +42,64 @@ struct TicketStampBundleHistoryRail: View {
         return bundle.stamps.firstIndex { $0.sessionID == stampID } ?? 0
     }
 
-    private var dayBoundaryIndices: Set<Int> {
-        Set(flat.enumerated().compactMap { index, item in
-            item.dayBoundaryBefore ? index : nil
-        })
+    private var dayTitle: String {
+        guard let bundle = currentBundle else { return "" }
+        return DayKeyFormatting.displayDay(from: bundle.calendarDayKey)
     }
 
     var body: some View {
-        HStack(spacing: 0) {
-            deckColumn
-            edgeScrubber
+        NavigationStack {
+            ZStack(alignment: .trailing) {
+                VStack(spacing: TrainTheme.Space.md) {
+                    Text(dayTitle)
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(.primary)
+                        .padding(.top, TrainTheme.Space.sm)
+
+                    if let bundle = currentBundle {
+                        TicketStampBundleDeckView(
+                            stamps: bundle.stamps,
+                            focusIndex: $deckFocusIndex,
+                            style: .viewer,
+                            dayBoundaries: dayBoundaryIndicesForLocalFocus(),
+                            onSelect: onSelectStamp
+                        )
+                        .padding(.horizontal, TrainTheme.Space.md)
+                    }
+
+                    Spacer(minLength: 0)
+                }
+
+                edgeScrubber
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(TrainTheme.platform)
+            .gesture(
+                DragGesture(minimumDistance: 24)
+                    .onEnded { value in
+                        guard value.translation.height > 72,
+                              abs(value.translation.height) > abs(value.translation.width)
+                        else { return }
+                        dismiss()
+                    }
+            )
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("閉じる") { dismiss() }
+                }
+            }
         }
-        .onAppear(perform: syncFlatIndexToSelectedDay)
-        .onChange(of: selectedDayKey) { _, _ in
-            syncFlatIndexToSelectedDay()
+        .onAppear(perform: syncFlatIndexToInitialDay)
+        .onChange(of: flatIndex) { _, _ in
+            deckFocusIndex = localFocus
         }
-        .onChange(of: bundles.count) { _, _ in
-            syncFlatIndexToSelectedDay()
+        .onChange(of: deckFocusIndex) { _, local in
+            guard let bundle = currentBundle, bundle.stamps.indices.contains(local) else { return }
+            let stamp = bundle.stamps[local]
+            if let global = flat.firstIndex(where: { $0.stamp.sessionID == stamp.sessionID }) {
+                flatIndex = global
+            }
         }
         .sensoryFeedback(.selection, trigger: selectionPulse)
         .sensoryFeedback(.impact(weight: .medium, intensity: 0.9), trigger: boundaryPulse)
@@ -65,58 +113,18 @@ struct TicketStampBundleHistoryRail: View {
         }
     }
 
-    private var deckColumn: some View {
-        TicketStampBundleDeckView(
-            stamps: currentBundle?.stamps ?? [],
-            focusIndex: $deckFocusIndex,
-            axis: .verticalHistoryEdge,
-            dayBoundaries: [],
-            onSelect: onSelectStamp
-        )
-        .id(currentBundle?.id)
-        .onChange(of: flatIndex) { _, _ in
-            deckFocusIndex = localFocus
-        }
-        .onChange(of: currentBundle?.id) { _, _ in
-            deckFocusIndex = localFocus
-        }
-        .onChange(of: deckFocusIndex) { _, local in
-            guard let bundle = currentBundle, bundle.stamps.indices.contains(local) else { return }
-            let stamp = bundle.stamps[local]
-            if let global = flat.firstIndex(where: { $0.stamp.sessionID == stamp.sessionID }) {
-                flatIndex = global
-            }
-        }
-        .overlay {
-            if let bundle = currentBundle, !bundle.stamps.isEmpty {
-                Color.clear
-                    .accessibilityLabel("運行日 \(DayKeyFormatting.displayDay(from: bundle.calendarDayKey))")
-            }
-        }
-    }
-
     private var edgeScrubber: some View {
-        Rectangle()
-            .fill(Color.primary.opacity(0.06))
-            .frame(width: 22)
-            .overlay {
-                Capsule()
-                    .fill(Color.primary.opacity(0.18))
-                    .frame(width: 4, height: 56)
-            }
+        Color.clear
+            .frame(width: 28)
             .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 4)
-                    .onChanged { value in
-                        edgeDrag = value.translation.height
-                    }
                     .onEnded { value in
                         let steps = scrubSteps(
                             translation: value.translation.height,
                             velocity: value.velocity.height
                         )
                         applyFlatSteps(steps, fast: abs(value.velocity.height) > 1400)
-                        edgeDrag = 0
                     }
             )
             .accessibilityLabel("切符の束")
@@ -133,13 +141,24 @@ struct TicketStampBundleHistoryRail: View {
             }
     }
 
+    private func dayBoundaryIndicesForLocalFocus() -> Set<Int> {
+        guard let bundle = currentBundle else { return [] }
+        var set: Set<Int> = []
+        for (index, stamp) in bundle.stamps.enumerated() {
+            if let global = flat.firstIndex(where: { $0.stamp.sessionID == stamp.sessionID }),
+               dayBoundaryIndices.contains(global) {
+                set.insert(index)
+            }
+        }
+        return set
+    }
+
     private func scrubSteps(translation: CGFloat, velocity: CGFloat) -> Int {
         if abs(velocity) > 1200 {
             return velocity > 0 ? -1 : 1
         }
-        let threshold: CGFloat = 40
-        if translation > threshold { return -1 }
-        if translation < -threshold { return 1 }
+        if translation > 40 { return -1 }
+        if translation < -40 { return 1 }
         return 0
     }
 
@@ -152,9 +171,6 @@ struct TicketStampBundleHistoryRail: View {
             let boundary = dayBoundaryIndices.contains(next)
             flatIndex = next
             deckFocusIndex = localFocus
-            if let bundle = bundles.first(where: { $0.serviceDayID == flat[next].stamp.serviceDayID }) {
-                selectedDayKey = bundle.calendarDayKey
-            }
             if fast {
                 if boundary { boundaryPulse += 1 }
             } else if boundary {
@@ -169,19 +185,18 @@ struct TicketStampBundleHistoryRail: View {
         guard let index = flat.firstIndex(where: { $0.stamp.serviceDayID == bundle.serviceDayID }) else { return }
         flatIndex = index
         deckFocusIndex = localFocus
-        selectedDayKey = bundle.calendarDayKey
         boundaryPulse += 1
     }
 
-    private func syncFlatIndexToSelectedDay() {
-        guard let bundle = TicketStampBundleAssembly.bundle(forCalendarDayKey: selectedDayKey, in: bundles) else {
+    private func syncFlatIndexToInitialDay() {
+        guard let bundle = TicketStampBundleAssembly.bundle(forCalendarDayKey: initialDayKey, in: bundles),
+              let index = flat.firstIndex(where: { $0.stamp.serviceDayID == bundle.serviceDayID })
+        else {
             flatIndex = min(flatIndex, max(0, flat.count - 1))
             deckFocusIndex = localFocus
             return
         }
-        if let index = flat.firstIndex(where: { $0.stamp.serviceDayID == bundle.serviceDayID }) {
-            flatIndex = index
-            deckFocusIndex = localFocus
-        }
+        flatIndex = index
+        deckFocusIndex = localFocus
     }
 }

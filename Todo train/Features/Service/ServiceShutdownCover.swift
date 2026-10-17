@@ -27,7 +27,8 @@ struct ServiceShutdownCover: View {
 
     private static let overviewID = "service-overview"
     private static let bundleID = "ticket-stamp-bundle"
-    private static let minimumClockHeight: CGFloat = 220
+    private static let bundleBandHeight: CGFloat = 124
+    private static let minimumClockHeight: CGFloat = 120
 
     private var pausedSessions: [WorkSession] {
         sessionManager.pausedSessions
@@ -130,91 +131,93 @@ struct ServiceShutdownCover: View {
 
     private func cabinBody(now: Date) -> some View {
         GeometryReader { geo in
-            let clockHeight = max(Self.minimumClockHeight, geo.size.height - prefaceHeight)
-            ScrollViewReader { proxy in
-                ScrollView {
-                    VStack(spacing: 0) {
-                        preface(now: now)
-                            .onGeometryChange(for: CGFloat.self) { proxy in
-                                proxy.size.height
-                            } action: { height in
-                                guard height > 1, abs(height - prefaceHeight) > 1 else { return }
-                                prefaceHeight = height
+            let bundleBand = stampBundle == nil ? 0 : Self.bundleBandHeight
+            let scrollHeight = max(0, geo.size.height - bundleBand)
+            let clockHeight = max(
+                Self.minimumClockHeight,
+                scrollHeight - prefaceHeight - 4
+            )
+            VStack(spacing: 0) {
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(spacing: 0) {
+                            preface(now: now)
+                                .onGeometryChange(for: CGFloat.self) { proxy in
+                                    proxy.size.height
+                                } action: { height in
+                                    guard height > 1, abs(height - prefaceHeight) > 1 else { return }
+                                    prefaceHeight = height
+                                }
+
+                            if lamp >= .live {
+                                FocusControlDivider()
+                                overviewClock(now: now, height: clockHeight)
+                                    .id(Self.overviewID)
                             }
 
-                        if lamp >= .live {
-                            FocusControlDivider()
-                            overviewClock(now: now, height: clockHeight)
-                                .id(Self.overviewID)
-                            if let stampBundle {
-                                FocusControlDivider()
-                                ServiceCabinPanel(powered: true) {
-                                    TicketStampBundleDeckView(
-                                        stamps: stampBundle.stamps,
-                                        focusIndex: $bundleFocusIndex,
-                                        axis: .horizontal,
-                                        dayBoundaries: []
-                                    )
-                                    .padding(.vertical, 8)
-                                    .id(Self.bundleID)
-                                    .onAppear {
-                                        #if DEBUG
-                                        if sessionManager.uiPreviewBundleFocusIndex > 0 {
-                                            bundleFocusIndex = sessionManager.uiPreviewBundleFocusIndex
-                                            return
-                                        }
-                                        #endif
-                                        bundleFocusIndex = max(0, stampBundle.stamps.count - 1)
+                            if lamp >= .ready, !poweringDown {
+                                pausedBlock
+                                if !canConfirmEnd {
+                                    FocusControlDivider()
+                                    ServiceCabinPanel(powered: true) {
+                                        Text(endBlockedReason)
+                                            .font(.footnote)
+                                            .foregroundStyle(FocusPanel.muted)
                                     }
                                 }
-                                .allowsHitTesting(!poweringDown)
-                            }
-                        }
-
-                        if lamp >= .ready, !poweringDown {
-                            pausedBlock
-                            if !canConfirmEnd {
-                                FocusControlDivider()
-                                ServiceCabinPanel(powered: true) {
-                                    Text(endBlockedReason)
-                                        .font(.footnote)
-                                        .foregroundStyle(FocusPanel.muted)
-                                }
                             }
                         }
                     }
-                }
-                .scrollIndicators(.hidden)
-                .onAppear { viewportHeight = geo.size.height }
-                .onChange(of: geo.size.height) { _, height in
-                    viewportHeight = height
-                }
-                .onChange(of: lamp) { _, newLamp in
-                    if newLamp < .live { overviewSettled = false }
-                }
-                .onChange(of: overviewSettled) { _, settled in
-                    guard settled else { return }
-                    let clock = max(Self.minimumClockHeight, viewportHeight - prefaceHeight)
-                    guard prefaceHeight + clock > viewportHeight + 8 else { return }
-                    if reduceMotion {
-                        proxy.scrollTo(Self.overviewID, anchor: .top)
-                    } else {
-                        withAnimation(ServiceCabinMotion.overviewPush) {
+                    .scrollIndicators(.hidden)
+                    .frame(height: scrollHeight)
+                    .onAppear { viewportHeight = scrollHeight }
+                    .onChange(of: scrollHeight) { _, height in
+                        viewportHeight = height
+                    }
+                    .onChange(of: lamp) { _, newLamp in
+                        if newLamp < .live { overviewSettled = false }
+                    }
+                    .onChange(of: overviewSettled) { _, settled in
+                        guard settled else { return }
+                        let clock = max(Self.minimumClockHeight, viewportHeight - prefaceHeight)
+                        guard prefaceHeight + clock > viewportHeight + 8 else { return }
+                        if reduceMotion {
                             proxy.scrollTo(Self.overviewID, anchor: .top)
+                        } else {
+                            withAnimation(ServiceCabinMotion.overviewPush) {
+                                proxy.scrollTo(Self.overviewID, anchor: .top)
+                            }
                         }
                     }
+                    .task(id: lamp >= .live) {
+                        await pushOverview()
+                    }
                 }
-                .task(id: lamp >= .live) {
-                    await pushOverview()
+
+                if let stampBundle, lamp >= .live {
+                    FocusControlDivider()
+                    ServiceCabinPanel(powered: true) {
+                        TicketStampBundleDeckView(
+                            stamps: stampBundle.stamps,
+                            focusIndex: $bundleFocusIndex,
+                            style: .shutdown,
+                            dayBoundaries: []
+                        )
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 2)
+                        .onAppear {
+                            #if DEBUG
+                            if sessionManager.uiPreviewShowsServiceShutdown {
+                                bundleFocusIndex = sessionManager.uiPreviewBundleFocusIndex
+                                return
+                            }
+                            #endif
+                            bundleFocusIndex = 0
+                        }
+                    }
+                    .frame(height: bundleBand)
+                    .allowsHitTesting(!poweringDown)
                 }
-                #if DEBUG
-                .task(id: sessionManager.uiPreviewShowsServiceShutdown) {
-                    guard sessionManager.uiPreviewShowsServiceShutdown else { return }
-                    overviewSettled = true
-                    try? await Task.sleep(for: .milliseconds(400))
-                    proxy.scrollTo(Self.bundleID, anchor: .center)
-                }
-                #endif
             }
         }
     }

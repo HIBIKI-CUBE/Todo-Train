@@ -12,6 +12,7 @@ import TodoTrainSync
 struct StampedMarsTicketFace: View {
     var stamp: TicketStampBundleAssembly.Stamp
     var scale: CGFloat = 1
+    var showsLogLines: Bool = true
 
     private var settled: (stampImpact: CGFloat, sealImpact: CGFloat) {
         ArrivalStampCommitEffects.settledVisuals(punctuality: stamp.punctuality)
@@ -40,8 +41,10 @@ struct StampedMarsTicketFace: View {
                 )
             }
             .overlay(alignment: .bottomLeading) {
-                logLines
-                    .padding(8 * max(scale, 0.65))
+                if showsLogLines {
+                    logLines
+                        .padding(8 * max(scale, 0.65))
+                }
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(accessibilityLabel)

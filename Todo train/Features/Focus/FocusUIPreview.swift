@@ -66,7 +66,9 @@ enum FocusUIPreview {
         guard let state = parsedState() else { return }
         switch state {
         case "shutdownBundle", "shutdownBundlePeel", "shutdownBundleLandscape", "shutdownBundlePeelLandscape",
-            "historyBundle", "historyBundleLandscape", "historyEmptyBundle":
+            "historyBundle", "historyBundleLandscape", "historyEmptyBundle",
+            "historyBundleViewer", "historyBundleViewerLandscape",
+            "historyBundleViewerBoundary", "historyBundleViewerBoundaryLandscape":
             try configureTicketBundlePreview(manager: manager, context: context, state: state)
             manager.uiPreviewLandscape = wantsLandscape
             return

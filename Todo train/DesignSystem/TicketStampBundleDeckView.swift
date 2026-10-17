@@ -2,49 +2,51 @@
 //  TicketStampBundleDeckView.swift
 //  Todo train
 //
-//  きっぷの束 — 扇状に重ね、なぞって一枚ずつめくる。
-//
 
 import SwiftUI
+import TodoTrainTicketUI
 import UIKit
 
-enum TicketStampBundleDeckAxis {
-    case horizontal
-    case verticalHistoryEdge
+enum TicketStampBundleDeckStyle {
+    /// 運行終了。横になぞって一枚ずつ。幅・高さに収める。
+    case shutdown
+    /// 履歴 1 日。小さな扇、タップのみ。
+    case historyStrip
+    /// 全画面ビューア。横になぞり、幅 8 割。
+    case viewer
 }
 
 struct TicketStampBundleDeckView: View {
     var stamps: [TicketStampBundleAssembly.Stamp]
     @Binding var focusIndex: Int
-    var axis: TicketStampBundleDeckAxis
+    var style: TicketStampBundleDeckStyle
     var dayBoundaries: Set<Int> = []
     var onSelect: (TicketStampBundleAssembly.Stamp) -> Void = { _ in }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var dragOffset: CGFloat = 0
-    @State private var haptics = TicketStampBundleHaptics()
     @State private var selectionPulse = 0
     @State private var boundaryPulse = 0
 
+    /// `focusIndex` = いま手前の切符（古い方から数える）。
     private var visibleStamps: [TicketStampBundleAssembly.Stamp] {
-        Array(stamps.suffix(from: min(focusIndex, stamps.count)))
+        let end = min(focusIndex + 1, stamps.count)
+        guard end > 0 else { return [] }
+        return Array(stamps.prefix(end))
     }
 
     var body: some View {
         Group {
             if stamps.isEmpty {
-                emptyPlaceholder
+                Color.clear.frame(height: 0).accessibilityHidden(true)
             } else {
                 deck
             }
         }
         .onAppear {
-            if stamps.isEmpty {
-                focusIndex = 0
-            } else {
-                focusIndex = min(focusIndex, stamps.count - 1)
+            if !stamps.isEmpty {
+                focusIndex = min(max(0, focusIndex), stamps.count - 1)
             }
-            haptics.prepare()
         }
         .onChange(of: stamps.count) { _, count in
             focusIndex = min(focusIndex, max(0, count - 1))
@@ -53,6 +55,7 @@ struct TicketStampBundleDeckView: View {
         .sensoryFeedback(.impact(weight: .medium, intensity: 0.9), trigger: boundaryPulse)
         .accessibilityElement(children: .contain)
         .accessibilityAdjustableAction { direction in
+            guard style != .historyStrip else { return }
             switch direction {
             case .increment:
                 stepFocus(by: 1, haptic: true)
@@ -64,84 +67,143 @@ struct TicketStampBundleDeckView: View {
         }
     }
 
-    private var emptyPlaceholder: some View {
-        RoundedRectangle(cornerRadius: 4, style: .continuous)
-            .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
-            .frame(maxWidth: .infinity)
-            .frame(height: axis == .horizontal ? 120 : 160)
-            .overlay {
-                Text("この日は検札した切符がありません")
-                    .font(.footnote)
-                    .foregroundStyle(FocusPanel.muted)
-                    .multilineTextAlignment(.center)
-                    .padding()
-            }
-            .accessibilityLabel("この日は検札した切符がありません")
-    }
-
     private var deck: some View {
         GeometryReader { geo in
-            let width = min(geo.size.width - 24, 360)
-            let height = MarsTicketSpec.height(forWidth: width)
-            let scale = axis == .horizontal ? min(1, (geo.size.width - 32) / width) : 0.72
+            let metrics = layoutMetrics(in: geo.size)
+            let centerNudge = fanCenterNudge(metrics: metrics)
             ZStack {
                 ForEach(Array(visibleStamps.enumerated()), id: \.element.id) { offset, stamp in
-                    let index = focusIndex + offset
-                    StampedMarsTicketFace(stamp: stamp, scale: scale)
-                        .frame(width: width * scale, height: height * scale)
+                    let depth = visibleStamps.count - 1 - offset
+                    let isFront = depth == 0
+                    StampedMarsTicketFace(stamp: stamp, scale: metrics.scale, showsLogLines: style != .historyStrip)
+                        .frame(width: metrics.ticketWidth, height: metrics.ticketHeight)
                         .rotationEffect(
-                            .degrees(fanRotation(offset: offset)),
+                            .degrees(fanRotation(depth: depth, metrics: metrics)),
                             anchor: .bottom
                         )
-                        .offset(fanOffset(offset: offset, drag: dragOffset))
+                        .offset(fanOffset(depth: depth, drag: dragOffset, metrics: metrics))
                         .zIndex(Double(offset))
                         .onTapGesture {
                             onSelect(stamp)
                         }
-                        .accessibilityAddTraits(index == focusIndex ? .isSelected : [])
+                        .accessibilityAddTraits(isFront ? .isSelected : [])
                         .accessibilityAction(named: "詳細") {
                             onSelect(stamp)
                         }
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+            .offset(x: centerNudge)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
             .contentShape(Rectangle())
-            .gesture(panGesture(in: geo.size))
+            .gesture(style == .historyStrip ? nil : panGesture(in: geo.size, metrics: metrics))
         }
-        .frame(height: axis == .horizontal ? 168 : 200)
+        .frame(height: bandHeight)
+        .clipped()
     }
 
-    private func fanRotation(offset: Int) -> Double {
-        let spread = axis == .horizontal ? 4.5 : 3.0
-        return Double(offset) * spread - Double(min(visibleStamps.count - 1, 4)) * spread * 0.35
-    }
-
-    private func fanOffset(offset: Int, drag: CGFloat) -> CGSize {
-        let step: CGFloat = axis == .horizontal ? 14 : 10
-        let primary = CGFloat(offset) * step + drag * 0.35
-        if axis == .horizontal {
-            return CGSize(width: primary, height: CGFloat(offset) * 3)
+    private var bandHeight: CGFloat {
+        switch style {
+        case .shutdown: 124
+        case .historyStrip: 120
+        case .viewer: 280
         }
-        return CGSize(width: CGFloat(offset) * 4, height: primary)
     }
 
-    private func panGesture(in size: CGSize) -> some Gesture {
+    private struct LayoutMetrics {
+        var ticketWidth: CGFloat
+        var ticketHeight: CGFloat
+        var scale: CGFloat
+        var fanStep: CGFloat
+        var fanSpread: Double
+        var maxFanCards: Int
+    }
+
+    private func layoutMetrics(in size: CGSize) -> LayoutMetrics {
+        let baseWidth: CGFloat = 300
+        let baseHeight = MarsTicketSpec.height(forWidth: baseWidth)
+        let visibleCount = min(visibleStamps.count, style == .shutdown ? 5 : 3)
+        switch style {
+        case .shutdown:
+            let pad: CGFloat = 24
+            let maxW = max(80, size.width - pad)
+            let maxH = max(60, size.height - 8)
+            var scale = min(maxW / baseWidth, maxH / baseHeight, 1)
+            var fanStep: CGFloat = 9
+            let ticketW = baseWidth * scale
+            let fanExtent = ticketW + CGFloat(max(0, visibleCount - 1)) * fanStep * scale
+            if fanExtent > maxW {
+                let squeeze = maxW / fanExtent
+                scale *= squeeze
+                fanStep *= squeeze
+            }
+            return LayoutMetrics(
+                ticketWidth: baseWidth * scale,
+                ticketHeight: baseHeight * scale,
+                scale: scale,
+                fanStep: fanStep,
+                fanSpread: 2.0,
+                maxFanCards: 4
+            )
+        case .historyStrip:
+            let maxW = max(60, size.width - 24)
+            let maxH = max(50, size.height - 8)
+            let scale = min(maxW / baseWidth, maxH / baseHeight, 0.38)
+            return LayoutMetrics(
+                ticketWidth: baseWidth * scale,
+                ticketHeight: baseHeight * scale,
+                scale: scale,
+                fanStep: 5,
+                fanSpread: 1.4,
+                maxFanCards: 3
+            )
+        case .viewer:
+            let targetW = size.width * 0.8
+            let scale = min(targetW / baseWidth, 1)
+            return LayoutMetrics(
+                ticketWidth: baseWidth * scale,
+                ticketHeight: baseHeight * scale,
+                scale: scale,
+                fanStep: 12,
+                fanSpread: 3.0,
+                maxFanCards: 5
+            )
+        }
+    }
+
+    private func fanRotation(depth: Int, metrics: LayoutMetrics) -> Double {
+        let capped = min(depth, metrics.maxFanCards)
+        return -Double(capped) * metrics.fanSpread
+    }
+
+    private func fanOffset(depth: Int, drag: CGFloat, metrics: LayoutMetrics) -> CGSize {
+        let capped = min(depth, metrics.maxFanCards)
+        let primary = -CGFloat(capped) * metrics.fanStep + drag * 0.28
+        return CGSize(width: primary, height: CGFloat(capped) * 2)
+    }
+
+    /// 扇の左寄りを補正して、手前の切符を帯の中央に寄せる。
+    private func fanCenterNudge(metrics: LayoutMetrics) -> CGFloat {
+        guard style == .shutdown || style == .viewer else { return 0 }
+        let depth = min(max(0, visibleStamps.count - 1), metrics.maxFanCards)
+        return CGFloat(depth) * metrics.fanStep * 0.5
+    }
+
+    private func panGesture(in size: CGSize, metrics: LayoutMetrics) -> some Gesture {
         DragGesture(minimumDistance: 8)
             .onChanged { value in
-                let delta = axis == .horizontal ? value.translation.width : value.translation.height
-                dragOffset = delta
+                dragOffset = value.translation.width
             }
             .onEnded { value in
-                let delta = axis == .horizontal ? value.translation.width : value.translation.height
-                let velocity = axis == .horizontal ? value.velocity.width : value.velocity.height
-                let threshold: CGFloat = axis == .horizontal ? 36 : 28
+                let delta = value.translation.width
+                let velocity = value.velocity.width
+                let threshold: CGFloat = 32
                 var steps = 0
                 if abs(velocity) > 900 {
                     steps = velocity > 0 ? -1 : 1
-                } else if delta > threshold {
-                    steps = -1
-                } else if delta < -threshold {
+                } else                 if delta > threshold {
                     steps = 1
+                } else if delta < -threshold {
+                    steps = -1
                 }
                 let fast = abs(velocity) > 1200
                 applySteps(steps, fast: fast)
@@ -170,23 +232,11 @@ struct TicketStampBundleDeckView: View {
         focusIndex = next
         guard haptic else { return }
         if fast {
-            if crossedBoundary {
-                boundaryPulse += 1
-            }
+            if crossedBoundary { boundaryPulse += 1 }
         } else if crossedBoundary {
             boundaryPulse += 1
         } else {
             selectionPulse += 1
         }
-    }
-}
-
-private final class TicketStampBundleHaptics {
-    let selection = UISelectionFeedbackGenerator()
-    let impact = UIImpactFeedbackGenerator(style: .medium)
-
-    func prepare() {
-        selection.prepare()
-        impact.prepare()
     }
 }
