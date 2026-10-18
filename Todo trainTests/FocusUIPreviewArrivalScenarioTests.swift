@@ -31,7 +31,6 @@ struct FocusUIPreviewArrivalScenarioTests {
         let j = judge(estimatedStart: 30 * 60, active: 30 * 60, reestimates: [])
         #expect(j.outcome == .onTime)
         #expect(j.sealLuxury == 1.0)
-        #expect(j.legacySealTier == .ticketing)
     }
 
     @Test func arrivalOnTimeEarly() {
@@ -45,7 +44,6 @@ struct FocusUIPreviewArrivalScenarioTests {
         let j = judge(estimatedStart: 30 * 60, active: 50 * 60, reestimates: events)
         #expect(j.outcome == .onTime)
         #expect(j.sealLuxury == 0.72)
-        #expect(j.legacySealTier == .earlyReestimate)
     }
 
     @Test func arrivalOnTimeLate() {
@@ -59,7 +57,6 @@ struct FocusUIPreviewArrivalScenarioTests {
         let j = judge(estimatedStart: 30 * 60, active: 40 * 60, reestimates: events)
         #expect(j.outcome == .onTime)
         #expect(j.sealLuxury == 0.34)
-        #expect(j.legacySealTier == .lateReestimate)
     }
 
     @Test func arrivalNotOnTime() {

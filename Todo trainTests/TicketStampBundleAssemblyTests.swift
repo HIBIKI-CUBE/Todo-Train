@@ -105,7 +105,7 @@ struct TicketStampBundleAssemblyTests {
         #expect(bundles[0].stamps[0].title == "割り込み")
     }
 
-    @Test func sealTierMatchesJudge() {
+    @Test func sealLuxuryMatchesJudge() {
         let re = TicketStampBundleAssembly.ReestimateInput(
             reestimateIndex: 1,
             activeSeconds: 10 * 60,
@@ -136,7 +136,7 @@ struct TicketStampBundleAssemblyTests {
                 ]
             )
         )
-        #expect(stamp.sealTier == judgment.legacySealTier)
+        #expect(stamp.sealLuxury == judgment.sealLuxury)
         #expect(stamp.punctuality == .onTime)
     }
 

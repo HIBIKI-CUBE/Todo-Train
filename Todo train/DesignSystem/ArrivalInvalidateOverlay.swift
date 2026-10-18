@@ -273,7 +273,9 @@ struct ArrivalInvalidateOverlay: View {
                 punctuality: arrival.punctuality,
                 stampSettled: impact,
                 innerRingSolid: praise.innerRingSolid,
-                sealTier: resolvedSealTier(for: arrival.punctuality),
+                sealLuxury: resolvedSealLuxury(for: arrival.punctuality),
+                sealSeed: sealSeed,
+                sealDateText: sealDateText,
                 sealSeason: stampSeason,
                 sealTimeOfDay: stampTimeOfDay,
                 sealSettled: sealImpact
@@ -450,9 +452,19 @@ struct ArrivalInvalidateOverlay: View {
         return PunctualityJudgment.stampTimeOfDay(at: ended)
     }
 
-    private func resolvedSealTier(for punctuality: ArrivalPunctuality) -> PunctualityJudgment.OnTimeSealTier? {
+    private func resolvedSealLuxury(for punctuality: ArrivalPunctuality) -> Double? {
         guard punctuality == .onTime, let session = arrivedSession else { return nil }
-        return Punctuality.judgment(for: session).legacySealTier
+        return Punctuality.judgment(for: session).sealLuxury
+    }
+
+    private var sealSeed: UInt64 {
+        guard let id = moment.arrivedSessionID else { return 0 }
+        return SealSeed.seed(rideID: id)
+    }
+
+    private var sealDateText: String {
+        let ended = arrivedSession?.endedAt ?? sessionManager.clock.now
+        return FukeiSealDate.text(from: ended)
     }
 
     private var punctualityShowsSealTip: Bool {
@@ -750,7 +762,9 @@ struct MarsTicketUsedMarks: View {
     var punctuality: ArrivalPunctuality = .late
     var stampSettled: CGFloat = 1
     var innerRingSolid: Bool = false
-    var sealTier: PunctualityJudgment.OnTimeSealTier?
+    var sealLuxury: Double?
+    var sealSeed: UInt64 = 0
+    var sealDateText: String = ""
     var sealSeason: PunctualityJudgment.StampSeason = .spring
     var sealTimeOfDay: PunctualityJudgment.StampTimeOfDay = .afternoon
     var sealSettled: CGFloat = 0
@@ -777,11 +791,13 @@ struct MarsTicketUsedMarks: View {
                     .rotationEffect(.degrees(-12))
                     .position(seat)
 
-                if let sealTier {
+                if let sealLuxury {
                     OnTimeCornerSealMark(
-                        tier: sealTier,
+                        luxury: sealLuxury,
                         season: sealSeason,
                         timeOfDay: sealTimeOfDay,
+                        seed: sealSeed,
+                        dateText: sealDateText,
                         settled: sealSettled
                     )
                     .zIndex(1)
@@ -792,7 +808,7 @@ struct MarsTicketUsedMarks: View {
         .accessibilityLabel(
             PunctualityPresentation.stampAccessibilityLabel(
                 punctuality: punctuality,
-                includesCornerSeal: sealTier != nil && sealSettled > 0.5
+                includesCornerSeal: sealLuxury != nil && sealSettled > 0.5
             )
         )
     }
