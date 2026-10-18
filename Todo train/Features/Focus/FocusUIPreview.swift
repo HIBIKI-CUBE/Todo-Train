@@ -12,6 +12,24 @@ import TodoTrainSync
 import UIKit
 #endif
 
+/// DEBUG プレビューで、開いている走行の合計を `activeSeconds` にする置き方。
+/// 区間の開始は `now` に置き、合計は積み上げだけが表す。
+struct FocusPreviewActiveTime: Equatable {
+    var accumulatedActiveSeconds: TimeInterval
+    var segmentStartedAt: Date
+
+    func elapsedSeconds(at now: Date) -> TimeInterval {
+        accumulatedActiveSeconds + now.timeIntervalSince(segmentStartedAt)
+    }
+
+    static func placement(activeSeconds: TimeInterval, now: Date) -> FocusPreviewActiveTime {
+        FocusPreviewActiveTime(
+            accumulatedActiveSeconds: activeSeconds,
+            segmentStartedAt: now
+        )
+    }
+}
+
 struct FocusReestimatePreviewConfiguration {
     enum Stage {
         case position
@@ -140,8 +158,10 @@ enum FocusUIPreview {
         case "positionReportOvertime":
             session.estimatedSecondsAtStart = 30 * 60
             session.currentBudgetSeconds = 30 * 60
-            session.accumulatedActiveSeconds = 68 * 60
-            session.segmentStartedAt = manager.clock.now.addingTimeInterval(-68 * 60)
+            let active = TimeInterval(68 * 60)
+            let placed = FocusPreviewActiveTime.placement(activeSeconds: active, now: manager.clock.now)
+            session.accumulatedActiveSeconds = placed.accumulatedActiveSeconds
+            session.segmentStartedAt = placed.segmentStartedAt
             manager.reconcile(now: manager.clock.now)
             manager.presentReestimate(trigger: .planEnd, surface: .iphonePortrait)
             manager.focusReestimatePreview = FocusReestimatePreviewConfiguration(
@@ -149,7 +169,7 @@ enum FocusUIPreview {
                 progressValue: 60,
                 committedProgress: 0.6,
                 projectedTotalSeconds: PositionReport.projection(
-                    activeSeconds: TimeInterval(68 * 60),
+                    activeSeconds: active,
                     progress: 0.6
                 )
             )
@@ -157,8 +177,10 @@ enum FocusUIPreview {
 
         case "planEnd":
             session.currentBudgetSeconds = 45 * 60
-            session.accumulatedActiveSeconds = 46 * 60
-            session.segmentStartedAt = manager.clock.now.addingTimeInterval(-46 * 60)
+            let active = TimeInterval(46 * 60)
+            let placed = FocusPreviewActiveTime.placement(activeSeconds: active, now: manager.clock.now)
+            session.accumulatedActiveSeconds = placed.accumulatedActiveSeconds
+            session.segmentStartedAt = placed.segmentStartedAt
             manager.reconcile(now: manager.clock.now)
             manager.uiPreviewForcesFocusCover = true
 

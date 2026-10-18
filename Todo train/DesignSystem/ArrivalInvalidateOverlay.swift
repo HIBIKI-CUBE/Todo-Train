@@ -42,9 +42,9 @@ struct ArrivalInvalidateOverlay: View {
     @State private var ticketNudge: CGFloat = 0
     @State private var phosphor: CGFloat = 0
     @State private var praise = ArrivalPraise.plain
-    @State private var baseHaptic = 0
-    @State private var praiseHaptic = 0
+    @State private var roundHaptic = 0
     @State private var sealHaptic = 0
+    @State private var sealHapticSecond = 0
     @State private var stampGeneration = 0
     @State private var choiceHaptic = 0
     @State private var openHaptic = 0
@@ -205,10 +205,20 @@ struct ArrivalInvalidateOverlay: View {
         }
         .offset(y: (1 - enter) * 28)
         .opacity(Double(max(0, enter)))
-        .sensoryFeedback(.impact(weight: .heavy, intensity: 1), trigger: baseHaptic)
-        .sensoryFeedback(.impact(flexibility: .rigid, intensity: 1), trigger: praiseHaptic)
-        .sensoryFeedback(.impact(flexibility: .rigid, intensity: 1), trigger: sealHaptic)
+        .sensoryFeedback(
+            .impact(weight: .light, intensity: ArrivalStampFeedback.roundLightIntensity),
+            trigger: roundHaptic
+        )
+        .sensoryFeedback(
+            .impact(weight: .heavy, intensity: ArrivalStampFeedback.sealHeavyIntensity),
+            trigger: sealHaptic
+        )
+        .sensoryFeedback(
+            .impact(flexibility: .rigid, intensity: ArrivalStampFeedback.sealRigidIntensity),
+            trigger: sealHapticSecond
+        )
         .onAppear {
+            StampSoundPlayer.prepareStampSounds()
             runEntrance()
             applyArrivalPreviewIfNeeded(punctuality: arrival.punctuality)
             announceIfNeeded(arrival: arrival)
@@ -582,25 +592,26 @@ struct ArrivalInvalidateOverlay: View {
                 return
             }
         }
-        StampSoundPlayer.playStampThud()
         stampError = ""
         deck.markStamped()
         praise = praise(for: punctuality)
         stampSeated = true
-        if praise.count > 0 {
-            praiseHaptic += 1
-        } else {
-            baseHaptic += 1
-        }
         let returnsToHub = action == nil
         stampGeneration += 1
         let generation = stampGeneration
         let settled = ArrivalStampCommitEffects.settledVisuals(punctuality: punctuality)
+        let hasCornerSeal = cornerSealIsPresent(punctuality: punctuality)
+        let sequence = ArrivalStampFeedback.sequence(hasCornerSeal: hasCornerSeal)
+        for step in sequence {
+            scheduleStampFeedback(step, generation: generation)
+        }
+        let sealOffset = sequence.first { $0.haptic == .sealHeavy }?.offsetMilliseconds
         if reduceMotion {
             impact = settled.stampImpact
-            sealImpact = settled.sealImpact
             phosphor = praise.count > 0 ? 1 : 0
-            if settled.sealImpact > 0 { sealHaptic += 1 }
+            if let sealOffset {
+                revealSeal(settled.sealImpact, after: sealOffset, generation: generation, animated: false)
+            }
             scheduleHold(generation: generation, returnsToHub: returnsToHub)
             return
         }
@@ -612,17 +623,64 @@ struct ArrivalInvalidateOverlay: View {
             withAnimation(MarsTicketSpec.ArrivalMotion.slam) {
                 ticketNudge = 0
             }
-            if settled.sealImpact > 0 {
-                Task { @MainActor in
-                    try? await Task.sleep(for: .milliseconds(120))
-                    guard generation == stampGeneration else { return }
-                    sealHaptic += 1
-                    withAnimation(MarsTicketSpec.ArrivalMotion.descend) {
-                        sealImpact = settled.sealImpact
-                    }
-                }
-            }
             scheduleHold(generation: generation, returnsToHub: returnsToHub)
+        }
+        if let sealOffset {
+            revealSeal(settled.sealImpact, after: sealOffset, generation: generation, animated: true)
+        }
+    }
+
+    /// 定時で `sealLuxury` があるときだけ角判を追わせる。nil のときは丸い印の一段だけ。
+    private func cornerSealIsPresent(punctuality: ArrivalPunctuality) -> Bool {
+        guard punctuality == .onTime, let session = arrivedSession else { return false }
+        return Punctuality.judgment(for: session).sealLuxury != nil
+    }
+
+    private func revealSeal(_ amount: CGFloat, after offsetMilliseconds: Int, generation: Int, animated: Bool) {
+        Task { @MainActor in
+            if offsetMilliseconds > 0 {
+                try? await Task.sleep(for: .milliseconds(offsetMilliseconds))
+            }
+            guard generation == stampGeneration else { return }
+            if animated {
+                withAnimation(MarsTicketSpec.ArrivalMotion.descend) {
+                    sealImpact = amount
+                }
+            } else {
+                sealImpact = amount
+            }
+        }
+    }
+
+    private func scheduleStampFeedback(_ step: ArrivalStampFeedback.Event, generation: Int) {
+        let fire = {
+            guard generation == stampGeneration else { return }
+            switch step.sound {
+            case .roundStamp:
+                StampSoundPlayer.playRoundStamp()
+            case .seal:
+                StampSoundPlayer.playSealStamp()
+            case nil:
+                break
+            }
+            switch step.haptic {
+            case .roundLight:
+                roundHaptic += 1
+            case .sealHeavy:
+                sealHaptic += 1
+            case .sealRigid:
+                sealHapticSecond += 1
+            case nil:
+                break
+            }
+        }
+        if step.offsetMilliseconds <= 0 {
+            fire()
+        } else {
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(step.offsetMilliseconds))
+                fire()
+            }
         }
     }
 
