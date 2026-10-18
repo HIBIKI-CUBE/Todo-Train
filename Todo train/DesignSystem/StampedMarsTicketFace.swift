@@ -38,7 +38,9 @@ struct StampedMarsTicketFace: View {
                 punctuality: stamp.punctuality,
                 stampSettled: settled.stampImpact,
                 innerRingSolid: stamp.punctuality == .onTime,
-                sealTier: stamp.sealTier,
+                sealLuxury: stamp.sealLuxury,
+                sealSeed: SealSeed.seed(rideID: stamp.sessionID),
+                sealDateText: FukeiSealDate.text(from: stamp.stampedAt),
                 sealSeason: stamp.stampSeason,
                 sealTimeOfDay: stamp.stampTimeOfDay,
                 sealSettled: settled.sealImpact
@@ -80,7 +82,7 @@ struct StampedMarsTicketFace: View {
         var parts = [stamp.title]
         parts.append(PunctualityPresentation.stampAccessibilityLabel(
             punctuality: stamp.punctuality,
-            includesCornerSeal: stamp.sealTier != nil
+            includesCornerSeal: stamp.sealLuxury != nil
         ))
         parts.append("見積もり \(stamp.judgedEstimateMinutes)分、実際 \(stamp.actualMinutes)分")
         return parts.joined(separator: "、")

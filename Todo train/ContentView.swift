@@ -32,6 +32,11 @@ struct ContentView: View {
         #if DEBUG
         .focusUIPreviewOrientation()
         .focusUIPreviewQuickAddSheet()
+        .overlay {
+            if FocusUIPreview.showsSealGallery {
+                FukeiSealGallery()
+            }
+        }
         #endif
         .environment(transferCanvas)
         .environment(ticketMotion)

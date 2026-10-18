@@ -31,12 +31,24 @@ struct PunctualitySealSample: View {
     var luxury: Double
 
     var body: some View {
-        let tier = PunctualityJudgment.legacySealTier(luxury: luxury)
-        OnTimeCornerSealGlyph(tier: tier, season: .spring, timeOfDay: .afternoon)
-            .frame(width: 18, height: 18)
-            .opacity(0.92)
-            .accessibilityHidden(true)
+        FukeiSealView(
+            input: FukeiSealInput(
+                luxury: luxury,
+                season: .spring,
+                timeOfDay: .afternoon,
+                seed: Self.sampleSeed,
+                dateText: "",
+                detail: .compact
+            )
+        )
+        .frame(width: 18, height: 18)
+        .accessibilityHidden(true)
     }
+
+    /// 見本は乗車を持たない。同じ豪華さなら同じかすれになる。
+    private static let sampleSeed = SealSeed.seed(
+        rideID: UUID(uuidString: "00000000-0000-4000-8000-000000000170")!
+    )
 }
 
 struct PunctualityHomeMeterRow: View {

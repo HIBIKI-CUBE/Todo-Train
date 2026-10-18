@@ -63,6 +63,8 @@ enum FocusUIPreview {
 
     static var isActive: Bool { parsedState() != nil }
 
+    static var showsSealGallery: Bool { parsedState() == "sealGallery" }
+
     /// DEBUG スクショ用。通知・AlarmKit の許可ダイアログを出さない。
     static var skipsNotificationAuthorization: Bool { isActive }
 
@@ -92,6 +94,9 @@ enum FocusUIPreview {
             "historyBundleViewerBoundary", "historyBundleViewerBoundaryLandscape":
             try configureTicketBundlePreview(manager: manager, context: context, state: state)
             manager.uiPreviewLandscape = wantsLandscape
+            return
+        case "sealGallery":
+            manager.uiPreviewSuppressMotion = true
             return
         default:
             break

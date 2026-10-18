@@ -42,7 +42,7 @@ enum TicketStampBundleAssembly {
         var title: String
         var stampedAt: Date
         var punctuality: ArrivalPunctuality
-        var sealTier: PunctualityJudgment.OnTimeSealTier?
+        var sealLuxury: Double?
         var stampSeason: PunctualityJudgment.StampSeason
         var stampTimeOfDay: PunctualityJudgment.StampTimeOfDay
         var judgedEstimateMinutes: Int
@@ -176,7 +176,7 @@ enum TicketStampBundleAssembly {
             title: session.title,
             stampedAt: stampedAt,
             punctuality: punctuality,
-            sealTier: judgment.legacySealTier,
+            sealLuxury: judgment.sealLuxury,
             stampSeason: PunctualityJudgment.stampSeason(at: stampedAt),
             stampTimeOfDay: PunctualityJudgment.stampTimeOfDay(at: stampedAt),
             judgedEstimateMinutes: max(Int(judgment.judgedTotalSeconds.rounded()), 1) / 60,
