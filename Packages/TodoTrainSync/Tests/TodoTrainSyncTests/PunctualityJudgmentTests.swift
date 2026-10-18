@@ -73,7 +73,7 @@ struct PunctualityJudgmentTests {
         let judgment = PunctualityJudgment.judge(ride(active: 1_400, estimate: 1_800))
         #expect(judgment.outcome == .early)
         #expect(judgment.arrivalJudgement == .none)
-        #expect(judgment.sealTier == nil)
+        #expect(judgment.sealLuxury == nil)
     }
 
     @Test func late_pastUpperBound() {
@@ -81,44 +81,123 @@ struct PunctualityJudgmentTests {
         #expect(judgment.outcome == .late)
     }
 
-    @Test func sealTier_firstHalfVersusSecondHalf() {
-        let earlyHalf = PunctualityJudgment.ReestimateCommit(
-            reestimateIndex: 1,
-            activeSeconds: 600,
-            committedRemainingSeconds: 1_200
-        )
-        let onFirstHalf = PunctualityJudgment.judge(
-            ride(active: 1_750, reestimates: [earlyHalf])
-        )
-        #expect(onFirstHalf.outcome == .onTime)
-        #expect(onFirstHalf.sealTier == .earlyReestimate)
-
-        let lateHalf = PunctualityJudgment.ReestimateCommit(
-            reestimateIndex: 1,
-            activeSeconds: 602,
-            committedRemainingSeconds: 600
-        )
-        let onSecondHalf = PunctualityJudgment.judge(
-            ride(active: 1_200, reestimates: [lateHalf])
-        )
-        #expect(onSecondHalf.outcome == .onTime)
-        #expect(onSecondHalf.sealTier == .lateReestimate)
-
-        let exactlyHalf = PunctualityJudgment.ReestimateCommit(
-            reestimateIndex: 1,
-            activeSeconds: 600,
-            committedRemainingSeconds: 600
-        )
-        let atHalf = PunctualityJudgment.judge(
-            ride(active: 1_200, reestimates: [exactlyHalf])
-        )
-        #expect(atHalf.outcome == .onTime)
-        #expect(atHalf.sealTier == .earlyReestimate)
+    @Test func sealLuxury_originalEstimateOnTime() {
+        let judgment = PunctualityJudgment.judge(ride(active: 1_780, estimate: 1_800))
+        #expect(judgment.sealLuxury == 1.0)
+        #expect(judgment.legacySealTier == .ticketing)
     }
 
-    @Test func sealTier_ticketingForOriginalEstimate() {
-        let judgment = PunctualityJudgment.judge(ride(active: 1_780, estimate: 1_800))
-        #expect(judgment.sealTier == .ticketing)
+    @Test func sealLuxury_reestimateRatioExamples() {
+        let atTwentyPercent = PunctualityJudgment.ReestimateCommit(
+            reestimateIndex: 1,
+            activeSeconds: 200,
+            committedRemainingSeconds: 800
+        )
+        #expect(
+            PunctualityJudgment.sealLuxury(source: .reestimate(index: 1), reestimates: [atTwentyPercent])
+                == 0.72
+        )
+
+        let atEightyPercent = PunctualityJudgment.ReestimateCommit(
+            reestimateIndex: 1,
+            activeSeconds: 800,
+            committedRemainingSeconds: 200
+        )
+        #expect(
+            PunctualityJudgment.sealLuxury(source: .reestimate(index: 1), reestimates: [atEightyPercent])
+                == 0.18
+        )
+
+        let atStart = PunctualityJudgment.ReestimateCommit(
+            reestimateIndex: 1,
+            activeSeconds: 0,
+            committedRemainingSeconds: 900
+        )
+        #expect(
+            PunctualityJudgment.sealLuxury(source: .reestimate(index: 1), reestimates: [atStart])
+                == 0.9
+        )
+
+        let atEnd = PunctualityJudgment.ReestimateCommit(
+            reestimateIndex: 1,
+            activeSeconds: 900,
+            committedRemainingSeconds: 0
+        )
+        #expect(
+            PunctualityJudgment.sealLuxury(source: .reestimate(index: 1), reestimates: [atEnd])
+                == 0.0
+        )
+    }
+
+    @Test func sealLuxury_roundsToHundredths() {
+        let event = PunctualityJudgment.ReestimateCommit(
+            reestimateIndex: 1,
+            activeSeconds: 625,
+            committedRemainingSeconds: 375
+        )
+        #expect(
+            PunctualityJudgment.sealLuxury(source: .reestimate(index: 1), reestimates: [event])
+                == 0.34
+        )
+
+        let nearEnd = PunctualityJudgment.ReestimateCommit(
+            reestimateIndex: 1,
+            activeSeconds: 99,
+            committedRemainingSeconds: 1
+        )
+        #expect(
+            PunctualityJudgment.sealLuxury(source: .reestimate(index: 1), reestimates: [nearEnd])
+                == 0.01
+        )
+    }
+
+    @Test func sealLuxury_zeroTotalSeconds() {
+        let event = PunctualityJudgment.ReestimateCommit(
+            reestimateIndex: 1,
+            activeSeconds: 0,
+            committedRemainingSeconds: 0
+        )
+        #expect(
+            PunctualityJudgment.sealLuxury(source: .reestimate(index: 1), reestimates: [event])
+                == 0.0
+        )
+    }
+
+    @Test func sealLuxury_lateReestimateAfterLeadWindowUsesEarlierValue() {
+        let events = [
+            PunctualityJudgment.ReestimateCommit(
+                reestimateIndex: 1,
+                activeSeconds: 300,
+                committedRemainingSeconds: 1_200
+            ),
+            PunctualityJudgment.ReestimateCommit(
+                reestimateIndex: 2,
+                activeSeconds: 1_200,
+                committedRemainingSeconds: 200
+            ),
+        ]
+        let judgment = PunctualityJudgment.judge(ride(active: 1_450, reestimates: events))
+        #expect(judgment.exportSource.reestimateIndex == 1)
+        #expect(judgment.sealLuxury == 0.72)
+    }
+
+    @Test func sealLuxury_isDeterministic() {
+        let events = [
+            PunctualityJudgment.ReestimateCommit(
+                reestimateIndex: 1,
+                activeSeconds: 400,
+                committedRemainingSeconds: 600
+            ),
+        ]
+        let first = PunctualityJudgment.sealLuxury(source: .reestimate(index: 1), reestimates: events)
+        let second = PunctualityJudgment.sealLuxury(source: .reestimate(index: 1), reestimates: events)
+        #expect(first == second)
+    }
+
+    @Test func legacyTier_boundaries() {
+        #expect(PunctualityJudgment.legacyTier(luxury: 1.0) == "ticketing")
+        #expect(PunctualityJudgment.legacyTier(luxury: 0.45) == "earlyReestimate")
+        #expect(PunctualityJudgment.legacyTier(luxury: 0.44) == "lateReestimate")
     }
 
     @Test func overtimeResolution_canStillBeOnTimeAfterReestimate() {

@@ -134,6 +134,7 @@ nonisolated enum PDCAExport {
         var judgmentBandHalfWidthSeconds: Double
         var arrivalJudgement: PunctualityJudgment.ArrivalJudgementExport
         var onTimeSealTier: PDCANull<String>
+        var sealLuxury: PDCANull<Double>
         var stampSeason: PDCANull<String>
         var stampTimeOfDay: PDCANull<String>
     }
@@ -225,6 +226,8 @@ nonisolated enum PDCAExport {
         var detailsOpened: Bool
         var undoneAt: PDCANull<Date>
         var remoteWillExtendReceived: Bool
+        var declaration: PDCANull<String>
+        var projectedTotalSeconds: PDCANull<Int>
     }
 
     struct NudgeRow: Encodable {
@@ -436,7 +439,10 @@ nonisolated enum PDCAExport {
                     judgedEstimateSource: punctuality.exportSource,
                     judgmentBandHalfWidthSeconds: punctuality.bandHalfWidth,
                     arrivalJudgement: punctuality.arrivalJudgement,
-                    onTimeSealTier: PDCANull(punctuality.sealTier?.rawValue),
+                    onTimeSealTier: PDCANull(
+                        punctuality.sealLuxury.map { PunctualityJudgment.legacyTier(luxury: $0) }
+                    ),
+                    sealLuxury: PDCANull(punctuality.sealLuxury),
                     stampSeason: PDCANull(
                         endedAt.map { PunctualityJudgment.stampSeason(at: $0).rawValue }
                     ),
@@ -795,7 +801,9 @@ nonisolated enum PDCAExport {
                 shownBandHighSeconds: PDCANull(event.shownBandHighSeconds),
                 detailsOpened: event.detailsOpened,
                 undoneAt: PDCANull(event.undoneAt),
-                remoteWillExtendReceived: event.remoteWillExtendReceived
+                remoteWillExtendReceived: event.remoteWillExtendReceived,
+                declaration: PDCANull(event.declaration?.rawValue),
+                projectedTotalSeconds: PDCANull(event.projectedTotalSeconds)
             )
         }
     }

@@ -442,7 +442,7 @@ struct ArrivalInvalidateOverlay: View {
 
     private func resolvedSealTier(for punctuality: ArrivalPunctuality) -> PunctualityJudgment.OnTimeSealTier? {
         guard punctuality == .onTime, let session = arrivedSession else { return nil }
-        return Punctuality.judgment(for: session).sealTier
+        return Punctuality.judgment(for: session).legacySealTier
     }
 
     private var punctualityShowsSealTip: Bool {

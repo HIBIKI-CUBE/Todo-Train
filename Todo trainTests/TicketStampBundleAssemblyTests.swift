@@ -136,7 +136,7 @@ struct TicketStampBundleAssemblyTests {
                 ]
             )
         )
-        #expect(stamp.sealTier == judgment.sealTier)
+        #expect(stamp.sealTier == judgment.legacySealTier)
         #expect(stamp.punctuality == .onTime)
     }
 

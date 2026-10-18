@@ -60,7 +60,7 @@ struct PunctualityMoment: Identifiable, Equatable, Sendable {
 enum Punctuality {
     static func rideInput(for session: WorkSession) -> PunctualityJudgment.RideInput {
         let reestimates = session.reestimateEvents
-            .filter { $0.undoneAt == nil }
+            .filter { $0.undoneAt == nil && $0.declaration != .recovery }
             .map {
                 PunctualityJudgment.ReestimateCommit(
                     reestimateIndex: $0.reestimateIndex,

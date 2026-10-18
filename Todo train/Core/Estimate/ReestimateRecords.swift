@@ -24,9 +24,15 @@ enum ReestimateInput: String, Codable, Sendable {
     case trackpadScroll
 }
 
+enum ReestimateDeclaration: String, Codable, Sendable {
+    case recovery
+    case adjust
+}
+
 enum ReestimateMode: String, Codable, Sendable {
     case progress
     case minutesOnly
+    case positionReport
 }
 
 struct ReestimateEventRecord: Codable, Equatable, Sendable {
@@ -48,6 +54,10 @@ struct ReestimateEventRecord: Codable, Equatable, Sendable {
     var undoneAt: Date?
     /// Mac・Watch から届いた延長の答えを受けたとき true。
     var remoteWillExtendReceived: Bool
+    /// 回復運転 / 運転調整。古い記録は nil。
+    var declaration: ReestimateDeclaration?
+    /// 見込みの全体秒（運転調整）。古い記録は nil。
+    var projectedTotalSeconds: Int?
 
     init(
         id: UUID = UUID(),
@@ -66,7 +76,9 @@ struct ReestimateEventRecord: Codable, Equatable, Sendable {
         shownBandHighSeconds: Int?,
         detailsOpened: Bool,
         undoneAt: Date? = nil,
-        remoteWillExtendReceived: Bool = false
+        remoteWillExtendReceived: Bool = false,
+        declaration: ReestimateDeclaration? = nil,
+        projectedTotalSeconds: Int? = nil
     ) {
         self.id = id
         self.reestimateIndex = reestimateIndex
@@ -85,10 +97,13 @@ struct ReestimateEventRecord: Codable, Equatable, Sendable {
         self.detailsOpened = detailsOpened
         self.undoneAt = undoneAt
         self.remoteWillExtendReceived = remoteWillExtendReceived
+        self.declaration = declaration
+        self.projectedTotalSeconds = projectedTotalSeconds
     }
 }
 
 enum ReestimatePromptID {
     static let progressV1 = "reestimate.progress.v1"
     static let remainingV1 = "reestimate.remaining.v1"
+    static let positionV1 = "reestimate.position.v1"
 }

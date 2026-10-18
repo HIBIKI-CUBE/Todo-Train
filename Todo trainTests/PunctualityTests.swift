@@ -265,6 +265,61 @@ struct PunctualityTests {
         )
     }
 
+    @Test func rideInput_excludesRecoveryDeclaration() throws {
+        let container = try AppModelContainer.make(inMemory: true)
+        let context = ModelContext(container)
+        let ticket = Ticket(title: "T", estimatedSeconds: 1_800)
+        context.insert(ticket)
+
+        let session = WorkSession(startedAt: .now, estimatedSecondsAtStart: 1_800, ticket: ticket)
+        session.endedAt = .now
+        session.outcome = .arrived
+        session.accumulatedActiveSeconds = 1_780
+        session.reestimateEvents = [
+            ReestimateEventRecord(
+                reestimateIndex: 1,
+                trigger: .manual,
+                surface: .iphonePortrait,
+                input: .touch,
+                promptId: ReestimatePromptID.positionV1,
+                mode: .positionReport,
+                committedAt: .now,
+                activeSeconds: 600,
+                overrunSeconds: 0,
+                progressAnswer: 0.6,
+                committedRemainingSeconds: 1_200,
+                shownBandLowSeconds: nil,
+                shownBandHighSeconds: nil,
+                detailsOpened: false,
+                declaration: .adjust
+            ),
+            ReestimateEventRecord(
+                reestimateIndex: 2,
+                trigger: .manual,
+                surface: .iphonePortrait,
+                input: .touch,
+                promptId: ReestimatePromptID.positionV1,
+                mode: .positionReport,
+                committedAt: .now,
+                activeSeconds: 900,
+                overrunSeconds: 0,
+                progressAnswer: 0.7,
+                committedRemainingSeconds: 900,
+                shownBandLowSeconds: nil,
+                shownBandHighSeconds: nil,
+                detailsOpened: false,
+                declaration: .recovery
+            ),
+        ]
+        context.insert(session)
+
+        let input = Punctuality.rideInput(for: session)
+        #expect(input.reestimates.count == 1)
+        #expect(input.reestimates[0].reestimateIndex == 1)
+        let judgment = PunctualityJudgment.judge(input)
+        #expect(judgment.sealLuxury == 0.6)
+    }
+
     @Test func presentation_serviceMomentIsBrief() {
         // 定時運行 only — arrivals wait for swipe and do not use this budget.
         #expect(PunctualityMoment.presentationMilliseconds <= 1_000)
