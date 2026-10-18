@@ -324,7 +324,6 @@ struct HistoryView: View {
                     }
                 }
                 .buttonStyle(.plain)
-                .frame(height: 140)
                 .padding(.horizontal, TrainTheme.Space.md)
                 .padding(.bottom, TrainTheme.Space.sm)
                 .accessibilityLabel("この日の切符の束")

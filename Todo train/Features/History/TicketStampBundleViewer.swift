@@ -18,6 +18,7 @@ struct TicketStampBundleViewer: View {
     @State private var deckFocusIndex: Int = 0
     @State private var selectionPulse = 0
     @State private var boundaryPulse = 0
+    @State private var deckShuttleEngaged = false
 
     private var flat: [TicketStampBundleAssembly.FlatStamp] {
         TicketStampBundleAssembly.flatten(bundles)
@@ -63,21 +64,21 @@ struct TicketStampBundleViewer: View {
                             focusIndex: $deckFocusIndex,
                             style: .viewer,
                             dayBoundaries: dayBoundaryIndicesForLocalFocus(),
-                            onSelect: onSelectStamp
+                            onSelect: onSelectStamp,
+                            verticalGesturesLocked: $deckShuttleEngaged
                         )
                         .padding(.horizontal, TrainTheme.Space.md)
                     }
-
-                    Spacer(minLength: 0)
                 }
 
                 edgeScrubber
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(TrainTheme.platform)
-            .gesture(
+            .simultaneousGesture(
                 DragGesture(minimumDistance: 24)
                     .onEnded { value in
+                        guard !deckShuttleEngaged else { return }
                         guard value.translation.height > 72,
                               abs(value.translation.height) > abs(value.translation.width)
                         else { return }
@@ -121,6 +122,7 @@ struct TicketStampBundleViewer: View {
             .gesture(
                 DragGesture(minimumDistance: 4)
                     .onEnded { value in
+                        guard !deckShuttleEngaged else { return }
                         let steps = scrubSteps(
                             translation: value.translation.height,
                             velocity: value.velocity.height
@@ -155,12 +157,12 @@ struct TicketStampBundleViewer: View {
     }
 
     private func scrubSteps(translation: CGFloat, velocity: CGFloat) -> Int {
-        if abs(velocity) > 1200 {
-            return velocity > 0 ? -1 : 1
-        }
-        if translation > 40 { return -1 }
-        if translation < -40 { return 1 }
-        return 0
+        TicketStampBundleSwipe.steps(
+            translation: Double(translation),
+            velocity: Double(velocity),
+            threshold: 40,
+            flickVelocity: 1200
+        )
     }
 
     private func applyFlatSteps(_ steps: Int, fast: Bool) {
@@ -190,10 +192,17 @@ struct TicketStampBundleViewer: View {
     }
 
     private func syncFlatIndexToInitialDay() {
-        if let forced = initialFlatIndex, flat.indices.contains(forced) {
-            flatIndex = forced
-            deckFocusIndex = localFocus
-            return
+        if let forced = initialFlatIndex {
+            if flat.indices.contains(forced) {
+                flatIndex = forced
+                deckFocusIndex = localFocus
+                return
+            }
+            if forced >= flat.count, !flat.isEmpty {
+                flatIndex = flat.count - 1
+                deckFocusIndex = localFocus
+                return
+            }
         }
         guard let bundle = TicketStampBundleAssembly.bundle(forCalendarDayKey: initialDayKey, in: bundles),
               let index = flat.firstIndex(where: { $0.stamp.serviceDayID == bundle.serviceDayID })

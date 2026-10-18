@@ -131,11 +131,27 @@ struct ServiceShutdownCover: View {
 
     private func cabinBody(now: Date) -> some View {
         GeometryReader { geo in
-            let bundleBand = stampBundle == nil
+            let stampCount = stampBundle?.stamps.count ?? 0
+            let depth = TicketStampBundleLayout.stackDepth(
+                stampCount: stampCount,
+                focusIndex: max(0, stampCount - 1),
+                style: .shutdown
+            )
+            let clockFloor = Self.minimumClockHeight + 4
+            let fittingPreface = max(0, geo.size.height - clockFloor - prefaceHeight)
+            let clockOnly = max(0, geo.size.height - clockFloor)
+            // 前文まで残すと横向きで束が消える。そのときは前文をスクロールに回し、時計の下限だけ守る。
+            let prefaceFits = fittingPreface >= 96
+            let bandLimit = prefaceFits ? fittingPreface : clockOnly
+            let bundleBand = stampCount == 0
                 ? 0
-                : TicketStampBundleDeckView.shutdownBandHeight(
-                    containerWidth: geo.size.width,
-                    bandViewportHeight: max(120, geo.size.height * 0.38)
+                : min(
+                    TicketStampBundleDeckView.shutdownBandHeight(
+                        containerWidth: geo.size.width,
+                        bandViewportHeight: bandLimit,
+                        depth: depth
+                    ),
+                    bandLimit
                 )
             let scrollHeight = max(0, geo.size.height - bundleBand)
             let clockHeight = max(
@@ -174,6 +190,8 @@ struct ServiceShutdownCover: View {
                         }
                     }
                     .scrollIndicators(.hidden)
+                    // 前文と時計が同時に入らないときは、下端（時計）を最初から見せる。
+                    .defaultScrollAnchor(prefaceFits ? .top : .bottom)
                     .frame(height: scrollHeight)
                     .onAppear { viewportHeight = scrollHeight }
                     .onChange(of: scrollHeight) { _, height in
@@ -213,7 +231,10 @@ struct ServiceShutdownCover: View {
                         .onAppear {
                             #if DEBUG
                             if sessionManager.uiPreviewShowsServiceShutdown {
-                                bundleFocusIndex = sessionManager.uiPreviewBundleFocusIndex
+                                bundleFocusIndex = min(
+                                    sessionManager.uiPreviewBundleFocusIndex,
+                                    max(0, stampBundle.stamps.count - 1)
+                                )
                                 return
                             }
                             #endif
