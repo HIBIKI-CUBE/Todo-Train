@@ -393,7 +393,9 @@ struct PDCAExportTests {
             shownBandHighSeconds: PDCANull<Int>(nil),
             detailsOpened: false,
             undoneAt: PDCANull<Date>(nil),
-            remoteWillExtendReceived: false
+            remoteWillExtendReceived: false,
+            declaration: PDCANull<String>(nil),
+            projectedTotalSeconds: PDCANull<Int>(nil)
         )
         let sampleKeys = Set(
             try #require(
@@ -417,6 +419,70 @@ struct PDCAExportTests {
         let pauses = try rows(object, "pauses")
         #expect(pauses.count == 1)
         #expect(date(pauses[0], "undoneAt") == undoneAt)
+    }
+
+    @Test func exportJSON_sealLuxuryAndLegacyTierOnArrivedRide() throws {
+        let container = try AppModelContainer.make(inMemory: true)
+        let context = ModelContext(container)
+        let ticket = Ticket(title: "定時", estimatedSeconds: 1_800)
+        context.insert(ticket)
+        let session = WorkSession(startedAt: PDCAFixture.dayStart, estimatedSecondsAtStart: 1_800, ticket: ticket)
+        session.endedAt = PDCAFixture.dayStart.addingTimeInterval(1_780)
+        session.outcome = .arrived
+        session.accumulatedActiveSeconds = 1_480
+        session.reestimateEvents = [
+            ReestimateEventRecord(
+                reestimateIndex: 1,
+                trigger: .manual,
+                surface: .iphonePortrait,
+                input: .touch,
+                promptId: ReestimatePromptID.positionV1,
+                mode: .positionReport,
+                committedAt: PDCAFixture.dayStart.addingTimeInterval(600),
+                activeSeconds: 600,
+                overrunSeconds: 0,
+                progressAnswer: 0.4,
+                committedRemainingSeconds: 900,
+                shownBandLowSeconds: nil,
+                shownBandHighSeconds: nil,
+                detailsOpened: false,
+                declaration: .adjust,
+                projectedTotalSeconds: 1_500
+            ),
+        ]
+        context.insert(session)
+        try context.save()
+
+        let rides = try rows(
+            try jsonObject(try PDCAExport.jsonData(in: context, exportedAt: PDCAFixture.exportedAt)),
+            "rides"
+        )
+        let ride = try #require(rides.first)
+        #expect(ride["sealLuxury"] as? Double == 0.54)
+        #expect(ride["onTimeSealTier"] as? String == "earlyReestimate")
+
+        let reestimates = try rows(
+            try jsonObject(try PDCAExport.jsonData(in: context, exportedAt: PDCAFixture.exportedAt)),
+            "reestimates"
+        )
+        #expect(reestimates.count == 1)
+        #expect(reestimates[0]["declaration"] as? String == "adjust")
+        #expect(number(reestimates[0], "projectedTotalSeconds") == 1_500)
+    }
+
+    @Test func reestimateEvents_decodeWithoutNewOptionalFields() throws {
+        let id = UUID()
+        let json = """
+        [{"id":"\(id.uuidString)","reestimateIndex":1,"trigger":"manual","surface":"iphonePortrait",\
+        "input":"touch","promptId":"reestimate.progress.v1","mode":"progress","committedAt":"2026-01-01T00:00:00Z",\
+        "activeSeconds":120,"overrunSeconds":0,"committedRemainingSeconds":480,"detailsOpened":false,\
+        "remoteWillExtendReceived":false}]
+        """
+        let session = WorkSession(startedAt: .now, estimatedSecondsAtStart: 600)
+        session.reestimateEventsJSON = json
+        #expect(session.reestimateEvents.count == 1)
+        #expect(session.reestimateEvents[0].declaration == nil)
+        #expect(session.reestimateEvents[0].projectedTotalSeconds == nil)
     }
 
     @Test func exportJSON_assignsServiceDayByContainingInterval() throws {
@@ -1020,7 +1086,7 @@ private enum PDCAContract {
         "issueToDepartSeconds", "batchId", "slackToNextTimetableBlockSeconds",
         "lineageGroupId", "similarityCandidates",
         "judgedEstimateSource", "judgmentBandHalfWidthSeconds", "arrivalJudgement",
-        "onTimeSealTier", "stampSeason", "stampTimeOfDay",
+        "onTimeSealTier", "sealLuxury", "stampSeason", "stampTimeOfDay",
     ]
     static let similarityCandidateKeys: Set<String> = [
         "rideId", "score", "titleNGram", "tag", "lineage", "hourBand", "dayKind",
@@ -1046,6 +1112,7 @@ private enum PDCAContract {
         "committedAt", "activeSeconds", "overrunSeconds", "progressAnswer",
         "committedRemainingSeconds", "shownBandLowSeconds", "shownBandHighSeconds",
         "detailsOpened", "undoneAt", "remoteWillExtendReceived",
+        "declaration", "projectedTotalSeconds",
     ]
     static let blockKeys: Set<String> = [
         "id", "startsAt", "endsAt", "source", "adoptionScope", "isCancelled", "needsReview",

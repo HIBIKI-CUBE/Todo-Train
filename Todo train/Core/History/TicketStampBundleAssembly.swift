@@ -176,7 +176,7 @@ enum TicketStampBundleAssembly {
             title: session.title,
             stampedAt: stampedAt,
             punctuality: punctuality,
-            sealTier: judgment.sealTier,
+            sealTier: judgment.legacySealTier,
             stampSeason: PunctualityJudgment.stampSeason(at: stampedAt),
             stampTimeOfDay: PunctualityJudgment.stampTimeOfDay(at: stampedAt),
             judgedEstimateMinutes: max(Int(judgment.judgedTotalSeconds.rounded()), 1) / 60,

@@ -7,6 +7,8 @@ public enum PunctualityJudgment: Sendable {
     /// Running seconds before arrival a committed reestimate must land to count.
     public static let reestimateLeadSeconds: TimeInterval = 300
     public static let lateGraceSeconds: TimeInterval = 0.5
+    /// 運転調整で定時に着いたときの判の上限（発券時の 1.0 より必ず下）。
+    public static let adjustCeiling: Double = 0.9
 
     public enum Outcome: String, Equatable, Sendable {
         case onTime
@@ -123,7 +125,8 @@ public enum PunctualityJudgment: Sendable {
         public var lowerBound: TimeInterval
         public var upperBound: TimeInterval
         public var outcome: Outcome
-        public var sealTier: OnTimeSealTier?
+        /// 定時に着いたときだけ。走行中の見本・到着の角判はこの値（または nil）。
+        public var sealLuxury: Double?
         public var signal: HomeSignalState
         public var exportSource: JudgedEstimateSourceExport
         public var arrivalJudgement: ArrivalJudgementExport
@@ -135,7 +138,7 @@ public enum PunctualityJudgment: Sendable {
             lowerBound: TimeInterval,
             upperBound: TimeInterval,
             outcome: Outcome,
-            sealTier: OnTimeSealTier?,
+            sealLuxury: Double?,
             signal: HomeSignalState,
             exportSource: JudgedEstimateSourceExport,
             arrivalJudgement: ArrivalJudgementExport
@@ -146,10 +149,15 @@ public enum PunctualityJudgment: Sendable {
             self.lowerBound = lowerBound
             self.upperBound = upperBound
             self.outcome = outcome
-            self.sealTier = sealTier
+            self.sealLuxury = sealLuxury
             self.signal = signal
             self.exportSource = exportSource
             self.arrivalJudgement = arrivalJudgement
+        }
+
+        /// 角判の描画がまだ段を使うときの互換（#171 まで）。
+        public var legacySealTier: OnTimeSealTier? {
+            sealLuxury.map { PunctualityJudgment.legacySealTier(luxury: $0) }
         }
     }
 
@@ -190,13 +198,9 @@ public enum PunctualityJudgment: Sendable {
             return .onTime
         }()
 
-        let sealTier: OnTimeSealTier? = {
+        let sealLuxury: Double? = {
             guard outcome == .onTime else { return nil }
-            return computeSealTier(
-                source: arrivalSource,
-                arrivalActiveSeconds: elapsed,
-                reestimates: sorted
-            )
+            return Self.sealLuxury(source: arrivalSource, reestimates: sorted)
         }()
 
         let signal = signalState(elapsed: elapsed, lowerBound: lower, upperBound: upper)
@@ -210,7 +214,7 @@ public enum PunctualityJudgment: Sendable {
             lowerBound: lower,
             upperBound: upper,
             outcome: outcome,
-            sealTier: sealTier,
+            sealLuxury: sealLuxury,
             signal: signal,
             exportSource: exportSource,
             arrivalJudgement: arrivalJudgement
@@ -257,6 +261,43 @@ public enum PunctualityJudgment: Sendable {
     }
 
     public static let tokyoTimeZone = TimeZone(identifier: "Asia/Tokyo")!
+
+    /// 定時判定に使った見積もりから判の豪華さ（0…1、0.01 刻み）。運任せなし。
+    public static func sealLuxury(
+        source: JudgedEstimateSource,
+        reestimates: [ReestimateCommit]
+    ) -> Double {
+        switch source {
+        case .original:
+            return 1.0
+        case .reestimate(let index):
+            guard let event = reestimates.first(where: { $0.reestimateIndex == index }) else {
+                return 1.0
+            }
+            let active = max(0, event.activeSeconds)
+            let total = active + TimeInterval(max(0, event.committedRemainingSeconds))
+            if total <= 0 { return 0.0 }
+            let ratio = min(max(active / total, 0), 1)
+            let raw = adjustCeiling * (1 - ratio)
+            return roundSealLuxury(raw)
+        }
+    }
+
+    /// export の `onTimeSealTier` 互換（豪華さから段の識別子を導く）。
+    public static func legacyTier(luxury: Double) -> String {
+        if luxury == 1.0 { return OnTimeSealTier.ticketing.rawValue }
+        if luxury >= 0.45 { return OnTimeSealTier.earlyReestimate.rawValue }
+        return OnTimeSealTier.lateReestimate.rawValue
+    }
+
+    /// 描画・読み上げがまだ段を使うときの互換（#171 まで）。
+    public static func legacySealTier(luxury: Double) -> OnTimeSealTier {
+        OnTimeSealTier(rawValue: legacyTier(luxury: luxury)) ?? .lateReestimate
+    }
+
+    private static func roundSealLuxury(_ raw: Double) -> Double {
+        (raw * 100).rounded() / 100
+    }
 
     // MARK: - Internals
 
@@ -333,26 +374,6 @@ public enum PunctualityJudgment: Sendable {
                 return max(estimatedSecondsAtStart, 1)
             }
             return max(event.committedRemainingSeconds, 1)
-        }
-    }
-
-    private static func computeSealTier(
-        source: JudgedEstimateSource,
-        arrivalActiveSeconds: TimeInterval,
-        reestimates: [ReestimateCommit]
-    ) -> OnTimeSealTier {
-        switch source {
-        case .original:
-            return .ticketing
-        case .reestimate(let index):
-            guard let event = reestimates.first(where: { $0.reestimateIndex == index }) else {
-                return .ticketing
-            }
-            let half = arrivalActiveSeconds / 2
-            if event.activeSeconds <= half {
-                return .earlyReestimate
-            }
-            return .lateReestimate
         }
     }
 
