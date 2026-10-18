@@ -4,69 +4,82 @@
 //
 
 import SwiftUI
+import TodoTrainSync
 import TodoTrainTicketUI
-
-private let progressStops = [10, 20, 30, 40, 50, 60, 70, 80, 90]
 
 struct FocusReestimatePanel: View {
     let activeSeconds: TimeInterval
-    let onCommit: (ReestimateMode, Double?, Int, Int?, Int?, Bool) -> Void
-    let onArriveAtFullProgress: () -> Void
+    let remainingSeconds: TimeInterval
+    let judgment: PunctualityJudgment.Judgment
+    let recoverySealLuxury: Double?
+    let now: Date
+    let onCommit: (ReestimateDeclaration, Double, Int) -> Void
+    let onArrive: () -> Void
     let onClose: () -> Void
 
     @State private var stage: Stage
-    @State private var progressValue: Int
-    @State private var remainingMinutes: Int
-    @State private var detailsOpen = false
+    @State private var progressPercent: Int
+    @State private var committedProgress: Double?
+    @State private var projectedTotalSeconds: TimeInterval?
     @State private var inputsLocked = false
 
     private enum Stage {
-        case progress
-        case remaining
+        case position
+        case declare
+        case onTimeOnly
+        case full
     }
 
     init(
         activeSeconds: TimeInterval,
-        onCommit: @escaping (ReestimateMode, Double?, Int, Int?, Int?, Bool) -> Void,
-        onArriveAtFullProgress: @escaping () -> Void,
+        remainingSeconds: TimeInterval,
+        judgment: PunctualityJudgment.Judgment,
+        recoverySealLuxury: Double?,
+        now: Date,
+        onCommit: @escaping (ReestimateDeclaration, Double, Int) -> Void,
+        onArrive: @escaping () -> Void,
         onClose: @escaping () -> Void,
         previewConfiguration: FocusReestimatePreviewConfiguration? = nil
     ) {
         self.activeSeconds = activeSeconds
+        self.remainingSeconds = remainingSeconds
+        self.judgment = judgment
+        self.recoverySealLuxury = recoverySealLuxury
+        self.now = now
         self.onCommit = onCommit
-        self.onArriveAtFullProgress = onArriveAtFullProgress
+        self.onArrive = onArrive
         self.onClose = onClose
+
         if let previewConfiguration {
             switch previewConfiguration.stage {
-            case .progress:
-                _stage = State(initialValue: .progress)
-            case .remaining:
-                _stage = State(initialValue: .remaining)
+            case .position:
+                _stage = State(initialValue: .position)
+            case .declare:
+                _stage = State(initialValue: .declare)
+            case .onTimeOnly:
+                _stage = State(initialValue: .onTimeOnly)
+            case .full:
+                _stage = State(initialValue: .full)
             }
-            _progressValue = State(initialValue: previewConfiguration.progressValue)
-            _remainingMinutes = State(initialValue: previewConfiguration.remainingMinutes)
+            _progressPercent = State(initialValue: previewConfiguration.progressValue)
+            _committedProgress = State(initialValue: previewConfiguration.committedProgress)
+            _projectedTotalSeconds = State(initialValue: previewConfiguration.projectedTotalSeconds)
         } else {
-            _stage = State(initialValue: .progress)
-            _progressValue = State(initialValue: 0)
-            _remainingMinutes = State(initialValue: 0)
+            _stage = State(initialValue: .position)
+            _progressPercent = State(initialValue: 0)
+            _committedProgress = State(initialValue: nil)
+            _projectedTotalSeconds = State(initialValue: nil)
         }
     }
 
     private var progressAnswer: Double? {
-        guard progressValue > 0, progressValue < 100 else { return nil }
-        return Double(progressValue) / 100.0
+        guard let committedProgress else { return nil }
+        return committedProgress
     }
 
-    private var band: ReestimateBand.ShownBand? {
-        guard let progressAnswer else { return nil }
-        return ReestimateBand.shown(activeSeconds: activeSeconds, progress: progressAnswer)
-    }
-
-    private var bandRangeMinutes: ClosedRange<Int>? {
-        guard let band, let span = ReestimateBand.remainingSpan(activeSeconds: activeSeconds, band: band) else {
-            return nil
-        }
-        return span.lowRemainingMinutes...span.highRemainingMinutes
+    private var progressTenth: Int {
+        guard progressPercent > 0, progressPercent < 100 else { return 0 }
+        return progressPercent / 10
     }
 
     var body: some View {
@@ -81,24 +94,15 @@ struct FocusReestimatePanel: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(FocusPanel.fill)
-        .onAppear {
-            lockInputsBriefly()
-        }
+        .onAppear { lockInputsBriefly() }
     }
 
     private var header: some View {
         HStack(spacing: 12) {
-            Text(stage == .progress ? "今、進捗は何割くらい？" : "あとどのくらい？")
+            Text(headerTitle)
                 .font(.system(size: 16, weight: .bold))
                 .multilineTextAlignment(.leading)
             Spacer(minLength: 0)
-            if stage == .progress {
-                Button("分で決める") {
-                    beginRemaining(minutesOnly: true)
-                }
-                .font(.system(size: 15, weight: .semibold))
-                .buttonStyle(.plain)
-            }
             Button("閉じる", action: onClose)
                 .font(.system(size: 15, weight: .semibold))
                 .buttonStyle(.plain)
@@ -109,119 +113,194 @@ struct FocusReestimatePanel: View {
         .background(FocusPanel.fill)
     }
 
+    private var headerTitle: String {
+        switch stage {
+        case .position:
+            return "いま何割の地点？"
+        case .declare, .onTimeOnly:
+            return "指令の見込み"
+        case .full:
+            return "10割の地点"
+        }
+    }
+
     @ViewBuilder
     private var stageBody: some View {
         switch stage {
-        case .progress:
-            VStack(alignment: .leading, spacing: 10) {
-                if progressValue == 100 {
-                    Text("到着済み")
-                        .font(.title3.weight(.semibold))
-                } else if progressValue > 0 {
-                    Text("\(progressValue / 10)割")
-                        .font(.system(size: 40, weight: .medium, design: .rounded))
-                        .monospacedDigit()
-                } else {
-                    Text("なぞって答える")
-                        .font(.subheadline)
-                        .foregroundStyle(FocusPanel.muted)
-                }
-                EstimateSnapGauge(
-                    minutes: $progressValue,
-                    stopMinutes: progressStops + [100],
-                    maxMinutes: 100,
-                    startsAtLeftUnselected: true,
-                    minimumCommitTranslation: 24,
-                    requiresDragToCommit: true,
-                    accessibilityLabelText: "進捗",
-                    onCommit: {
-                        if progressValue == 100 {
-                            onArriveAtFullProgress()
-                        } else if progressValue > 0 {
-                            beginRemaining(minutesOnly: false)
-                        }
-                    }
-                )
+        case .position:
+            positionStage
+        case .declare:
+            declareStage(showChoices: true)
+        case .onTimeOnly:
+            declareStage(showChoices: false)
+        case .full:
+            fullStage
+        }
+    }
+
+    private var positionStage: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if progressPercent == 100 {
+                Text("10割")
+                    .font(.system(size: 40, weight: .semibold, design: .default))
+                    .monospacedDigit()
+            } else if progressPercent > 0 {
+                Text("\(progressTenth)割")
+                    .font(.system(size: 40, weight: .semibold, design: .default))
+                    .monospacedDigit()
+            } else {
+                Text("なぞって答える")
+                    .font(.subheadline)
+                    .foregroundStyle(FocusPanel.muted)
             }
-        case .remaining:
-            VStack(alignment: .leading, spacing: 10) {
-                bandHeader
-                if remainingMinutes > 0 {
-                    HStack(alignment: .firstTextBaseline, spacing: 4) {
-                        Text("\(remainingMinutes)")
-                            .font(.system(size: 40, weight: .medium, design: .rounded))
-                            .monospacedDigit()
-                        Text("分")
-                            .font(.title3.weight(.semibold))
-                            .foregroundStyle(FocusPanel.muted)
-                    }
-                } else {
-                    Text("左端からなぞって残りを決める")
-                        .font(.subheadline)
-                        .foregroundStyle(FocusPanel.muted)
-                }
-                EstimateSnapGauge(
-                    minutes: $remainingMinutes,
-                    startsAtLeftUnselected: true,
-                    bandRangeMinutes: bandRangeMinutes,
-                    minimumCommitTranslation: 24,
-                    requiresDragToCommit: true,
-                    accessibilityLabelText: "残り時間",
-                    onCommit: {
-                        guard remainingMinutes > 0 else { return }
-                        let low = band?.lowTotalSeconds
-                        let high = band?.highTotalSeconds
-                        onCommit(
-                            progressAnswer == nil ? .minutesOnly : .progress,
-                            progressAnswer,
-                            remainingMinutes * 60,
-                            low,
-                            high,
-                            detailsOpen
-                        )
-                    }
-                )
+            FocusPositionBar(progressPercent: $progressPercent) {
+                handlePositionCommitted()
             }
         }
     }
 
     @ViewBuilder
-    private var bandHeader: some View {
-        if let band {
-            Button {
-                detailsOpen.toggle()
-            } label: {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(band.headline)
-                        .font(.subheadline.weight(.semibold))
-                    if detailsOpen {
-                        Text(
-                            "走行 \(Int(activeSeconds) / 60) 分 · 目安 \(band.lowTotalSeconds / 60)〜\(band.highTotalSeconds / 60) 分"
-                        )
-                        .font(.caption)
-                        .foregroundStyle(FocusPanel.muted)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
+    private func declareStage(showChoices: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            if let progressAnswer {
+                let tenth = Int((progressAnswer * 10).rounded())
+                Text(PositionReportWording.progressHeadline(tenth: tenth))
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(FocusPanel.muted)
             }
-            .buttonStyle(.plain)
-        } else if activeSeconds < 180 {
-            Text("走行が短いときは、分で決めるのが確かです。")
-                .font(.caption)
-                .foregroundStyle(FocusPanel.muted)
+
+            if showChoices, let projectedTotalSeconds, let progressAnswer {
+                let projectedArrival = now.addingTimeInterval(max(0, projectedTotalSeconds - activeSeconds))
+                let activeMinutes = max(1, Int((activeSeconds / 60).rounded()))
+                let tenth = Int((progressAnswer * 10).rounded())
+                Text(PositionReportWording.projectionDetail(
+                    activeMinutes: activeMinutes,
+                    tenth: tenth,
+                    projectedArrival: projectedArrival
+                ))
+                .font(.body.weight(.medium))
+                .foregroundStyle(FocusPanel.ink)
+
+                projectedArrivalPlate(projectedArrival)
+
+                HStack(spacing: 10) {
+                    declarationCell(
+                        title: "回復運転",
+                        caption: PositionReportWording.recoveryCaption(arrival: scheduledArrival),
+                        sealLuxury: recoverySealLuxury,
+                        action: { commit(.recovery) }
+                    )
+                    declarationCell(
+                        title: "運転調整",
+                        caption: PositionReportWording.adjustCaption(arrival: projectedArrival),
+                        sealLuxury: PositionReport.adjustLuxuryPreview(progress: progressAnswer),
+                        action: { commit(.adjust) }
+                    )
+                }
+            } else {
+                Text(PositionReportWording.onTimeProjectionSummary)
+                    .font(.body.weight(.medium))
+                    .foregroundStyle(FocusPanel.ink)
+            }
         }
     }
 
-    private func beginRemaining(minutesOnly: Bool) {
-        if minutesOnly {
-            progressValue = 0
+    private func projectedArrivalPlate(_ arrival: Date) -> some View {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ja_JP")
+        formatter.dateFormat = "HH:mm"
+        let label = "\(formatter.string(from: arrival))着"
+        return Text(label)
+            .font(.system(size: 28, weight: .semibold, design: .default))
+            .monospacedDigit()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, 8)
+            .padding(.horizontal, 12)
+            .background(FocusPanel.fillRaised)
+            .accessibilityLabel(label)
+            .accessibilityHint("走行時間と答えた割合から出した見込みです。")
+    }
+
+    private func declarationCell(
+        title: String,
+        caption: String,
+        sealLuxury: Double?,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(alignment: .top, spacing: 8) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                        .font(.system(size: 16, weight: .semibold))
+                    Text(caption)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(FocusPanel.muted)
+                        .multilineTextAlignment(.leading)
+                }
+                Spacer(minLength: 0)
+                if let sealLuxury {
+                    PunctualitySealSample(luxury: sealLuxury)
+                }
+            }
+            .foregroundStyle(FocusPanel.ink)
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(FocusPanel.fillRaised)
         }
-        inputsLocked = true
-        withAnimation(TrainTheme.Motion.soft) {
-            stage = .remaining
-            remainingMinutes = 0
+        .buttonStyle(.plain)
+    }
+
+    private var fullStage: some View {
+        VStack(spacing: 12) {
+            Text("到着の操作を選ぶ")
+                .font(.subheadline)
+                .foregroundStyle(FocusPanel.muted)
+            FocusControlButton(
+                title: "到着",
+                systemImage: "flag.checkered",
+                fill: TrainTheme.signalGreen,
+                foreground: .black,
+                prominence: .primary,
+                action: onArrive
+            )
+            .frame(height: 52)
+        }
+    }
+
+    private var scheduledArrival: Date {
+        now.addingTimeInterval(max(0, remainingSeconds))
+    }
+
+    private func handlePositionCommitted() {
+        guard progressPercent > 0 else { return }
+        if progressPercent >= 100 {
+            committedProgress = 1.0
+            withAnimation(TrainTheme.Motion.soft) { stage = .full }
+            return
+        }
+        let progress = Double(progressPercent) / 100.0
+        committedProgress = progress
+        guard let projected = PositionReport.projection(activeSeconds: activeSeconds, progress: progress) else {
+            return
+        }
+        projectedTotalSeconds = projected
+        if projectedIsOnTime(projected) {
+            withAnimation(TrainTheme.Motion.soft) { stage = .onTimeOnly }
+        } else {
+            withAnimation(TrainTheme.Motion.soft) { stage = .declare }
         }
         lockInputsBriefly()
+    }
+
+    private func projectedIsOnTime(_ projectedTotal: TimeInterval) -> Bool {
+        projectedTotal >= judgment.lowerBound
+            && projectedTotal <= judgment.upperBound + PunctualityJudgment.lateGraceSeconds
+    }
+
+    private func commit(_ declaration: ReestimateDeclaration) {
+        guard let progressAnswer, let projectedTotalSeconds else { return }
+        let projectedInt = Int(projectedTotalSeconds.rounded())
+        onCommit(declaration, progressAnswer, projectedInt)
     }
 
     private func lockInputsBriefly() {

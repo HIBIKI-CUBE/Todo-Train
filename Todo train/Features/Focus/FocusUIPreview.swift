@@ -14,13 +14,16 @@ import UIKit
 
 struct FocusReestimatePreviewConfiguration {
     enum Stage {
-        case progress
-        case remaining
+        case position
+        case declare
+        case onTimeOnly
+        case full
     }
 
     var stage: Stage
     var progressValue: Int
-    var remainingMinutes: Int
+    var committedProgress: Double?
+    var projectedTotalSeconds: TimeInterval?
 }
 
 #if DEBUG
@@ -85,32 +88,67 @@ enum FocusUIPreview {
 
         switch state {
         case "reestimateProgress":
-            session.accumulatedActiveSeconds = 12 * 60
+            session.estimatedSecondsAtStart = 45 * 60
+            session.currentBudgetSeconds = 45 * 60
+            session.accumulatedActiveSeconds = 9 * 60
             manager.presentReestimate(trigger: .manual, surface: .iphonePortrait)
             manager.focusReestimatePreview = FocusReestimatePreviewConfiguration(
-                stage: .progress,
-                progressValue: 40,
-                remainingMinutes: 0
+                stage: .position,
+                progressValue: 20,
+                committedProgress: nil,
+                projectedTotalSeconds: nil
             )
             manager.uiPreviewForcesFocusCover = true
 
-        case "reestimateMinutes":
-            session.accumulatedActiveSeconds = 12 * 60
+        case "positionReportDeclare":
+            session.estimatedSecondsAtStart = 45 * 60
+            session.currentBudgetSeconds = 45 * 60
+            session.accumulatedActiveSeconds = 21 * 60
             manager.presentReestimate(trigger: .manual, surface: .iphonePortrait)
             manager.focusReestimatePreview = FocusReestimatePreviewConfiguration(
-                stage: .remaining,
-                progressValue: 40,
-                remainingMinutes: 0
+                stage: .declare,
+                progressValue: 60,
+                committedProgress: 0.6,
+                projectedTotalSeconds: 35 * 60
             )
             manager.uiPreviewForcesFocusCover = true
 
-        case "reestimateMinutesOnly":
-            session.accumulatedActiveSeconds = 4 * 60
+        case "positionReportOnTime":
+            session.estimatedSecondsAtStart = 30 * 60
+            session.currentBudgetSeconds = 30 * 60
+            session.accumulatedActiveSeconds = 18 * 60
             manager.presentReestimate(trigger: .manual, surface: .iphonePortrait)
             manager.focusReestimatePreview = FocusReestimatePreviewConfiguration(
-                stage: .remaining,
-                progressValue: 0,
-                remainingMinutes: 20
+                stage: .onTimeOnly,
+                progressValue: 60,
+                committedProgress: 0.6,
+                projectedTotalSeconds: 30 * 60
+            )
+            manager.uiPreviewForcesFocusCover = true
+
+        case "positionReportFull":
+            session.accumulatedActiveSeconds = 40 * 60
+            manager.presentReestimate(trigger: .manual, surface: .iphonePortrait)
+            manager.focusReestimatePreview = FocusReestimatePreviewConfiguration(
+                stage: .full,
+                progressValue: 100,
+                committedProgress: 1.0,
+                projectedTotalSeconds: nil
+            )
+            manager.uiPreviewForcesFocusCover = true
+
+        case "positionReportOvertime":
+            session.estimatedSecondsAtStart = 30 * 60
+            session.currentBudgetSeconds = 30 * 60
+            session.accumulatedActiveSeconds = 34 * 60
+            session.segmentStartedAt = manager.clock.now.addingTimeInterval(-34 * 60)
+            manager.reconcile(now: manager.clock.now)
+            manager.presentReestimate(trigger: .planEnd, surface: .iphonePortrait)
+            manager.focusReestimatePreview = FocusReestimatePreviewConfiguration(
+                stage: .declare,
+                progressValue: 60,
+                committedProgress: 0.6,
+                projectedTotalSeconds: 56 * 60
             )
             manager.uiPreviewForcesFocusCover = true
 

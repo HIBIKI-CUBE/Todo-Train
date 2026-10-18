@@ -18,28 +18,12 @@ enum PunctualityFirstTimeTips {
 
 enum PunctualityPresentation {
     /// 走行中の判見本。ホームを過ぎた（信号消灯）あとは出さない。
-    static func ridingSealSampleTier(
+    static func ridingSealLuxury(
         judgment: PunctualityJudgment.Judgment,
         reestimates: [PunctualityJudgment.ReestimateCommit]
-    ) -> PunctualityJudgment.OnTimeSealTier? {
+    ) -> Double? {
         guard judgment.signal != .off else { return nil }
-        return ridingSealTier(judgment: judgment, reestimates: reestimates)
-    }
-
-    static func ridingSealTier(
-        judgment: PunctualityJudgment.Judgment,
-        reestimates: [PunctualityJudgment.ReestimateCommit]
-    ) -> PunctualityJudgment.OnTimeSealTier? {
-        switch judgment.source {
-        case .original:
-            return .ticketing
-        case .reestimate(let index):
-            guard let event = reestimates.first(where: { $0.reestimateIndex == index }) else {
-                return .ticketing
-            }
-            let half = judgment.judgedTotalSeconds / 2
-            return event.activeSeconds <= half ? .earlyReestimate : .lateReestimate
-        }
+        return PunctualityJudgment.sealLuxury(source: judgment.source, reestimates: reestimates)
     }
 
     static func homeBandFractions(
@@ -83,24 +67,29 @@ enum PunctualityPresentation {
     static func homeMeterAccessibilityLabel(
         judgment: PunctualityJudgment.Judgment,
         activeSeconds: TimeInterval,
-        sealTier: PunctualityJudgment.OnTimeSealTier?
+        sealLuxury: Double?
     ) -> String {
         var parts = [signalAccessibilityLabel(judgment: judgment, activeSeconds: activeSeconds)]
-        if let sealTier, judgment.signal != .off {
-            parts.append(sealSampleAccessibilityLabel(tier: sealTier))
+        if let sealLuxury, judgment.signal != .off {
+            parts.append(sealSampleAccessibilityLabel(luxury: sealLuxury))
         }
         return parts.joined(separator: "、")
     }
 
-    static func sealSampleAccessibilityLabel(
-        tier: PunctualityJudgment.OnTimeSealTier
-    ) -> String {
-        let name = switch tier {
-        case .ticketing: "発券時の見積もり"
-        case .earlyReestimate: "走行前半の見積もり直し"
-        case .lateReestimate: "走行後半の見積もり直し"
-        }
+    static func sealSampleAccessibilityLabel(luxury: Double) -> String {
+        let name = sealLuxuryDescription(luxury)
         return "かかっている判：\(name)"
+    }
+
+    static func sealLuxuryDescription(_ luxury: Double) -> String {
+        if luxury >= 0.999 {
+            return "発券時の見積もり"
+        }
+        let tenth = Int((luxury / PunctualityJudgment.adjustCeiling * 10).rounded())
+        if tenth >= 5 {
+            return "走行前半の見積もり直し"
+        }
+        return "走行後半の見積もり直し"
     }
 
     static func stampAccessibilityLabel(
