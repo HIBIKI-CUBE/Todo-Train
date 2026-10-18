@@ -28,6 +28,8 @@ struct HistoryView: View {
     @State private var didFocusInitialDay = false
     @State private var isSearchPresented = false
     @State private var daysVisible: CGFloat = 1
+    @State private var showBundleViewer = false
+    @State private var bundleStripFocusIndex = 0
     @FocusState private var searchFieldFocused: Bool
 
     init(focusDay: Date? = nil) {
@@ -127,6 +129,26 @@ struct HistoryView: View {
         HistoryRideDensity(daysVisible: daysVisible)
     }
 
+    private var dayStampBundle: TicketStampBundleAssembly.DayBundle? {
+        sessionManager.ticketStampBundle(forCalendarDayKey: selectedDayKey)
+    }
+
+    private var bundleViewerInitialDayKey: String {
+        #if DEBUG
+        sessionManager.uiPreviewBundleViewerDayKey ?? selectedDayKey
+        #else
+        selectedDayKey
+        #endif
+    }
+
+    private var bundleViewerInitialFlatIndex: Int? {
+        #if DEBUG
+        sessionManager.uiPreviewBundleViewerFlatIndex
+        #else
+        nil
+        #endif
+    }
+
     private var visibleDayKeys: Set<String> {
         Set(
             HistoryCanvasZoom.visibleDays(
@@ -212,8 +234,26 @@ struct HistoryView: View {
             }
         }
         .errorAlert(isPresented: $showError, message: errorMessage)
-        .onAppear(perform: focusInitialDayIfNeeded)
+        .onAppear {
+            focusInitialDayIfNeeded()
+            #if DEBUG
+            if sessionManager.uiPreviewShowsBundleViewer {
+                showBundleViewer = true
+            }
+            #endif
+        }
         .sensoryFeedback(.selection, trigger: selectedDayKey)
+        .fullScreenCover(isPresented: $showBundleViewer) {
+            TicketStampBundleViewer(
+                bundles: sessionManager.ticketStampBundles(),
+                initialDayKey: bundleViewerInitialDayKey,
+                initialFlatIndex: bundleViewerInitialFlatIndex,
+                onSelectStamp: { stamp in
+                    showBundleViewer = false
+                    selectedRideID = stamp.sessionID
+                }
+            )
+        }
     }
 
     private var searchFieldRow: some View {
@@ -267,6 +307,28 @@ struct HistoryView: View {
                 )
                 .padding(.horizontal, TrainTheme.Space.md)
                 .padding(.bottom, TrainTheme.Space.sm)
+            }
+
+            if rideDensity == .day, let bundle = dayStampBundle, !bundle.stamps.isEmpty {
+                Button {
+                    showBundleViewer = true
+                } label: {
+                    TicketStampBundleDeckView(
+                        stamps: bundle.stamps,
+                        focusIndex: $bundleStripFocusIndex,
+                        style: .historyStrip
+                    )
+                    .allowsHitTesting(false)
+                    .onAppear {
+                        bundleStripFocusIndex = max(0, bundle.stamps.count - 1)
+                    }
+                }
+                .buttonStyle(.plain)
+                .frame(height: 140)
+                .padding(.horizontal, TrainTheme.Space.md)
+                .padding(.bottom, TrainTheme.Space.sm)
+                .accessibilityLabel("この日の切符の束")
+                .accessibilityHint("開いて切符をめくれます")
             }
 
             if !selectedDayPassengerRides.isEmpty {
