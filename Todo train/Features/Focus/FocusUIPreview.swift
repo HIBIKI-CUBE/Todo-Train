@@ -140,15 +140,18 @@ enum FocusUIPreview {
         case "positionReportOvertime":
             session.estimatedSecondsAtStart = 30 * 60
             session.currentBudgetSeconds = 30 * 60
-            session.accumulatedActiveSeconds = 34 * 60
-            session.segmentStartedAt = manager.clock.now.addingTimeInterval(-34 * 60)
+            session.accumulatedActiveSeconds = 68 * 60
+            session.segmentStartedAt = manager.clock.now.addingTimeInterval(-68 * 60)
             manager.reconcile(now: manager.clock.now)
             manager.presentReestimate(trigger: .planEnd, surface: .iphonePortrait)
             manager.focusReestimatePreview = FocusReestimatePreviewConfiguration(
                 stage: .declare,
                 progressValue: 60,
                 committedProgress: 0.6,
-                projectedTotalSeconds: 56 * 60
+                projectedTotalSeconds: PositionReport.projection(
+                    activeSeconds: TimeInterval(68 * 60),
+                    progress: 0.6
+                )
             )
             manager.uiPreviewForcesFocusCover = true
 

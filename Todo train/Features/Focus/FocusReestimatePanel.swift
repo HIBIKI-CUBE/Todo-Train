@@ -172,8 +172,12 @@ struct FocusReestimatePanel: View {
                     .foregroundStyle(FocusPanel.muted)
             }
 
-            if showChoices, let projectedTotalSeconds, let progressAnswer {
-                let projectedArrival = now.addingTimeInterval(max(0, projectedTotalSeconds - activeSeconds))
+            if showChoices, let progressAnswer,
+               let projectedArrival = PositionReport.projectedArrival(
+                   now: now,
+                   activeSeconds: activeSeconds,
+                   progress: progressAnswer
+               ) {
                 let activeMinutes = max(1, Int((activeSeconds / 60).rounded()))
                 let tenth = Int((progressAnswer * 10).rounded())
                 Text(PositionReportWording.projectionDetail(
@@ -301,8 +305,12 @@ struct FocusReestimatePanel: View {
     }
 
     private func commit(_ declaration: ReestimateDeclaration) {
-        guard let progressAnswer, let projectedTotalSeconds else { return }
-        let projectedInt = Int(projectedTotalSeconds.rounded())
+        guard let progressAnswer,
+              let projectedInt = PositionReport.projectedTotalSecondsInt(
+                  activeSeconds: activeSeconds,
+                  progress: progressAnswer
+              )
+        else { return }
         onCommit(declaration, progressAnswer, projectedInt)
     }
 

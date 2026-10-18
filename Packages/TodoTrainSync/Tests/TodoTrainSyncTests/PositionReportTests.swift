@@ -53,6 +53,29 @@ struct PositionReportTests {
         )
     }
 
+    @Test func projectedRemaining_overtimeSixTenthsOfSixtyEightMinutes() {
+        let active = TimeInterval(68 * 60)
+        let progress = 0.6
+        let remaining = PositionReport.projectedRemainingSeconds(
+            activeSeconds: active,
+            progress: progress
+        )
+        #expect(remaining != nil)
+        let minutes = (remaining! / 60)
+        #expect(minutes > 44.5)
+        #expect(minutes < 46.0)
+        let total = PositionReport.projectedTotalSecondsInt(activeSeconds: active, progress: progress)
+        #expect(total == Int((active / progress).rounded()))
+        let committed = PositionReport.committedRemainingSeconds(activeSeconds: active, progress: progress)
+        #expect(committed == total! - 68 * 60)
+        let arrival = PositionReport.projectedArrival(
+            now: Date(timeIntervalSince1970: 0),
+            activeSeconds: active,
+            progress: progress
+        )
+        #expect(arrival == Date(timeIntervalSince1970: remaining!))
+    }
+
     @Test func showsRecoveryDeclaration_hidesAfterOriginalScheduledArrival() {
         #expect(
             !PositionReport.showsRecoveryDeclaration(

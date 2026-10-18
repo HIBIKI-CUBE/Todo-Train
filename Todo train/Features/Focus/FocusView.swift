@@ -377,9 +377,15 @@ struct FocusView: View {
                     onCommit: { declaration, progress, projectedTotal in
                         run {
                             let active = sessionManager.activeSession?.elapsedSeconds(at: .now) ?? 0
-                            let remaining = declaration == .adjust
-                                ? max(0, projectedTotal - Int(active.rounded()))
-                                : Int(sessionManager.remainingSeconds.rounded())
+                            let remaining: Int
+                            if declaration == .adjust {
+                                remaining = PositionReport.committedRemainingSeconds(
+                                    activeSeconds: active,
+                                    progress: progress
+                                ) ?? 0
+                            } else {
+                                remaining = Int(sessionManager.remainingSeconds.rounded())
+                            }
                             try sessionManager.commitReestimate(
                                 mode: .positionReport,
                                 progressAnswer: progress,
