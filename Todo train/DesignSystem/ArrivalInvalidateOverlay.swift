@@ -45,6 +45,7 @@ struct ArrivalInvalidateOverlay: View {
     @State private var baseHaptic = 0
     @State private var praiseHaptic = 0
     @State private var sealHaptic = 0
+    @State private var sealHapticSecond = 0
     @State private var stampGeneration = 0
     @State private var choiceHaptic = 0
     @State private var openHaptic = 0
@@ -205,10 +206,24 @@ struct ArrivalInvalidateOverlay: View {
         }
         .offset(y: (1 - enter) * 28)
         .opacity(Double(max(0, enter)))
-        .sensoryFeedback(.impact(weight: .heavy, intensity: 1), trigger: baseHaptic)
-        .sensoryFeedback(.impact(flexibility: .rigid, intensity: 1), trigger: praiseHaptic)
-        .sensoryFeedback(.impact(flexibility: .rigid, intensity: 1), trigger: sealHaptic)
+        .sensoryFeedback(
+            .impact(weight: .heavy, intensity: ArrivalStampFeedback.roundBaseIntensity),
+            trigger: baseHaptic
+        )
+        .sensoryFeedback(
+            .impact(flexibility: .rigid, intensity: ArrivalStampFeedback.roundPraiseIntensity),
+            trigger: praiseHaptic
+        )
+        .sensoryFeedback(
+            .impact(weight: .heavy, intensity: ArrivalStampFeedback.sealHeavyIntensity),
+            trigger: sealHaptic
+        )
+        .sensoryFeedback(
+            .impact(flexibility: .rigid, intensity: ArrivalStampFeedback.sealRigidIntensity),
+            trigger: sealHapticSecond
+        )
         .onAppear {
+            StampSoundPlayer.prepareSealSound()
             runEntrance()
             applyArrivalPreviewIfNeeded(punctuality: arrival.punctuality)
             announceIfNeeded(arrival: arrival)
@@ -582,47 +597,83 @@ struct ArrivalInvalidateOverlay: View {
                 return
             }
         }
-        StampSoundPlayer.playStampThud()
         stampError = ""
         deck.markStamped()
         praise = praise(for: punctuality)
         stampSeated = true
-        if praise.count > 0 {
-            praiseHaptic += 1
-        } else {
-            baseHaptic += 1
-        }
         let returnsToHub = action == nil
         stampGeneration += 1
         let generation = stampGeneration
         let settled = ArrivalStampCommitEffects.settledVisuals(punctuality: punctuality)
+        playStampFeedback(
+            hasCornerSeal: cornerSealIsPresent(punctuality: punctuality),
+            praiseCount: praise.count,
+            generation: generation
+        )
         if reduceMotion {
             impact = settled.stampImpact
             sealImpact = settled.sealImpact
             phosphor = praise.count > 0 ? 1 : 0
-            if settled.sealImpact > 0 { sealHaptic += 1 }
             scheduleHold(generation: generation, returnsToHub: returnsToHub)
             return
         }
         withAnimation(MarsTicketSpec.ArrivalMotion.slam) {
             impact = settled.stampImpact
+            sealImpact = settled.sealImpact
             phosphor = praise.count > 0 ? 1 : 0
             ticketNudge = MarsTicketSpec.ArrivalMotion.nudgeAmplitude
         } completion: {
             withAnimation(MarsTicketSpec.ArrivalMotion.slam) {
                 ticketNudge = 0
             }
-            if settled.sealImpact > 0 {
-                Task { @MainActor in
-                    try? await Task.sleep(for: .milliseconds(120))
-                    guard generation == stampGeneration else { return }
-                    sealHaptic += 1
-                    withAnimation(MarsTicketSpec.ArrivalMotion.descend) {
-                        sealImpact = settled.sealImpact
-                    }
-                }
-            }
             scheduleHold(generation: generation, returnsToHub: returnsToHub)
+        }
+    }
+
+    /// 定時で `sealLuxury` があるときだけ角判の音と 2 段の振動にする。nil のときは丸い印のまま。
+    private func cornerSealIsPresent(punctuality: ArrivalPunctuality) -> Bool {
+        guard punctuality == .onTime, let session = arrivedSession else { return false }
+        return Punctuality.judgment(for: session).sealLuxury != nil
+    }
+
+    private func playStampFeedback(hasCornerSeal: Bool, praiseCount: Int, generation: Int) {
+        let sequence = ArrivalStampFeedback.sequence(hasCornerSeal: hasCornerSeal, praiseCount: praiseCount)
+        for step in sequence {
+            scheduleStampFeedback(step, generation: generation)
+        }
+    }
+
+    private func scheduleStampFeedback(_ step: ArrivalStampFeedback.Event, generation: Int) {
+        let fire = {
+            guard generation == stampGeneration else { return }
+            switch step.sound {
+            case .roundStamp:
+                StampSoundPlayer.playStampThud()
+            case .seal:
+                StampSoundPlayer.playSealStamp()
+            case nil:
+                break
+            }
+            switch step.haptic {
+            case .roundBase:
+                baseHaptic += 1
+            case .roundPraise:
+                praiseHaptic += 1
+            case .sealHeavy:
+                sealHaptic += 1
+            case .sealRigid:
+                sealHapticSecond += 1
+            case nil:
+                break
+            }
+        }
+        if step.delayMilliseconds <= 0 {
+            fire()
+        } else {
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(step.delayMilliseconds))
+                fire()
+            }
         }
     }
 
