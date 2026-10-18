@@ -26,6 +26,10 @@ struct TicketStampBundleDeckView: View {
     var onSelect: (TicketStampBundleAssembly.Stamp) -> Void = { _ in }
     /// 長押しのあと横に固定しているあいだ、ビューアの縦操作を止める。
     var verticalGesturesLocked: Binding<Bool> = .constant(false)
+    /// 運行終了でタイムラインを残すために浅くした奥行き。
+    var shutdownDepthCap: Int? = nil
+    /// 運行終了の券面。帯の中でさらに縮めない。
+    var shutdownTicket: TicketStampBundleLayout.TicketSize? = nil
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.verticalSizeClass) private var verticalSizeClass
@@ -49,7 +53,9 @@ struct TicketStampBundleDeckView: View {
     }
 
     private var maxFanDepth: Int {
-        TicketStampBundleLayout.maxFanDepth(for: style)
+        let standard = TicketStampBundleLayout.maxFanDepth(for: style)
+        guard style == .shutdown, let cap = shutdownDepthCap else { return standard }
+        return min(standard, max(0, cap))
     }
 
     /// 帯と券面の縮尺。手前が最新のときの奥行きで固定し、めくるたびに高さが変わらない。
@@ -184,6 +190,13 @@ struct TicketStampBundleDeckView: View {
     private func layoutMetrics(in size: CGSize) -> LayoutMetrics {
         switch style {
         case .shutdown:
+            if let ticket = shutdownTicket {
+                return LayoutMetrics(
+                    ticketWidth: ticket.width,
+                    ticketHeight: ticket.height,
+                    scale: ticket.scale
+                )
+            }
             let fitted = TicketStampBundleLayout.fittedTicketSize(
                 targetWidth: TicketStampBundleLayout.shutdownTargetWidth(containerWidth: size.width),
                 viewportHeight: size.height,

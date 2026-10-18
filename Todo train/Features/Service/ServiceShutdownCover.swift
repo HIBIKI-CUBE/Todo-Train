@@ -132,27 +132,19 @@ struct ServiceShutdownCover: View {
     private func cabinBody(now: Date) -> some View {
         GeometryReader { geo in
             let stampCount = stampBundle?.stamps.count ?? 0
-            let depth = TicketStampBundleLayout.stackDepth(
-                stampCount: stampCount,
-                focusIndex: max(0, stampCount - 1),
-                style: .shutdown
-            )
             let clockFloor = Self.minimumClockHeight + 4
             let fittingPreface = max(0, geo.size.height - clockFloor - prefaceHeight)
-            let clockOnly = max(0, geo.size.height - clockFloor)
             // 前文まで残すと横向きで束が消える。そのときは前文をスクロールに回し、時計の下限だけ守る。
             let prefaceFits = fittingPreface >= 96
-            let bandLimit = prefaceFits ? fittingPreface : clockOnly
-            let bundleBand = stampCount == 0
-                ? 0
-                : min(
-                    TicketStampBundleDeckView.shutdownBandHeight(
-                        containerWidth: geo.size.width,
-                        bandViewportHeight: bandLimit,
-                        depth: depth
-                    ),
-                    bandLimit
-                )
+            // 盤の余白のぶん、券面の帯より枠は高い。タイムラインの計算は券面の帯で行う。
+            let bandChrome: CGFloat = 33
+            let arrangement = TicketStampBundleLayout.shutdownArrangement(
+                containerWidth: max(0, geo.size.width - 44),
+                cabinHeight: max(0, geo.size.height - bandChrome),
+                prefaceHeight: prefaceHeight,
+                stampCount: stampCount
+            )
+            let bundleBand = stampCount == 0 ? 0 : arrangement.bandHeight + bandChrome
             let scrollHeight = max(0, geo.size.height - bundleBand)
             let clockHeight = max(
                 Self.minimumClockHeight,
@@ -224,7 +216,9 @@ struct ServiceShutdownCover: View {
                             stamps: stampBundle.stamps,
                             focusIndex: $bundleFocusIndex,
                             style: .shutdown,
-                            dayBoundaries: []
+                            dayBoundaries: [],
+                            shutdownDepthCap: arrangement.depth,
+                            shutdownTicket: arrangement.ticket
                         )
                         .padding(.horizontal, 8)
                         .padding(.vertical, 2)

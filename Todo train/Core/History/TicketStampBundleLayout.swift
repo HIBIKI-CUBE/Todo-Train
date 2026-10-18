@@ -14,6 +14,12 @@ enum TicketStampBundleLayout {
     static let peekRatio: CGFloat = 0.45
     static let standardMaxFanDepth = 4
     static let historyMaxFanDepth = 2
+    /// 運行終了で帯が上限を超えたとき、これより浅くはしない。
+    static let shutdownDepthFloor = 2
+    /// 運行終了のタイムラインに残す高さ。これより帯を高くしない。
+    static let shutdownTimelineMinimumHeight: CGFloat = 240
+    /// 前文と時計が同時に入らないときの時計の下限（`minimumClockHeight` + 余白）。
+    static let shutdownClockFloor: CGFloat = 92
     /// 手前の切符だけ、指の横移動にこの割合で付く。
     static let dragFollow: CGFloat = 0.28
     /// 付随の上限。シャトルで大きく動かしても券面が流れ出さない。
@@ -95,6 +101,79 @@ enum TicketStampBundleLayout {
         let height = room > 0 ? min(naturalH, room / factor) : min(naturalH, 1)
         let width = height * MarsTicketSpec.aspectWidth / MarsTicketSpec.aspectHeight
         return TicketSize(width: width, height: height, scale: width / baseWidth)
+    }
+
+    struct ShutdownArrangement: Equatable {
+        var depth: Int
+        var ticket: TicketSize
+        var bandHeight: CGFloat
+    }
+
+    /// 帯の上限に収まるいちばん深い奥行き。4 から試し、超えたら 3、それでも超えたら 2。
+    static func shutdownDepth(
+        ticketHeight: CGFloat,
+        bandLimit: CGFloat,
+        stampCount: Int
+    ) -> Int {
+        let preferred = stackDepth(
+            stampCount: stampCount,
+            focusIndex: max(0, stampCount - 1),
+            style: .shutdown
+        )
+        let floor = min(preferred, shutdownDepthFloor)
+        var depth = preferred
+        while depth > floor && bandHeight(ticketHeight: ticketHeight, depth: depth) > bandLimit {
+            depth -= 1
+        }
+        return depth
+    }
+
+    /// 運行終了の券面。タイムラインの高さを残す上限に当たったら、切符を縮める前に奥行きを減らす。
+    /// 幅は、時計の下限だけを残して depth 4 で収めたときより狭くしない。
+    static func shutdownArrangement(
+        containerWidth: CGFloat,
+        cabinHeight: CGFloat,
+        prefaceHeight: CGFloat,
+        stampCount: Int
+    ) -> ShutdownArrangement {
+        let fittingPreface = max(0, cabinHeight - shutdownClockFloor - prefaceHeight)
+        let prefaceFits = fittingPreface >= 96
+        let oldLimit = prefaceFits ? fittingPreface : max(0, cabinHeight - shutdownClockFloor)
+        let bandLimit = prefaceFits
+            ? max(0, cabinHeight - prefaceHeight - shutdownTimelineMinimumHeight)
+            : oldLimit
+        let target = shutdownTargetWidth(containerWidth: containerWidth)
+        let natural = MarsTicketSpec.height(forWidth: max(target, 1))
+        let preferred = stackDepth(
+            stampCount: stampCount,
+            focusIndex: max(0, stampCount - 1),
+            style: .shutdown
+        )
+        let floorTicket = fittedTicketSize(
+            targetWidth: target,
+            viewportHeight: max(oldLimit, 1),
+            depth: preferred
+        )
+        let depth = shutdownDepth(
+            ticketHeight: natural,
+            bandLimit: bandLimit,
+            stampCount: stampCount
+        )
+        var ticketHeight = natural
+        if bandHeight(ticketHeight: ticketHeight, depth: depth) > bandLimit {
+            let fitted = fittedTicketSize(
+                targetWidth: target,
+                viewportHeight: max(bandLimit, 1),
+                depth: depth
+            )
+            ticketHeight = max(fitted.height, floorTicket.height)
+        }
+        let width = ticketHeight * MarsTicketSpec.aspectWidth / MarsTicketSpec.aspectHeight
+        return ShutdownArrangement(
+            depth: depth,
+            ticket: TicketSize(width: width, height: ticketHeight, scale: width / baseWidth),
+            bandHeight: bandHeight(ticketHeight: ticketHeight, depth: depth)
+        )
     }
 
     /// 角判の外接矩形。回転後も券面座標。

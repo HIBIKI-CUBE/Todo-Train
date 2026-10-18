@@ -85,6 +85,52 @@ struct TicketStampBundleLayoutTests {
         #expect(band <= 280)
     }
 
+    @Test func shutdownDepthDropsBeforeShrinkingTheTicket() {
+        let height: CGFloat = 200
+        let band4 = TicketStampBundleLayout.bandHeight(ticketHeight: height, depth: 4)
+        let band3 = TicketStampBundleLayout.bandHeight(ticketHeight: height, depth: 3)
+        let band2 = TicketStampBundleLayout.bandHeight(ticketHeight: height, depth: 2)
+        #expect(TicketStampBundleLayout.shutdownDepth(ticketHeight: height, bandLimit: band4, stampCount: 5) == 4)
+        #expect(TicketStampBundleLayout.shutdownDepth(ticketHeight: height, bandLimit: band4 - 1, stampCount: 5) == 3)
+        #expect(TicketStampBundleLayout.shutdownDepth(ticketHeight: height, bandLimit: band3 - 1, stampCount: 5) == 2)
+        #expect(TicketStampBundleLayout.shutdownDepth(ticketHeight: height, bandLimit: band2 - 1, stampCount: 5) == 2)
+        #expect(TicketStampBundleLayout.shutdownDepth(ticketHeight: height, bandLimit: 10, stampCount: 2) == 1)
+        #expect(TicketStampBundleLayout.shutdownDepth(ticketHeight: height, bandLimit: 10, stampCount: 1) == 0)
+    }
+
+    @Test func shutdownArrangementReservesTheTimelineWithoutNarrowing() {
+        let cabin: CGFloat = 700
+        let preface: CGFloat = 168
+        let width: CGFloat = 360
+        let arrangement = TicketStampBundleLayout.shutdownArrangement(
+            containerWidth: width,
+            cabinHeight: cabin,
+            prefaceHeight: preface,
+            stampCount: 5
+        )
+        #expect(arrangement.depth == 2)
+        let target = TicketStampBundleLayout.shutdownTargetWidth(containerWidth: width)
+        let oldLimit = cabin - TicketStampBundleLayout.shutdownClockFloor - preface
+        let floor = TicketStampBundleLayout.fittedTicketSize(
+            targetWidth: target,
+            viewportHeight: oldLimit,
+            depth: 4
+        )
+        #expect(arrangement.ticket.width + 0.01 >= floor.width)
+        let timeline = cabin - preface - arrangement.bandHeight
+        #expect(timeline + 0.01 >= TicketStampBundleLayout.shutdownTimelineMinimumHeight)
+
+        let loose = TicketStampBundleLayout.shutdownArrangement(
+            containerWidth: 200,
+            cabinHeight: 900,
+            prefaceHeight: 80,
+            stampCount: 6
+        )
+        #expect(loose.depth == 4)
+        let natural = MarsTicketSpec.height(forWidth: TicketStampBundleLayout.shutdownTargetWidth(containerWidth: 200))
+        #expect(abs(loose.ticket.height - natural) < 0.01)
+    }
+
     @Test func cornerSealBoundsStayInsideThePeekAtSixDegrees() {
         let width: CGFloat = 300
         let height = MarsTicketSpec.height(forWidth: width)
