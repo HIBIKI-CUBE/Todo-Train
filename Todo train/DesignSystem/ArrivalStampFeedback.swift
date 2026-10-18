@@ -7,19 +7,25 @@
 
 import Foundation
 
+/// 丸い印と角判の間。実機では 100〜200ms の範囲でこの値だけを調整する。
+enum StampFeedbackTiming {
+    /// 丸い印を落としてから角判を落とすまでの間。250ms を超えると別々の出来事に見える。
+    static let sealDelayMilliseconds = 150
+    /// 角判の heavy から rigid までの間。
+    static let sealSecondHapticMilliseconds = 70
+}
+
 enum ArrivalStampFeedback: Equatable, Sendable {
     enum Sound: Equatable, Sendable {
-        /// 角判がない到着。システム音 1104。
+        /// 丸い印。軽い短い音。
         case roundStamp
-        /// 角判がある到着。判専用の短い音。
+        /// 角判。重い短い音。
         case seal
     }
 
     enum Haptic: Equatable, Sendable {
-        /// 丸い印。praise がないとき。heavy、強度 `roundBaseIntensity`。
-        case roundBase
-        /// 丸い印。praise があるとき。rigid、強度 `roundPraiseIntensity`。
-        case roundPraise
+        /// 丸い印の一打。light、強度 `roundLightIntensity`。
+        case roundLight
         /// 角判の 1 段目。heavy、強度 `sealHeavyIntensity`。
         case sealHeavy
         /// 角判の 2 段目。rigid、強度 `sealRigidIntensity`。
@@ -27,32 +33,35 @@ enum ArrivalStampFeedback: Equatable, Sendable {
     }
 
     struct Event: Equatable, Sendable {
-        var delayMilliseconds: Int
+        /// 印を押した瞬間からのオフセット。
+        var offsetMilliseconds: Int
         var sound: Sound?
         var haptic: Haptic?
     }
 
-    /// 丸い印だけの 1 段目。既存の設定のまま。
-    static let roundBaseIntensity = 1.0
-    /// 丸い印だけの praise。既存の設定のまま。
-    static let roundPraiseIntensity = 1.0
+    /// 丸い印。light の 0.6 前後。
+    static let roundLightIntensity = 0.6
     /// 角判が券面に当たる瞬間。
     static let sealHeavyIntensity = 1.0
-    /// 角判の 2 段目。1 段目から `sealFollowUpMilliseconds` 後。
+    /// 角判の 2 段目。
     static let sealRigidIntensity = 0.75
-    static let sealFollowUpMilliseconds = 70
 
     /// `hasCornerSeal` は定時で `sealLuxury` があるとき。豪華さの大小では変えない。
-    static func sequence(hasCornerSeal: Bool, praiseCount: Int) -> [Event] {
-        if hasCornerSeal {
-            return [
-                Event(delayMilliseconds: 0, sound: .seal, haptic: .sealHeavy),
-                Event(delayMilliseconds: sealFollowUpMilliseconds, sound: nil, haptic: .sealRigid),
-            ]
-        }
-        let haptic: Haptic = praiseCount > 0 ? .roundPraise : .roundBase
-        return [
-            Event(delayMilliseconds: 0, sound: .roundStamp, haptic: haptic),
+    /// 角判がないとき（遅刻など）は丸い印の一段だけ。
+    static func sequence(hasCornerSeal: Bool) -> [Event] {
+        var events = [
+            Event(offsetMilliseconds: 0, sound: .roundStamp, haptic: .roundLight),
         ]
+        guard hasCornerSeal else { return events }
+        let seal = StampFeedbackTiming.sealDelayMilliseconds
+        events.append(Event(offsetMilliseconds: seal, sound: .seal, haptic: .sealHeavy))
+        events.append(
+            Event(
+                offsetMilliseconds: seal + StampFeedbackTiming.sealSecondHapticMilliseconds,
+                sound: nil,
+                haptic: .sealRigid
+            )
+        )
+        return events
     }
 }

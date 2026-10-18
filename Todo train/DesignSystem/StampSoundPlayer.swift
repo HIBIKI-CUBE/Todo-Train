@@ -4,34 +4,29 @@
 //
 
 import AVFoundation
-import AudioToolbox
 
 enum StampSoundPlayer {
     private static var configured = false
+    private static var roundPlayer: AVAudioPlayer?
     private static var sealPlayer: AVAudioPlayer?
 
-    /// 角判がない到着。システム音 1104。
-    static func playStampThud() {
-        prepareAmbientSession()
-        AudioServicesPlaySystemSound(1104)
-    }
-
     /// 到着の画面が出た時点で呼ぶ。再生までの遅れを小さくする。
-    static func prepareSealSound() {
+    static func prepareStampSounds() {
         prepareAmbientSession()
-        let player = sealPlayer ?? loadSealPlayer()
-        sealPlayer = player
-        player?.prepareToPlay()
+        roundPlayer = roundPlayer ?? loadPlayer(named: "round_stamp")
+        sealPlayer = sealPlayer ?? loadPlayer(named: "seal_stamp")
+        roundPlayer?.prepareToPlay()
+        sealPlayer?.prepareToPlay()
     }
 
-    /// 角判がある到着。判専用の短い音だけを鳴らす。
+    /// 丸い印。軽い短い音。
+    static func playRoundStamp() {
+        play(player: roundPlayer ?? loadPlayer(named: "round_stamp"), store: { roundPlayer = $0 })
+    }
+
+    /// 角判。重い短い音。
     static func playSealStamp() {
-        prepareAmbientSession()
-        let player = sealPlayer ?? loadSealPlayer()
-        sealPlayer = player
-        guard let player else { return }
-        player.currentTime = 0
-        player.play()
+        play(player: sealPlayer ?? loadPlayer(named: "seal_stamp"), store: { sealPlayer = $0 })
     }
 
     /// `.ambient` なのでマナーモードでは鳴らない。`.mixWithOthers` だけで、音楽は止めず音量も下げない。
@@ -43,18 +38,26 @@ enum StampSoundPlayer {
         try? session.setActive(true)
     }
 
-    private static func loadSealPlayer() -> AVAudioPlayer? {
-        guard let url = sealSoundURL() else { return nil }
+    private static func play(player loaded: AVAudioPlayer?, store: (AVAudioPlayer?) -> Void) {
+        prepareAmbientSession()
+        store(loaded)
+        guard let loaded else { return }
+        loaded.currentTime = 0
+        loaded.play()
+    }
+
+    private static func loadPlayer(named resource: String) -> AVAudioPlayer? {
+        guard let url = soundURL(named: resource) else { return nil }
         guard let player = try? AVAudioPlayer(contentsOf: url) else { return nil }
         player.volume = 1
         player.numberOfLoops = 0
         return player
     }
 
-    private static func sealSoundURL() -> URL? {
+    private static func soundURL(named resource: String) -> URL? {
         let bundle = Bundle.main
-        return bundle.url(forResource: "seal_stamp", withExtension: "caf")
-            ?? bundle.url(forResource: "seal_stamp", withExtension: "caf", subdirectory: "Sounds")
-            ?? bundle.url(forResource: "seal_stamp", withExtension: "caf", subdirectory: "Resources/Sounds")
+        return bundle.url(forResource: resource, withExtension: "caf")
+            ?? bundle.url(forResource: resource, withExtension: "caf", subdirectory: "Sounds")
+            ?? bundle.url(forResource: resource, withExtension: "caf", subdirectory: "Resources/Sounds")
     }
 }

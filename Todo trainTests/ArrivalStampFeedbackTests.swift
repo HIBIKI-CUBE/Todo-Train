@@ -9,46 +9,40 @@ import Testing
 
 @Suite("Arrival stamp feedback")
 struct ArrivalStampFeedbackTests {
-    @Test func cornerSealPlaysSealSoundThenTwoHaptics() {
-        let events = ArrivalStampFeedback.sequence(hasCornerSeal: true, praiseCount: 0)
+    @Test func onTimeDropsRoundStampThenCornerSeal() {
+        let events = ArrivalStampFeedback.sequence(hasCornerSeal: true)
+        let seal = StampFeedbackTiming.sealDelayMilliseconds
+        let rigid = seal + StampFeedbackTiming.sealSecondHapticMilliseconds
+        #expect(events.map(\.offsetMilliseconds) == [0, seal, rigid])
+        #expect(events.map(\.sound) == [.roundStamp, .seal, nil])
+        #expect(events.map(\.haptic) == [.roundLight, .sealHeavy, .sealRigid])
+        #expect(events[1].offsetMilliseconds - events[0].offsetMilliseconds == seal)
+        #expect(events[2].offsetMilliseconds - events[1].offsetMilliseconds == 70)
+    }
+
+    @Test func withoutCornerSealIsOnlyTheRoundStamp() {
+        let events = ArrivalStampFeedback.sequence(hasCornerSeal: false)
         #expect(events == [
-            ArrivalStampFeedback.Event(delayMilliseconds: 0, sound: .seal, haptic: .sealHeavy),
-            ArrivalStampFeedback.Event(
-                delayMilliseconds: ArrivalStampFeedback.sealFollowUpMilliseconds,
-                sound: nil,
-                haptic: .sealRigid
-            ),
+            ArrivalStampFeedback.Event(offsetMilliseconds: 0, sound: .roundStamp, haptic: .roundLight),
         ])
-        #expect(events[1].delayMilliseconds - events[0].delayMilliseconds == 70)
+        #expect(events.allSatisfy { $0.sound != .seal })
+        #expect(events.allSatisfy { $0.haptic != .sealHeavy && $0.haptic != .sealRigid })
     }
 
-    @Test func cornerSealIgnoresPraiseAndDoesNotStackRoundCues() {
-        let quiet = ArrivalStampFeedback.sequence(hasCornerSeal: true, praiseCount: 0)
-        let praised = ArrivalStampFeedback.sequence(hasCornerSeal: true, praiseCount: 3)
-        #expect(quiet == praised)
-        let cues = praised
-        #expect(cues.allSatisfy { $0.sound != .roundStamp })
-        #expect(cues.allSatisfy { $0.haptic != .roundBase && $0.haptic != .roundPraise })
-        #expect(cues.filter { $0.sound == .seal }.count == 1)
+    @Test func sealDelayStaysInsideTheTuneRange() {
+        let delay = StampFeedbackTiming.sealDelayMilliseconds
+        #expect(delay >= 100)
+        #expect(delay <= 200)
+        #expect(delay <= 250)
+        let events = ArrivalStampFeedback.sequence(hasCornerSeal: true)
+        #expect(events[1].offsetMilliseconds == delay)
     }
 
-    @Test func sealIntensitiesStayFixed() {
+    @Test func hapticIntensities() {
+        #expect(ArrivalStampFeedback.roundLightIntensity == 0.6)
         #expect(ArrivalStampFeedback.sealHeavyIntensity == 1.0)
         #expect(ArrivalStampFeedback.sealRigidIntensity == 0.75)
-        #expect(ArrivalStampFeedback.sealFollowUpMilliseconds == 70)
-    }
-
-    @Test func withoutCornerSealKeepsRoundSoundAndExistingHaptics() {
-        let plain = ArrivalStampFeedback.sequence(hasCornerSeal: false, praiseCount: 0)
-        #expect(plain == [
-            ArrivalStampFeedback.Event(delayMilliseconds: 0, sound: .roundStamp, haptic: .roundBase),
-        ])
-        let praised = ArrivalStampFeedback.sequence(hasCornerSeal: false, praiseCount: 1)
-        #expect(praised == [
-            ArrivalStampFeedback.Event(delayMilliseconds: 0, sound: .roundStamp, haptic: .roundPraise),
-        ])
-        #expect(ArrivalStampFeedback.roundBaseIntensity == 1.0)
-        #expect(ArrivalStampFeedback.roundPraiseIntensity == 1.0)
+        #expect(StampFeedbackTiming.sealSecondHapticMilliseconds == 70)
     }
 
     @Test func previewActiveTimeMatchesTheRequestedTotal() {
@@ -60,14 +54,16 @@ struct ArrivalStampFeedbackTests {
         #expect(planEnd.elapsedSeconds(at: now) == 46 * 60)
     }
 
-    @Test func sealStampSoundIsInTheAppBundle() {
-        let url = Bundle.main.url(forResource: "seal_stamp", withExtension: "caf")
-            ?? Bundle.main.url(forResource: "seal_stamp", withExtension: "caf", subdirectory: "Sounds")
-            ?? Bundle.main.url(
-                forResource: "seal_stamp",
-                withExtension: "caf",
-                subdirectory: "Resources/Sounds"
-            )
-        #expect(url != nil)
+    @Test func stampSoundsAreInTheAppBundle() {
+        for name in ["round_stamp", "seal_stamp"] {
+            let url = Bundle.main.url(forResource: name, withExtension: "caf")
+                ?? Bundle.main.url(forResource: name, withExtension: "caf", subdirectory: "Sounds")
+                ?? Bundle.main.url(
+                    forResource: name,
+                    withExtension: "caf",
+                    subdirectory: "Resources/Sounds"
+                )
+            #expect(url != nil)
+        }
     }
 }
