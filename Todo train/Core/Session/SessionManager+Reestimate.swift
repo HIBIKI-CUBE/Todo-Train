@@ -54,6 +54,8 @@ extension SessionManager {
         shownBandHighSeconds: Int?,
         detailsOpened: Bool,
         promptId: String,
+        declaration: ReestimateDeclaration? = nil,
+        projectedTotalSeconds: Int? = nil,
         now: Date? = nil
     ) throws {
         let now = now ?? clock.now
@@ -75,7 +77,8 @@ extension SessionManager {
            now.timeIntervalSince(last.committedAt) < 60,
            last.committedRemainingSeconds == committedRemainingSeconds,
            last.mode == mode,
-           last.progressAnswer == progressAnswer {
+           last.progressAnswer == progressAnswer,
+           last.declaration == declaration {
             dismissReestimate()
             return
         }
@@ -95,13 +98,17 @@ extension SessionManager {
             shownBandLowSeconds: shownBandLowSeconds,
             shownBandHighSeconds: shownBandHighSeconds,
             detailsOpened: detailsOpened,
-            remoteWillExtendReceived: request.remoteWillExtendReceived
+            remoteWillExtendReceived: request.remoteWillExtendReceived,
+            declaration: declaration,
+            projectedTotalSeconds: projectedTotalSeconds
         )
         var events = session.reestimateEvents
         events.append(record)
         session.reestimateEvents = events
 
-        session.currentBudgetSeconds = Int(active.rounded()) + committedRemainingSeconds
+        if declaration != .recovery {
+            session.currentBudgetSeconds = Int(active.rounded()) + committedRemainingSeconds
+        }
         noteCabinActivity(now: now, clearPendingIdle: true)
         suppressedEndBellSessionIDs.remove(session.id)
         dismissReestimate()

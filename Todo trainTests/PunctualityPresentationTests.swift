@@ -48,10 +48,14 @@ struct PunctualityPresentationTests {
         )
     }
 
-    @Test func sealSampleAccessibility_usesJudgedSourceLabel() {
+    @Test func sealSampleAccessibility_usesLuxuryLabel() {
         #expect(
-            PunctualityPresentation.sealSampleAccessibilityLabel(tier: .ticketing)
+            PunctualityPresentation.sealSampleAccessibilityLabel(luxury: 1.0)
                 == "かかっている判：発券時の見積もり"
+        )
+        #expect(
+            PunctualityPresentation.sealSampleAccessibilityLabel(luxury: 0.72)
+                == "かかっている判：走行前半の見積もり直し"
         )
     }
 
@@ -76,13 +80,13 @@ struct PunctualityPresentationTests {
         let label = PunctualityPresentation.homeMeterAccessibilityLabel(
             judgment: judgment,
             activeSeconds: 2_100,
-            sealTier: .ticketing
+            sealLuxury: 1.0
         )
         #expect(label == "ホームを過ぎました")
         #expect(!label.contains("かかっている判"))
     }
 
-    @Test func ridingSealSample_hiddenWhenSignalOff() {
+    @Test func ridingSealLuxury_hiddenWhenSignalOff() {
         let judgment = PunctualityJudgment.judge(
             PunctualityJudgment.RideInput(
                 arrived: false,
@@ -92,14 +96,14 @@ struct PunctualityPresentationTests {
             )
         )
         #expect(judgment.signal == .off)
-        let tier = PunctualityPresentation.ridingSealSampleTier(
+        let luxury = PunctualityPresentation.ridingSealLuxury(
             judgment: judgment,
             reestimates: []
         )
-        #expect(tier == nil)
+        #expect(luxury == nil)
     }
 
-    @Test func ridingSealSample_shownAfterReestimateMovesHome() {
+    @Test func ridingSealLuxury_shownAfterReestimateMovesHome() {
         let events = [
             PunctualityJudgment.ReestimateCommit(
                 reestimateIndex: 1,
@@ -116,11 +120,11 @@ struct PunctualityPresentationTests {
             )
         )
         #expect(judgment.signal == .green)
-        let tier = PunctualityPresentation.ridingSealSampleTier(
+        let luxury = PunctualityPresentation.ridingSealLuxury(
             judgment: judgment,
             reestimates: events
         )
-        #expect(tier == .earlyReestimate)
+        #expect(luxury == 0.6)
     }
 
     @Test func actualProgressTenth_clampsToTen() {

@@ -269,7 +269,7 @@ struct FocusView: View {
                         judgment: punctuality.judgment,
                         activeSeconds: punctuality.activeSeconds,
                         budgetSeconds: punctuality.budgetSeconds,
-                        sealTier: punctuality.sealTier,
+                        sealLuxury: punctuality.sealLuxury,
                         showsFirstTimeTip: !sawHomeTip
                     )
                     .padding(.top, 8)
@@ -342,22 +342,64 @@ struct FocusView: View {
             if sessionManager.reestimateRequest != nil {
                 FocusReestimatePanel(
                     activeSeconds: sessionManager.activeSession?.elapsedSeconds(at: .now) ?? 0,
-                    onCommit: { mode, progress, remaining, low, high, details in
+                    remainingSeconds: sessionManager.remainingSeconds,
+                    plannedBudgetSeconds: sessionManager.activeSession?.activeBudgetSeconds ?? 1,
+                    judgment: {
+                        guard let session = sessionManager.activeSession else {
+                            return PunctualityJudgment.judge(
+                                PunctualityJudgment.RideInput(
+                                    arrived: false,
+                                    activeSeconds: 0,
+                                    estimatedSecondsAtStart: 1
+                                )
+                            )
+                        }
+                        return Punctuality.judgment(for: session)
+                    }(),
+                    recoverySealLuxury: {
+                        guard let session = sessionManager.activeSession else { return nil }
+                        let commits = session.reestimateEvents
+                            .filter { $0.undoneAt == nil }
+                            .map {
+                                PunctualityJudgment.ReestimateCommit(
+                                    reestimateIndex: $0.reestimateIndex,
+                                    activeSeconds: $0.activeSeconds,
+                                    committedRemainingSeconds: $0.committedRemainingSeconds
+                                )
+                            }
+                        let judgment = Punctuality.judgment(for: session)
+                        return PunctualityPresentation.ridingSealLuxury(
+                            judgment: judgment,
+                            reestimates: commits
+                        )
+                    }(),
+                    now: sessionManager.clock.now,
+                    onCommit: { declaration, progress, projectedTotal in
                         run {
+                            let active = sessionManager.activeSession?.elapsedSeconds(at: .now) ?? 0
+                            let remaining: Int
+                            if declaration == .adjust {
+                                remaining = PositionReport.committedRemainingSeconds(
+                                    activeSeconds: active,
+                                    progress: progress
+                                ) ?? 0
+                            } else {
+                                remaining = Int(sessionManager.remainingSeconds.rounded())
+                            }
                             try sessionManager.commitReestimate(
-                                mode: mode,
+                                mode: .positionReport,
                                 progressAnswer: progress,
                                 committedRemainingSeconds: remaining,
-                                shownBandLowSeconds: low,
-                                shownBandHighSeconds: high,
-                                detailsOpened: details,
-                                promptId: mode == .minutesOnly
-                                    ? ReestimatePromptID.remainingV1
-                                    : ReestimatePromptID.progressV1
+                                shownBandLowSeconds: nil,
+                                shownBandHighSeconds: nil,
+                                detailsOpened: false,
+                                promptId: ReestimatePromptID.positionV1,
+                                declaration: declaration,
+                                projectedTotalSeconds: declaration == .adjust ? projectedTotal : nil
                             )
                         }
                     },
-                    onArriveAtFullProgress: {
+                    onArrive: {
                         sessionManager.dismissReestimate()
                         if sessionManager.phase == .overtime {
                             run { try sessionManager.arrive(resolution: .justFinished) }
@@ -497,7 +539,7 @@ struct FocusView: View {
         judgment: PunctualityJudgment.Judgment,
         activeSeconds: TimeInterval,
         budgetSeconds: Int,
-        sealTier: PunctualityJudgment.OnTimeSealTier?,
+        sealLuxury: Double?,
         homeBand: (start: Double, end: Double)?
     )? {
         guard let session = sessionManager.activeSession, session.isOpen else { return nil }
@@ -513,9 +555,9 @@ struct FocusView: View {
                     committedRemainingSeconds: $0.committedRemainingSeconds
                 )
             }
-        let tier = PunctualityPresentation.ridingSealSampleTier(judgment: judgment, reestimates: commits)
+        let luxury = PunctualityPresentation.ridingSealLuxury(judgment: judgment, reestimates: commits)
         let band = PunctualityPresentation.homeBandFractions(judgment: judgment, budgetSeconds: budget)
-        return (judgment, active, budget, tier, band)
+        return (judgment, active, budget, luxury, band)
     }
 
     private func occupancyInstrument(now: Date) -> (

@@ -28,9 +28,10 @@ struct PunctualityHomeSignalLamp: View {
 }
 
 struct PunctualitySealSample: View {
-    var tier: PunctualityJudgment.OnTimeSealTier
+    var luxury: Double
 
     var body: some View {
+        let tier = PunctualityJudgment.legacySealTier(luxury: luxury)
         OnTimeCornerSealGlyph(tier: tier, season: .spring, timeOfDay: .afternoon)
             .frame(width: 18, height: 18)
             .opacity(0.92)
@@ -42,7 +43,7 @@ struct PunctualityHomeMeterRow: View {
     var judgment: PunctualityJudgment.Judgment
     var activeSeconds: TimeInterval
     var budgetSeconds: Int
-    var sealTier: PunctualityJudgment.OnTimeSealTier?
+    var sealLuxury: Double?
     var showsFirstTimeTip: Bool
 
     private var band: (start: Double, end: Double)? {
@@ -53,8 +54,8 @@ struct PunctualityHomeMeterRow: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
                 PunctualityHomeSignalLamp(state: judgment.signal)
-                if let sealTier {
-                    PunctualitySealSample(tier: sealTier)
+                if let sealLuxury {
+                    PunctualitySealSample(luxury: sealLuxury)
                 }
                 Spacer(minLength: 0)
             }
@@ -75,7 +76,7 @@ struct PunctualityHomeMeterRow: View {
         PunctualityPresentation.homeMeterAccessibilityLabel(
             judgment: judgment,
             activeSeconds: activeSeconds,
-            sealTier: sealTier
+            sealLuxury: sealLuxury
         )
     }
 }

@@ -29,14 +29,14 @@ struct CheckInControlsView: View {
                 FocusControlDivider()
 
                 FocusControlButton(
-                    title: "見積もり直す",
-                    systemImage: "slider.horizontal.3",
+                    title: "現在位置",
+                    systemImage: "antenna.radiowaves.left.and.right",
                     fill: FocusPanel.fillRaised,
                     foreground: FocusPanel.ink,
                     prominence: .secondary,
                     action: onReestimate
                 )
-                .accessibilityHint("進捗から見積もりを直します")
+                .accessibilityHint("いま何割の地点かを指令に報告します")
                 .frame(height: row)
             }
             .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
