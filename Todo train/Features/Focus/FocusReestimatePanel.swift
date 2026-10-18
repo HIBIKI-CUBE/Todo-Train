@@ -10,6 +10,7 @@ import TodoTrainTicketUI
 struct FocusReestimatePanel: View {
     let activeSeconds: TimeInterval
     let remainingSeconds: TimeInterval
+    let plannedBudgetSeconds: Int
     let judgment: PunctualityJudgment.Judgment
     let recoverySealLuxury: Double?
     let now: Date
@@ -33,6 +34,7 @@ struct FocusReestimatePanel: View {
     init(
         activeSeconds: TimeInterval,
         remainingSeconds: TimeInterval,
+        plannedBudgetSeconds: Int,
         judgment: PunctualityJudgment.Judgment,
         recoverySealLuxury: Double?,
         now: Date,
@@ -43,6 +45,7 @@ struct FocusReestimatePanel: View {
     ) {
         self.activeSeconds = activeSeconds
         self.remainingSeconds = remainingSeconds
+        self.plannedBudgetSeconds = plannedBudgetSeconds
         self.judgment = judgment
         self.recoverySealLuxury = recoverySealLuxury
         self.now = now
@@ -180,16 +183,24 @@ struct FocusReestimatePanel: View {
                 ))
                 .font(.body.weight(.medium))
                 .foregroundStyle(FocusPanel.ink)
+                .accessibilityHint("走行時間と答えた割合から出した見込みです。")
 
-                projectedArrivalPlate(projectedArrival)
-
-                HStack(spacing: 10) {
-                    declarationCell(
-                        title: "回復運転",
-                        caption: PositionReportWording.recoveryCaption(arrival: scheduledArrival),
-                        sealLuxury: recoverySealLuxury,
-                        action: { commit(.recovery) }
-                    )
+                if showsRecoveryOption {
+                    HStack(spacing: 10) {
+                        declarationCell(
+                            title: "回復運転",
+                            caption: PositionReportWording.recoveryCaption(arrival: originalScheduledArrival),
+                            sealLuxury: recoverySealLuxury,
+                            action: { commit(.recovery) }
+                        )
+                        declarationCell(
+                            title: "運転調整",
+                            caption: PositionReportWording.adjustCaption(arrival: projectedArrival),
+                            sealLuxury: PositionReport.adjustLuxuryPreview(progress: progressAnswer),
+                            action: { commit(.adjust) }
+                        )
+                    }
+                } else {
                     declarationCell(
                         title: "運転調整",
                         caption: PositionReportWording.adjustCaption(arrival: projectedArrival),
@@ -205,20 +216,11 @@ struct FocusReestimatePanel: View {
         }
     }
 
-    private func projectedArrivalPlate(_ arrival: Date) -> some View {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "ja_JP")
-        formatter.dateFormat = "HH:mm"
-        let label = "\(formatter.string(from: arrival))着"
-        return Text(label)
-            .font(.system(size: 28, weight: .semibold, design: .default))
-            .monospacedDigit()
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.vertical, 8)
-            .padding(.horizontal, 12)
-            .background(FocusPanel.fillRaised)
-            .accessibilityLabel(label)
-            .accessibilityHint("走行時間と答えた割合から出した見込みです。")
+    private var showsRecoveryOption: Bool {
+        PositionReport.showsRecoveryDeclaration(
+            activeSeconds: activeSeconds,
+            plannedBudgetSeconds: plannedBudgetSeconds
+        )
     }
 
     private func declarationCell(
@@ -267,8 +269,9 @@ struct FocusReestimatePanel: View {
         }
     }
 
-    private var scheduledArrival: Date {
-        now.addingTimeInterval(max(0, remainingSeconds))
+    /// いまの予定着（回復運転の副題）。超過中は過去の元着時刻のまま。
+    private var originalScheduledArrival: Date {
+        now.addingTimeInterval(remainingSeconds)
     }
 
     private func handlePositionCommitted() {

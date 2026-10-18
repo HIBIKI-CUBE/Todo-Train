@@ -101,8 +101,8 @@ enum FocusUIPreview {
             manager.uiPreviewForcesFocusCover = true
 
         case "positionReportDeclare":
-            session.estimatedSecondsAtStart = 45 * 60
-            session.currentBudgetSeconds = 45 * 60
+            session.estimatedSecondsAtStart = 30 * 60
+            session.currentBudgetSeconds = 30 * 60
             session.accumulatedActiveSeconds = 21 * 60
             manager.presentReestimate(trigger: .manual, surface: .iphonePortrait)
             manager.focusReestimatePreview = FocusReestimatePreviewConfiguration(

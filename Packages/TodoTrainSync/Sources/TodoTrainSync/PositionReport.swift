@@ -16,4 +16,13 @@ public enum PositionReport: Sendable {
         let raw = PunctualityJudgment.adjustCeiling * (1 - p)
         return (raw * 100).rounded() / 100
     }
+
+    /// 元の到着予定を過ぎていなければ回復運転を出す（超過中は運転調整のみ）。
+    public static func showsRecoveryDeclaration(
+        activeSeconds: TimeInterval,
+        plannedBudgetSeconds: Int
+    ) -> Bool {
+        guard plannedBudgetSeconds > 0 else { return false }
+        return activeSeconds < TimeInterval(plannedBudgetSeconds)
+    }
 }

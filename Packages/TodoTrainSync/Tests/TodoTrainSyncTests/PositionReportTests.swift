@@ -37,4 +37,34 @@ struct PositionReportTests {
         #expect(preview == committed)
         #expect(preview == 0.36)
     }
+
+    @Test func showsRecoveryDeclaration_beforeOriginalScheduledArrival() {
+        #expect(
+            PositionReport.showsRecoveryDeclaration(
+                activeSeconds: 21 * 60,
+                plannedBudgetSeconds: 30 * 60
+            )
+        )
+        #expect(
+            PositionReport.showsRecoveryDeclaration(
+                activeSeconds: 29 * 60 + 59,
+                plannedBudgetSeconds: 30 * 60
+            )
+        )
+    }
+
+    @Test func showsRecoveryDeclaration_hidesAfterOriginalScheduledArrival() {
+        #expect(
+            !PositionReport.showsRecoveryDeclaration(
+                activeSeconds: 30 * 60,
+                plannedBudgetSeconds: 30 * 60
+            )
+        )
+        #expect(
+            !PositionReport.showsRecoveryDeclaration(
+                activeSeconds: 34 * 60,
+                plannedBudgetSeconds: 30 * 60
+            )
+        )
+    }
 }

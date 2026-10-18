@@ -343,6 +343,7 @@ struct FocusView: View {
                 FocusReestimatePanel(
                     activeSeconds: sessionManager.activeSession?.elapsedSeconds(at: .now) ?? 0,
                     remainingSeconds: sessionManager.remainingSeconds,
+                    plannedBudgetSeconds: sessionManager.activeSession?.activeBudgetSeconds ?? 1,
                     judgment: {
                         guard let session = sessionManager.activeSession else {
                             return PunctualityJudgment.judge(
