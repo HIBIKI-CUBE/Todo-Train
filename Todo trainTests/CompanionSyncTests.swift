@@ -244,7 +244,7 @@ struct CompanionSnapBuildingTests {
             )
         )
         let home = try #require(snap.home)
-        #expect(home.signal == judgment.signal)
+        #expect(home.signal == WireHomeSignal(judgment.signal))
         #expect(home.signal == .green)
         #expect(home.startSeconds == judgment.lowerBound)
         #expect(home.endSeconds == judgment.upperBound)
