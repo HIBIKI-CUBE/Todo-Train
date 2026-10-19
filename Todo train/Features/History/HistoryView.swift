@@ -284,7 +284,8 @@ struct HistoryView: View {
 
     private var calendarDay: some View {
         GeometryReader { geo in
-            calendarDayStack(viewport: geo.size, bottomObstacle: geo.safeAreaInsets.bottom)
+            // この矩形はタブバーの上で終わる。下端の余白だけ足す。
+            calendarDayStack(viewport: geo.size, bottomObstacle: 0)
         }
     }
 
