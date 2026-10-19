@@ -21,6 +21,7 @@ struct HistoryDayPager: View {
     var onDelete: (WorkSession) -> Void
     var stripsByDay: [String: [DayClockStrip]] = [:]
     var bottomContentInset: CGFloat = 0
+    var bundleTouching: Bool = false
 
     @Environment(\.calendar) private var calendar
 
@@ -62,7 +63,8 @@ struct HistoryDayPager: View {
             onReissue: onReissue,
             onDelete: onDelete,
             stripsByDay: stripsByDay,
-            bottomContentInset: bottomContentInset
+            bottomContentInset: bottomContentInset,
+            bundleTouching: bundleTouching
         )
     }
 }
@@ -79,6 +81,7 @@ private struct HistoryDayInteractiveCanvas: View {
     var onDelete: (WorkSession) -> Void
     var stripsByDay: [String: [DayClockStrip]] = [:]
     var bottomContentInset: CGFloat = 0
+    var bundleTouching: Bool = false
 
     @Environment(\.calendar) private var calendar
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -314,7 +317,7 @@ private struct HistoryDayInteractiveCanvas: View {
 
     private var pagePan: DeckHorizontalPanGesture {
         DeckHorizontalPanGesture(
-            isEnabled: !isPinching && !isSettlingPage,
+            isEnabled: !isPinching && !isSettlingPage && !bundleTouching,
             cancelsTouchesInView: true
         ) { x in
             dragX = x

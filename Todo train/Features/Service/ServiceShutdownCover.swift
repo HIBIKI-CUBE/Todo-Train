@@ -85,6 +85,9 @@ struct ServiceShutdownCover: View {
         .environment(\.colorScheme, .dark)
         .presentationBackground(.black)
         .safeAreaPadding(.top, 4)
+        .overlay {
+            shutdownBundleOverlay
+        }
         .interactiveDismissDisabled(poweringDown)
         .sheet(item: $canvasLaunch) { launch in
             RemainingTicketsCanvas(parent: launch.parent, fromSessionID: launch.sessionID)
@@ -93,6 +96,37 @@ struct ServiceShutdownCover: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text(localError)
+        }
+    }
+
+    @ViewBuilder
+    private var shutdownBundleOverlay: some View {
+        if let stampBundle, lamp >= .live {
+            TicketStampBundleDeckView(
+                stamps: stampBundle.stamps,
+                focusIndex: $bundleFocusIndex,
+                style: .shutdown,
+                dayBoundaries: [],
+                pinnedSpread: previewPinnedSpread,
+                pinnedFocusUnit: previewPinnedFocusUnit,
+                playsSpreadDemo: previewPlaysSpreadDemo,
+                bottomObstacle: Self.consoleBlockHeight
+            )
+            .ignoresSafeArea()
+            .allowsHitTesting(!poweringDown)
+            .onAppear {
+                guard previewPinnedFocusUnit == nil else { return }
+                #if DEBUG
+                if sessionManager.uiPreviewShowsServiceShutdown {
+                    bundleFocusIndex = min(
+                        sessionManager.uiPreviewBundleFocusIndex,
+                        max(0, stampBundle.stamps.count - 1)
+                    )
+                    return
+                }
+                #endif
+                bundleFocusIndex = max(0, stampBundle.stamps.count - 1)
+            }
         }
     }
 
@@ -204,37 +238,6 @@ struct ServiceShutdownCover: View {
                     }
                 }
 
-                if let stampBundle, lamp >= .live {
-                    TicketStampBundleDeckView(
-                        stamps: stampBundle.stamps,
-                        focusIndex: $bundleFocusIndex,
-                        style: .shutdown,
-                        dayBoundaries: [],
-                        pinnedSpread: previewPinnedSpread,
-                        playsSpreadDemo: previewPlaysSpreadDemo,
-                        layoutViewport: CGSize(
-                            width: max(80, geo.size.width),
-                            height: max(80, geo.size.height + Self.consoleBlockHeight)
-                        ),
-                        bottomObstacle: Self.consoleBlockHeight
-                    )
-                    .padding(.trailing, TicketStampBundleLayout.safeMargin)
-                    .padding(.bottom, TicketStampBundleLayout.bottomClearance)
-                    .zIndex(4)
-                    .allowsHitTesting(!poweringDown)
-                    .onAppear {
-                        #if DEBUG
-                        if sessionManager.uiPreviewShowsServiceShutdown {
-                            bundleFocusIndex = min(
-                                sessionManager.uiPreviewBundleFocusIndex,
-                                max(0, stampBundle.stamps.count - 1)
-                            )
-                            return
-                        }
-                        #endif
-                        bundleFocusIndex = max(0, stampBundle.stamps.count - 1)
-                    }
-                }
             }
         }
     }
@@ -435,6 +438,15 @@ struct ServiceShutdownCover: View {
         #else
         false
         #endif
+    }
+
+    private var previewPinnedFocusUnit: CGFloat? {
+        #if DEBUG
+        if let value = sessionManager.uiPreviewBundleFocus {
+            return CGFloat(value)
+        }
+        #endif
+        return nil
     }
 
     private func powerOff() async {

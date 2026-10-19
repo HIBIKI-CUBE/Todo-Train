@@ -34,6 +34,28 @@ extension FocusUIPreview {
         context.insert(serviceDay)
         manager.activeServiceDay = serviceDay
 
+        if state == "historyBundleMany" || state == "historyBundleManyLandscape" {
+            for index in 0..<20 {
+                let estimate = 30 * 60
+                let active = TimeInterval((10 + (index % 7) * 5) * 60)
+                insertArrivedStamp(
+                    context: context,
+                    title: "乗車 \(index + 1)",
+                    estimate: estimate,
+                    active: active,
+                    offset: TimeInterval(index) * 1200,
+                    base: base
+                )
+            }
+            try context.save()
+            manager.activeSession = nil
+            manager.phase = .idle
+            manager.uiPreviewSuppressMotion = true
+            manager.uiPreviewBundleViewerFlatIndex = nil
+            manager.uiPreviewSelectHistoryTab = true
+            return
+        }
+
         func insertStamped(
             title: String,
             estimate: Int,
@@ -144,7 +166,7 @@ extension FocusUIPreview {
         case "shutdownBundlePeel", "shutdownBundlePeelLandscape":
             manager.uiPreviewShowsServiceShutdown = true
             manager.uiPreviewBundleFocusIndex = 1
-        case "historyBundle", "historyBundleLandscape":
+        case "historyBundle", "historyBundleLandscape", "historyBundleMany", "historyBundleManyLandscape":
             manager.uiPreviewSelectHistoryTab = true
         case "historyBundleViewer", "historyBundleViewerLandscape":
             manager.uiPreviewSelectHistoryTab = true
@@ -161,6 +183,30 @@ extension FocusUIPreview {
         default:
             break
         }
+    }
+
+    @MainActor
+    private static func insertArrivedStamp(
+        context: ModelContext,
+        title: String,
+        estimate: Int,
+        active: TimeInterval,
+        offset: TimeInterval,
+        base: Date
+    ) {
+        let ticket = Ticket(title: title, estimatedSeconds: estimate, sortOrder: Int(offset))
+        context.insert(ticket)
+        let start = base.addingTimeInterval(offset)
+        let end = start.addingTimeInterval(active)
+        let session = WorkSession(startedAt: start, estimatedSecondsAtStart: estimate, ticket: ticket)
+        session.endedAt = end
+        session.accumulatedActiveSeconds = active
+        session.outcome = .arrived
+        session.arrivalStampedAt = end
+        session.arrivalAction = .nextRide
+        context.insert(session)
+        ticket.closedAt = end
+        ticket.closureKind = .arrived
     }
 
     @MainActor
