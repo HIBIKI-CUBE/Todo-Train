@@ -93,14 +93,18 @@ struct ContentView: View {
             syncGapSurface()
             companion.handleScenePhase(.active, sessionManager: sessionManager)
             WatchSessionBridge.shared.publishCurrent()
-            sessionManager.suppressProgressLocalNotifications = companion.isPaired
+            sessionManager.suppressProgressLocalNotifications = CompanionSyncRuntime.Policy.suppressProgressNotifications(
+                isPaired: companion.isPaired
+            )
         }
         .onChange(of: sessionManager.companionSyncTick) { _, _ in
             companion.noteSessionChanged(sessionManager: sessionManager)
             WatchSessionBridge.shared.publishCurrent()
         }
         .onChange(of: companion.isPaired) { _, paired in
-            sessionManager.suppressProgressLocalNotifications = paired
+            sessionManager.suppressProgressLocalNotifications = CompanionSyncRuntime.Policy.suppressProgressNotifications(
+                isPaired: paired
+            )
             sessionManager.syncCabinAnnouncementsWithSettings()
         }
         .onChange(of: scenePhase) { _, newPhase in

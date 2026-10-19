@@ -352,7 +352,7 @@ struct GoldenJSONTests {
         #expect(json["kind"] as? [String] == ["snap", "cmd", "ack"])
         #expect(json["op"] as? [String] == [
             "pause", "resume", "still", "issueAndBoard", "answer", "boardReserved", "presence",
-            "pauseInputReport",
+            "pauseInputReport", "reestimate", "undoReestimate",
         ])
         #expect(json["pendingCabin"] as? [String] == ["progress", "away", "idle", "overrun", "gap"])
         #expect(json["nudgeKind"] as? [String] == NudgeKind.knownRawValues)
@@ -365,13 +365,137 @@ struct GoldenJSONTests {
         #expect(json["heldBy"] as? [String] == PauseHeldBy.knownRawValues)
         #expect(json["pauseCommandHeldBy"] as? [String] == PauseHeldBy.pauseCommandRawValues)
         #expect(json["promptAnswer"] as? [String] == PausePromptAnswer.knownRawValues)
+        #expect(json["reestimateMode"] as? [String] == WireReestimateMode.knownRawValues)
+        #expect(json["reestimateTrigger"] as? [String] == WireReestimateTrigger.knownRawValues)
+        #expect(json["reestimateSurface"] as? [String] == WireReestimateSurface.knownRawValues)
+        #expect(json["reestimateInput"] as? [String] == WireReestimateInput.knownRawValues)
+        #expect(json["homeSignal"] as? [String] == WireHomeSignal.knownRawValues)
+        #expect(json["judgedEstimateKind"] as? [String] == WireJudgedEstimateKind.knownRawValues)
         let introduced = try #require(json["opIntroduced"] as? [String: Int])
-        for op in ["pause", "resume", "still", "issueAndBoard", "answer", "boardReserved", "presence", "pauseInputReport"] {
+        for op in ["pause", "resume", "still", "issueAndBoard", "answer", "boardReserved", "presence", "pauseInputReport", "reestimate", "undoReestimate"] {
             #expect(introduced[op] == WireOp(rawValue: op).introducedIn)
         }
+        #expect(WireOp.reestimate.introducedIn == 15)
+        #expect(WireOp.undoReestimate.introducedIn == 15)
         #expect(json["error"] as? [String] == [
             "pauseLimitReached", "noActiveService", "sessionMismatch", "decryptFailed", "notPaused",
             "invalidPayload", "unsupportedOp", "nudgeStale", "noReservation", "reservationChanged",
         ])
+    }
+
+    @Test func ridingSnapCarriesHomeAndIdleOmitsIt() throws {
+        let running = try WireJSON.decoder().decode(
+            SnapPlaintext.self,
+            from: ContractFixtures.data("fixtures/snap.json")
+        )
+        let judgment = PunctualityJudgment.judge(
+            PunctualityJudgment.RideInput(
+                arrived: false,
+                activeSeconds: 120,
+                estimatedSecondsAtStart: 1500
+            )
+        )
+        let home = try #require(running.home)
+        #expect(home.startSeconds == judgment.lowerBound)
+        #expect(home.endSeconds == judgment.upperBound)
+        #expect(home.signal == .green)
+        #expect(home.judgedEstimate.kind == .original)
+        #expect(home.judgedEstimate.reestimateIndex == nil)
+        #expect(home.sealLuxury == PunctualityJudgment.sealLuxury(source: .original, reestimates: []))
+        let runningObject = try JSONSerialization.jsonObject(with: try WireJSON.encoder().encode(running)) as! [String: Any]
+        let homeObject = try #require(runningObject["home"] as? [String: Any])
+        #expect(homeObject["signal"] as? String == "green")
+        let judged = try #require(homeObject["judgedEstimate"] as? [String: Any])
+        #expect(judged["kind"] as? String == "original")
+        #expect(judged["reestimateIndex"] == nil)
+
+        let idle = try WireJSON.decoder().decode(
+            SnapPlaintext.self,
+            from: ContractFixtures.data("fixtures/snap-idle.json")
+        )
+        #expect(idle.home == nil)
+        let idleObject = try JSONSerialization.jsonObject(with: try WireJSON.encoder().encode(idle)) as! [String: Any]
+        #expect(idleObject["home"] == nil)
+
+        let frozen = try WireJSON.decoder().decode(
+            SnapPlaintext.self,
+            from: ContractFixtures.data("fixtures/v14/snap.json")
+        )
+        #expect(frozen.home == nil)
+        #expect(frozen.title == "週次レポート")
+    }
+
+    @Test func brokenHomeDoesNotFailTheSnap() throws {
+        let data = try ContractFixtures.data("fixtures/snap.json")
+        var object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        object["home"] = ["signal": "green"]
+        let decoded = try WireJSON.decoder().decode(
+            SnapPlaintext.self,
+            from: try JSONSerialization.data(withJSONObject: object)
+        )
+        #expect(decoded.home == nil)
+        #expect(decoded.title == "週次レポート")
+
+        object["home"] = [
+            "startSeconds": 1275,
+            "endSeconds": 1725,
+            "signal": "blue",
+            "judgedEstimate": ["kind": "original"],
+        ]
+        let unknownSignal = try WireJSON.decoder().decode(
+            SnapPlaintext.self,
+            from: try JSONSerialization.data(withJSONObject: object)
+        )
+        #expect(unknownSignal.home?.signal == .unknown("blue"))
+        #expect(unknownSignal.title == "週次レポート")
+    }
+
+    @Test func cmdReestimateAndUndoRoundTrip() throws {
+        let reestimate = try WireJSON.decoder().decode(
+            CommandPlaintext.self,
+            from: ContractFixtures.data("fixtures/cmd-reestimate.json")
+        )
+        #expect(reestimate.op == .reestimate)
+        #expect(reestimate.progressAnswer == 0.5)
+        #expect(reestimate.committedRemainingSeconds == 1200)
+        #expect(reestimate.mode == .progress)
+        #expect(reestimate.trigger == .manual)
+        #expect(reestimate.promptId == "reestimate.progress.v1")
+        #expect(reestimate.surface == .macPip)
+        #expect(reestimate.input == .click)
+        let reestimateObject = try JSONSerialization.jsonObject(with: try WireJSON.encoder().encode(reestimate)) as! [String: Any]
+        #expect(reestimateObject["surface"] as? String == "macPip")
+        #expect(reestimateObject["input"] as? String == "click")
+        #expect(reestimateObject["heldBy"] == nil)
+
+        var withoutProgress = reestimate
+        withoutProgress.progressAnswer = nil
+        let omitted = try JSONSerialization.jsonObject(with: try WireJSON.encoder().encode(withoutProgress)) as! [String: Any]
+        #expect(omitted["progressAnswer"] == nil)
+        #expect(omitted["committedRemainingSeconds"] as? Int == 1200)
+
+        let undo = try WireJSON.decoder().decode(
+            CommandPlaintext.self,
+            from: ContractFixtures.data("fixtures/cmd-undoReestimate.json")
+        )
+        #expect(undo.op == .undoReestimate)
+        #expect(undo.sessionId == UUID(uuidString: "11111111-1111-4111-8111-111111111111"))
+        #expect(undo.mode == nil)
+        let undoObject = try JSONSerialization.jsonObject(with: try WireJSON.encoder().encode(undo)) as! [String: Any]
+        #expect(undoObject.keys.sorted() == ["at", "id", "op", "sessionId"])
+
+        let unknown = Data(#"{"id":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","op":"reestimate","sessionId":"11111111-1111-4111-8111-111111111111","at":1,"mode":"later","trigger":"manual","promptId":"reestimate.progress.v1","surface":"macPip","input":"click","committedRemainingSeconds":60}"#.utf8)
+        let decodedUnknown = try WireJSON.decoder().decode(CommandPlaintext.self, from: unknown)
+        #expect(decodedUnknown.mode == .unknown("later"))
+    }
+
+    @Test func latestFixturesDropAnswerExtend() throws {
+        let latest = ContractFixtures.directory.appendingPathComponent("fixtures")
+        let names = try FileManager.default.contentsOfDirectory(atPath: latest.path)
+        #expect(!names.contains("cmd-answer-extend.json"))
+        #expect(names.contains("cmd-reestimate.json"))
+        #expect(names.contains("cmd-undoReestimate.json"))
+        #expect(FileManager.default.fileExists(atPath: latest.appendingPathComponent("v14/cmd-answer-extend.json").path))
+        #expect(FileManager.default.fileExists(atPath: latest.appendingPathComponent("v12/cmd-answer-extend.json").path))
     }
 }

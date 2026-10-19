@@ -12,5 +12,14 @@
   "serviceActive": true,
   "cabinEnabled": true,
   "checkInFiredCount": 0,
-  "pendingCabin": null
+  "pendingCabin": null,
+  "home": {
+    "startSeconds": 1275,
+    "endSeconds": 1725,
+    "signal": "green",
+    "judgedEstimate": {
+      "kind": "original"
+    },
+    "sealLuxury": 1
+  }
 }

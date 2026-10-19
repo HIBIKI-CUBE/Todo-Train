@@ -38,5 +38,14 @@
     "ticketId": "99999999-9999-4999-8999-999999999999",
     "title": "次の下書き",
     "estimatedSeconds": 900
+  },
+  "home": {
+    "startSeconds": 1275,
+    "endSeconds": 1725,
+    "signal": "green",
+    "judgedEstimate": {
+      "kind": "original"
+    },
+    "sealLuxury": 1
   }
 }

@@ -68,7 +68,7 @@ struct NudgeWireTests {
     @Test func answerExtendAndArriveRoundTrip() throws {
         let extend = try WireJSON.decoder().decode(
             CommandPlaintext.self,
-            from: ContractFixtures.data("fixtures/cmd-answer-extend.json")
+            from: ContractFixtures.data("fixtures/v14/cmd-answer-extend.json")
         )
         #expect(extend.op == .answer)
         #expect(extend.choice == .willExtend)

@@ -50,6 +50,8 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
     public var notifyTurn: Int?
     /// Unix seconds for Mac's away or idle notification. Overtime is computed from the ride.
     public var notifyFireAt: Int?
+    /// Home band, signal, judged estimate, and seal sample. Present only while riding.
+    public var home: WireHome?
 
     public init(
         rev: Int,
@@ -82,7 +84,8 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
         macActiveSeconds: Double? = nil,
         notifyOn: NotifyOn? = nil,
         notifyTurn: Int? = nil,
-        notifyFireAt: Int? = nil
+        notifyFireAt: Int? = nil,
+        home: WireHome? = nil
     ) {
         self.rev = rev
         self.sessionId = sessionId
@@ -116,6 +119,7 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
         self.notifyOn = notifyOn
         self.notifyTurn = notifyTurn
         self.notifyFireAt = notifyFireAt
+        self.home = Self.riding(phase) ? home : nil
     }
 
     public var announcement: ContractAnnouncement {
@@ -131,6 +135,7 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
         case nudge, nudgePlan, reserved, pauseHeldBy, pauseId
         case macSampledSeconds, macActiveSeconds
         case notifyOn, notifyTurn, notifyFireAt
+        case home
     }
 
     public init(from decoder: Decoder) throws {
@@ -184,6 +189,8 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
         }
         notifyTurn = try container.decodeIfPresent(Int.self, forKey: .notifyTurn)
         notifyFireAt = try container.decodeIfPresent(Int.self, forKey: .notifyFireAt)
+        let decodedHome = Self.lenient(WireHome.self, from: container, forKey: .home)
+        home = Self.riding(phase) ? decodedHome : nil
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -221,6 +228,17 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
         try container.encodeIfPresent(notifyOn, forKey: .notifyOn)
         try container.encodeIfPresent(notifyTurn, forKey: .notifyTurn)
         try container.encodeIfPresent(notifyFireAt, forKey: .notifyFireAt)
+        if Self.riding(phase) {
+            try container.encodeIfPresent(home, forKey: .home)
+        }
+    }
+
+    /// Running, paused, and overtime still have a ride. Idle omits `home`.
+    static func riding(_ phase: WirePhase) -> Bool {
+        switch phase {
+        case .running, .paused, .overtime: true
+        case .idle, .unknown: false
+        }
     }
 
     /// A broken optional field is dropped. The rest of the snap still decodes.

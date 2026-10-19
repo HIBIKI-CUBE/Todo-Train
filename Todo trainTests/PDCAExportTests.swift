@@ -82,7 +82,7 @@ struct PDCAExportTests {
         #expect(Set(peer.keys) == ["builtAt", "dirty", "schema", "sha"])
         #expect(peer["sha"] as? String == "abcdef1")
         #expect(stamped["schema"] as? String == "todotrain.pdca.v0")
-        #expect(ContractVersion.contract == 14)
+        #expect(ContractVersion.contract == 15)
         #expect(AppSchemaV6.versionIdentifier == Schema.Version(6, 0, 0))
     }
 

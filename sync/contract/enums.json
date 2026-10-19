@@ -1,7 +1,7 @@
 {
   "phase": ["idle", "running", "paused", "overtime"],
   "kind": ["snap", "cmd", "ack"],
-  "op": ["pause", "resume", "still", "issueAndBoard", "answer", "boardReserved", "presence", "pauseInputReport"],
+  "op": ["pause", "resume", "still", "issueAndBoard", "answer", "boardReserved", "presence", "pauseInputReport", "reestimate", "undoReestimate"],
   "opIntroduced": {
     "pause": 3,
     "resume": 3,
@@ -10,7 +10,9 @@
     "answer": 5,
     "boardReserved": 5,
     "presence": 5,
-    "pauseInputReport": 12
+    "pauseInputReport": 12,
+    "reestimate": 15,
+    "undoReestimate": 15
   },
   "pendingCabin": ["progress", "away", "idle", "overrun", "gap"],
   "nudgeKind": ["progress", "overrun", "gap"],
@@ -23,6 +25,12 @@
   "heldBy": ["user", "timetable", "alarm", "switch", "passenger"],
   "pauseCommandHeldBy": ["user", "timetable"],
   "promptAnswer": ["resume", "keepPaused", "none"],
+  "reestimateMode": ["progress", "minutesOnly", "positionReport"],
+  "reestimateTrigger": ["checkIn", "planEnd", "manual"],
+  "reestimateSurface": ["iphonePortrait", "iphoneLandscape", "macPip"],
+  "reestimateInput": ["touch", "click", "keyboard", "trackpadScroll"],
+  "homeSignal": ["green", "yellow", "off"],
+  "judgedEstimateKind": ["original", "reestimate"],
   "error": [
     "pauseLimitReached",
     "noActiveService",
@@ -37,7 +45,7 @@
   ],
   "notes": {
     "phase": "SessionPhase raw values. Unknown values: display conservatively, do not crash.",
-    "op": "pause, resume, still (consume the current cabin prompt), issueAndBoard (issue a ticket and board it in one beat), answer (reply to a nudge), boardReserved (board the reserved ticket), presence (Mac pipVisible and attending, sent only when either changes), and pauseInputReport (Mac input samples for one pause). Do not add arrive/extend. issueAndBoard carries title and estimatedSeconds. answer carries nudgeId, choice, answeredOn, and addSeconds only for willExtend. boardReserved carries ticketId and optional nudgeId, with sessionId null. presence carries pipVisible and attending, with sessionId null. pauseInputReport carries sessionId, pauseId, macSampledSeconds, macActiveSeconds, at, and optional promptedAt and promptAnswer. Other ops omit those keys. Unknown op values decode as unknown and are not applied. An op whose opIntroduced is above the receiver's contract is unsupportedOp.",
+    "op": "pause, resume, still (consume the current cabin prompt), issueAndBoard (issue a ticket and board it in one beat), answer (reply to a nudge), boardReserved (board the reserved ticket), presence (Mac pipVisible and attending, sent only when either changes), pauseInputReport (Mac input samples for one pause), reestimate (commit a new remaining estimate), and undoReestimate (undo the latest reestimate still in effect). Do not add arrive/extend. issueAndBoard carries title and estimatedSeconds. answer carries nudgeId, choice, answeredOn, and addSeconds only for willExtend. boardReserved carries ticketId and optional nudgeId, with sessionId null. presence carries pipVisible and attending, with sessionId null. pauseInputReport carries sessionId, pauseId, macSampledSeconds, macActiveSeconds, at, and optional promptedAt and promptAnswer. reestimate carries sessionId, committedRemainingSeconds, mode, trigger, promptId, surface, input, and optional progressAnswer. undoReestimate carries sessionId and no extra keys. Other ops omit those keys. Unknown op values decode as unknown and are not applied. An op whose opIntroduced is above the receiver's contract is unsupportedOp.",
     "pendingCabin": "Current 車内放送 kind on snap. null when none. Unknown values: ignore for display. idle means service is open with no ride. Hub or PiP shows it while that screen is up. notifyOn names who posts when neither screen is up. progress is stage 1 and is not a notification. overrun is the estimate and handoffs. gap is the blank after arrival. Older Macs ignore unknown values.",
     "notifyOn": "Optional snap field. iphone, mac, or none. Who posts the safety-net notification when neither screen is up. none posts nowhere. Missing on snaps from before contract 11. Unknown strings are dropped and do not fail the snap. notifyTurn is 0...3. notifyFireAt is Unix seconds for away or idle. Overtime fire time comes from remaining seconds.",
     "nudgeKind": "nudge.kind. progress uses pendingCabin progress. overrun and gap match the pendingCabin values of the same name. Unknown values are kept and do not fail the snap.",
@@ -49,6 +57,12 @@
     "heldBy": "Who is holding the pause. user, timetable, alarm, switch, passenger. snap.pauseHeldBy uses these while the ride is paused and omits the key otherwise. Unknown strings stay on the value and do not fail the snap.",
     "pauseCommandHeldBy": "pause.heldBy from Mac. Only user and timetable. alarm, switch, passenger, and unknown values are invalidPayload and are not applied. A missing key is an older Mac: the iPhone infers timetable when the same ride's protection boundary is within 60 seconds of arrival, otherwise user, and stores heldByInferred. The inferred flag is not on the wire.",
     "promptAnswer": "pauseInputReport.promptAnswer. resume, keepPaused, or none. none means the question was shown and not answered. Absent when the question was not shown. Unknown strings decode and are invalidPayload. promptedAt and promptAnswer are written once while the pause is open. After the pause ends they stay. macSampledSeconds and macActiveSeconds only rise, and active stays within sampled. snap carries the stored pair while paused so a restarted Mac continues.",
-    "error": "Ack wire errors only. sessionMismatch and decryptFailed are wire-only (not SessionError cases). Map noActiveSession to noActiveService. Map SessionError.notPaused to notPaused. invalidPayload is issueAndBoard input (empty title or estimatedSeconds outside 60...3600), answer input outside the extend presets, and pause.heldBy other than user or timetable. unsupportedOp means the receiver did not run an unknown op, or an op introduced after the receiver's contract. nudgeStale means the nudgeId is not the current nudge. noReservation means boardReserved arrived with no reserved ticket. reservationChanged means ticketId is not reserved.ticketId. Do not put the rest of SessionError on the wire."
+    "reestimateMode": "reestimate.mode. progress, minutesOnly, or positionReport. Unknown strings decode and are invalidPayload.",
+    "reestimateTrigger": "reestimate.trigger. checkIn, planEnd, or manual. Unknown strings decode and are invalidPayload.",
+    "reestimateSurface": "reestimate.surface. iphonePortrait, iphoneLandscape, or macPip. Unknown strings decode and are invalidPayload.",
+    "reestimateInput": "reestimate.input. touch, click, keyboard, or trackpadScroll. Unknown strings decode and are invalidPayload.",
+    "homeSignal": "home.signal while riding. green is before the home band, yellow is inside it, off is past it. Same words as PunctualityJudgment.HomeSignalState. Unknown strings stay on the value and do not fail the snap. The key is omitted when the ride is idle.",
+    "judgedEstimateKind": "home.judgedEstimate.kind. original is the estimate from ticketing. reestimate adds reestimateIndex and activeSeconds (running seconds at that commit). Unknown strings stay and do not fail the snap.",
+    "error": "Ack wire errors only. sessionMismatch and decryptFailed are wire-only (not SessionError cases). Map noActiveSession to noActiveService. Map SessionError.notPaused to notPaused. invalidPayload is issueAndBoard input (empty title or estimatedSeconds outside 60...3600), answer input outside the extend presets, pause.heldBy other than user or timetable, a reestimate missing a required field or using an unknown enum, and undoReestimate when no reestimate is still in effect. unsupportedOp means the receiver did not run an unknown op, or an op introduced after the receiver's contract. nudgeStale means the nudgeId is not the current nudge. noReservation means boardReserved arrived with no reserved ticket. reservationChanged means ticketId is not reserved.ticketId. Do not put the rest of SessionError on the wire."
   }
 }

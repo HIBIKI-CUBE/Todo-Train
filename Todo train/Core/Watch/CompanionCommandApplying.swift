@@ -22,6 +22,12 @@ enum CompanionCommandApplying {
         if command.op == .answer || command.op == .boardReserved || command.op == .presence {
             return sessionManager.applyNudgeCommand(command)
         }
+        if command.op == .reestimate {
+            return reestimateAck(command, sessionManager: sessionManager)
+        }
+        if command.op == .undoReestimate {
+            return undoReestimateAck(command, sessionManager: sessionManager)
+        }
         var decision = RemotePauseEvaluating.evaluate(
             openSessionId: sessionManager.activeSession?.id,
             pausedCount: sessionManager.pausedCountTowardLimit,
@@ -41,7 +47,7 @@ enum CompanionCommandApplying {
                 try sessionManager.resume()
             case .still:
                 sessionManager.acknowledgeCabinStill()
-            case .issueAndBoard, .answer, .boardReserved, .presence, .pauseInputReport, .unknown:
+            case .issueAndBoard, .answer, .boardReserved, .presence, .pauseInputReport, .reestimate, .undoReestimate, .unknown:
                 break
             }
         }
@@ -82,6 +88,81 @@ enum CompanionCommandApplying {
         }
     }
 
+    /// Records a reestimate by calling the existing commit. Does not add a rule of its own.
+    private static func reestimateAck(
+        _ command: CommandPlaintext,
+        sessionManager: SessionManager
+    ) -> AckPlaintext {
+        guard let mode = ReestimateMode(command.mode),
+              let trigger = ReestimateTrigger(command.trigger),
+              let surface = ReestimateSurface(command.surface),
+              let input = ReestimateInput(command.input),
+              let promptId = command.promptId
+        else {
+            return AckPlaintext(cmdId: command.id, ok: false, error: .invalidPayload)
+        }
+        guard let remaining = command.committedRemainingSeconds else {
+            return AckPlaintext(cmdId: command.id, ok: false, error: .invalidPayload)
+        }
+        guard let sessionId = command.sessionId else {
+            return AckPlaintext(cmdId: command.id, ok: false, error: .noActiveService)
+        }
+        guard let session = sessionManager.activeSession, session.isOpen, sessionManager.phase != .idle else {
+            return AckPlaintext(cmdId: command.id, ok: false, error: .noActiveService)
+        }
+        guard session.id == sessionId else {
+            return AckPlaintext(cmdId: command.id, ok: false, error: .sessionMismatch)
+        }
+        sessionManager.presentReestimate(trigger: trigger, surface: surface, input: input)
+        do {
+            try sessionManager.commitReestimate(
+                mode: mode,
+                progressAnswer: command.progressAnswer,
+                committedRemainingSeconds: remaining,
+                shownBandLowSeconds: nil,
+                shownBandHighSeconds: nil,
+                detailsOpened: false,
+                promptId: promptId
+            )
+        } catch let error as SessionError {
+            sessionManager.dismissReestimate()
+            return AckPlaintext(cmdId: command.id, ok: false, error: wireError(for: error))
+        } catch {
+            sessionManager.dismissReestimate()
+            return AckPlaintext(cmdId: command.id, ok: false, error: .invalidPayload)
+        }
+        return AckPlaintext(cmdId: command.id, ok: true)
+    }
+
+    /// Undoes the latest reestimate that is still in effect. A miss uses an existing ack error.
+    private static func undoReestimateAck(
+        _ command: CommandPlaintext,
+        sessionManager: SessionManager
+    ) -> AckPlaintext {
+        guard let sessionId = command.sessionId else {
+            return AckPlaintext(cmdId: command.id, ok: false, error: .noActiveService)
+        }
+        guard let session = sessionManager.activeSession, session.isOpen, sessionManager.phase != .idle else {
+            return AckPlaintext(cmdId: command.id, ok: false, error: .noActiveService)
+        }
+        guard session.id == sessionId else {
+            return AckPlaintext(cmdId: command.id, ok: false, error: .sessionMismatch)
+        }
+        guard let event = session.reestimateEvents.last(where: { $0.undoneAt == nil }) else {
+            return AckPlaintext(cmdId: command.id, ok: false, error: .invalidPayload)
+        }
+        do {
+            try sessionManager.undoReestimate(eventID: event.id)
+        } catch {
+            return AckPlaintext(cmdId: command.id, ok: false, error: .invalidPayload)
+        }
+        let undone = sessionManager.activeSession?.reestimateEvents.first { $0.id == event.id }?.undoneAt != nil
+        guard undone else {
+            return AckPlaintext(cmdId: command.id, ok: false, error: .invalidPayload)
+        }
+        return AckPlaintext(cmdId: command.id, ok: true)
+    }
+
     /// Passenger lock and a stale service day have no dedicated wire code.
     /// Both refuse boarding, so the sender sees `noActiveService` instead of a silent drop.
     private static func wireError(for error: SessionError) -> WireError {
@@ -92,6 +173,51 @@ enum CompanionCommandApplying {
             .pauseLimitReached
         default:
             .invalidPayload
+        }
+    }
+}
+
+extension ReestimateMode {
+    init?(_ wire: WireReestimateMode?) {
+        switch wire {
+        case .progress: self = .progress
+        case .minutesOnly: self = .minutesOnly
+        case .positionReport: self = .positionReport
+        case .unknown, .none: return nil
+        }
+    }
+}
+
+extension ReestimateTrigger {
+    init?(_ wire: WireReestimateTrigger?) {
+        switch wire {
+        case .checkIn: self = .checkIn
+        case .planEnd: self = .planEnd
+        case .manual: self = .manual
+        case .unknown, .none: return nil
+        }
+    }
+}
+
+extension ReestimateSurface {
+    init?(_ wire: WireReestimateSurface?) {
+        switch wire {
+        case .iphonePortrait: self = .iphonePortrait
+        case .iphoneLandscape: self = .iphoneLandscape
+        case .macPip: self = .macPip
+        case .unknown, .none: return nil
+        }
+    }
+}
+
+extension ReestimateInput {
+    init?(_ wire: WireReestimateInput?) {
+        switch wire {
+        case .touch: self = .touch
+        case .click: self = .click
+        case .keyboard: self = .keyboard
+        case .trackpadScroll: self = .trackpadScroll
+        case .unknown, .none: return nil
         }
     }
 }
