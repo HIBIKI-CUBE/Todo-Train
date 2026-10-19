@@ -370,12 +370,12 @@ struct HistoryView: View {
                     pinnedSpread: previewPinnedSpread,
                     playsSpreadDemo: previewPlaysSpreadDemo,
                     layoutViewport: CGSize(
-                        width: max(80, viewport.width - TicketStampBundleLayout.safeMargin * 2),
+                        width: max(80, viewport.width),
                         height: max(80, viewport.height)
                     ),
                     bottomObstacle: bottomObstacle
                 )
-                .padding(.trailing, TicketStampBundleLayout.fanTrailingPadding)
+                .padding(.trailing, TicketStampBundleLayout.safeMargin)
                 .padding(.bottom, bottomObstacle + TicketStampBundleLayout.bottomClearance)
                 .zIndex(4)
                 .onAppear {

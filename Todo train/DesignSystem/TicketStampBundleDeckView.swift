@@ -141,7 +141,7 @@ struct TicketStampBundleDeckView: View {
         .frame(maxWidth: style == .viewer ? .infinity : nil, maxHeight: style == .viewer ? .infinity : nil)
     }
 
-    /// 右下を固定し、券面が大きくなる分は上と左へ出す。
+    /// たたんだ右下から、開いた扇の中央へ。大きくなる分は上へ出す。
     @ViewBuilder
     private func fanBody(fan: TicketStampBundleLayout.ExpandedFan) -> some View {
         if reduceMotion, style != .viewer, pinnedSpread == nil, !playsSpreadDemo {
@@ -210,10 +210,27 @@ struct TicketStampBundleDeckView: View {
             }
         }
         .compositingGroup()
-        .offset(
-            x: -fan.cornerInset.width - TicketStampBundleLayout.safeMargin,
-            y: -fan.cornerInset.height
+        .offset(fanShift(spread: spread, fan: fan))
+    }
+
+    /// ビューアは開いた扇を右下に置く。運行終了と履歴は、たたんだ右端から開いた中央へ直線で動かす。
+    private func fanShift(spread: CGFloat, fan: TicketStampBundleLayout.ExpandedFan) -> CGSize {
+        if style == .viewer {
+            return CGSize(
+                width: -fan.cornerInset.width - TicketStampBundleLayout.safeMargin,
+                height: -fan.cornerInset.height
+            )
+        }
+        let shift = TicketStampBundleLayout.layerOffset(
+            fan: fan,
+            spread: spread,
+            fittingWidth: layoutViewport.width,
+            fittingHeight: layoutViewport.height,
+            depth: TicketStampBundleLayout.depthCap,
+            bottomObstacle: bottomObstacle,
+            bottomClearance: TicketStampBundleLayout.bottomClearance
         )
+        return CGSize(width: shift.x, height: shift.y)
     }
 
     private func cardOpacity(_ depth: Double) -> Double {

@@ -213,12 +213,12 @@ struct ServiceShutdownCover: View {
                         pinnedSpread: previewPinnedSpread,
                         playsSpreadDemo: previewPlaysSpreadDemo,
                         layoutViewport: CGSize(
-                            width: max(80, geo.size.width - TicketStampBundleLayout.safeMargin * 2),
+                            width: max(80, geo.size.width),
                             height: max(80, geo.size.height + Self.consoleBlockHeight)
                         ),
                         bottomObstacle: Self.consoleBlockHeight
                     )
-                    .padding(.trailing, TicketStampBundleLayout.fanTrailingPadding)
+                    .padding(.trailing, TicketStampBundleLayout.safeMargin)
                     .padding(.bottom, TicketStampBundleLayout.bottomClearance)
                     .zIndex(4)
                     .allowsHitTesting(!poweringDown)

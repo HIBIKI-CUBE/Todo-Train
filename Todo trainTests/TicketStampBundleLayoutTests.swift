@@ -211,6 +211,117 @@ struct TicketStampBundleLayoutTests {
         #expect(fan.ticket.width > 120)
     }
 
+    @Test func collapsedFanRightEdgeSitsOnTheTrailingMargin() {
+        let width: CGFloat = 390
+        let height: CGFloat = 780
+        let obstacle: CGFloat = 72
+        let clearance = TicketStampBundleLayout.bottomClearance
+        let fan = fittedFan(width: width, height: height, obstacle: obstacle, clearance: clearance)
+        let rect = TicketStampBundleLayout.placedFanRect(
+            fan: fan,
+            spread: 0,
+            fittingWidth: width,
+            fittingHeight: height,
+            depth: 4,
+            bottomObstacle: obstacle,
+            bottomClearance: clearance
+        )
+        let usable = TicketStampBundleLayout.usableFanHeight(
+            fittingHeight: height,
+            bottomObstacle: obstacle,
+            bottomClearance: clearance
+        )
+        #expect(abs(rect.maxX - (width - TicketStampBundleLayout.safeMargin)) < 0.5)
+        #expect(abs(rect.maxY - usable) < 0.5)
+    }
+
+    @Test func openFanCentersHorizontallyInsideTheSafeRect() {
+        let clearance = TicketStampBundleLayout.bottomClearance
+        let phone = fittedFan(width: 390, height: 780, obstacle: 72, clearance: clearance)
+        let phoneRect = TicketStampBundleLayout.placedFanRect(
+            fan: phone,
+            spread: 1,
+            fittingWidth: 390,
+            fittingHeight: 780,
+            depth: 4,
+            bottomObstacle: 72,
+            bottomClearance: clearance
+        )
+        #expect(abs(phoneRect.midX - 195) < 0.5)
+        #expect(phoneRect.minX >= -0.5)
+        #expect(phoneRect.maxX <= 390.5)
+
+        let wide = fittedFan(width: 700, height: 240, obstacle: 0, clearance: clearance)
+        let wideRect = TicketStampBundleLayout.placedFanRect(
+            fan: wide,
+            spread: 1,
+            fittingWidth: 700,
+            fittingHeight: 240,
+            depth: 4,
+            bottomObstacle: 0,
+            bottomClearance: clearance
+        )
+        #expect(wideRect.minX >= -0.5)
+        #expect(wideRect.maxX <= 700.5)
+        #expect(abs(wideRect.midX - 350) < 0.5)
+    }
+
+    @Test func fanOriginSlidesLinearlyBetweenTheCornerAndTheCenter() {
+        let width: CGFloat = 390
+        let height: CGFloat = 780
+        let obstacle: CGFloat = 72
+        let clearance = TicketStampBundleLayout.bottomClearance
+        let fan = fittedFan(width: width, height: height, obstacle: obstacle, clearance: clearance)
+        func origin(_ spread: CGFloat) -> CGPoint {
+            TicketStampBundleLayout.fanOrigin(
+                fan: fan,
+                spread: spread,
+                fittingWidth: width,
+                fittingHeight: height,
+                depth: 4,
+                bottomObstacle: obstacle,
+                bottomClearance: clearance
+            )
+        }
+        let start = origin(0)
+        let middle = origin(0.5)
+        let end = origin(1)
+        #expect(abs(middle.x - (start.x + end.x) / 2) < 0.01)
+        #expect(start.x > end.x)
+        let usable = TicketStampBundleLayout.usableFanHeight(
+            fittingHeight: height,
+            bottomObstacle: obstacle,
+            bottomClearance: clearance
+        )
+        for spread in [CGFloat(0), 0.25, 0.5, 0.75, 1] {
+            let rect = TicketStampBundleLayout.placedFanRect(
+                fan: fan,
+                spread: spread,
+                fittingWidth: width,
+                fittingHeight: height,
+                depth: 4,
+                bottomObstacle: obstacle,
+                bottomClearance: clearance
+            )
+            #expect(abs(rect.maxY - usable) < 0.5)
+        }
+    }
+
+    private func fittedFan(
+        width: CGFloat,
+        height: CGFloat,
+        obstacle: CGFloat,
+        clearance: CGFloat
+    ) -> TicketStampBundleLayout.ExpandedFan {
+        TicketStampBundleLayout.expandedFan(
+            fittingWidth: width,
+            fittingHeight: height,
+            depth: 4,
+            bottomObstacle: obstacle,
+            bottomClearance: clearance
+        )
+    }
+
     @Test func openFanKeepsTheCornerNearTheBoxCorner() {
         let fan = TicketStampBundleLayout.expandedFan(fittingWidth: 390, fittingHeight: 720, depth: 4)
         #expect(fan.cornerInset.width <= TicketStampBundleLayout.maxCornerInset + 0.5)

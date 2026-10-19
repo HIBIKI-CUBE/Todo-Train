@@ -27,8 +27,6 @@ enum TicketStampBundleLayout {
     static let safeMargin: CGFloat = 12
     /// 手前の券面の下端と、下ボタンやタブバーの上端とのあいだ。
     static let bottomClearance: CGFloat = 8
-    /// 描いた扇の右端が計算より少し出る。余白を足して画面の中に収める。
-    static let fanTrailingPadding: CGFloat = safeMargin * 2 + 16
     /// 支点は券面の下半分。右端から半径だけ外。
     static let pivotYRatio: CGFloat = 0.64
     static let compactStepDegrees: Double = 1.6
@@ -275,7 +273,7 @@ enum TicketStampBundleLayout {
         var ticket: CGSize
         var radius: CGFloat
         var stepDegrees: Double
-        /// 手前の券面の右下を、容器の右下から内側へ寄せる量。開閉では動かさない。
+        /// 開いた扇で、手前の券面の右下より外接が右や下へ出る量。収める計算に使う。
         var cornerInset: CGSize
     }
 
@@ -401,6 +399,127 @@ enum TicketStampBundleLayout {
             dx: fittingWidth - fan.ticket.width - fan.cornerInset.width,
             dy: usableHeight - fan.ticket.height - fan.cornerInset.height
         )
+    }
+
+    /// 手前の券面の左上を容器に置いた位置。
+    /// x は spread 0（外接の右端が右余白）と spread 1（外接の水平中心が容器の中央）の直線補間。
+    /// 中央に置くと安全領域からはみ出すときは、収まる側へ寄せる。
+    /// y は、その spread の外接の下端が使える高さの下端に来るようにする。
+    static func fanOrigin(
+        fan: ExpandedFan,
+        spread: CGFloat,
+        fittingWidth: CGFloat,
+        fittingHeight: CGFloat,
+        depth: Int,
+        bottomObstacle: CGFloat = 0,
+        bottomClearance: CGFloat = 0
+    ) -> CGPoint {
+        let spread = unit(spread)
+        let usableHeight = usableFanHeight(
+            fittingHeight: fittingHeight,
+            bottomObstacle: bottomObstacle,
+            bottomClearance: bottomClearance
+        )
+        let bounds = geometry(fan: fan, spread: spread, depth: depth).bounds
+        let leading = collapsedOriginX(fan: fan, fittingWidth: fittingWidth, depth: depth)
+        let centered = centeredOriginX(fan: fan, fittingWidth: fittingWidth, depth: depth)
+        return CGPoint(
+            x: lerp(leading, centered, spread),
+            y: usableHeight - bounds.maxY
+        )
+    }
+
+    /// 外接を容器に置いた矩形。`fanOrigin` と同じ位置。
+    static func placedFanRect(
+        fan: ExpandedFan,
+        spread: CGFloat,
+        fittingWidth: CGFloat,
+        fittingHeight: CGFloat,
+        depth: Int,
+        bottomObstacle: CGFloat = 0,
+        bottomClearance: CGFloat = 0
+    ) -> CGRect {
+        let bounds = geometry(fan: fan, spread: spread, depth: depth).bounds
+        let origin = fanOrigin(
+            fan: fan,
+            spread: spread,
+            fittingWidth: fittingWidth,
+            fittingHeight: fittingHeight,
+            depth: depth,
+            bottomObstacle: bottomObstacle,
+            bottomClearance: bottomClearance
+        )
+        return bounds.offsetBy(dx: origin.x, dy: origin.y)
+    }
+
+    /// 券面の右下を容器の右下余白に揃えたあと、扇を `fanOrigin` へ動かす量。
+    /// 運行終了と履歴は、たたんだ束の枠の右下をその点に置く。
+    static func layerOffset(
+        fan: ExpandedFan,
+        spread: CGFloat,
+        fittingWidth: CGFloat,
+        fittingHeight: CGFloat,
+        depth: Int,
+        bottomObstacle: CGFloat = 0,
+        bottomClearance: CGFloat = 0
+    ) -> CGPoint {
+        let snapshot = geometry(fan: fan, spread: spread, depth: depth)
+        let origin = fanOrigin(
+            fan: fan,
+            spread: spread,
+            fittingWidth: fittingWidth,
+            fittingHeight: fittingHeight,
+            depth: depth,
+            bottomObstacle: bottomObstacle,
+            bottomClearance: bottomClearance
+        )
+        let anchorX = fittingWidth - safeMargin
+        let usableHeight = usableFanHeight(
+            fittingHeight: fittingHeight,
+            bottomObstacle: bottomObstacle,
+            bottomClearance: bottomClearance
+        )
+        return CGPoint(
+            x: origin.x - anchorX + snapshot.ticket.width,
+            y: origin.y - usableHeight + snapshot.ticket.height
+        )
+    }
+
+    private static func geometry(
+        fan: ExpandedFan,
+        spread: CGFloat,
+        depth: Int
+    ) -> (bounds: CGRect, ticket: CGSize) {
+        let compact = compactTicketSize()
+        let ticket = ticketSize(compact: compact, expanded: fan.ticket, spread: spread)
+        let radius = lerp(compact.width * compactRadiusRatio, fan.radius, spread)
+        let bounds = fanBounds(
+            ticketWidth: ticket.width,
+            ticketHeight: ticket.height,
+            radius: radius,
+            spread: spread,
+            expandedStep: fan.stepDegrees,
+            depthCap: max(0, depth)
+        )
+        return (bounds, ticket)
+    }
+
+    private static func collapsedOriginX(fan: ExpandedFan, fittingWidth: CGFloat, depth: Int) -> CGFloat {
+        let bounds = geometry(fan: fan, spread: 0, depth: depth).bounds
+        return fittingWidth - safeMargin - bounds.maxX
+    }
+
+    private static func centeredOriginX(fan: ExpandedFan, fittingWidth: CGFloat, depth: Int) -> CGFloat {
+        let bounds = geometry(fan: fan, spread: 1, depth: depth).bounds
+        let mid = (bounds.minX + bounds.maxX) / 2
+        var dx = fittingWidth / 2 - mid
+        if bounds.maxX + dx > fittingWidth {
+            dx -= bounds.maxX + dx - fittingWidth
+        }
+        if bounds.minX + dx < 0 {
+            dx -= bounds.minX + dx
+        }
+        return dx
     }
 
     private static func makeFan(width: CGFloat, scale: CGFloat, depth: Int) -> ExpandedFan {
