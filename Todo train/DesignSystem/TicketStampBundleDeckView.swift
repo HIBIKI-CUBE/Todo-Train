@@ -38,7 +38,10 @@ struct TicketStampBundleDeckView: View {
     /// 開閉の録画用。0 から 1 へ開いて戻す。
     var playsSpreadDemo: Bool = false
     /// 隅に置いた扇が収まってよい矩形。運行終了と履歴が渡す。
+    /// 高さは下ボタンやタブバーを含んだ容器。`bottomObstacle` でその高さを渡す。
     var layoutViewport: CGSize = CGSize(width: 360, height: 640)
+    /// 矩形の下端にある下ボタン、またはタブバー。
+    var bottomObstacle: CGFloat = 0
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var spread: CGFloat = 0
@@ -115,18 +118,11 @@ struct TicketStampBundleDeckView: View {
     private var deck: some View {
         GeometryReader { geo in
             let fan = fittedFan(in: geo.size)
-            ZStack(alignment: .bottomTrailing) {
-                if reduceMotion, style != .viewer, pinnedSpread == nil, !playsSpreadDemo {
-                    fanLayer(spread: 0, fan: fan)
-                        .opacity(1 - renderedSpread)
-                    fanLayer(spread: 1, fan: fan)
-                        .opacity(renderedSpread)
-                } else {
-                    fanLayer(spread: renderedSpread, fan: fan)
+            Color.clear
+                .overlay(alignment: .bottomTrailing) {
+                    fanBody(fan: fan)
                 }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-            .contentShape(Rectangle())
+                .contentShape(Rectangle())
             .onTapGesture {
                 guard style == .historyStrip else { return }
                 guard renderedSpread < 0.08, !shuttleDrive.engaged, !suppressNextTap else {
@@ -143,6 +139,21 @@ struct TicketStampBundleDeckView: View {
             height: style == .viewer ? nil : TicketStampBundleLayout.collapsedFanSize.height
         )
         .frame(maxWidth: style == .viewer ? .infinity : nil, maxHeight: style == .viewer ? .infinity : nil)
+    }
+
+    /// 右下を固定し、券面が大きくなる分は上と左へ出す。
+    @ViewBuilder
+    private func fanBody(fan: TicketStampBundleLayout.ExpandedFan) -> some View {
+        if reduceMotion, style != .viewer, pinnedSpread == nil, !playsSpreadDemo {
+            ZStack(alignment: .bottomTrailing) {
+                fanLayer(spread: 0, fan: fan)
+                    .opacity(1 - renderedSpread)
+                fanLayer(spread: 1, fan: fan)
+                    .opacity(renderedSpread)
+            }
+        } else {
+            fanLayer(spread: renderedSpread, fan: fan)
+        }
     }
 
     private func fanLayer(spread: CGFloat, fan: TicketStampBundleLayout.ExpandedFan) -> some View {
@@ -230,10 +241,14 @@ struct TicketStampBundleDeckView: View {
                 height: max(layoutViewport.height, 80)
             )
         }
+        let clearance = style == .viewer ? 0 : TicketStampBundleLayout.bottomClearance
+        let obstacle = style == .viewer ? 0 : bottomObstacle
         return TicketStampBundleLayout.expandedFan(
             fittingWidth: box.width,
             fittingHeight: box.height,
-            depth: TicketStampBundleLayout.depthCap
+            depth: TicketStampBundleLayout.depthCap,
+            bottomObstacle: obstacle,
+            bottomClearance: clearance
         )
     }
 

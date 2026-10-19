@@ -284,11 +284,11 @@ struct HistoryView: View {
 
     private var calendarDay: some View {
         GeometryReader { geo in
-            calendarDayStack(viewport: geo.size)
+            calendarDayStack(viewport: geo.size, bottomObstacle: geo.safeAreaInsets.bottom)
         }
     }
 
-    private func calendarDayStack(viewport: CGSize) -> some View {
+    private func calendarDayStack(viewport: CGSize, bottomObstacle: CGFloat) -> some View {
         let bundleReserve = dayStampBundle?.stamps.isEmpty == false && rideDensity == .day
             ? TicketStampBundleLayout.collapsedFanSize.height
             : 0
@@ -370,11 +370,12 @@ struct HistoryView: View {
                     playsSpreadDemo: previewPlaysSpreadDemo,
                     layoutViewport: CGSize(
                         width: max(80, viewport.width - TicketStampBundleLayout.safeMargin * 2),
-                        height: max(80, viewport.height - 8)
-                    )
+                        height: max(80, viewport.height)
+                    ),
+                    bottomObstacle: bottomObstacle
                 )
                 .padding(.trailing, TicketStampBundleLayout.fanTrailingPadding)
-                .padding(.bottom, 6)
+                .padding(.bottom, bottomObstacle + TicketStampBundleLayout.bottomClearance)
                 .zIndex(4)
                 .onAppear {
                     bundleStripFocusIndex = max(0, bundle.stamps.count - 1)

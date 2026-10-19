@@ -29,6 +29,8 @@ struct ServiceShutdownCover: View {
     private static let overviewID = "service-overview"
     private static let bundleID = "ticket-stamp-bundle"
     private static let minimumClockHeight: CGFloat = 88
+    /// 区切り線と「キャンセル / 運行終了」の行。扇の安全領域の下端に含める。
+    private static let consoleBlockHeight: CGFloat = 72 + FocusPanel.hairlineWidth
 
     private var pausedSessions: [WorkSession] {
         sessionManager.pausedSessions
@@ -125,7 +127,7 @@ struct ServiceShutdownCover: View {
                 .disabled(!canConfirmEnd)
                 .accessibilityHint(canConfirmEnd ? "盤を落として運行を終了します" : endBlockedReason)
             }
-            .frame(height: 72)
+            .frame(height: Self.consoleBlockHeight - FocusPanel.hairlineWidth)
         }
     }
 
@@ -212,11 +214,12 @@ struct ServiceShutdownCover: View {
                         playsSpreadDemo: previewPlaysSpreadDemo,
                         layoutViewport: CGSize(
                             width: max(80, geo.size.width - TicketStampBundleLayout.safeMargin * 2),
-                            height: max(80, geo.size.height - 8)
-                        )
+                            height: max(80, geo.size.height + Self.consoleBlockHeight)
+                        ),
+                        bottomObstacle: Self.consoleBlockHeight
                     )
                     .padding(.trailing, TicketStampBundleLayout.fanTrailingPadding)
-                    .padding(.bottom, 4)
+                    .padding(.bottom, TicketStampBundleLayout.bottomClearance)
                     .zIndex(4)
                     .allowsHitTesting(!poweringDown)
                     .onAppear {

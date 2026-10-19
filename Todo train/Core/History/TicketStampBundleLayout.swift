@@ -25,6 +25,8 @@ enum TicketStampBundleLayout {
     /// 手前の券面の右下を、容器の右下からこれより内側へ寄せない。
     static let maxCornerInset: CGFloat = 64
     static let safeMargin: CGFloat = 12
+    /// 手前の券面の下端と、下ボタンやタブバーの上端とのあいだ。
+    static let bottomClearance: CGFloat = 8
     /// 描いた扇の右端が計算より少し出る。余白を足して画面の中に収める。
     static let fanTrailingPadding: CGFloat = safeMargin * 2 + 16
     /// 支点は券面の下半分。右端から半径だけ外。
@@ -277,12 +279,33 @@ enum TicketStampBundleLayout {
         var cornerInset: CGSize
     }
 
+    /// 容器の下端から、下ボタン（またはタブバー）と余白を除いた扇の高さ。
+    static func usableFanHeight(
+        fittingHeight: CGFloat,
+        bottomObstacle: CGFloat,
+        bottomClearance: CGFloat
+    ) -> CGFloat {
+        fittingHeight - max(0, bottomObstacle) - max(0, bottomClearance)
+    }
+
     /// 開いた扇が矩形に収まる券面・半径・角度。
     /// 手前の券面の右下は `cornerInset` だけ内側に固定し、奥の切符が右や下へ出た分も矩形の中に置く。
+    /// 矩形の下端には `bottomObstacle`（下ボタンやタブバー）と `bottomClearance` を含める。扇の下端はその上で止める。
     /// 半径は券面幅の `expandedRadiusRatio` 倍まで、角度は名前と角判が見える角と `maxExpandedStepDegrees` までのうち小さい方。
     /// 矩形が狭いときは、その上限より開きを小さくして収める。
-    static func expandedFan(fittingWidth: CGFloat, fittingHeight: CGFloat, depth: Int) -> ExpandedFan {
+    static func expandedFan(
+        fittingWidth: CGFloat,
+        fittingHeight: CGFloat,
+        depth: Int,
+        bottomObstacle: CGFloat = 0,
+        bottomClearance: CGFloat = 0
+    ) -> ExpandedFan {
         let depth = max(0, depth)
+        let fittingHeight = usableFanHeight(
+            fittingHeight: fittingHeight,
+            bottomObstacle: bottomObstacle,
+            bottomClearance: bottomClearance
+        )
         guard fittingWidth > 72, fittingHeight > 72 else {
             let width = min(96, max(48, fittingWidth - 8))
             return makeFan(width: width, scale: 0, depth: depth)
@@ -352,8 +375,15 @@ enum TicketStampBundleLayout {
         return makeFan(width: 64, scale: 0, depth: depth)
     }
 
-    /// 開いた扇を、容器の右下に外接が接するように置いた範囲。
-    static func expandedFanRect(fan: ExpandedFan, fittingWidth: CGFloat, fittingHeight: CGFloat, depth: Int) -> CGRect {
+    /// 開いた扇を、下の障害物の上で右下に外接が接するように置いた範囲。
+    static func expandedFanRect(
+        fan: ExpandedFan,
+        fittingWidth: CGFloat,
+        fittingHeight: CGFloat,
+        depth: Int,
+        bottomObstacle: CGFloat = 0,
+        bottomClearance: CGFloat = 0
+    ) -> CGRect {
         let bounds = fanBounds(
             ticketWidth: fan.ticket.width,
             ticketHeight: fan.ticket.height,
@@ -362,9 +392,14 @@ enum TicketStampBundleLayout {
             expandedStep: fan.stepDegrees,
             depthCap: max(0, depth)
         )
+        let usableHeight = usableFanHeight(
+            fittingHeight: fittingHeight,
+            bottomObstacle: bottomObstacle,
+            bottomClearance: bottomClearance
+        )
         return bounds.offsetBy(
             dx: fittingWidth - fan.ticket.width - fan.cornerInset.width,
-            dy: fittingHeight - fan.ticket.height - fan.cornerInset.height
+            dy: usableHeight - fan.ticket.height - fan.cornerInset.height
         )
     }
 

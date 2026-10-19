@@ -183,6 +183,34 @@ struct TicketStampBundleLayoutTests {
         #expect(abs(newer - 2) < 0.001)
     }
 
+    @Test func openFanBottomStaysAboveTheBottomObstacle() {
+        let width: CGFloat = 390
+        let height: CGFloat = 780
+        let obstacle: CGFloat = 72
+        let clearance = TicketStampBundleLayout.bottomClearance
+        let fan = TicketStampBundleLayout.expandedFan(
+            fittingWidth: width,
+            fittingHeight: height,
+            depth: 4,
+            bottomObstacle: obstacle,
+            bottomClearance: clearance
+        )
+        let rect = TicketStampBundleLayout.expandedFanRect(
+            fan: fan,
+            fittingWidth: width,
+            fittingHeight: height,
+            depth: 4,
+            bottomObstacle: obstacle,
+            bottomClearance: clearance
+        )
+        let obstacleTop = height - obstacle
+        let frontBottom = rect.maxY - fan.cornerInset.height
+        #expect(rect.maxY <= obstacleTop - clearance + 0.5)
+        #expect(frontBottom <= obstacleTop - clearance + 0.5)
+        #expect(rect.minY >= -0.5)
+        #expect(fan.ticket.width > 120)
+    }
+
     @Test func openFanKeepsTheCornerNearTheBoxCorner() {
         let fan = TicketStampBundleLayout.expandedFan(fittingWidth: 390, fittingHeight: 720, depth: 4)
         #expect(fan.cornerInset.width <= TicketStampBundleLayout.maxCornerInset + 0.5)
