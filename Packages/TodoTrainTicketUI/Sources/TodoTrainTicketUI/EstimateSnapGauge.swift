@@ -3,12 +3,20 @@
 //  Todo train
 //
 //  Full-width linear snap gauge — sticky detents, spring escape (“ビュン”), Liquid Glass knob.
+//  `.ticket` は発券の見た目。`.cabin` は盤の色と振動だけを差し替える。
 //
 
 import SwiftUI
 #if os(iOS)
 import UIKit
 #endif
+
+public enum EstimateSnapGaugeStyle: Sendable, Equatable {
+    /// 発券画面。Liquid Glass、アクセントの塗り、緑の推し点。
+    case ticket
+    /// 運転台。純黒の溝、白のインク、平らなつまみ。
+    case cabin
+}
 
 public struct EstimateSnapGauge: View {
     @Binding var minutes: Int
@@ -22,10 +30,16 @@ public struct EstimateSnapGauge: View {
     public var minimumCommitTranslation: CGFloat
     public var requiresDragToCommit: Bool
     public var accessibilityLabelText: String
+    public var style: EstimateSnapGaugeStyle
+    /// `.cabin` のホーム帯を、答えが幅の中のときに明るくする。
+    public var homeBandLit: Bool
+    /// nil のときは「N分」。位置確認は割の読みを渡す。
+    public var accessibilityValueText: String?
     /// When true, finger-up issues a ticket — quiet detent so sheet owns celebration.
     public var willIssue: () -> Bool = { false }
     public var onCommit: (() -> Void)?
     public var onLongPress: (() -> Void)?
+    public var onTouchingChange: ((Bool) -> Void)?
 
     public init(
         minutes: Binding<Int>,
@@ -37,9 +51,13 @@ public struct EstimateSnapGauge: View {
         minimumCommitTranslation: CGFloat = 10,
         requiresDragToCommit: Bool = false,
         accessibilityLabelText: String = "見積もり",
+        style: EstimateSnapGaugeStyle = .ticket,
+        homeBandLit: Bool = false,
+        accessibilityValueText: String? = nil,
         willIssue: @escaping () -> Bool = { false },
         onCommit: (() -> Void)? = nil,
-        onLongPress: (() -> Void)? = nil
+        onLongPress: (() -> Void)? = nil,
+        onTouchingChange: ((Bool) -> Void)? = nil
     ) {
         _minutes = minutes
         self.highlightedMinutes = highlightedMinutes
@@ -50,9 +68,13 @@ public struct EstimateSnapGauge: View {
         self.minimumCommitTranslation = minimumCommitTranslation
         self.requiresDragToCommit = requiresDragToCommit
         self.accessibilityLabelText = accessibilityLabelText
+        self.style = style
+        self.homeBandLit = homeBandLit
+        self.accessibilityValueText = accessibilityValueText
         self.willIssue = willIssue
         self.onCommit = onCommit
         self.onLongPress = onLongPress
+        self.onTouchingChange = onTouchingChange
     }
 
     @State private var displayFraction: CGFloat = 0
@@ -61,6 +83,9 @@ public struct EstimateSnapGauge: View {
     @State private var selectionPulse = 0
     @State private var impactPulse = 0
     @State private var confirmPulse = 0
+    @State private var cabinSelectionPulse = 0
+    @State private var overscrollPulse = 0
+    @State private var wasOverscrolling = false
     @State private var dragStartAnchoredMinutes = 0
     @State private var suppressCommit = false
 
@@ -70,63 +95,14 @@ public struct EstimateSnapGauge: View {
     public var body: some View {
         GeometryReader { geo in
             let width = geo.size.width
-            let knobX = displayFraction * width
-            let fillWidth = max(min(max(displayFraction, 0), 1) * width, trackHeight / 2)
-
-            ZStack(alignment: .leading) {
-                Capsule()
-                    .fill(.clear)
-                    .frame(height: trackHeight)
-                    .ticketGlass(nil, in: Capsule())
-
-                Capsule()
-                    .fill(TicketGaugeInk.rail.opacity(0.28))
-                    .frame(width: fillWidth, height: trackHeight)
-                    .allowsHitTesting(false)
-
-                if let bandRangeMinutes {
-                    let lowX = EstimateSnapMapping.fraction(minutes: bandRangeMinutes.lowerBound, maxMinutes: maxMinutes) * width
-                    let highX = EstimateSnapMapping.fraction(minutes: bandRangeMinutes.upperBound, maxMinutes: maxMinutes) * width
-                    Capsule()
-                        .fill(TicketGaugeInk.rail.opacity(0.14))
-                        .frame(width: max(highX - lowX, 4), height: trackHeight)
-                        .offset(x: lowX)
-                        .allowsHitTesting(false)
-                }
-
-                ForEach(stopMinutes, id: \.self) { stop in
-                    let x = EstimateSnapMapping.fraction(minutes: stop, maxMinutes: maxMinutes) * width
-                    let isActive = anchoredMinutes == stop
-                    let isHighlighted = highlightedMinutes == stop
-                    Circle()
-                        .fill(
-                            isActive
-                                ? TicketGaugeInk.rail
-                                : (isHighlighted ? TicketGaugeInk.highlight : Color.primary.opacity(0.2))
-                        )
-                        .frame(width: isActive ? 7 : (isHighlighted ? 6 : 4),
-                               height: isActive ? 7 : (isHighlighted ? 6 : 4))
-                        .position(x: x, y: trackHeight / 2)
-                        .allowsHitTesting(false)
-                }
-
-                Circle()
-                    .fill(.clear)
-                    .frame(width: knobSize, height: knobSize)
-                    .ticketGlass(TicketGaugeInk.rail, in: Circle())
-                    .position(x: knobX, y: trackHeight / 2)
-                    .allowsHitTesting(false)
-            }
-            .frame(height: trackHeight)
-            .contentShape(Rectangle())
-            .highPriorityGesture(scrubGesture(width: width))
-            .simultaneousGesture(
-                LongPressGesture(minimumDuration: 0.55, maximumDistance: 8)
-                    .onEnded { _ in
-                        suppressCommit = true
-                        onLongPress?()
-                    }
-            )
+            chrome(width: width)
+                .frame(height: trackHeight)
+                .contentShape(Rectangle())
+                .highPriorityGesture(scrubGesture(width: width))
+                .modifier(EstimateSnapLongPress(enabled: onLongPress != nil) {
+                    suppressCommit = true
+                    onLongPress?()
+                })
         }
         .frame(height: trackHeight)
         .onAppear {
@@ -138,9 +114,21 @@ public struct EstimateSnapGauge: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityLabelText)
-        .accessibilityValue("\(minutes)分")
+        .accessibilityValue(accessibilityValueText ?? "\(minutes)分")
         .accessibilityAdjustableAction { direction in
             let stops = stopMinutes
+            if startsAtLeftUnselected, anchoredMinutes <= 0 {
+                if direction == .increment, let first = stops.first {
+                    let issuingContext = willIssue()
+                    applyEscape(
+                        to: first,
+                        playHaptic: !issuingContext,
+                        animated: !issuingContext
+                    )
+                    noteAdjustableDetent(issuing: issuingContext)
+                }
+                return
+            }
             guard let index = stops.firstIndex(of: anchoredMinutes)
                     ?? stops.firstIndex(of: EstimateSnapMapping.snap(
                         rawMinutes: Double(minutes),
@@ -156,7 +144,7 @@ public struct EstimateSnapGauge: View {
                         playHaptic: !issuingContext,
                         animated: !issuingContext
                     )
-                    if !issuingContext { selectionPulse += 1 }
+                    noteAdjustableDetent(issuing: issuingContext)
                 }
             case .decrement:
                 if index > 0 {
@@ -165,7 +153,7 @@ public struct EstimateSnapGauge: View {
                         playHaptic: !issuingContext,
                         animated: !issuingContext
                     )
-                    if !issuingContext { selectionPulse += 1 }
+                    noteAdjustableDetent(issuing: issuingContext)
                 }
             @unknown default:
                 break
@@ -174,6 +162,179 @@ public struct EstimateSnapGauge: View {
         .sensoryFeedback(.selection, trigger: selectionPulse)
         .sensoryFeedback(.impact(weight: .medium, intensity: 1.0), trigger: impactPulse)
         .sensoryFeedback(.impact(weight: .light, intensity: 1.0), trigger: confirmPulse)
+        .sensoryFeedback(.selection, trigger: cabinSelectionPulse)
+        .sensoryFeedback(.impact(weight: .light, intensity: 1.0), trigger: overscrollPulse)
+    }
+
+    @ViewBuilder
+    private func chrome(width: CGFloat) -> some View {
+        switch style {
+        case .ticket:
+            ticketChrome(width: width)
+        case .cabin:
+            cabinChrome(width: width)
+        }
+    }
+
+    private func ticketChrome(width: CGFloat) -> some View {
+        let knobX = displayFraction * width
+        let fillWidth = max(min(max(displayFraction, 0), 1) * width, trackHeight / 2)
+        return ZStack(alignment: .leading) {
+            Capsule()
+                .fill(.clear)
+                .frame(height: trackHeight)
+                .ticketGlass(nil, in: Capsule())
+
+            Capsule()
+                .fill(TicketGaugeInk.rail.opacity(0.28))
+                .frame(width: fillWidth, height: trackHeight)
+                .allowsHitTesting(false)
+
+            if let bandRangeMinutes {
+                let lowX = EstimateSnapMapping.fraction(minutes: bandRangeMinutes.lowerBound, maxMinutes: maxMinutes) * width
+                let highX = EstimateSnapMapping.fraction(minutes: bandRangeMinutes.upperBound, maxMinutes: maxMinutes) * width
+                Capsule()
+                    .fill(TicketGaugeInk.rail.opacity(0.14))
+                    .frame(width: max(highX - lowX, 4), height: trackHeight)
+                    .offset(x: lowX)
+                    .allowsHitTesting(false)
+            }
+
+            ForEach(stopMinutes, id: \.self) { stop in
+                let x = EstimateSnapMapping.fraction(minutes: stop, maxMinutes: maxMinutes) * width
+                let isActive = anchoredMinutes == stop
+                let isHighlighted = highlightedMinutes == stop
+                Circle()
+                    .fill(
+                        isActive
+                            ? TicketGaugeInk.rail
+                            : (isHighlighted ? TicketGaugeInk.highlight : Color.primary.opacity(0.2))
+                    )
+                    .frame(width: isActive ? 7 : (isHighlighted ? 6 : 4),
+                           height: isActive ? 7 : (isHighlighted ? 6 : 4))
+                    .position(x: x, y: trackHeight / 2)
+                    .allowsHitTesting(false)
+            }
+
+            Circle()
+                .fill(.clear)
+                .frame(width: knobSize, height: knobSize)
+                .ticketGlass(TicketGaugeInk.rail, in: Circle())
+                .position(x: knobX, y: trackHeight / 2)
+                .allowsHitTesting(false)
+        }
+    }
+
+    private func cabinChrome(width: CGFloat) -> some View {
+        let knobX = cabinX(displayFraction, width: width)
+        let clamped = min(max(displayFraction, 0), 1)
+        let fillWidth = cabinX(clamped, width: width)
+        return ZStack(alignment: .leading) {
+            Capsule()
+                .fill(CabinGaugeInk.groove)
+                .frame(height: trackHeight)
+                .overlay {
+                    Capsule()
+                        .strokeBorder(CabinGaugeInk.hairline, lineWidth: 1)
+                }
+                .overlay {
+                    Capsule()
+                        .stroke(Color.black.opacity(0.55), lineWidth: 2.5)
+                        .blur(radius: 0.8)
+                        .offset(y: 1)
+                        .mask {
+                            Capsule()
+                                .fill(
+                                    LinearGradient(
+                                        colors: [.black, .clear],
+                                        startPoint: .top,
+                                        endPoint: .center
+                                    )
+                                )
+                        }
+                }
+
+            if clamped > 0 {
+                Capsule()
+                    .fill(CabinGaugeInk.fill)
+                    .frame(width: max(fillWidth, trackHeight / 2), height: trackHeight)
+                    .allowsHitTesting(false)
+            }
+
+            if let bandRangeMinutes {
+                let lowX = cabinX(
+                    EstimateSnapMapping.fraction(minutes: bandRangeMinutes.lowerBound, maxMinutes: maxMinutes),
+                    width: width
+                )
+                let highX = cabinX(
+                    EstimateSnapMapping.fraction(minutes: bandRangeMinutes.upperBound, maxMinutes: maxMinutes),
+                    width: width
+                )
+                Capsule()
+                    .fill(homeBandLit ? CabinGaugeInk.bandLit : CabinGaugeInk.band)
+                    .frame(width: max(highX - lowX, 4), height: trackHeight)
+                    .offset(x: lowX)
+                    .allowsHitTesting(false)
+            }
+
+            ForEach(stopMinutes, id: \.self) { stop in
+                let x = cabinX(
+                    EstimateSnapMapping.fraction(minutes: stop, maxMinutes: maxMinutes),
+                    width: width
+                )
+                if anchoredMinutes != stop {
+                    if highlightedMinutes == stop {
+                        Circle()
+                            .strokeBorder(CabinGaugeInk.ring, lineWidth: 1.5)
+                            .frame(width: 8, height: 8)
+                            .position(x: x, y: trackHeight / 2)
+                            .allowsHitTesting(false)
+                    } else {
+                        Circle()
+                            .fill(CabinGaugeInk.stop)
+                            .frame(width: 4, height: 4)
+                            .position(x: x, y: trackHeight / 2)
+                            .allowsHitTesting(false)
+                    }
+                }
+            }
+
+            Circle()
+                .fill(CabinGaugeInk.knob)
+                .overlay {
+                    Circle().strokeBorder(CabinGaugeInk.knobEdge, lineWidth: 1)
+                }
+                .frame(width: knobSize, height: knobSize)
+                .position(x: knobX, y: trackHeight / 2)
+                .allowsHitTesting(false)
+        }
+    }
+
+    /// つまみの半径ぶん内側に 0 と 1 を置き、その外はゴムの伸び。
+    private func cabinX(_ fraction: CGFloat, width: CGFloat) -> CGFloat {
+        let inset = knobSize / 2
+        let travel = max(width - knobSize, 1)
+        return inset + fraction * travel
+    }
+
+    /// なぞり。`.cabin` は描画と同じ内側の座標。`.ticket` は幅そのもの。
+    private func scrubFingerFraction(x: CGFloat, width: CGFloat) -> CGFloat {
+        switch style {
+        case .ticket:
+            EstimateSnapMapping.unboundedFraction(x: x, width: width)
+        case .cabin:
+            EstimateSnapMapping.cabinFingerFraction(x: x, width: width, knobSize: knobSize)
+        }
+    }
+
+    /// タップの吸い付き。端の外は 0 か 1 に切る。
+    private func tapFraction(x: CGFloat, width: CGFloat) -> CGFloat {
+        switch style {
+        case .ticket:
+            EstimateSnapMapping.fraction(x: x, width: width)
+        case .cabin:
+            EstimateSnapMapping.cabinFraction(x: x, width: width, knobSize: knobSize)
+        }
     }
 
     private func scrubGesture(width: CGFloat) -> some Gesture {
@@ -181,15 +342,13 @@ public struct EstimateSnapGauge: View {
             .onChanged { value in
                 if suppressCommit { return }
                 if !isDragging {
-                    isDragging = true
+                    updateDragging(true)
                     anchoredMinutes = resolvedAnchor(minutes)
                     dragStartAnchoredMinutes = startsAtLeftUnselected && minutes <= 0 ? 0 : anchoredMinutes
                 }
                 let issuingContext = willIssue()
-                let finger = EstimateSnapMapping.unboundedFraction(
-                    x: value.location.x,
-                    width: width
-                )
+                let finger = scrubFingerFraction(x: value.location.x, width: width)
+                noteOverscroll(finger)
                 let scrub: EstimateSnapMapping.StickyScrub
                 if startsAtLeftUnselected, minutes <= 0, anchoredMinutes <= 0 {
                     scrub = EstimateSnapMapping.scrubFromUnselected(
@@ -217,11 +376,10 @@ public struct EstimateSnapGauge: View {
                 }
             }
             .onEnded { value in
-                defer { suppressCommit = false }
-                let finger = EstimateSnapMapping.unboundedFraction(
-                    x: value.location.x,
-                    width: width
-                )
+                defer {
+                    suppressCommit = false
+                    wasOverscrolling = false
+                }
 
                 if suppressCommit {
                     withAnimation(TicketGaugeInk.snap) {
@@ -229,7 +387,7 @@ public struct EstimateSnapGauge: View {
                             minutes: anchoredMinutes,
                             maxMinutes: maxMinutes
                         )
-                        isDragging = false
+                        updateDragging(false)
                     }
                     return
                 }
@@ -253,13 +411,13 @@ public struct EstimateSnapGauge: View {
                     withAnimation(TicketGaugeInk.soft) {
                         syncToMinutes(minutes, animated: false)
                     }
-                    isDragging = false
+                    updateDragging(false)
                     return
                 }
 
                 if translation < 10 {
                     let tapped = EstimateSnapMapping.snap(
-                        fraction: EstimateSnapMapping.fraction(x: value.location.x, width: width),
+                        fraction: tapFraction(x: value.location.x, width: width),
                         stops: stopMinutes,
                         maxMinutes: maxMinutes
                     )
@@ -280,12 +438,12 @@ public struct EstimateSnapGauge: View {
 
                 if issuing {
                     displayFraction = landed
-                    isDragging = false
+                    updateDragging(false)
                     onCommit?()
                 } else {
                     withAnimation(TicketGaugeInk.snap) {
                         displayFraction = landed
-                        isDragging = false
+                        updateDragging(false)
                     }
                     onCommit?()
                 }
@@ -296,7 +454,12 @@ public struct EstimateSnapGauge: View {
         anchoredMinutes = stop
         minutes = stop
         if playHaptic {
-            impactPulse += 1
+            switch style {
+            case .ticket:
+                impactPulse += 1
+            case .cabin:
+                cabinSelectionPulse += 1
+            }
         }
         let target = EstimateSnapMapping.fraction(minutes: stop, maxMinutes: maxMinutes)
         if animated {
@@ -338,6 +501,59 @@ public struct EstimateSnapGauge: View {
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(80))
             confirmPulse += 1
+        }
+    }
+
+    /// 発券の VoiceOver は点の振動に加え、選択のフィードバックも鳴らす。盤は点の選択だけ。
+    private func noteAdjustableDetent(issuing: Bool) {
+        if style == .ticket, !issuing {
+            selectionPulse += 1
+        }
+        if style == .cabin {
+            onCommit?()
+        }
+    }
+
+    private func noteOverscroll(_ finger: CGFloat) {
+        guard style == .cabin else { return }
+        let over = EstimateSnapMapping.isOverscrolling(fingerFraction: finger)
+        if over, !wasOverscrolling {
+            overscrollPulse += 1
+        }
+        wasOverscrolling = over
+    }
+
+    private func updateDragging(_ dragging: Bool) {
+        guard isDragging != dragging else { return }
+        isDragging = dragging
+        onTouchingChange?(dragging)
+    }
+}
+
+private enum CabinGaugeInk {
+    static let groove = Color(red: 31.0 / 255, green: 31.0 / 255, blue: 31.0 / 255)
+    static let hairline = Color.white.opacity(0.14)
+    static let fill = Color.white.opacity(0.07)
+    static let stop = Color.white.opacity(0.28)
+    static let ring = Color.white.opacity(0.70)
+    static let band = Color.white.opacity(0.08)
+    static let bandLit = Color.white.opacity(0.16)
+    static let knob = Color(red: 217.0 / 255, green: 217.0 / 255, blue: 217.0 / 255)
+    static let knobEdge = Color.white
+}
+
+private struct EstimateSnapLongPress: ViewModifier {
+    var enabled: Bool
+    var action: () -> Void
+
+    func body(content: Content) -> some View {
+        if enabled {
+            content.simultaneousGesture(
+                LongPressGesture(minimumDuration: 0.55, maximumDistance: 8)
+                    .onEnded { _ in action() }
+            )
+        } else {
+            content
         }
     }
 }

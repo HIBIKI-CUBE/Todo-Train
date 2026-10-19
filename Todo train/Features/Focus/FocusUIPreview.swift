@@ -32,16 +32,15 @@ struct FocusPreviewActiveTime: Equatable {
 
 struct FocusReestimatePreviewConfiguration {
     enum Stage {
-        case position
+        case check
         case declare
-        case onTimeOnly
         case full
     }
 
     var stage: Stage
+    /// 選んだ割。0 は未選択。10 が 1割、100 が 10割。
     var progressValue: Int
-    var committedProgress: Double?
-    var projectedTotalSeconds: TimeInterval?
+    var isTouching: Bool
 }
 
 #if DEBUG
@@ -135,58 +134,94 @@ enum FocusUIPreview {
         guard let session = manager.activeSession else { return }
 
         switch state {
-        case "reestimateProgress":
-            session.estimatedSecondsAtStart = 45 * 60
-            session.currentBudgetSeconds = 45 * 60
-            session.accumulatedActiveSeconds = 9 * 60
+        case "positionCheckOpen":
+            placePositionCheckRide(session, budget: 30 * 60, active: 21 * 60, now: manager.clock.now)
             manager.presentReestimate(trigger: .manual, surface: .iphonePortrait)
             manager.focusReestimatePreview = FocusReestimatePreviewConfiguration(
-                stage: .position,
-                progressValue: 20,
-                committedProgress: nil,
-                projectedTotalSeconds: nil
+                stage: .check,
+                progressValue: 0,
+                isTouching: false
             )
             manager.uiPreviewForcesFocusCover = true
 
-        case "positionReportDeclare":
-            session.estimatedSecondsAtStart = 30 * 60
-            session.currentBudgetSeconds = 30 * 60
-            session.accumulatedActiveSeconds = 21 * 60
+        case "positionCheckLive6":
+            placePositionCheckRide(session, budget: 30 * 60, active: 21 * 60, now: manager.clock.now)
+            manager.presentReestimate(trigger: .manual, surface: .iphonePortrait)
+            manager.focusReestimatePreview = FocusReestimatePreviewConfiguration(
+                stage: .check,
+                progressValue: 60,
+                isTouching: true
+            )
+            manager.uiPreviewForcesFocusCover = true
+
+        case "positionCheckOut6":
+            placePositionCheckRide(session, budget: 30 * 60, active: 21 * 60, now: manager.clock.now)
             manager.presentReestimate(trigger: .manual, surface: .iphonePortrait)
             manager.focusReestimatePreview = FocusReestimatePreviewConfiguration(
                 stage: .declare,
                 progressValue: 60,
-                committedProgress: 0.6,
-                projectedTotalSeconds: 35 * 60
+                isTouching: false
             )
             manager.uiPreviewForcesFocusCover = true
 
-        case "positionReportOnTime":
-            session.estimatedSecondsAtStart = 30 * 60
-            session.currentBudgetSeconds = 30 * 60
-            session.accumulatedActiveSeconds = 18 * 60
+        case "positionCheckHome7":
+            placePositionCheckRide(session, budget: 30 * 60, active: 21 * 60, now: manager.clock.now)
             manager.presentReestimate(trigger: .manual, surface: .iphonePortrait)
             manager.focusReestimatePreview = FocusReestimatePreviewConfiguration(
-                stage: .onTimeOnly,
-                progressValue: 60,
-                committedProgress: 0.6,
-                projectedTotalSeconds: 30 * 60
+                stage: .check,
+                progressValue: 70,
+                isTouching: false
             )
             manager.uiPreviewForcesFocusCover = true
 
-        case "positionReportFull":
-            session.accumulatedActiveSeconds = 40 * 60
+        case "positionCheckFull":
+            placePositionCheckRide(session, budget: 30 * 60, active: 21 * 60, now: manager.clock.now)
             manager.presentReestimate(trigger: .manual, surface: .iphonePortrait)
             manager.focusReestimatePreview = FocusReestimatePreviewConfiguration(
                 stage: .full,
                 progressValue: 100,
-                committedProgress: 1.0,
-                projectedTotalSeconds: nil
+                isTouching: false
             )
+            manager.uiPreviewForcesFocusCover = true
+
+        case "positionCheckBanner":
+            placePositionCheckRide(session, budget: 30 * 60, active: 21 * 60, now: manager.clock.now)
+            let active = TimeInterval(21 * 60)
+            let progress = 0.6
+            manager.presentReestimate(trigger: .manual, surface: .iphonePortrait)
+            try manager.commitReestimate(
+                mode: .positionReport,
+                progressAnswer: progress,
+                committedRemainingSeconds: PositionReport.committedRemainingSeconds(
+                    activeSeconds: active,
+                    progress: progress
+                ) ?? 0,
+                shownBandLowSeconds: nil,
+                shownBandHighSeconds: nil,
+                detailsOpened: false,
+                promptId: ReestimatePromptID.positionV2,
+                declaration: .adjust,
+                projectedTotalSeconds: PositionReport.projectedTotalSecondsInt(
+                    activeSeconds: active,
+                    progress: progress
+                )
+            )
+            if let offer = manager.focusUndoOffer {
+                let expiresAt = manager.clock.now.addingTimeInterval(60)
+                manager.focusUndoOffer = SessionManager.FocusUndoOffer(
+                    kind: offer.kind,
+                    message: offer.message,
+                    eventID: offer.eventID,
+                    expiresAt: expiresAt,
+                    statusLine: offer.statusLine
+                )
+                manager.scheduleFocusUndoExpiry(at: expiresAt)
+            }
             manager.uiPreviewForcesFocusCover = true
 
         case "positionReportOvertime":
             session.estimatedSecondsAtStart = 30 * 60
+            session.budgetSecondsAtStart = 30 * 60
             session.currentBudgetSeconds = 30 * 60
             let active = TimeInterval(68 * 60)
             let placed = FocusPreviewActiveTime.placement(activeSeconds: active, now: manager.clock.now)
@@ -197,11 +232,7 @@ enum FocusUIPreview {
             manager.focusReestimatePreview = FocusReestimatePreviewConfiguration(
                 stage: .declare,
                 progressValue: 60,
-                committedProgress: 0.6,
-                projectedTotalSeconds: PositionReport.projection(
-                    activeSeconds: active,
-                    progress: 0.6
-                )
+                isTouching: false
             )
             manager.uiPreviewForcesFocusCover = true
 
@@ -308,6 +339,20 @@ enum FocusUIPreview {
         session.budgetSecondsAtStart = queued.budget
         session.currentBudgetSeconds = queued.budget
         let placed = FocusPreviewActiveTime.placement(activeSeconds: queued.active, now: now)
+        session.accumulatedActiveSeconds = placed.accumulatedActiveSeconds
+        session.segmentStartedAt = placed.segmentStartedAt
+    }
+
+    private static func placePositionCheckRide(
+        _ session: WorkSession,
+        budget: Int,
+        active: TimeInterval,
+        now: Date
+    ) {
+        session.estimatedSecondsAtStart = budget
+        session.budgetSecondsAtStart = budget
+        session.currentBudgetSeconds = budget
+        let placed = FocusPreviewActiveTime.placement(activeSeconds: active, now: now)
         session.accumulatedActiveSeconds = placed.accumulatedActiveSeconds
         session.segmentStartedAt = placed.segmentStartedAt
     }

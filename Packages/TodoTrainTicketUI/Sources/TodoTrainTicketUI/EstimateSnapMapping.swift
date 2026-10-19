@@ -86,6 +86,23 @@ public enum EstimateSnapMapping {
         return x / width
     }
 
+    /// `.cabin` の指の割合。つまみの中心が 0 と 1 に乗るよう、半径ぶん内側を行き幅にする。0 未満と 1 超はそのまま返す。
+    public static func cabinFingerFraction(x: CGFloat, width: CGFloat, knobSize: CGFloat) -> CGFloat {
+        let travel = width - knobSize
+        guard travel > 0 else { return 0 }
+        return (x - knobSize / 2) / travel
+    }
+
+    /// `.cabin` のタップ。上の割合を 0…1 に切る。
+    public static func cabinFraction(x: CGFloat, width: CGFloat, knobSize: CGFloat) -> CGFloat {
+        min(max(cabinFingerFraction(x: x, width: width, knobSize: knobSize), 0), 1)
+    }
+
+    /// 端のゴムが伸び始めているか。0 と 1 は止まりで、その外だけ true。
+    public static func isOverscrolling(fingerFraction: CGFloat) -> Bool {
+        fingerFraction < 0 || fingerFraction > 1
+    }
+
     public static func snap(x: CGFloat, width: CGFloat) -> Int {
         snap(fraction: fraction(x: x, width: width))
     }

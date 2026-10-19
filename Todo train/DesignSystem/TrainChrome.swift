@@ -58,6 +58,10 @@ struct FocusProgressBar: View {
     var budgetSeconds: Int = 20 * 60
     /// On-time home band as fractions of the planned budget (0…1+).
     var homeBand: (start: Double, end: Double)? = nil
+    /// 位置確認で触れている間の見込み。予算に対する割合（1 を超えてよい）。点線の頭。
+    var projectedMarker: Double? = nil
+    /// 触れていて、答えが定時の幅の中のとき、ホーム帯を明るくする。
+    var homeBandLit: Bool = false
 
     private var clampedProgress: Double {
         min(max(progress, 0), 1)
@@ -103,6 +107,21 @@ struct FocusProgressBar: View {
                             y: (height - headH) / 2
                         )
                 }
+                if let projectedMarker {
+                    let headW: CGFloat = 12
+                    let headH: CGFloat = 8
+                    let marker = width * CGFloat(CockpitGaugeRange.trackFraction(progress: projectedMarker))
+                    TrainHeadShape()
+                        .stroke(
+                            Color.white.opacity(0.92),
+                            style: StrokeStyle(lineWidth: 1.15, dash: [1.6, 1.3])
+                        )
+                        .frame(width: headW, height: headH)
+                        .offset(
+                            x: min(max(marker - headW * 0.72, 0), max(width - headW, 0)),
+                            y: (height - headH) / 2
+                        )
+                }
             }
         }
         .frame(height: 14)
@@ -132,7 +151,7 @@ struct FocusProgressBar: View {
             let endX = plannedWidth * CGFloat(min(max(homeBand.end, 0), 1.25))
             let bandWidth = max(endX - startX, 4)
             Capsule()
-                .fill(Color.white.opacity(0.14))
+                .fill(Color.white.opacity(homeBandLit ? 0.28 : 0.14))
                 .frame(width: bandWidth, height: trackH + 4)
                 .offset(x: startX, y: trackY - 2)
         }

@@ -31,6 +31,7 @@ struct FocusUndoBanner: View {
 
 extension SessionManager.FocusUndoOffer {
     var recordedStatusLine: String {
+        if let statusLine { return statusLine }
         switch kind {
         case .pause:
             return "停車を記録しました"

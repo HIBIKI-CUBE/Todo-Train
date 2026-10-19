@@ -28,6 +28,8 @@ struct FocusView: View {
     @State private var overtimeHaptic = 0
     @State private var didConsumePendingAction = false
     @AppStorage(PunctualityFirstTimeTips.homeStorageKey) private var sawHomeTip = false
+    @State private var positionCheckPercent = 0
+    @State private var positionCheckTouching = false
 
     /// Portrait: controls take ~38% of height. Compact: right pane ~40% of width.
     private let portraitControlFraction: CGFloat = 0.38
@@ -83,6 +85,7 @@ struct FocusView: View {
             sessionManager.reconcile()
             handleOvertimeSound()
             consumePendingActionIfNeeded()
+            seedPositionCheckPreview()
         }
         .onChange(of: sessionManager.nudgeRingTick) { _, _ in
             playNudgeRing()
@@ -285,7 +288,9 @@ struct FocusView: View {
                     pinch: clearance == .pinch,
                     overrun: clearance == .overrun,
                     budgetSeconds: punctuality?.budgetSeconds ?? sessionManager.activeSession?.activeBudgetSeconds ?? 1,
-                    homeBand: punctuality?.homeBand
+                    homeBand: punctuality?.homeBand,
+                    projectedMarker: positionProjectedMarker(at: context.date),
+                    homeBandLit: positionHomeBandLit(at: context.date)
                 )
 
                 HStack(spacing: TrainTheme.Space.md) {
@@ -393,7 +398,7 @@ struct FocusView: View {
                                 shownBandLowSeconds: nil,
                                 shownBandHighSeconds: nil,
                                 detailsOpened: false,
-                                promptId: ReestimatePromptID.positionV1,
+                                promptId: ReestimatePromptID.positionV2,
                                 declaration: declaration,
                                 projectedTotalSeconds: declaration == .adjust ? projectedTotal : nil
                             )
@@ -408,6 +413,10 @@ struct FocusView: View {
                         }
                     },
                     onClose: { sessionManager.dismissReestimate() },
+                    onLiveChange: { percent, touching in
+                        positionCheckPercent = percent
+                        positionCheckTouching = touching
+                    },
                     previewConfiguration: {
                         #if DEBUG
                         return sessionManager.focusReestimatePreview
@@ -518,6 +527,45 @@ struct FocusView: View {
         let byHeight = size.height * 0.72
         let capped: CGFloat = verticalSizeClass == .compact ? 140 : 220
         return min(byWidth, byHeight, capped)
+    }
+
+    private func seedPositionCheckPreview() {
+        #if DEBUG
+        guard let preview = sessionManager.focusReestimatePreview else { return }
+        positionCheckPercent = preview.progressValue
+        positionCheckTouching = preview.isTouching
+        #endif
+    }
+
+    /// 触れている間だけ、選んだ割から出した見込みを進捗ゲージの点線の頭にする。
+    private func positionProjectedMarker(at now: Date) -> Double? {
+        guard positionCheckTouching,
+              positionCheckPercent > 0,
+              positionCheckPercent < 100,
+              let session = sessionManager.activeSession
+        else { return nil }
+        let progress = Double(positionCheckPercent) / 100
+        guard let total = PositionReport.projection(
+            activeSeconds: session.elapsedSeconds(at: now),
+            progress: progress
+        ) else { return nil }
+        let budget = TimeInterval(max(session.activeBudgetSeconds, 1))
+        return total / budget
+    }
+
+    private func positionHomeBandLit(at now: Date) -> Bool {
+        guard positionCheckTouching,
+              let session = sessionManager.activeSession
+        else { return false }
+        let progress = Double(positionCheckPercent) / 100
+        guard let total = PositionReport.projection(
+            activeSeconds: session.elapsedSeconds(at: now),
+            progress: progress
+        ) else { return false }
+        return PositionReport.isOnTime(
+            projectedTotal: total,
+            judgment: Punctuality.judgment(for: session)
+        )
     }
 
     private func progressValue(at now: Date) -> Double {
