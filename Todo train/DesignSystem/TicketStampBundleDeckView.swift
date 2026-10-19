@@ -2,7 +2,7 @@
 //  TicketStampBundleDeckView.swift
 //  Todo train
 //
-//  奥の切符は上にのぞく。横になぞると一枚、長押しのあと距離で連続。
+//  たたんだ扇は帯の隅。長押しか横ドラッグで弧に開き、指を離すと戻る。
 //
 
 import SwiftUI
@@ -10,12 +10,19 @@ import TodoTrainTicketUI
 import UIKit
 
 enum TicketStampBundleDeckStyle {
-    /// 運行終了。横になぞって一枚ずつ。幅・高さに収める。
+    /// 運行終了。たたんだ帯はタイムラインの下。開くと上に重なる。
     case shutdown
-    /// 履歴 1 日。小さな束、タップのみ。奥は 2 枚まで。
+    /// 履歴 1 日。タップでビューア、長押しと横ドラッグでその場の扇。
     case historyStrip
-    /// 全画面ビューア。横になぞり、幅 8 割。
+    /// 全画面ビューア。扇は開いたまま。
     case viewer
+}
+
+struct TicketStampBundleSpreadPreference: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
 }
 
 struct TicketStampBundleDeckView: View {
@@ -24,55 +31,34 @@ struct TicketStampBundleDeckView: View {
     var style: TicketStampBundleDeckStyle
     var dayBoundaries: Set<Int> = []
     var onSelect: (TicketStampBundleAssembly.Stamp) -> Void = { _ in }
+    var onOpenViewer: (() -> Void)? = nil
     /// 長押しのあと横に固定しているあいだ、ビューアの縦操作を止める。
     var verticalGesturesLocked: Binding<Bool> = .constant(false)
-    /// 運行終了でタイムラインを残すために浅くした奥行き。
-    var shutdownDepthCap: Int? = nil
-    /// 運行終了の券面。帯の中でさらに縮めない。
-    var shutdownTicket: TicketStampBundleLayout.TicketSize? = nil
+    /// スクショ用。指定した spread で止める。
+    var pinnedSpread: CGFloat? = nil
+    /// 開閉の録画用。0 から 1 へ開いて戻す。
+    var playsSpreadDemo: Bool = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @State private var spread: CGFloat = 0
+    @State private var focusPosition: CGFloat = 0
     @State private var dragOffset: CGFloat = 0
+    @State private var fanOpened = false
+    @State private var suppressNextTap = false
     @State private var selectionPulse = 0
     @State private var boundaryPulse = 0
     @State private var shuttleArmPulse = 0
+    @State private var fanOpenPulse = 0
     @State private var shuttleDrive = ShuttleDrive()
     @State private var ignorePanEnd = false
 
-    /// 横向きの履歴はタブの上に収める。帯は券面 × (1 + 0.45 × 2)。
-    private var historyTicketHeight: CGFloat {
-        if verticalSizeClass == .compact {
-            return 64
+    private var renderedSpread: CGFloat {
+        if style == .viewer { return 1 }
+        if playsSpreadDemo { return spread }
+        if let pinnedSpread {
+            return min(1, max(0, pinnedSpread))
         }
-        return TicketStampBundleLayout.historyTicketHeight
-    }
-
-    private var historyTicketWidth: CGFloat {
-        historyTicketHeight * MarsTicketSpec.aspectWidth / MarsTicketSpec.aspectHeight
-    }
-
-    private var maxFanDepth: Int {
-        let standard = TicketStampBundleLayout.maxFanDepth(for: style)
-        guard style == .shutdown, let cap = shutdownDepthCap else { return standard }
-        return min(standard, max(0, cap))
-    }
-
-    /// 帯と券面の縮尺。手前が最新のときの奥行きで固定し、めくるたびに高さが変わらない。
-    private var layoutDepth: Int {
-        TicketStampBundleLayout.stackDepth(
-            stampCount: stamps.count,
-            focusIndex: max(0, stamps.count - 1),
-            style: style
-        )
-    }
-
-    /// `focusIndex` = いま手前の切符（古い方から数える）。奥は上。
-    private var visibleStamps: [TicketStampBundleAssembly.Stamp] {
-        let end = min(focusIndex + 1, stamps.count)
-        guard end > 0 else { return [] }
-        let start = max(0, end - (maxFanDepth + 1))
-        return Array(stamps[start..<end])
+        return spread
     }
 
     var body: some View {
@@ -84,24 +70,35 @@ struct TicketStampBundleDeckView: View {
             }
         }
         .onAppear {
-            if !stamps.isEmpty {
-                focusIndex = min(max(0, focusIndex), stamps.count - 1)
-            }
+            guard !stamps.isEmpty else { return }
+            focusIndex = min(max(0, focusIndex), stamps.count - 1)
+            focusPosition = CGFloat(focusIndex)
         }
         .onChange(of: stamps.count) { _, count in
             focusIndex = min(focusIndex, max(0, count - 1))
+            focusPosition = CGFloat(focusIndex)
+        }
+        .onChange(of: focusIndex) { _, newValue in
+            let target = CGFloat(newValue)
+            guard abs(focusPosition - target) > 1.2 else { return }
+            withAnimation(cardAnimation) {
+                focusPosition = target
+            }
         }
         .onDisappear {
-            finishShuttle()
+            finishShuttle(collapse: false)
+        }
+        .task {
+            await playSpreadDemoIfNeeded()
         }
         .sensoryFeedback(.selection, trigger: selectionPulse)
         .sensoryFeedback(.impact(weight: .medium, intensity: 0.9), trigger: boundaryPulse)
         .sensoryFeedback(.impact(weight: .light, intensity: 0.7), trigger: shuttleArmPulse)
+        .sensoryFeedback(.impact(weight: .light, intensity: 0.55), trigger: fanOpenPulse)
         .accessibilityElement(children: .contain)
         .accessibilityValue(stamps.isEmpty ? "" : "\(focusIndex + 1)枚目、全\(stamps.count)枚")
         .modifier(DeckSwipeHint(enabled: style != .historyStrip))
         .accessibilityAdjustableAction { direction in
-            guard style != .historyStrip else { return }
             switch direction {
             case .increment:
                 stepFocus(by: 1, haptic: true)
@@ -111,119 +108,206 @@ struct TicketStampBundleDeckView: View {
                 break
             }
         }
+        .preference(key: TicketStampBundleSpreadPreference.self, value: renderedSpread)
     }
 
     private var deck: some View {
         GeometryReader { geo in
-            let metrics = layoutMetrics(in: geo.size)
-            ZStack {
-                ForEach(Array(visibleStamps.enumerated()), id: \.element.id) { offset, stamp in
-                    let depth = visibleStamps.count - 1 - offset
-                    let isFront = depth == 0
-                    let showsLogs = isFront && style == .viewer
-                    StampedMarsTicketFace(stamp: stamp, scale: metrics.scale, showsLogLines: showsLogs)
-                        .frame(width: metrics.ticketWidth, height: metrics.ticketHeight, alignment: .bottom)
-                        .offset(TicketStampBundleLayout.offset(
-                            depth: depth,
-                            ticketHeight: metrics.ticketHeight,
-                            drag: dragOffset
-                        ))
-                        .zIndex(Double(offset))
-                        .onTapGesture {
-                            onSelect(stamp)
-                        }
-                        .accessibilityAddTraits(isFront ? .isSelected : [])
-                        .accessibilityAction(named: "詳細") {
-                            onSelect(stamp)
-                        }
+            let expanded = expandedTicketSize(in: geo.size)
+            ZStack(alignment: .bottomTrailing) {
+                if reduceMotion, style != .viewer, pinnedSpread == nil, !playsSpreadDemo {
+                    fanLayer(spread: 0, expanded: expanded, container: geo.size)
+                        .opacity(1 - renderedSpread)
+                    fanLayer(spread: 1, expanded: expanded, container: geo.size)
+                        .opacity(renderedSpread)
+                } else {
+                    fanLayer(spread: renderedSpread, expanded: expanded, container: geo.size)
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
             .contentShape(Rectangle())
-            .simultaneousGesture(style == .historyStrip ? nil : panGesture())
-            .simultaneousGesture(style == .historyStrip ? nil : shuttleGesture())
-        }
-        .modifier(DeckBandHeightModifier(
-            style: style,
-            bandHeight: TicketStampBundleLayout.bandHeight(
-                ticketHeight: historyTicketHeight,
-                depth: layoutDepth
-            )
-        ))
-        .clipped()
-    }
-
-    private struct DeckBandHeightModifier: ViewModifier {
-        var style: TicketStampBundleDeckStyle
-        var bandHeight: CGFloat
-
-        func body(content: Content) -> some View {
-            switch style {
-            case .shutdown, .viewer:
-                content.frame(maxWidth: .infinity, maxHeight: .infinity)
-            case .historyStrip:
-                content.frame(height: bandHeight)
+            .onTapGesture {
+                guard style == .historyStrip else { return }
+                guard renderedSpread < 0.08, !shuttleDrive.engaged, !suppressNextTap else {
+                    suppressNextTap = false
+                    return
+                }
+                onOpenViewer?()
             }
+            .simultaneousGesture(panGesture())
+            .simultaneousGesture(shuttleGesture())
         }
+        .frame(maxWidth: .infinity)
+        .frame(height: style == .viewer ? nil : TicketStampBundleLayout.collapsedFanHeight)
+        .frame(maxHeight: style == .viewer ? .infinity : nil)
     }
 
-    private struct DeckSwipeHint: ViewModifier {
-        var enabled: Bool
-
-        func body(content: Content) -> some View {
-            if enabled {
-                content.accessibilityHint(
-                    "右になぞると古い切符、左になぞると新しい切符です。増やすと新しい切符、減らすと古い切符です。"
+    private func fanLayer(spread: CGFloat, expanded: CGSize, container: CGSize) -> some View {
+        let compact = TicketStampBundleLayout.compactTicketSize()
+        let ticket = TicketStampBundleLayout.ticketSize(compact: compact, expanded: expanded, spread: spread)
+        let radius = TicketStampBundleLayout.radius(
+            compactWidth: compact.width,
+            expandedWidth: expanded.width,
+            spread: spread
+        )
+        let pivot = TicketStampBundleLayout.pivot(
+            ticketWidth: ticket.width,
+            ticketHeight: ticket.height,
+            radius: radius
+        )
+        let step = TicketStampBundleLayout.expandedStepDegrees(
+            ticketWidth: expanded.width,
+            ticketHeight: expanded.height
+        )
+        let scale = ticket.width / TicketStampBundleLayout.baseWidth
+        let nudge = TicketStampBundleLayout.placementOffset(
+            ticketWidth: ticket.width,
+            ticketHeight: ticket.height,
+            spread: spread,
+            expandedStep: step,
+            containerWidth: container.width,
+            containerHeight: max(container.height, ticket.height)
+        )
+        return ZStack(alignment: .bottomTrailing) {
+            ForEach(Array(stamps.enumerated()), id: \.element.id) { index, stamp in
+                let depth = TicketStampBundleLayout.visualDepth(
+                    index: index,
+                    focus: focusPosition,
+                    drag: dragOffset
                 )
-            } else {
-                content
+                let angle = TicketStampBundleLayout.angleDegrees(
+                    depth: depth,
+                    spread: spread,
+                    expandedStep: step
+                )
+                StampedMarsTicketFace(
+                    stamp: stamp,
+                    scale: scale,
+                    showsLogLines: style == .viewer && abs(depth) < 0.45
+                )
+                .frame(width: ticket.width, height: ticket.height, alignment: .bottom)
+                .rotationEffect(
+                    .degrees(angle),
+                    anchor: UnitPoint(
+                        x: pivot.x / max(ticket.width, 1),
+                        y: pivot.y / max(ticket.height, 1)
+                    )
+                )
+                .opacity(cardOpacity(depth))
+                .shadow(color: .black.opacity(0.10), radius: 2, y: 1)
+                .zIndex(-depth)
+                .onTapGesture {
+                    guard style == .viewer else { return }
+                    onSelect(stamp)
+                }
+                .accessibilityAddTraits(abs(depth) < 0.45 ? .isSelected : [])
+                .accessibilityAction(named: "詳細") {
+                    onSelect(stamp)
+                }
             }
         }
+        .offset(nudge)
     }
 
-    private struct LayoutMetrics {
-        var ticketWidth: CGFloat
-        var ticketHeight: CGFloat
-        var scale: CGFloat
+    private func cardOpacity(_ depth: Double) -> Double {
+        if depth < 0 {
+            return max(0, 1 + depth)
+        }
+        let cap = Double(TicketStampBundleLayout.depthCap)
+        if depth > cap {
+            return max(0, 1 - (depth - cap))
+        }
+        return 1
     }
 
-    private func layoutMetrics(in size: CGSize) -> LayoutMetrics {
+    private func expandedTicketSize(in proposed: CGSize) -> CGSize {
         switch style {
-        case .shutdown:
-            if let ticket = shutdownTicket {
-                return LayoutMetrics(
-                    ticketWidth: ticket.width,
-                    ticketHeight: ticket.height,
-                    scale: ticket.scale
-                )
-            }
-            let fitted = TicketStampBundleLayout.fittedTicketSize(
-                targetWidth: TicketStampBundleLayout.shutdownTargetWidth(containerWidth: size.width),
-                viewportHeight: size.height,
-                depth: layoutDepth
-            )
-            return LayoutMetrics(
-                ticketWidth: fitted.width,
-                ticketHeight: fitted.height,
-                scale: fitted.scale
-            )
-        case .historyStrip:
-            return LayoutMetrics(
-                ticketWidth: historyTicketWidth,
-                ticketHeight: historyTicketHeight,
-                scale: historyTicketWidth / TicketStampBundleLayout.baseWidth
-            )
         case .viewer:
-            let fitted = TicketStampBundleLayout.fittedTicketSize(
-                targetWidth: size.width * 0.8,
-                viewportHeight: size.height,
-                depth: layoutDepth
+            return TicketStampBundleLayout.expandedTicketSize(
+                fittingWidth: max(proposed.width - 12, 80),
+                fittingHeight: max(proposed.height - 12, 80)
             )
-            return LayoutMetrics(
-                ticketWidth: fitted.width,
-                ticketHeight: fitted.height,
-                scale: fitted.scale
+        case .shutdown, .historyStrip:
+            let screen = Self.screenBounds
+            return TicketStampBundleLayout.expandedTicketSize(
+                fittingWidth: max(screen.width - 28, 80),
+                fittingHeight: max(screen.height * 0.72, 120)
             )
+        }
+    }
+
+    private static var screenBounds: CGSize {
+        let scene = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first { $0.activationState == .foregroundActive }
+            ?? UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
+        return scene?.screen.bounds.size ?? CGSize(width: 390, height: 844)
+    }
+
+    private var cardAnimation: Animation {
+        reduceMotion
+            ? .easeInOut(duration: 0.15)
+            : .spring(response: 0.22, dampingFraction: 0.86)
+    }
+
+    private func openFan() {
+        guard style != .viewer, pinnedSpread == nil, !playsSpreadDemo else { return }
+        if !fanOpened {
+            fanOpened = true
+            fanOpenPulse += 1
+        }
+        guard spread < 0.98 else { return }
+        let animation: Animation = reduceMotion
+            ? .easeInOut(duration: 0.15)
+            : .spring(response: TicketStampBundleLayout.openSpringResponse, dampingFraction: 0.84)
+        withAnimation(animation) {
+            spread = 1
+        }
+    }
+
+    private func collapseFan() {
+        guard style != .viewer, pinnedSpread == nil, !playsSpreadDemo else { return }
+        guard fanOpened || spread > 0.02 else { return }
+        fanOpened = false
+        suppressNextTap = true
+        let newest = max(0, stamps.count - 1)
+        let animation: Animation = reduceMotion
+            ? .easeInOut(duration: 0.15)
+            : .spring(response: TicketStampBundleLayout.closeSpringResponse, dampingFraction: 0.9)
+        if reduceMotion {
+            withAnimation(animation) {
+                spread = 0
+            }
+            snapFocusToNewest(newest)
+        } else {
+            withAnimation(animation) {
+                spread = 0
+            } completion: {
+                snapFocusToNewest(newest)
+            }
+        }
+    }
+
+    private func snapFocusToNewest(_ newest: Int) {
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            focusIndex = newest
+            focusPosition = CGFloat(newest)
+        }
+    }
+
+    private func playSpreadDemoIfNeeded() async {
+        guard playsSpreadDemo, style != .viewer else { return }
+        try? await Task.sleep(for: .milliseconds(700))
+        guard !Task.isCancelled else { return }
+        withAnimation(.spring(response: 0.42, dampingFraction: 0.86)) {
+            spread = 1
+        }
+        try? await Task.sleep(for: .milliseconds(1100))
+        guard !Task.isCancelled else { return }
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.9)) {
+            spread = 0
         }
     }
 
@@ -234,14 +318,18 @@ struct TicketStampBundleDeckView: View {
                     ignorePanEnd = false
                 }
                 guard !shuttleDrive.engaged, !ignorePanEnd else { return }
-                if abs(value.translation.width) >= abs(value.translation.height) {
-                    dragOffset = value.translation.width
+                let horizontal = abs(value.translation.width) >= abs(value.translation.height)
+                guard horizontal else { return }
+                dragOffset = value.translation.width
+                if abs(value.translation.width) > 8 {
+                    suppressNextTap = true
+                    openFan()
                 }
             }
             .onEnded { value in
                 if ignorePanEnd || shuttleDrive.engaged {
                     ignorePanEnd = false
-                    finishShuttle()
+                    finishShuttle(collapse: true)
                     return
                 }
                 let horizontal = abs(value.translation.width) >= abs(value.translation.height)
@@ -256,6 +344,9 @@ struct TicketStampBundleDeckView: View {
                     applySteps(steps, fast: fast)
                 }
                 settleDrag()
+                if horizontal {
+                    collapseFan()
+                }
             }
     }
 
@@ -271,9 +362,14 @@ struct TicketStampBundleDeckView: View {
             if !shuttleDrive.engaged {
                 shuttleDrive.engaged = true
                 ignorePanEnd = true
-                shuttleArmPulse += 1
+                suppressNextTap = true
                 verticalGesturesLocked.wrappedValue = true
                 dragOffset = 0
+                if style == .viewer {
+                    shuttleArmPulse += 1
+                } else {
+                    openFan()
+                }
                 startShuttleLoop()
             }
             shuttleDrive.distance = Double(dx)
@@ -281,7 +377,7 @@ struct TicketStampBundleDeckView: View {
         }
         .onEnded { _ in
             guard shuttleDrive.engaged else { return }
-            finishShuttle()
+            finishShuttle(collapse: true)
         }
     }
 
@@ -323,20 +419,24 @@ struct TicketStampBundleDeckView: View {
         }
     }
 
-    private func finishShuttle() {
+    private func finishShuttle(collapse: Bool) {
+        let wasEngaged = shuttleDrive.engaged
         shuttleDrive.engaged = false
         shuttleDrive.distance = 0
         shuttleDrive.task?.cancel()
         shuttleDrive.task = nil
         verticalGesturesLocked.wrappedValue = false
         settleDrag()
+        if collapse, wasEngaged {
+            collapseFan()
+        }
     }
 
     private func settleDrag() {
         if reduceMotion {
             dragOffset = 0
         } else {
-            withAnimation(.smooth(duration: 0.28)) {
+            withAnimation(.smooth(duration: 0.22)) {
                 dragOffset = 0
             }
         }
@@ -355,6 +455,9 @@ struct TicketStampBundleDeckView: View {
         guard next != focusIndex else { return }
         let crossedBoundary = dayBoundaries.contains(next)
         focusIndex = next
+        withAnimation(cardAnimation) {
+            focusPosition = CGFloat(next)
+        }
         guard haptic else { return }
         if fast {
             if crossedBoundary { boundaryPulse += 1 }
@@ -364,19 +467,19 @@ struct TicketStampBundleDeckView: View {
             selectionPulse += 1
         }
     }
+}
 
-    /// 運行終了の束帯の高さ。呼び出し側が時計の下限で頭を抑える。
-    static func shutdownBandHeight(
-        containerWidth: CGFloat,
-        bandViewportHeight: CGFloat,
-        depth: Int
-    ) -> CGFloat {
-        let ticket = TicketStampBundleLayout.fittedTicketSize(
-            targetWidth: TicketStampBundleLayout.shutdownTargetWidth(containerWidth: containerWidth),
-            viewportHeight: bandViewportHeight,
-            depth: depth
-        )
-        return TicketStampBundleLayout.bandHeight(ticketHeight: ticket.height, depth: depth)
+private struct DeckSwipeHint: ViewModifier {
+    var enabled: Bool
+
+    func body(content: Content) -> some View {
+        if enabled {
+            content.accessibilityHint(
+                "右になぞると古い切符、左になぞると新しい切符です。増やすと新しい切符、減らすと古い切符です。"
+            )
+        } else {
+            content
+        }
     }
 }
 

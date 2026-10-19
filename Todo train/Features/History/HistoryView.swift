@@ -30,6 +30,7 @@ struct HistoryView: View {
     @State private var daysVisible: CGFloat = 1
     @State private var showBundleViewer = false
     @State private var bundleStripFocusIndex = 0
+    @State private var bundleSpread: CGFloat = 0
     @FocusState private var searchFieldFocused: Bool
 
     init(focusDay: Date? = nil) {
@@ -310,22 +311,21 @@ struct HistoryView: View {
             }
 
             if rideDensity == .day, let bundle = dayStampBundle, !bundle.stamps.isEmpty {
-                Button {
-                    showBundleViewer = true
-                } label: {
-                    TicketStampBundleDeckView(
-                        stamps: bundle.stamps,
-                        focusIndex: $bundleStripFocusIndex,
-                        style: .historyStrip
-                    )
-                    .allowsHitTesting(false)
-                    .onAppear {
-                        bundleStripFocusIndex = max(0, bundle.stamps.count - 1)
-                    }
+                TicketStampBundleDeckView(
+                    stamps: bundle.stamps,
+                    focusIndex: $bundleStripFocusIndex,
+                    style: .historyStrip,
+                    onOpenViewer: { showBundleViewer = true },
+                    pinnedSpread: previewPinnedSpread,
+                    playsSpreadDemo: previewPlaysSpreadDemo
+                )
+                .onAppear {
+                    bundleStripFocusIndex = max(0, bundle.stamps.count - 1)
                 }
-                .buttonStyle(.plain)
                 .padding(.horizontal, TrainTheme.Space.md)
                 .padding(.bottom, TrainTheme.Space.sm)
+                .zIndex(bundleSpread > 0.04 ? 4 : 0)
+                .onPreferenceChange(TicketStampBundleSpreadPreference.self) { bundleSpread = $0 }
                 .accessibilityLabel("この日の切符の束")
                 .accessibilityHint("開いて切符をめくれます")
             }
@@ -538,6 +538,23 @@ struct HistoryView: View {
         )
         let maxOrder = (try? modelContext.fetch(descriptor).first?.sortOrder) ?? -1
         return maxOrder + 1
+    }
+
+    private var previewPinnedSpread: CGFloat? {
+        #if DEBUG
+        if let value = sessionManager.uiPreviewBundleSpread {
+            return CGFloat(value)
+        }
+        #endif
+        return nil
+    }
+
+    private var previewPlaysSpreadDemo: Bool {
+        #if DEBUG
+        sessionManager.uiPreviewBundleFanDemo
+        #else
+        false
+        #endif
     }
 
     private static let timeFormatter: DateFormatter = {

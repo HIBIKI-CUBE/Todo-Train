@@ -10,150 +10,206 @@ import TodoTrainSync
 
 @Suite("Ticket stamp bundle layout")
 struct TicketStampBundleLayoutTests {
-    @Test func offsetRaisesOlderTicketsAndFollowsOnlyTheFront() {
-        let raised = TicketStampBundleLayout.offset(depth: 2, ticketHeight: 200, drag: 50)
-        #expect(raised.width == 0)
-        #expect(raised.height == -0.45 * 200 * 2)
-
-        let front = TicketStampBundleLayout.offset(depth: 0, ticketHeight: 200, drag: 50)
-        #expect(front.width == 50 * 0.28)
-        #expect(front.height == 0)
-
-        let flung = TicketStampBundleLayout.offset(depth: 0, ticketHeight: 200, drag: 400)
-        #expect(flung.width == TicketStampBundleLayout.dragFollowLimit)
-        let flungLeft = TicketStampBundleLayout.offset(depth: 0, ticketHeight: 200, drag: -400)
-        #expect(flungLeft.width == -TicketStampBundleLayout.dragFollowLimit)
+    private func sampleExpanded() -> CGSize {
+        CGSize(width: 260, height: MarsTicketSpec.height(forWidth: 260))
     }
 
-    @Test func bandHeightUsesPeekRatio() {
-        #expect(TicketStampBundleLayout.bandHeight(ticketHeight: 110, depth: 2) == 110 * (1 + 0.45 * 2))
-        let historyWidth = TicketStampBundleLayout.historyTicketWidth
-        let historyVisual = MarsTicketSpec.height(forWidth: TicketStampBundleLayout.baseWidth)
-            * (historyWidth / TicketStampBundleLayout.baseWidth)
-        #expect(abs(historyVisual - TicketStampBundleLayout.historyTicketHeight) < 0.01)
-        #expect(TicketStampBundleLayout.bandHeight(ticketHeight: 100, depth: 0) == 100)
-        #expect(TicketStampBundleLayout.bandHeight(ticketHeight: 80, depth: 4) == 80 * (1 + 0.45 * 4))
+    @Test func scaleIsCompactWhenFoldedAndFullWhenOpen() {
+        let compact = TicketStampBundleLayout.compactTicketSize()
+        let expanded = sampleExpanded()
+        let folded = TicketStampBundleLayout.visualScale(compact: compact, expanded: expanded, spread: 0)
+        let open = TicketStampBundleLayout.visualScale(compact: compact, expanded: expanded, spread: 1)
+        let mid = TicketStampBundleLayout.visualScale(compact: compact, expanded: expanded, spread: 0.5)
+        #expect(abs(folded - compact.width / expanded.width) < 0.001)
+        #expect(abs(open - 1) < 0.001)
+        #expect(abs(mid - (folded + open) / 2) < 0.001)
+        #expect(folded < 0.55)
     }
 
-    @Test func fanDepthIsLowerOnTheHistoryStrip() {
-        #expect(TicketStampBundleLayout.maxFanDepth(for: .historyStrip) == 2)
-        #expect(TicketStampBundleLayout.maxFanDepth(for: .shutdown) == 4)
-        #expect(TicketStampBundleLayout.maxFanDepth(for: .viewer) == 4)
-        #expect(TicketStampBundleLayout.stackDepth(stampCount: 5, focusIndex: 4, style: .historyStrip) == 2)
-        #expect(TicketStampBundleLayout.stackDepth(stampCount: 5, focusIndex: 4, style: .shutdown) == 4)
-        #expect(TicketStampBundleLayout.stackDepth(stampCount: 5, focusIndex: 0, style: .shutdown) == 0)
-        #expect(TicketStampBundleLayout.stackDepth(stampCount: 0, focusIndex: 3, style: .viewer) == 0)
+    @Test func anglesMatchTheEndsOfTheSpread() {
+        let expanded = sampleExpanded()
+        let step = TicketStampBundleLayout.expandedStepDegrees(
+            ticketWidth: expanded.width,
+            ticketHeight: expanded.height
+        )
+        #expect(step > TicketStampBundleLayout.compactStepDegrees)
+        let folded = TicketStampBundleLayout.angleDegrees(depth: 2, spread: 0, expandedStep: step)
+        let open = TicketStampBundleLayout.angleDegrees(depth: 2, spread: 1, expandedStep: step)
+        #expect(abs(folded - 2 * TicketStampBundleLayout.compactStepDegrees) < 0.001)
+        #expect(abs(open - 2 * step) < 0.001)
+        #expect(TicketStampBundleLayout.angleDegrees(depth: 0, spread: 1, expandedStep: step) == 0)
+        #expect(open > folded)
     }
 
-    @Test func fittedTicketShrinksSoTheStackStaysInTheViewport() {
-        let wide = TicketStampBundleLayout.fittedTicketSize(
-            targetWidth: 300,
-            viewportHeight: 10_000,
-            depth: 4
+    @Test func radiusAndPivotLerpWithoutAJump() {
+        let compact = TicketStampBundleLayout.compactTicketSize()
+        let expanded = sampleExpanded()
+        let radius0 = TicketStampBundleLayout.radius(
+            compactWidth: compact.width,
+            expandedWidth: expanded.width,
+            spread: 0
         )
-        let natural = MarsTicketSpec.height(forWidth: 300)
-        #expect(abs(wide.height - natural) < 0.01)
-        #expect(abs(wide.width - 300) < 0.01)
+        let radius1 = TicketStampBundleLayout.radius(
+            compactWidth: compact.width,
+            expandedWidth: expanded.width,
+            spread: 1
+        )
+        let radiusMid = TicketStampBundleLayout.radius(
+            compactWidth: compact.width,
+            expandedWidth: expanded.width,
+            spread: 0.5
+        )
+        #expect(abs(radiusMid - (radius0 + radius1) / 2) < 0.01)
+        #expect(radius1 > radius0 * 2)
 
-        let tight = TicketStampBundleLayout.fittedTicketSize(
-            targetWidth: 300,
-            viewportHeight: 200,
-            depth: 4
-        )
-        let expected = (200 - 10) / (1 + 0.45 * 4)
-        #expect(abs(tight.height - expected) < 0.01)
-        let expectedWidth = expected * MarsTicketSpec.aspectWidth / MarsTicketSpec.aspectHeight
-        #expect(abs(tight.width - expectedWidth) < 0.01)
-        let band = TicketStampBundleLayout.bandHeight(ticketHeight: tight.height, depth: 4)
-        #expect(band <= 200 - 10 + 0.01)
+        let pivot0 = TicketStampBundleLayout.pivot(compact: compact, expanded: expanded, spread: 0)
+        let pivot1 = TicketStampBundleLayout.pivot(compact: compact, expanded: expanded, spread: 1)
+        let pivotMid = TicketStampBundleLayout.pivot(compact: compact, expanded: expanded, spread: 0.5)
+        #expect(abs(pivotMid.x - (pivot0.x + pivot1.x) / 2) < 0.01)
+        #expect(abs(pivotMid.y - (pivot0.y + pivot1.y) / 2) < 0.01)
+        #expect(pivot1.x > pivot0.x + 40)
+
+        var previousX = pivot0.x
+        var previousRadius = radius0
+        for index in 1...20 {
+            let spread = CGFloat(index) / 20
+            let radius = TicketStampBundleLayout.radius(
+                compactWidth: compact.width,
+                expandedWidth: expanded.width,
+                spread: spread
+            )
+            let pivot = TicketStampBundleLayout.pivot(compact: compact, expanded: expanded, spread: spread)
+            let step = (radius1 - radius0) / 20
+            #expect(radius + 0.01 >= previousRadius)
+            #expect(pivot.x + 0.01 >= previousX)
+            #expect(radius - previousRadius < step + 0.02)
+            #expect(pivot.x - previousX < (pivot1.x - pivot0.x) / 20 + 0.02)
+            previousRadius = radius
+            previousX = pivot.x
+        }
     }
 
-    @Test func shutdownBandHeightMatchesTheLayout() {
-        let band = TicketStampBundleDeckView.shutdownBandHeight(
-            containerWidth: 390,
-            bandViewportHeight: 280,
-            depth: 4
+    @Test func rearCardClearsTheNameAndTheOnTimeMarkWhenOpen() {
+        let expanded = sampleExpanded()
+        let step = TicketStampBundleLayout.expandedStepDegrees(
+            ticketWidth: expanded.width,
+            ticketHeight: expanded.height
         )
-        let target = TicketStampBundleLayout.shutdownTargetWidth(containerWidth: 390)
-        let ticket = TicketStampBundleLayout.fittedTicketSize(
-            targetWidth: target,
-            viewportHeight: 280,
-            depth: 4
+        let radius = TicketStampBundleLayout.radius(
+            compactWidth: expanded.width,
+            expandedWidth: expanded.width,
+            spread: 1
         )
-        let expected = TicketStampBundleLayout.bandHeight(ticketHeight: ticket.height, depth: 4)
-        #expect(abs(band - expected) < 0.01)
-        #expect(band <= 280)
+        let name = TicketStampBundleLayout.placed(
+            TicketStampBundleLayout.titleBottomLeft(ticketWidth: expanded.width),
+            depth: 1,
+            ticketWidth: expanded.width,
+            ticketHeight: expanded.height,
+            radius: radius,
+            spread: 1,
+            expandedStep: step
+        )
+        let mark = TicketStampBundleLayout.placed(
+            TicketStampBundleLayout.onTimeTitleBottomCenter(
+                ticketWidth: expanded.width,
+                ticketHeight: expanded.height
+            ),
+            depth: 1,
+            ticketWidth: expanded.width,
+            ticketHeight: expanded.height,
+            radius: radius,
+            spread: 1,
+            expandedStep: step
+        )
+        let front = CGRect(x: 0, y: 0, width: expanded.width, height: expanded.height)
+        let margin = TicketStampBundleLayout.clearanceMargin(ticketHeight: expanded.height)
+        #expect(TicketStampBundleLayout.isPeeking(name, front: front, margin: margin))
+        #expect(TicketStampBundleLayout.isPeeking(mark, front: front, margin: margin))
     }
 
-    @Test func shutdownDepthDropsBeforeShrinkingTheTicket() {
-        let height: CGFloat = 200
-        let band4 = TicketStampBundleLayout.bandHeight(ticketHeight: height, depth: 4)
-        let band3 = TicketStampBundleLayout.bandHeight(ticketHeight: height, depth: 3)
-        let band2 = TicketStampBundleLayout.bandHeight(ticketHeight: height, depth: 2)
-        #expect(TicketStampBundleLayout.shutdownDepth(ticketHeight: height, bandLimit: band4, stampCount: 5) == 4)
-        #expect(TicketStampBundleLayout.shutdownDepth(ticketHeight: height, bandLimit: band4 - 1, stampCount: 5) == 3)
-        #expect(TicketStampBundleLayout.shutdownDepth(ticketHeight: height, bandLimit: band3 - 1, stampCount: 5) == 2)
-        #expect(TicketStampBundleLayout.shutdownDepth(ticketHeight: height, bandLimit: band2 - 1, stampCount: 5) == 2)
-        #expect(TicketStampBundleLayout.shutdownDepth(ticketHeight: height, bandLimit: 10, stampCount: 2) == 1)
-        #expect(TicketStampBundleLayout.shutdownDepth(ticketHeight: height, bandLimit: 10, stampCount: 1) == 0)
+    @Test func foldedFanStaysWithinTheBand() {
+        let height = TicketStampBundleLayout.collapsedFanHeight
+        #expect(height <= TicketStampBundleLayout.collapsedFanMax)
+        #expect(height <= TicketStampBundleLayout.collapsedBandMax)
+        let size = TicketStampBundleLayout.compactTicketSize()
+        #expect(size.width < 160)
     }
 
-    @Test func shutdownArrangementReservesTheTimelineWithoutNarrowing() {
-        let cabin: CGFloat = 700
-        let preface: CGFloat = 168
-        let width: CGFloat = 360
-        let arrangement = TicketStampBundleLayout.shutdownArrangement(
-            containerWidth: width,
-            cabinHeight: cabin,
-            prefaceHeight: preface,
-            stampCount: 5
+    @Test func aRearPointMovesSmoothlyAsTheFanOpens() {
+        let compact = TicketStampBundleLayout.compactTicketSize()
+        let expanded = sampleExpanded()
+        let step = TicketStampBundleLayout.expandedStepDegrees(
+            ticketWidth: expanded.width,
+            ticketHeight: expanded.height
         )
-        #expect(arrangement.depth == 2)
-        let target = TicketStampBundleLayout.shutdownTargetWidth(containerWidth: width)
-        let oldLimit = cabin - TicketStampBundleLayout.shutdownClockFloor - preface
-        let floor = TicketStampBundleLayout.fittedTicketSize(
-            targetWidth: target,
-            viewportHeight: oldLimit,
-            depth: 4
-        )
-        #expect(arrangement.ticket.width + 0.01 >= floor.width)
-        let timeline = cabin - preface - arrangement.bandHeight
-        #expect(timeline + 0.01 >= TicketStampBundleLayout.shutdownTimelineMinimumHeight)
-
-        let loose = TicketStampBundleLayout.shutdownArrangement(
-            containerWidth: 200,
-            cabinHeight: 900,
-            prefaceHeight: 80,
-            stampCount: 6
-        )
-        #expect(loose.depth == 4)
-        let natural = MarsTicketSpec.height(forWidth: TicketStampBundleLayout.shutdownTargetWidth(containerWidth: 200))
-        #expect(abs(loose.ticket.height - natural) < 0.01)
+        func namePoint(_ spread: CGFloat) -> CGPoint {
+            let size = TicketStampBundleLayout.ticketSize(compact: compact, expanded: expanded, spread: spread)
+            let radius = TicketStampBundleLayout.radius(
+                compactWidth: compact.width,
+                expandedWidth: expanded.width,
+                spread: spread
+            )
+            return TicketStampBundleLayout.placed(
+                TicketStampBundleLayout.titleBottomLeft(ticketWidth: size.width),
+                depth: 1,
+                ticketWidth: size.width,
+                ticketHeight: size.height,
+                radius: radius,
+                spread: spread,
+                expandedStep: step
+            )
+        }
+        var previous = namePoint(0)
+        var lowest = previous.y
+        for index in 1...20 {
+            let point = namePoint(CGFloat(index) / 20)
+            let dx = point.x - previous.x
+            let dy = point.y - previous.y
+            let distance = (dx * dx + dy * dy).squareRoot()
+            #expect(distance < 48)
+            lowest = min(lowest, point.y)
+            previous = point
+        }
+        #expect(namePoint(1).y < namePoint(0).y)
+        #expect(lowest <= namePoint(1).y + 0.5)
     }
 
-    @Test func cornerSealBoundsStayInsideThePeekAtSixDegrees() {
-        let width: CGFloat = 300
-        let height = MarsTicketSpec.height(forWidth: width)
-        let bounds = TicketStampBundleLayout.cornerSealBounds(
-            ticketWidth: width,
-            ticketHeight: height,
-            rotationDegrees: -6
-        )
-        #expect(bounds.maxY < height * TicketStampBundleLayout.peekRatio)
-        #expect(bounds.minY > 0)
+    @Test func dragTowardOlderLowersDepth() {
+        let still = TicketStampBundleLayout.visualDepth(index: 2, focus: 3, drag: 0)
+        let older = TicketStampBundleLayout.visualDepth(index: 2, focus: 3, drag: 72)
+        let newer = TicketStampBundleLayout.visualDepth(index: 2, focus: 3, drag: -72)
+        #expect(abs(still - 1) < 0.001)
+        #expect(abs(older - 0) < 0.001)
+        #expect(abs(newer - 2) < 0.001)
+    }
 
-        let shipped = TicketStampBundleLayout.cornerSealBounds(
-            ticketWidth: width,
-            ticketHeight: height,
-            rotationDegrees: TicketStampBundleLayout.cornerSealRotationDegrees
+    @Test func expandedTicketFitsTheOfferedBox() {
+        let size = TicketStampBundleLayout.expandedTicketSize(fittingWidth: 360, fittingHeight: 520)
+        let step = TicketStampBundleLayout.expandedStepDegrees(
+            ticketWidth: size.width,
+            ticketHeight: size.height
         )
-        #expect(shipped.maxY < height * TicketStampBundleLayout.peekRatio)
-
-        let metrics = FukeiSealLayout.metrics(luxury: 1)
-        let side = min(width, height) * TicketStampBundleLayout.cornerSealSideRatio
-        let sealTop = height * TicketStampBundleLayout.cornerSealCenterYRatio - side / 2
-        let frameOrigin = (1 - metrics.frameSide) / 2 * side
-        let titleBottom = frameOrigin + (metrics.textBlockTop + metrics.titleSize) * side
-        #expect(sealTop + titleBottom < height * TicketStampBundleLayout.peekRatio)
+        let bounds = TicketStampBundleLayout.fanBounds(
+            ticketWidth: size.width,
+            ticketHeight: size.height,
+            spread: 1,
+            expandedStep: step
+        )
+        let usedWidth = max(bounds.maxX, size.width) - min(bounds.minX, 0)
+        let usedHeight = max(bounds.maxY, size.height) - min(bounds.minY, 0)
+        #expect(usedWidth <= 360.5)
+        #expect(usedHeight <= 520.5)
+        #expect(size.width > 80)
+        let offset = TicketStampBundleLayout.placementOffset(
+            ticketWidth: size.width,
+            ticketHeight: size.height,
+            spread: 1,
+            expandedStep: step,
+            containerWidth: 360,
+            containerHeight: 520
+        )
+        let originX = 360 - size.width + offset.width
+        #expect(bounds.maxX + originX <= 360.5)
+        #expect(bounds.minX + originX >= -0.5)
     }
 }

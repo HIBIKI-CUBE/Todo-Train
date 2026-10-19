@@ -36,11 +36,15 @@ capture() {
   local state="$2"
   local landscape="${3:-0}"
   local dir="${4:-$SHOT_DIR}"
+  local spread="${5:-}"
   xcrun simctl terminate "$UDID" "$BUNDLE_ID" 2>/dev/null || true
   sleep 0.6
   local args=( "$BUNDLE_ID" -uiPreviewState "$state" )
   if [[ "$landscape" == "1" ]]; then
     args+=( -uiPreviewLandscape )
+  fi
+  if [[ -n "$spread" ]]; then
+    args+=( -uiPreviewBundleSpread "$spread" )
   fi
   xcrun simctl launch "$UDID" "${args[@]}" >/dev/null
   if [[ "$state" == arrival* ]]; then
@@ -79,12 +83,33 @@ mkdir -p "$C_DIR"
 rm -f "$C_DIR"/*.png
 
 capture shutdown-bundle.png shutdownBundle 0 "$C_DIR"
+capture shutdown-bundle-spread-05.png shutdownBundle 0 "$C_DIR" 0.5
+capture shutdown-bundle-spread-1.png shutdownBundle 0 "$C_DIR" 1
 capture shutdown-bundle-landscape.png shutdownBundleLandscape 1 "$C_DIR"
 capture history-bundle.png historyBundle 0 "$C_DIR"
+capture history-bundle-spread-05.png historyBundle 0 "$C_DIR" 0.5
+capture history-bundle-spread-1.png historyBundle 0 "$C_DIR" 1
 capture history-bundle-landscape.png historyBundleLandscape 1 "$C_DIR"
 capture history-bundle-viewer.png historyBundleViewer 0 "$C_DIR"
 capture history-bundle-viewer-landscape.png historyBundleViewerLandscape 1 "$C_DIR"
 capture arrival-on-time-ticketing.png arrivalOnTimeTicketing 0 "$C_DIR"
+
+xcrun simctl terminate "$UDID" "$BUNDLE_ID" 2>/dev/null || true
+sleep 0.4
+VIDEO="$C_DIR/fan-open.mp4"
+rm -f "$VIDEO"
+xcrun simctl io "$UDID" recordVideo --codec h264 --force "$VIDEO" >/dev/null 2>&1 &
+RECORD_PID=$!
+sleep 0.4
+xcrun simctl launch "$UDID" "$BUNDLE_ID" -uiPreviewState shutdownBundle -uiPreviewBundleFanDemo >/dev/null
+sleep 3.6
+kill -INT "$RECORD_PID" 2>/dev/null || true
+wait "$RECORD_PID" 2>/dev/null || true
+if [[ -f "$VIDEO" ]]; then
+  echo "Wrote $VIDEO ($(wc -c < "$VIDEO") bytes)"
+else
+  echo "Fan video was not written"
+fi
 
 xcrun simctl shutdown "$UDID" || true
 

@@ -48,6 +48,8 @@ struct FocusReestimatePreviewConfiguration {
 enum FocusUIPreview {
     static let stateArgument = "-uiPreviewState"
     static let landscapeArgument = "-uiPreviewLandscape"
+    static let bundleSpreadArgument = "-uiPreviewBundleSpread"
+    static let bundleFanDemoArgument = "-uiPreviewBundleFanDemo"
 
     static func parsedState() -> String? {
         let args = ProcessInfo.processInfo.arguments
@@ -59,6 +61,18 @@ enum FocusUIPreview {
 
     static var wantsLandscape: Bool {
         ProcessInfo.processInfo.arguments.contains(landscapeArgument)
+    }
+
+    static var requestedBundleSpread: Double? {
+        let args = ProcessInfo.processInfo.arguments
+        guard let index = args.firstIndex(of: bundleSpreadArgument), index + 1 < args.count else {
+            return nil
+        }
+        return Double(args[index + 1])
+    }
+
+    static var wantsBundleFanDemo: Bool {
+        ProcessInfo.processInfo.arguments.contains(bundleFanDemoArgument)
     }
 
     static var isActive: Bool { parsedState() != nil }
@@ -94,6 +108,8 @@ enum FocusUIPreview {
             "historyBundleViewerBoundary", "historyBundleViewerBoundaryLandscape":
             try configureTicketBundlePreview(manager: manager, context: context, state: state)
             manager.uiPreviewLandscape = wantsLandscape
+            manager.uiPreviewBundleSpread = requestedBundleSpread
+            manager.uiPreviewBundleFanDemo = wantsBundleFanDemo
             return
         case "sealGallery":
             manager.uiPreviewSuppressMotion = true

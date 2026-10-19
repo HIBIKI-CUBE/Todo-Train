@@ -22,6 +22,7 @@ struct ServiceShutdownCover: View {
     @State private var localError = ""
     @State private var showLocalError = false
     @State private var prefaceHeight: CGFloat = 168
+    @State private var bundleSpread: CGFloat = 0
     @State private var viewportHeight: CGFloat = 0
     @State private var overviewSettled = false
     @State private var bundleFocusIndex = 0
@@ -136,15 +137,10 @@ struct ServiceShutdownCover: View {
             let fittingPreface = max(0, geo.size.height - clockFloor - prefaceHeight)
             // 前文まで残すと横向きで束が消える。そのときは前文をスクロールに回し、時計の下限だけ守る。
             let prefaceFits = fittingPreface >= 96
-            // 盤の余白のぶん、券面の帯より枠は高い。タイムラインの計算は券面の帯で行う。
-            let bandChrome: CGFloat = 33
-            let arrangement = TicketStampBundleLayout.shutdownArrangement(
-                containerWidth: max(0, geo.size.width - 44),
-                cabinHeight: max(0, geo.size.height - bandChrome),
-                prefaceHeight: prefaceHeight,
-                stampCount: stampCount
-            )
-            let bundleBand = stampCount == 0 ? 0 : arrangement.bandHeight + bandChrome
+            // 盤の縦余白を足しても 140 を超えない。開いた扇は帯の外へ重なる。
+            let bundleBand = stampCount == 0
+                ? 0
+                : TicketStampBundleLayout.collapsedFanHeight + 28
             let scrollHeight = max(0, geo.size.height - bundleBand)
             let clockHeight = max(
                 Self.minimumClockHeight,
@@ -217,11 +213,10 @@ struct ServiceShutdownCover: View {
                             focusIndex: $bundleFocusIndex,
                             style: .shutdown,
                             dayBoundaries: [],
-                            shutdownDepthCap: arrangement.depth,
-                            shutdownTicket: arrangement.ticket
+                            pinnedSpread: previewPinnedSpread,
+                            playsSpreadDemo: previewPlaysSpreadDemo
                         )
                         .padding(.horizontal, 8)
-                        .padding(.vertical, 2)
                         .onAppear {
                             #if DEBUG
                             if sessionManager.uiPreviewShowsServiceShutdown {
@@ -232,10 +227,12 @@ struct ServiceShutdownCover: View {
                                 return
                             }
                             #endif
-                            bundleFocusIndex = 0
+                            bundleFocusIndex = max(0, stampBundle.stamps.count - 1)
                         }
                     }
                     .frame(height: bundleBand)
+                    .zIndex(bundleSpread > 0.04 ? 4 : 0)
+                    .onPreferenceChange(TicketStampBundleSpreadPreference.self) { bundleSpread = $0 }
                     .allowsHitTesting(!poweringDown)
                 }
             }
@@ -421,6 +418,23 @@ struct ServiceShutdownCover: View {
         } catch {
             present(error)
         }
+    }
+
+    private var previewPinnedSpread: CGFloat? {
+        #if DEBUG
+        if let value = sessionManager.uiPreviewBundleSpread {
+            return CGFloat(value)
+        }
+        #endif
+        return nil
+    }
+
+    private var previewPlaysSpreadDemo: Bool {
+        #if DEBUG
+        sessionManager.uiPreviewBundleFanDemo
+        #else
+        false
+        #endif
     }
 
     private func powerOff() async {
