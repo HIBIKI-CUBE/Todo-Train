@@ -26,6 +26,8 @@ extension SessionManager {
         var message: String
         var eventID: UUID
         var expiresAt: Date
+        /// 位置確認で残した取り消し帯。無いときは kind の定型文。
+        var statusLine: String? = nil
     }
 
     func presentReestimate(
@@ -116,11 +118,17 @@ extension SessionManager {
         reconcile(now: now)
         refreshRideSideEffects(for: session, now: now)
 
+        let statusLine = positionUndoStatusLine(
+            declaration: declaration,
+            committedRemainingSeconds: committedRemainingSeconds,
+            now: now
+        )
         focusUndoOffer = FocusUndoOffer(
             kind: .reestimate,
-            message: "見積もり直しを取り消す",
+            message: statusLine ?? "見積もり直しを取り消す",
             eventID: record.id,
-            expiresAt: now.addingTimeInterval(5)
+            expiresAt: now.addingTimeInterval(5),
+            statusLine: statusLine
         )
         scheduleFocusUndoExpiry(at: focusUndoOffer!.expiresAt)
     }
@@ -174,6 +182,21 @@ extension SessionManager {
             if focusUndoOffer?.expiresAt == date {
                 focusUndoOffer = nil
             }
+        }
+    }
+
+    private func positionUndoStatusLine(
+        declaration: ReestimateDeclaration?,
+        committedRemainingSeconds: Int,
+        now: Date
+    ) -> String? {
+        guard let declaration else { return nil }
+        let arrival = now.addingTimeInterval(TimeInterval(committedRemainingSeconds))
+        switch declaration {
+        case .adjust:
+            return PositionReportWording.adjustBanner(arrival: arrival)
+        case .recovery:
+            return PositionReportWording.recoveryBanner(arrival: arrival)
         }
     }
 

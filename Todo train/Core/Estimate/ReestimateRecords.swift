@@ -106,4 +106,5 @@ enum ReestimatePromptID {
     static let progressV1 = "reestimate.progress.v1"
     static let remainingV1 = "reestimate.remaining.v1"
     static let positionV1 = "reestimate.position.v1"
+    static let positionV2 = "reestimate.position.v2"
 }

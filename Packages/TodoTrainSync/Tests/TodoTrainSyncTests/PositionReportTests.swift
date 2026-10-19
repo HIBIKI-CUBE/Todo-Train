@@ -76,6 +76,51 @@ struct PositionReportTests {
         #expect(arrival == Date(timeIntervalSince1970: remaining!))
     }
 
+    @Test func isOnTime_includesLowerBoundAndLateGrace() {
+        let judgment = PunctualityJudgment.judge(
+            PunctualityJudgment.RideInput(
+                arrived: false,
+                activeSeconds: 21 * 60,
+                estimatedSecondsAtStart: 30 * 60
+            )
+        )
+        #expect(PositionReport.isOnTime(projectedTotal: judgment.lowerBound, judgment: judgment))
+        #expect(!PositionReport.isOnTime(projectedTotal: judgment.lowerBound - 0.01, judgment: judgment))
+        let graceEdge = judgment.upperBound + PunctualityJudgment.lateGraceSeconds
+        #expect(PositionReport.isOnTime(projectedTotal: graceEdge, judgment: judgment))
+        #expect(!PositionReport.isOnTime(projectedTotal: graceEdge + 0.01, judgment: judgment))
+    }
+
+    @Test func onTimeProgressRange_twentyOneMinutesIsAboutSixToEightTenths() throws {
+        let active = TimeInterval(21 * 60)
+        let lower = TimeInterval(25.5 * 60)
+        let upper = TimeInterval(34.5 * 60)
+        let range = try #require(
+            PositionReport.onTimeProgressRange(activeSeconds: active, lower: lower, upper: upper)
+        )
+        #expect(abs(range.lowerBound - (21.0 / 34.5)) < 0.000_001)
+        #expect(abs(range.upperBound - (21.0 / 25.5)) < 0.000_001)
+        #expect((range.lowerBound * 100).rounded() / 100 == 0.61)
+        #expect((range.upperBound * 100).rounded() / 100 == 0.82)
+    }
+
+    @Test func onTimeProgressRange_clipsPastOne() {
+        let range = PositionReport.onTimeProgressRange(
+            activeSeconds: 30 * 60,
+            lower: 20 * 60,
+            upper: 25 * 60
+        )
+        #expect(range == nil)
+    }
+
+    @Test func scheduledTenth_hidesBelowOneAndAboveTen() {
+        #expect(PositionReport.scheduledTenth(activeSeconds: 21 * 60, plannedSeconds: 30 * 60) == 7)
+        #expect(PositionReport.scheduledTenth(activeSeconds: 3 * 60, plannedSeconds: 30 * 60) == 1)
+        #expect(PositionReport.scheduledTenth(activeSeconds: 2 * 60, plannedSeconds: 30 * 60) == nil)
+        #expect(PositionReport.scheduledTenth(activeSeconds: 31 * 60, plannedSeconds: 30 * 60) == nil)
+        #expect(PositionReport.scheduledTenth(activeSeconds: 30 * 60, plannedSeconds: 30 * 60) == 10)
+    }
+
     @Test func showsRecoveryDeclaration_hidesAfterOriginalScheduledArrival() {
         #expect(
             !PositionReport.showsRecoveryDeclaration(

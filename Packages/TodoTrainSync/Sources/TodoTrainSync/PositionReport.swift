@@ -1,6 +1,6 @@
 import Foundation
 
-/// 現在位置の報告から見込みと判見本を出す純粋関数。
+/// 位置確認の見込みと判見本を出す純粋関数。
 public enum PositionReport: Sendable {
     /// 走行秒 `a` と割合 `p`（1 割刻み）から見込みの全体秒。10 割・未走行は nil。
     public static func projection(activeSeconds: TimeInterval, progress: Double) -> TimeInterval? {
@@ -65,5 +65,37 @@ public enum PositionReport: Sendable {
     ) -> Bool {
         guard plannedBudgetSeconds > 0 else { return false }
         return activeSeconds < TimeInterval(plannedBudgetSeconds)
+    }
+
+    /// 見込みの全体秒が、いまのホーム（定時の幅）に入るか。上端は遅い猶予までを幅の中に数える。
+    public static func isOnTime(
+        projectedTotal: TimeInterval,
+        judgment: PunctualityJudgment.Judgment
+    ) -> Bool {
+        projectedTotal >= judgment.lowerBound
+            && projectedTotal <= judgment.upperBound + PunctualityJudgment.lateGraceSeconds
+    }
+
+    /// 見込みがホームに入る割合。走った秒 ÷ 幅の上端から、走った秒 ÷ 幅の下端まで。1 を超える部分は切る。
+    public static func onTimeProgressRange(
+        activeSeconds: TimeInterval,
+        lower: TimeInterval,
+        upper: TimeInterval
+    ) -> ClosedRange<Double>? {
+        guard activeSeconds > 0, lower > 0, upper >= lower else { return nil }
+        let start = min(max(activeSeconds / upper, 0), 1)
+        let end = min(max(activeSeconds / lower, 0), 1)
+        guard end > start else { return nil }
+        return start...end
+    }
+
+    /// 予定どおりの割。1割未満、または 10割を超えるときは出さない。
+    public static func scheduledTenth(activeSeconds: TimeInterval, plannedSeconds: Int) -> Int? {
+        guard plannedSeconds > 0 else { return nil }
+        let ratio = activeSeconds / TimeInterval(plannedSeconds)
+        if ratio < 0.1 || ratio > 1 { return nil }
+        let tenth = Int((ratio * 10).rounded())
+        guard tenth >= 1, tenth <= 10 else { return nil }
+        return tenth
     }
 }

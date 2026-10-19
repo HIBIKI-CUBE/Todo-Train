@@ -86,6 +86,11 @@ public enum EstimateSnapMapping {
         return x / width
     }
 
+    /// 端のゴムが伸び始めているか。0 と 1 は止まりで、その外だけ true。
+    public static func isOverscrolling(fingerFraction: CGFloat) -> Bool {
+        fingerFraction < 0 || fingerFraction > 1
+    }
+
     public static func snap(x: CGFloat, width: CGFloat) -> Int {
         snap(fraction: fraction(x: x, width: width))
     }

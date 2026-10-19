@@ -137,6 +137,45 @@ struct EstimateSnapMappingTests {
         #expect(escaped.anchoredMinutes == 5)
     }
 
+    @Test func isOverscrolling_isFalseOnTheEndsAndTrueJustOutside() {
+        #expect(EstimateSnapMapping.isOverscrolling(fingerFraction: 0) == false)
+        #expect(EstimateSnapMapping.isOverscrolling(fingerFraction: 1) == false)
+        #expect(EstimateSnapMapping.isOverscrolling(fingerFraction: 0.5) == false)
+        #expect(EstimateSnapMapping.isOverscrolling(fingerFraction: -0.001) == true)
+        #expect(EstimateSnapMapping.isOverscrolling(fingerFraction: 1.001) == true)
+    }
+
+    @Test func stickyScrub_tenStopsUseTheSameEscapeAndStretch() {
+        let stops = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+        let maxMinutes = 100
+        let from = EstimateSnapMapping.fraction(minutes: 60, maxMinutes: maxMinutes)
+        let to = EstimateSnapMapping.fraction(minutes: 70, maxMinutes: maxMinutes)
+        let gap = to - from
+
+        let before = from + gap * (EstimateSnapMapping.stickyEscapeProgress - 0.01)
+        let held = EstimateSnapMapping.stickyScrub(
+            fingerFraction: before,
+            anchoredMinutes: 60,
+            stops: stops,
+            maxMinutes: maxMinutes
+        )
+        #expect(held.didEscape == false)
+        #expect(held.anchoredMinutes == 60)
+        let expectedStretch = from + gap * (EstimateSnapMapping.stickyEscapeProgress - 0.01) * EstimateSnapMapping.stickyStretch
+        #expect(abs(held.displayFraction - expectedStretch) < 0.0001)
+
+        let past = from + gap * (EstimateSnapMapping.stickyEscapeProgress + 0.01)
+        let escaped = EstimateSnapMapping.stickyScrub(
+            fingerFraction: past,
+            anchoredMinutes: 60,
+            stops: stops,
+            maxMinutes: maxMinutes
+        )
+        #expect(escaped.didEscape == true)
+        #expect(escaped.anchoredMinutes == 70)
+        #expect(escaped.displayFraction == to)
+    }
+
     @Test func shouldCommitScrub_rejectsVerticalShortOrSameStop() {
         #expect(
             EstimateSnapMapping.shouldCommitScrub(

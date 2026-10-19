@@ -2,7 +2,7 @@
 //  PositionReportWording.swift
 //  Todo train
 //
-//  指令（車内放送）の見込み文案。CabinKind の契約指紋とは分離する。
+//  位置確認の一行目と、二択・取り消し帯の文。
 //
 
 import Foundation
@@ -15,27 +15,45 @@ enum PositionReportWording {
         return f
     }()
 
-    static func progressHeadline(tenth: Int) -> String {
-        "\(tenth)割の地点"
+    static func clock(_ date: Date) -> String {
+        arrivalFormatter.string(from: date)
     }
 
-    static func projectionDetail(
-        activeMinutes: Int,
-        tenth: Int,
-        projectedArrival: Date
-    ) -> String {
-        let clock = arrivalFormatter.string(from: projectedArrival)
-        return "\(activeMinutes)分で\(tenth)割なので、このままなら \(clock)着の見込み"
+    static func scheduledLine(tenth: Int) -> String {
+        "予定どおりなら \(tenth)割"
     }
 
-    static let onTimeProjectionSummary = "このままなら定時の見込み"
+    static func shareLine(tenth: Int) -> String {
+        "\(tenth)割"
+    }
+
+    static func projectionLine(arrival: Date) -> String {
+        "このままなら \(clock(arrival))着"
+    }
+
+    static let onTimeLine = "このままなら定時"
+
+    static let arrivalPointLine = "到着の地点"
+
+    static let unselectedValue = "未選択"
+
+    static func gaugeValue(tenth: Int, phrase: String) -> String {
+        "\(tenth)割、\(phrase)"
+    }
 
     static func recoveryCaption(arrival: Date) -> String {
-        "\(arrivalFormatter.string(from: arrival))着を目指す"
+        "\(clock(arrival))着を目指す"
     }
 
     static func adjustCaption(arrival: Date) -> String {
-        "\(arrivalFormatter.string(from: arrival))着にする"
+        "\(clock(arrival))着にする"
     }
 
+    static func recoveryBanner(arrival: Date) -> String {
+        "\(clock(arrival))着を目指す回復運転"
+    }
+
+    static func adjustBanner(arrival: Date) -> String {
+        "\(clock(arrival))着で運転調整"
+    }
 }

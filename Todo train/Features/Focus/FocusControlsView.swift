@@ -45,14 +45,14 @@ struct FocusControlsView: View {
                     FocusControlVerticalDivider()
 
                     FocusControlButton(
-                        title: "現在位置",
-                        systemImage: "antenna.radiowaves.left.and.right",
+                        title: "位置確認",
+                        systemImage: "scope",
                         fill: FocusPanel.fillRaised,
                         foreground: FocusPanel.ink,
                         prominence: .secondary,
                         action: onReestimate
                     )
-                    .accessibilityHint("いま何割の地点かを指令に報告します")
+                    .accessibilityHint("いまの地点から、着の見込みを確かめます。")
                     .frame(maxWidth: .infinity)
                 }
                 .frame(height: row)

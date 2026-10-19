@@ -182,6 +182,163 @@ struct SessionManagerReestimateTests {
         #expect(manager.activeSession?.reestimateEvents.isEmpty == true)
     }
 
+    @Test func positionCheck_openReleaseAndClose_recordsNothing() throws {
+        let (manager, context, _, _) = try SessionManagerFixtures.makeHarness()
+        try manager.startService()
+        let ticket = try SessionManagerFixtures.makeTicket(context, seconds: 30 * 60)
+        try manager.board(ticket: ticket)
+        manager.presentReestimate(trigger: .manual, surface: .iphonePortrait)
+        manager.dismissReestimate()
+
+        let session = try #require(manager.activeSession)
+        #expect(session.reestimateEvents.isEmpty)
+        #expect(manager.reestimateRequest == nil)
+    }
+
+    @Test func positionCheck_adjust_recordsV2AndChangesEstimate() throws {
+        let (manager, context, clock, _) = try SessionManagerFixtures.makeHarness()
+        try manager.startService()
+        let ticket = try SessionManagerFixtures.makeTicket(context, seconds: 30 * 60)
+        try manager.board(ticket: ticket)
+        let before = try foldOpenSegment(manager, clock: clock, by: 21 * 60)
+        let budgetBefore = before.currentBudgetSeconds
+        let luxuryBefore = try #require(ridingLuxury(before))
+        manager.presentReestimate(trigger: .manual, surface: .iphonePortrait)
+
+        let active = before.elapsedSeconds(at: clock.now)
+        let progress = 0.6
+        let remaining = try #require(
+            PositionReport.committedRemainingSeconds(activeSeconds: active, progress: progress)
+        )
+        let projected = try #require(
+            PositionReport.projectedTotalSecondsInt(activeSeconds: active, progress: progress)
+        )
+        try manager.commitReestimate(
+            mode: .positionReport,
+            progressAnswer: progress,
+            committedRemainingSeconds: remaining,
+            shownBandLowSeconds: nil,
+            shownBandHighSeconds: nil,
+            detailsOpened: false,
+            promptId: ReestimatePromptID.positionV2,
+            declaration: .adjust,
+            projectedTotalSeconds: projected
+        )
+
+        let session = try #require(manager.activeSession)
+        let events = session.reestimateEvents.filter { $0.undoneAt == nil }
+        #expect(events.count == 1)
+        let event = try #require(events.first)
+        #expect(event.promptId == ReestimatePromptID.positionV2)
+        #expect(event.declaration == .adjust)
+        #expect(event.mode == .positionReport)
+        #expect(session.currentBudgetSeconds != budgetBefore)
+        #expect(session.currentBudgetSeconds == Int(active.rounded()) + remaining)
+        let luxuryAfter = try #require(ridingLuxury(session))
+        #expect(luxuryBefore == 1.0)
+        #expect(luxuryAfter < luxuryBefore)
+        #expect(manager.focusUndoOffer?.statusLine?.hasSuffix("着で運転調整") == true)
+    }
+
+    @Test func positionCheck_recovery_recordsWithoutChangingEstimateOrSeal() throws {
+        let (manager, context, clock, _) = try SessionManagerFixtures.makeHarness()
+        try manager.startService()
+        let ticket = try SessionManagerFixtures.makeTicket(context, seconds: 30 * 60)
+        try manager.board(ticket: ticket)
+        let before = try foldOpenSegment(manager, clock: clock, by: 21 * 60)
+        let budgetBefore = before.currentBudgetSeconds
+        let luxuryBefore = try #require(ridingLuxury(before))
+        let remaining = Int(before.remainingSeconds(at: clock.now).rounded())
+        manager.presentReestimate(trigger: .manual, surface: .iphonePortrait)
+
+        try manager.commitReestimate(
+            mode: .positionReport,
+            progressAnswer: 0.6,
+            committedRemainingSeconds: remaining,
+            shownBandLowSeconds: nil,
+            shownBandHighSeconds: nil,
+            detailsOpened: false,
+            promptId: ReestimatePromptID.positionV2,
+            declaration: .recovery,
+            projectedTotalSeconds: nil
+        )
+
+        let session = try #require(manager.activeSession)
+        let events = session.reestimateEvents.filter { $0.undoneAt == nil }
+        #expect(events.count == 1)
+        #expect(events.first?.promptId == ReestimatePromptID.positionV2)
+        #expect(events.first?.declaration == .recovery)
+        #expect(session.currentBudgetSeconds == budgetBefore)
+        #expect(ridingLuxury(session) == luxuryBefore)
+        #expect(manager.focusUndoOffer?.statusLine?.hasSuffix("着を目指す回復運転") == true)
+    }
+
+    @Test func positionCheck_insideWidthStaysCheck_andFullBecomesFull() {
+        let active = TimeInterval(21 * 60)
+        let judgment = PunctualityJudgment.judge(
+            PunctualityJudgment.RideInput(
+                arrived: false,
+                activeSeconds: active,
+                estimatedSecondsAtStart: 30 * 60
+            )
+        )
+        #expect(
+            PositionCheckFlow.stageAfterRelease(
+                percent: 70,
+                activeSeconds: active,
+                judgment: judgment
+            ) == .check
+        )
+        #expect(
+            PositionCheckFlow.stageAfterRelease(
+                percent: 60,
+                activeSeconds: active,
+                judgment: judgment
+            ) == .declare
+        )
+        #expect(
+            PositionCheckFlow.stageAfterRelease(
+                percent: 100,
+                activeSeconds: active,
+                judgment: judgment
+            ) == .full
+        )
+        #expect(
+            PositionCheckFlow.stageAfterRelease(
+                percent: 0,
+                activeSeconds: active,
+                judgment: judgment
+            ) == .check
+        )
+    }
+
+    /// 走行中の判定は区間を畳んだ秒を見る。時計だけ進めても判の入力には入らない。
+    private func foldOpenSegment(
+        _ manager: SessionManager,
+        clock: FixedSessionClock,
+        by seconds: TimeInterval
+    ) throws -> WorkSession {
+        clock.advance(by: seconds)
+        let session = try #require(manager.activeSession)
+        session.closeActiveSegment(at: clock.now)
+        session.segmentStartedAt = clock.now
+        return session
+    }
+
+    private func ridingLuxury(_ session: WorkSession) -> Double? {
+        let judgment = Punctuality.judgment(for: session)
+        let commits = session.reestimateEvents
+            .filter { $0.undoneAt == nil && $0.declaration != .recovery }
+            .map {
+                PunctualityJudgment.ReestimateCommit(
+                    reestimateIndex: $0.reestimateIndex,
+                    activeSeconds: $0.activeSeconds,
+                    committedRemainingSeconds: $0.committedRemainingSeconds
+                )
+            }
+        return PunctualityPresentation.ridingSealLuxury(judgment: judgment, reestimates: commits)
+    }
+
     private func reestimateCommand(sessionID: UUID, at: Date) -> CommandPlaintext {
         CommandPlaintext(
             id: UUID(),
