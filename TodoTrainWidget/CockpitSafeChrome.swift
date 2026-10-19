@@ -45,10 +45,14 @@ enum CockpitSafeSurface: Equatable, Sendable {
 struct CockpitSafeChrome: Equatable, Sendable {
     /// Expanded island corner beside the camera. HIG's 44pt; the top row sits here.
     static let expandedOuterRadius: CGFloat = 44
-    /// Expanded island bottom corner. Measured on a Pro Max expanded island:
-    /// the bottom chord matches a 50pt corner, rounder than the 44pt top.
-    /// The bottom slot's width is the chord of this radius, not a second padding guess.
-    static let expandedBottomRadius: CGFloat = 50
+    /// Expanded island bottom corner. Rounder than the 44pt top.
+    /// Measured on the iPhone 18 Pro Max Simulator, iOS 27.2, from the expanded
+    /// riding island (framebuffer 1320×2868, @3x). The bottom-left edge fits a
+    /// circle of radius 142.5px = 47.5pt (RMSE 1.35px). The straight left edge
+    /// is x=42px and the black region ends near y=382px.
+    static let expandedBottomRadius: CGFloat = 47.5
+    /// Extra horizontal clearance past the chord at the train head's bottom.
+    static let gaugeCornerClearance: CGFloat = 4
     /// Lock Screen / StandBy card corner in proposal points.
     static let lockScreenOuterRadius: CGFloat = 24
     /// Smart Stack card corner.
@@ -83,14 +87,63 @@ struct CockpitSafeChrome: Equatable, Sendable {
     }
 
     static var expandedEdgeInset: CGFloat { cornerInset(radius: expandedOuterRadius) }
-    /// Horizontal inset of the bottom slot: the chord at the bottom clearance, both ends.
-    static var expandedBottomChordInset: CGFloat {
-        chordInset(radius: expandedBottomRadius, distanceFromEdge: expandedEdgeInset).rounded(.up)
+    /// Horizontal inset that keeps the gauge, including the train head, inside the
+    /// bottom corner. `gaugeBottomFromEdge` is the distance from the island's bottom
+    /// edge up to the lowest point the head draws. The chord there, plus
+    /// `gaugeCornerClearance`, is the inset. Both ends use the same value.
+    static func gaugeChordInset(gaugeBottomFromEdge: CGFloat) -> CGFloat {
+        let chord = chordInset(radius: expandedBottomRadius, distanceFromEdge: gaugeBottomFromEdge)
+        return (chord + gaugeCornerClearance).rounded(.up)
+    }
+
+    /// Distance from the expanded island's bottom edge to the train head's bottom.
+    /// The gauge frame is bottom-aligned on `expandedEdgeInset`; the head sits up
+    /// inside that frame by half the leftover height.
+    static func expandedGaugeBottomFromEdge(gaugeHeight: CGFloat) -> CGFloat {
+        expandedEdgeInset + CockpitTrainHeadMetrics.bottomInset(gaugeHeight: gaugeHeight)
+    }
+
+    /// Shared bottom inset. The shorter gauge sits closer to the corner, so it wins.
+    static var expandedGaugeHorizontalInset: CGFloat {
+        let heights = [
+            CockpitFaceMetrics.expanded.gaugeHeight,
+            CockpitFaceMetrics.expandedTight.gaugeHeight
+        ]
+        return heights.map { height in
+            gaugeChordInset(gaugeBottomFromEdge: expandedGaugeBottomFromEdge(gaugeHeight: height))
+        }.max() ?? 0
+    }
+
+    /// Bounds of the expanded gauge's train head. The overtime end clamps the head
+    /// with `width - headW`, which is this rect's trailing edge.
+    static func expandedGaugeHeadRect(canvas: CGSize, gaugeHeight: CGFloat) -> CGRect {
+        let chrome = resolve(surface: .islandExpanded, canvas: canvas)
+        let head = CockpitTrainHeadMetrics.size(gaugeHeight: gaugeHeight)
+        let fromEdge = expandedGaugeBottomFromEdge(gaugeHeight: gaugeHeight)
+        return CGRect(
+            x: chrome.bottom.minX,
+            y: canvas.height - fromEdge - head.height,
+            width: chrome.bottom.width,
+            height: head.height
+        )
     }
     static var lockScreenEdgeInset: CGFloat { cornerInset(radius: lockScreenOuterRadius) }
     static var stackEdgeInset: CGFloat { cornerInset(radius: stackOuterRadius) }
     static var compactEdgeInset: CGFloat {
         cornerInset(radius: CockpitSizeContract.islandCompactSide.height / 2)
+    }
+    /// Compact trailing pill. Leading, trailing, and vertical all use the cap inset.
+    /// On the iPhone 18 Pro Max Simulator (iOS 27.2) the truncated digits still
+    /// ended ~7pt inside the pill, which is this inset and not a second system
+    /// margin. The missing digits were an ellipsis inside the timer frame.
+    static var compactTrailingLeadingMargin: CGFloat { compactEdgeInset }
+    static var compactTrailingVerticalMargin: CGFloat { compactEdgeInset }
+    static var compactTrailingTrailingMargin: CGFloat { compactEdgeInset }
+    /// Width left for the digits after the trailing pill's horizontal margins.
+    static var compactTrailingContentWidth: CGFloat {
+        CockpitSizeContract.islandCompactSide.width
+            - compactTrailingLeadingMargin
+            - compactTrailingTrailingMargin
     }
     static var minimalEdgeInset: CGFloat {
         cornerInset(radius: CockpitSizeContract.islandMinimalMaxWidth / 2)
@@ -322,11 +375,9 @@ struct CockpitSafeChrome: Equatable, Sendable {
             height: max(0, sideHeight)
         )
         let bottomY = min(max(bottomFloor, top + sideHeight + bandGap), slotBottom)
-        // Chord at the slot's bottom edge. Both ends move in by the same amount.
-        let horizontal = chordInset(
-            radius: expandedBottomRadius,
-            distanceFromEdge: max(0, height - slotBottom)
-        ).rounded(.up)
+        // Chord at the train head's bottom, plus the clearance. The gauge is
+        // bottom-aligned in this slot, so the head — not the slot's top — meets the corner.
+        let horizontal = expandedGaugeHorizontalInset
         let bottom = CGRect(
             x: horizontal,
             y: bottomY,
@@ -508,7 +559,7 @@ extension DynamicIslandExpandedRegion {
     }
 
     func safeBottomChrome() -> DynamicIslandExpandedRegion<Content> {
-        contentMargins(.horizontal, CockpitSafeChrome.expandedBottomChordInset)
+        contentMargins(.horizontal, CockpitSafeChrome.expandedGaugeHorizontalInset)
             .contentMargins(.bottom, CockpitSafeChrome.expandedEdgeInset)
     }
 }
@@ -516,7 +567,9 @@ extension DynamicIslandExpandedRegion {
 extension DynamicIsland {
     func safeCompactChrome() -> DynamicIsland {
         contentMargins(.all, CockpitSafeChrome.compactEdgeInset, for: .compactLeading)
-            .contentMargins(.all, CockpitSafeChrome.compactEdgeInset, for: .compactTrailing)
+            .contentMargins(.leading, CockpitSafeChrome.compactTrailingLeadingMargin, for: .compactTrailing)
+            .contentMargins(.vertical, CockpitSafeChrome.compactTrailingVerticalMargin, for: .compactTrailing)
+            .contentMargins(.trailing, CockpitSafeChrome.compactTrailingTrailingMargin, for: .compactTrailing)
             .contentMargins(.all, CockpitSafeChrome.minimalEdgeInset, for: .minimal)
     }
 }

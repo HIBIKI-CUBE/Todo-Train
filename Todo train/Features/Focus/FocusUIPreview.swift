@@ -77,6 +77,14 @@ enum FocusUIPreview {
 
     static var isActive: Bool { parsedState() != nil }
 
+    /// Preview launches use an in-memory store and a no-op Live Activity.
+    /// `-uiPreviewLiveActivity` keeps the real ActivityKit manager so a Dynamic Island shot can start.
+    static let liveActivityArgument = "-uiPreviewLiveActivity"
+
+    static var wantsLiveActivity: Bool {
+        ProcessInfo.processInfo.arguments.contains(liveActivityArgument)
+    }
+
     static var showsSealGallery: Bool { parsedState() == "sealGallery" }
 
     /// DEBUG スクショ用。通知・AlarmKit の許可ダイアログを出さない。
@@ -122,6 +130,7 @@ enum FocusUIPreview {
         let ticket = Ticket(title: "スクショ用", estimatedSeconds: 45 * 60, sortOrder: 0)
         context.insert(ticket)
         try context.save()
+        queueRideBeforeBoard(state: state, ticket: ticket)
         try manager.board(ticket: ticket)
         guard let session = manager.activeSession else { return }
 
@@ -236,6 +245,22 @@ enum FocusUIPreview {
             session.accumulatedActiveSeconds = 35 * 60
             manager.uiPreviewForcesFocusCover = true
 
+        case "laRemain12":
+            // Launch and the island settle take a few seconds. Start long so the shot reads 12:00.
+            placeLiveActivity(session, manager: manager, budget: 20 * 60, active: 8 * 60 - 8)
+        case "laRemain90":
+            placeLiveActivity(session, manager: manager, budget: 20 * 60, active: 20 * 60 - 90 - 8)
+        case "laOvertime":
+            placeLiveActivity(session, manager: manager, budget: 20 * 60, active: 20 * 60 + 90)
+        case "laPaused":
+            placeLiveActivity(session, manager: manager, budget: 20 * 60, active: 8 * 60)
+            try manager.pause()
+        case "laPrompt":
+            placeLiveActivity(session, manager: manager, budget: 20 * 60, active: 8 * 60)
+            session.pendingCheckIn = .progress
+            session.checkInPromptLine = CheckInCopy.away
+            manager.refreshLiveActivity(for: session, now: manager.clock.now)
+
         case "arrivalOnTimeTicketing", "arrivalOnTimeEarly", "arrivalOnTimeLate", "arrivalNotOnTime", "arrivalLateLog":
             try configureArrivalPreview(
                 manager: manager,
@@ -248,6 +273,62 @@ enum FocusUIPreview {
         }
         manager.uiPreviewLandscape = wantsLandscape
         manager.uiPreviewSuppressMotion = true
+    }
+
+    /// Applied inside `startNewSession`, before the first Live Activity request.
+    /// An update that moves the deadline into the past does not replace the
+    /// activity started by `board()` (the overtime shot stayed on the 45-minute
+    /// countdown). Queuing the ride makes that first request already overtime.
+    private static var queuedRide: (budget: Int, active: TimeInterval)?
+
+    private static func queueRideBeforeBoard(state: String, ticket: Ticket) {
+        switch state {
+        case "laRemain12":
+            queueRide(budget: 20 * 60, active: 8 * 60 - 8, ticket: ticket)
+        case "laRemain90":
+            queueRide(budget: 20 * 60, active: 20 * 60 - 90 - 8, ticket: ticket)
+        case "laOvertime":
+            queueRide(budget: 20 * 60, active: 20 * 60 + 90, ticket: ticket)
+        case "laPaused", "laPrompt":
+            queueRide(budget: 20 * 60, active: 8 * 60, ticket: ticket)
+        default:
+            break
+        }
+    }
+
+    private static func queueRide(budget: Int, active: TimeInterval, ticket: Ticket) {
+        ticket.estimatedSeconds = budget
+        queuedRide = (budget, active)
+    }
+
+    static func applyQueuedRide(to session: WorkSession, now: Date) {
+        guard let queued = queuedRide else { return }
+        queuedRide = nil
+        session.estimatedSecondsAtStart = queued.budget
+        session.budgetSecondsAtStart = queued.budget
+        session.currentBudgetSeconds = queued.budget
+        let placed = FocusPreviewActiveTime.placement(activeSeconds: queued.active, now: now)
+        session.accumulatedActiveSeconds = placed.accumulatedActiveSeconds
+        session.segmentStartedAt = placed.segmentStartedAt
+    }
+
+    /// DEBUG Live Activity shots. Remaining time is `budget - active` at `now`.
+    @MainActor
+    private static func placeLiveActivity(
+        _ session: WorkSession,
+        manager: SessionManager,
+        budget: Int,
+        active: TimeInterval
+    ) {
+        session.estimatedSecondsAtStart = budget
+        session.budgetSecondsAtStart = budget
+        session.currentBudgetSeconds = budget
+        let placed = FocusPreviewActiveTime.placement(activeSeconds: active, now: manager.clock.now)
+        session.accumulatedActiveSeconds = placed.accumulatedActiveSeconds
+        session.segmentStartedAt = placed.segmentStartedAt
+        manager.reconcile(now: manager.clock.now)
+        manager.refreshLiveActivity(for: session, now: manager.clock.now)
+        manager.uiPreviewForcesFocusCover = true
     }
 
     @MainActor

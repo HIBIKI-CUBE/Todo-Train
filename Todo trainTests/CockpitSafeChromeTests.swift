@@ -7,6 +7,8 @@
 //
 
 import CoreGraphics
+import SwiftUI
+import UIKit
 import XCTest
 @testable import Todo_train
 
@@ -76,7 +78,7 @@ final class CockpitSafeChromeTests: XCTestCase {
             CockpitSafeChrome.expandedBottomRadius,
             CockpitSafeChrome.expandedOuterRadius
         )
-        let chord = CockpitSafeChrome.expandedBottomChordInset
+        let chord = CockpitSafeChrome.expandedGaugeHorizontalInset
         XCTAssertGreaterThan(chord, CockpitSafeChrome.expandedEdgeInset)
         for height: CGFloat in [110, 160] {
             let canvas = CGSize(width: CockpitSizeContract.proMaxWidth, height: height)
@@ -106,6 +108,102 @@ final class CockpitSafeChromeTests: XCTestCase {
             XCTAssertTrue(chrome.contains(schedule), "予定 under the timer left the island at \(height)")
             XCTAssertFalse(chrome.bottom.contains(schedule))
         }
+    }
+
+    /// The gauge rect, including the train head, stays 4pt inside the expanded clip.
+    /// The overtime clamp (`width - headW`) is the head's trailing edge of that rect.
+    func testExpandedGaugeHeadClearsTheBottomCorner() {
+        let margin = CockpitSafeChrome.gaugeCornerClearance
+        XCTAssertEqual(margin, 4)
+        let gaugeHeight = CockpitFaceMetrics.expanded.gaugeHeight
+        let head = CockpitTrainHeadMetrics.size(gaugeHeight: gaugeHeight)
+        for height: CGFloat in [120, 140, 160] {
+            let canvas = CGSize(width: CockpitSizeContract.proMaxWidth, height: height)
+            let chrome = CockpitSafeChrome.resolve(surface: .islandExpanded, canvas: canvas)
+            let rect = CockpitSafeChrome.expandedGaugeHeadRect(canvas: canvas, gaugeHeight: gaugeHeight)
+            let clamped = CGRect(
+                x: rect.maxX - head.width,
+                y: rect.minY,
+                width: head.width,
+                height: head.height
+            )
+            for box in [rect, clamped] {
+                let corners = [
+                    CGPoint(x: box.minX, y: box.minY),
+                    CGPoint(x: box.maxX, y: box.minY),
+                    CGPoint(x: box.minX, y: box.maxY),
+                    CGPoint(x: box.maxX, y: box.maxY)
+                ]
+                for corner in corners {
+                    XCTAssertTrue(chrome.pointInsideClip(corner), "\(height) \(corner)")
+                    let outwardX = corner.x <= canvas.width / 2 ? corner.x - margin : corner.x + margin
+                    let outwardY = corner.y >= canvas.height / 2 ? corner.y + margin : corner.y - margin
+                    XCTAssertTrue(
+                        chrome.pointInsideClip(CGPoint(x: outwardX, y: corner.y)),
+                        "horizontal \(height) \(corner)"
+                    )
+                    XCTAssertTrue(
+                        chrome.pointInsideClip(CGPoint(x: corner.x, y: outwardY)),
+                        "vertical \(height) \(corner)"
+                    )
+                }
+            }
+            XCTAssertGreaterThanOrEqual(rect.minX, chrome.bottom.minX)
+            XCTAssertLessThanOrEqual(rect.maxX, chrome.bottom.maxX)
+            XCTAssertEqual(
+                canvas.width - rect.maxX,
+                rect.minX,
+                accuracy: 0.01,
+                "\(height)"
+            )
+        }
+    }
+
+    /// "0:00", "00:00", and "75:00" fit in the compact trailing pill after its margins.
+    func testCompactTrailingTemplateFitsAfterMargins() {
+        let available = CockpitSafeChrome.compactTrailingContentWidth
+        XCTAssertEqual(
+            CockpitSizeContract.islandCompactSide.width - available,
+            CockpitSafeChrome.compactTrailingLeadingMargin + CockpitSafeChrome.compactTrailingTrailingMargin,
+            accuracy: 0.01
+        )
+        let pointSize = UIFont.preferredFont(forTextStyle: .caption1).pointSize
+        let font = UIFont.monospacedDigitSystemFont(ofSize: pointSize, weight: .bold)
+        for text in ["0:00", "00:00", "75:00"] {
+            let measured = (text as NSString).size(withAttributes: [.font: font]).width
+            let pure = CockpitCompactTimerWidth.width(of: text)
+            XCTAssertGreaterThanOrEqual(pure, measured.rounded(.up), text)
+            XCTAssertLessThanOrEqual(pure, available, text)
+            XCTAssertLessThanOrEqual(measured, available, text)
+        }
+        XCTAssertEqual(CockpitCompactTimerWidth.template(remaining: 90, limitedWidth: false), "0:00")
+        XCTAssertEqual(CockpitCompactTimerWidth.template(remaining: 12 * 60, limitedWidth: false), "00:00")
+        XCTAssertEqual(CockpitCompactTimerWidth.template(remaining: 75 * 60, limitedWidth: false), "00:00")
+        XCTAssertEqual(
+            CockpitCompactTimerWidth.width(of: "75:00"),
+            CockpitCompactTimerWidth.width(of: "00:00")
+        )
+        XCTAssertLessThanOrEqual(CockpitCompactTimerWidth.template(remaining: 75 * 60, limitedWidth: false).count, 5)
+        let framed = CockpitCompactTimerWidth.frameWidth(of: "00:00")
+        XCTAssertLessThanOrEqual(framed, available, "timer frame must fit after the pill margins")
+        let countdown = MainActor.assumeIsolated {
+            let end = Date().addingTimeInterval(12 * 60)
+            let view = Text(
+                timerInterval: Date()...end,
+                countsDown: true,
+                showsHours: false
+            )
+            .font(.caption.weight(.bold).monospacedDigit())
+            let renderer = ImageRenderer(content: view)
+            renderer.proposedSize = ProposedViewSize(width: 200, height: 30)
+            return renderer.uiImage?.size.width ?? 0
+        }
+        XCTAssertGreaterThan(countdown, 0)
+        XCTAssertLessThanOrEqual(
+            countdown,
+            framed,
+            "countdown intrinsic \(countdown) exceeds the compact frame \(framed)"
+        )
     }
 
     func testCardCornersKeepAControlInside() {

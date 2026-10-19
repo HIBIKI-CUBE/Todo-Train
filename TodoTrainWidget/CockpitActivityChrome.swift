@@ -25,8 +25,15 @@ struct CockpitFaceMetrics: Equatable {
     var captionLine: CGFloat { captionSize + 4 }
 
     /// Timer row (at least the 44pt control) plus 「予定 HH:mm」 under it.
+    /// Lock Screen, StandBy, and the stack still stack the caption under the control.
     var scheduleBand: CGFloat {
         max(timerSize, CockpitSafeChrome.controlSide) + 2 + captionLine
+    }
+
+    /// Expanded trailing column: remaining time over 「予定 HH:mm」, beside the control.
+    /// `max(timer + 2 + caption, 44)`.
+    var islandTrailingScheduleHeight: CGFloat {
+        max(timerSize + 2 + captionLine, CockpitSafeChrome.controlSide)
     }
 
     static let expanded = CockpitFaceMetrics(
@@ -289,30 +296,26 @@ struct CockpitActivityChrome<RideButton: View, ResumeButton: View, PromptButtons
         }
     }
 
-    /// Expanded trailing region. 予定 sits under the remaining time, off the bottom corner.
-    /// Ideal height is the stack itself, so the island grows to it instead of collapsing.
+    /// Expanded trailing region. The caption sits under the remaining time, and the
+    /// stop control sits beside that column, so the ideal height is
+    /// `islandTrailingScheduleHeight` (51pt at the expanded face) rather than the
+    /// 61pt stack that ViewThatFits was dropping.
     private var fittedTrailing: some View {
-        let withSchedule = CockpitFaceBudget(
-            top: metrics.scheduleBand,
-            bottom: 0,
-            spacing: 0,
-            timerHeight: metrics.timerSize,
-            showsSchedule: true,
-            showsStateLine: false
-        )
-        let timerOnly = CockpitFaceBudget(
-            top: max(metrics.timerSize, CockpitSafeChrome.controlSide),
-            bottom: 0,
-            spacing: 0,
-            timerHeight: metrics.timerSize,
-            showsSchedule: false,
-            showsStateLine: false
-        )
-        return ViewThatFits(in: .vertical) {
-            trailingStack(withSchedule)
-            trailingStack(timerOnly)
+        HStack(alignment: .center, spacing: 4) {
+            VStack(alignment: .trailing, spacing: 2) {
+                CockpitFaceTimer(
+                    model: model,
+                    metrics: metrics,
+                    limitedWidth: limitedWidth,
+                    height: metrics.timerSize
+                )
+                expandedScheduleLabel
+            }
+            if case .riding = model.chromeMode {
+                trailingControl
+            }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
     }
 
     /// Gauge or action row. Its own height is the ideal, so the system keeps the row
@@ -353,13 +356,28 @@ struct CockpitActivityChrome<RideButton: View, ResumeButton: View, PromptButtons
     @ViewBuilder
     private var scheduleLabel: some View {
         if let caption = model.gaugeCaption {
-            Text(caption)
-                .font(.system(size: metrics.captionSize, weight: .semibold))
-                .foregroundStyle(CockpitColors.muted)
-                .monospacedDigit()
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
+            scheduleText(caption)
         }
+    }
+
+    /// Pause freezes `deadline` at the last update, so the clock time goes stale.
+    /// Keep the old 「予定 —」 instead of a frozen HH:mm. Other states keep the caption.
+    @ViewBuilder
+    private var expandedScheduleLabel: some View {
+        if case .paused = model.chromeMode {
+            scheduleText("予定 —")
+        } else {
+            scheduleLabel
+        }
+    }
+
+    private func scheduleText(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: metrics.captionSize, weight: .semibold))
+            .foregroundStyle(CockpitColors.muted)
+            .monospacedDigit()
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
     }
 
     private func titleBlock(showsStateLine: Bool) -> some View {
@@ -635,6 +653,24 @@ struct TrainHeadShape: Shape {
     }
 }
 
+/// Train-head size shared by the gauge and the expanded-island chord.
+/// The overtime end clamps the head at `width - headW`, so this width is the
+/// inset the corner clearance has to cover.
+enum CockpitTrainHeadMetrics {
+    static func size(gaugeHeight: CGFloat) -> CGSize {
+        CGSize(
+            width: min(14, max(7, gaugeHeight * 0.85)),
+            height: min(10, max(5, gaugeHeight * 0.62))
+        )
+    }
+
+    /// How far the head's bottom sits above the bottom of the gauge frame.
+    static func bottomInset(gaugeHeight: CGFloat) -> CGFloat {
+        let headHeight = size(gaugeHeight: gaugeHeight).height
+        return max(0, (gaugeHeight - headHeight) / 2)
+    }
+}
+
 struct TrainHeadGaugeStyle: ProgressViewStyle {
     var phase: FocusTimerPhase
     var tickFractions: [Double]
@@ -652,8 +688,9 @@ struct TrainHeadGaugeStyle: ProgressViewStyle {
             let filled = width * fraction
             let pastFull = fraction > CGFloat(CockpitGaugeRange.plannedSpan) + 0.004
             let accent = muted ? CockpitColors.muted : (pastFull ? CockpitColors.red : phase.accentColor)
-            let headW = min(14, max(7, height * 0.85))
-            let headH = min(10, max(5, height * 0.62))
+            let head = CockpitTrainHeadMetrics.size(gaugeHeight: height)
+            let headW = head.width
+            let headH = head.height
 
             ZStack(alignment: .topLeading) {
                 Capsule()

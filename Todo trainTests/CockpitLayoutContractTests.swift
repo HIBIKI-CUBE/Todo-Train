@@ -353,6 +353,16 @@ final class CockpitLayoutContractTests: XCTestCase {
                 CockpitFaceMetrics.expanded.scheduleBand,
                 sample.name
             )
+            XCTAssertLessThanOrEqual(
+                CockpitFaceMetrics.expanded.islandTrailingScheduleHeight,
+                51,
+                sample.name
+            )
+            XCTAssertLessThanOrEqual(
+                CockpitFaceMetrics.expanded.islandTrailingScheduleHeight,
+                chrome.trailing.height,
+                sample.name
+            )
             XCTAssertGreaterThan(chrome.bottom.minX, CockpitSafeChrome.expandedEdgeInset, sample.name)
         }
         let compactCanvases = [
