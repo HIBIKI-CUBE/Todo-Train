@@ -17,7 +17,16 @@ enum TicketStampBundleLayout {
     /// 運行終了の盤の縦余白を含めても帯が 140 を超えないよう、券面の扇はここまで。
     static let collapsedFanMax: CGFloat = 112
     static let compactRadiusRatio: CGFloat = 0.48
-    static let expandedRadiusRatio: CGFloat = 1.35
+    /// 開いた扇の半径の上限。弧をゆるくして、奥の切符が右へ大きく出ないようにする。
+    /// 矩形に収まらないときはこれより小さくする。
+    static let expandedRadiusRatio: CGFloat = 3.6
+    /// 1 枚あたりの角度の上限。矩形に収まらないときはこれより小さくする。
+    static let maxExpandedStepDegrees: Double = 28
+    /// 手前の券面の右下を、容器の右下からこれより内側へ寄せない。
+    static let maxCornerInset: CGFloat = 64
+    static let safeMargin: CGFloat = 12
+    /// 描いた扇の右端が計算より少し出る。余白を足して画面の中に収める。
+    static let fanTrailingPadding: CGFloat = safeMargin * 2 + 16
     /// 支点は券面の下半分。右端から半径だけ外。
     static let pivotYRatio: CGFloat = 0.64
     static let compactStepDegrees: Double = 1.6
@@ -210,11 +219,11 @@ enum TicketStampBundleLayout {
     static func fanBounds(
         ticketWidth: CGFloat,
         ticketHeight: CGFloat,
+        radius: CGFloat,
         spread: CGFloat,
         expandedStep: Double,
         depthCap: Int = depthCap
     ) -> CGRect {
-        let radius = ticketWidth * lerp(compactRadiusRatio, expandedRadiusRatio, spread)
         var rect = CGRect.null
         let corners = [
             CGPoint(x: 0, y: 0),
@@ -239,72 +248,152 @@ enum TicketStampBundleLayout {
         return rect.isNull ? CGRect(x: 0, y: 0, width: ticketWidth, height: ticketHeight) : rect
     }
 
-    static var collapsedFanHeight: CGFloat {
+    /// 新しい切符ほど上。開閉の途中でも、めくりで focus が動いても順は変えない。
+    static func stackRank(index: Int) -> Double {
+        Double(index)
+    }
+
+    static var collapsedFanSize: CGSize {
         let size = compactTicketSize()
         let bounds = fanBounds(
             ticketWidth: size.width,
             ticketHeight: size.height,
+            radius: size.width * compactRadiusRatio,
             spread: 0,
             expandedStep: compactStepDegrees
         )
+        let width = max(bounds.maxX, size.width) - min(bounds.minX, 0)
         let height = max(bounds.maxY, size.height) - min(bounds.minY, 0)
-        return ceil(height)
+        return CGSize(width: ceil(width), height: ceil(height))
     }
 
-    /// 券面の右下を容器の右下に置いたとき、扇が容器の中に残る移動量。
-    static func placementOffset(
-        ticketWidth: CGFloat,
-        ticketHeight: CGFloat,
-        spread: CGFloat,
-        expandedStep: Double,
-        containerWidth: CGFloat,
-        containerHeight: CGFloat
-    ) -> CGSize {
-        let bounds = fanBounds(
-            ticketWidth: ticketWidth,
-            ticketHeight: ticketHeight,
-            spread: spread,
-            expandedStep: expandedStep
-        )
-        let right = max(0, bounds.maxX - ticketWidth)
-        let left = max(0, -bounds.minX)
-        let down = max(0, bounds.maxY - ticketHeight)
-        let roomX = max(0, containerWidth - ticketWidth)
-        let shiftX = min(right, max(0, roomX - left))
-        let roomY = max(0, containerHeight - ticketHeight)
-        let shiftY = min(down, roomY)
-        return CGSize(width: -shiftX, height: -shiftY)
+    static var collapsedFanHeight: CGFloat { collapsedFanSize.height }
+
+    struct ExpandedFan: Equatable {
+        var ticket: CGSize
+        var radius: CGFloat
+        var stepDegrees: Double
+        /// 手前の券面の右下を、容器の右下から内側へ寄せる量。開閉では動かさない。
+        var cornerInset: CGSize
     }
 
-    /// 開いた扇が幅と高さに収まる券面。二分探索。
-    static func expandedTicketSize(fittingWidth: CGFloat, fittingHeight: CGFloat) -> CGSize {
-        guard fittingWidth > 48, fittingHeight > 48 else {
-            let width: CGFloat = 120
-            return CGSize(width: width, height: MarsTicketSpec.height(forWidth: width))
+    /// 開いた扇が矩形に収まる券面・半径・角度。
+    /// 手前の券面の右下は `cornerInset` だけ内側に固定し、奥の切符が右や下へ出た分も矩形の中に置く。
+    /// 半径は券面幅の `expandedRadiusRatio` 倍まで、角度は名前と角判が見える角と `maxExpandedStepDegrees` までのうち小さい方。
+    /// 矩形が狭いときは、その上限より開きを小さくして収める。
+    static func expandedFan(fittingWidth: CGFloat, fittingHeight: CGFloat, depth: Int) -> ExpandedFan {
+        let depth = max(0, depth)
+        guard fittingWidth > 72, fittingHeight > 72 else {
+            let width = min(96, max(48, fittingWidth - 8))
+            return makeFan(width: width, scale: 0, depth: depth)
         }
-        var low: CGFloat = 72
-        var high = min(max(fittingWidth, low), 340)
-        func fits(_ width: CGFloat) -> Bool {
-            let height = MarsTicketSpec.height(forWidth: width)
-            let step = expandedStepDegrees(ticketWidth: width, ticketHeight: height)
-            let bounds = fanBounds(
-                ticketWidth: width,
-                ticketHeight: height,
-                spread: 1,
-                expandedStep: step
-            )
-            let usedWidth = max(bounds.maxX, width) - min(bounds.minX, 0)
-            let usedHeight = max(bounds.maxY, height) - min(bounds.minY, 0)
-            return usedWidth <= fittingWidth && usedHeight <= fittingHeight
-        }
-        for _ in 0..<18 {
-            let mid = (low + high) / 2
-            if fits(mid) {
-                low = mid
-            } else {
-                high = mid
+
+        func solve(limitInset: Bool) -> (scale: CGFloat, width: CGFloat)? {
+            func fits(width: CGFloat, scale: CGFloat) -> Bool {
+                let height = MarsTicketSpec.height(forWidth: width)
+                guard width <= fittingWidth, height <= fittingHeight else { return false }
+                let fan = makeFan(width: width, scale: scale, depth: depth)
+                if limitInset,
+                   fan.cornerInset.width > maxCornerInset || fan.cornerInset.height > maxCornerInset {
+                    return false
+                }
+                let rect = expandedFanRect(
+                    fan: fan,
+                    fittingWidth: fittingWidth,
+                    fittingHeight: fittingHeight,
+                    depth: depth
+                )
+                return rect.minX >= -0.5
+                    && rect.minY >= -0.5
+                    && rect.maxX <= fittingWidth + 0.5
+                    && rect.maxY <= fittingHeight + 0.5
             }
+
+            func widest(at scale: CGFloat) -> CGFloat? {
+                let floor: CGFloat = 48
+                guard fits(width: floor, scale: scale) else { return nil }
+                var low = floor
+                var high = min(max(fittingWidth - safeMargin, floor), 320)
+                for _ in 0..<16 {
+                    let mid = (low + high) / 2
+                    if fits(width: mid, scale: scale) {
+                        low = mid
+                    } else {
+                        high = mid
+                    }
+                }
+                return low
+            }
+
+            guard let folded = widest(at: 0) else { return nil }
+            if let full = widest(at: 1) {
+                return (1, full)
+            }
+            var bestScale: CGFloat = 0
+            var bestWidth = folded
+            var low: CGFloat = 0
+            var high: CGFloat = 1
+            for _ in 0..<16 {
+                let mid = (low + high) / 2
+                if let width = widest(at: mid) {
+                    bestScale = mid
+                    bestWidth = width
+                    low = mid
+                } else {
+                    high = mid
+                }
+            }
+            return (bestScale, bestWidth)
         }
-        return CGSize(width: low, height: MarsTicketSpec.height(forWidth: low))
+
+        if let solved = solve(limitInset: true) ?? solve(limitInset: false) {
+            return makeFan(width: solved.width, scale: solved.scale, depth: depth)
+        }
+        return makeFan(width: 64, scale: 0, depth: depth)
+    }
+
+    /// 開いた扇を、容器の右下に外接が接するように置いた範囲。
+    static func expandedFanRect(fan: ExpandedFan, fittingWidth: CGFloat, fittingHeight: CGFloat, depth: Int) -> CGRect {
+        let bounds = fanBounds(
+            ticketWidth: fan.ticket.width,
+            ticketHeight: fan.ticket.height,
+            radius: fan.radius,
+            spread: 1,
+            expandedStep: fan.stepDegrees,
+            depthCap: max(0, depth)
+        )
+        return bounds.offsetBy(
+            dx: fittingWidth - fan.ticket.width - fan.cornerInset.width,
+            dy: fittingHeight - fan.ticket.height - fan.cornerInset.height
+        )
+    }
+
+    private static func makeFan(width: CGFloat, scale: CGFloat, depth: Int) -> ExpandedFan {
+        let height = MarsTicketSpec.height(forWidth: width)
+        let clearance = min(
+            expandedStepDegrees(ticketWidth: width, ticketHeight: height),
+            maxExpandedStepDegrees
+        )
+        let unit = min(1, max(0, scale))
+        let radius = width * compactRadiusRatio
+            + (width * expandedRadiusRatio - width * compactRadiusRatio) * unit
+        let step = compactStepDegrees + (clearance - compactStepDegrees) * Double(unit)
+        let bounds = fanBounds(
+            ticketWidth: width,
+            ticketHeight: height,
+            radius: radius,
+            spread: 1,
+            expandedStep: step,
+            depthCap: depth
+        )
+        return ExpandedFan(
+            ticket: CGSize(width: width, height: height),
+            radius: radius,
+            stepDegrees: step,
+            cornerInset: CGSize(
+                width: max(0, bounds.maxX - width) + safeMargin,
+                height: max(0, bounds.maxY - height)
+            )
+        )
     }
 }

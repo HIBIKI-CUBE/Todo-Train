@@ -7,7 +7,6 @@
 
 import SwiftUI
 import TodoTrainTicketUI
-import UIKit
 
 enum TicketStampBundleDeckStyle {
     /// 運行終了。たたんだ帯はタイムラインの下。開くと上に重なる。
@@ -38,6 +37,8 @@ struct TicketStampBundleDeckView: View {
     var pinnedSpread: CGFloat? = nil
     /// 開閉の録画用。0 から 1 へ開いて戻す。
     var playsSpreadDemo: Bool = false
+    /// 隅に置いた扇が収まってよい矩形。運行終了と履歴が渡す。
+    var layoutViewport: CGSize = CGSize(width: 360, height: 640)
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var spread: CGFloat = 0
@@ -113,15 +114,15 @@ struct TicketStampBundleDeckView: View {
 
     private var deck: some View {
         GeometryReader { geo in
-            let expanded = expandedTicketSize(in: geo.size)
+            let fan = fittedFan(in: geo.size)
             ZStack(alignment: .bottomTrailing) {
                 if reduceMotion, style != .viewer, pinnedSpread == nil, !playsSpreadDemo {
-                    fanLayer(spread: 0, expanded: expanded, container: geo.size)
+                    fanLayer(spread: 0, fan: fan)
                         .opacity(1 - renderedSpread)
-                    fanLayer(spread: 1, expanded: expanded, container: geo.size)
+                    fanLayer(spread: 1, fan: fan)
                         .opacity(renderedSpread)
                 } else {
-                    fanLayer(spread: renderedSpread, expanded: expanded, container: geo.size)
+                    fanLayer(spread: renderedSpread, fan: fan)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
@@ -137,37 +138,27 @@ struct TicketStampBundleDeckView: View {
             .simultaneousGesture(panGesture())
             .simultaneousGesture(shuttleGesture())
         }
-        .frame(maxWidth: .infinity)
-        .frame(height: style == .viewer ? nil : TicketStampBundleLayout.collapsedFanHeight)
-        .frame(maxHeight: style == .viewer ? .infinity : nil)
+        .frame(
+            width: style == .viewer ? nil : TicketStampBundleLayout.collapsedFanSize.width,
+            height: style == .viewer ? nil : TicketStampBundleLayout.collapsedFanSize.height
+        )
+        .frame(maxWidth: style == .viewer ? .infinity : nil, maxHeight: style == .viewer ? .infinity : nil)
     }
 
-    private func fanLayer(spread: CGFloat, expanded: CGSize, container: CGSize) -> some View {
+    private func fanLayer(spread: CGFloat, fan: TicketStampBundleLayout.ExpandedFan) -> some View {
         let compact = TicketStampBundleLayout.compactTicketSize()
-        let ticket = TicketStampBundleLayout.ticketSize(compact: compact, expanded: expanded, spread: spread)
-        let radius = TicketStampBundleLayout.radius(
-            compactWidth: compact.width,
-            expandedWidth: expanded.width,
-            spread: spread
+        let ticket = TicketStampBundleLayout.ticketSize(compact: compact, expanded: fan.ticket, spread: spread)
+        let radius = TicketStampBundleLayout.lerp(
+            compact.width * TicketStampBundleLayout.compactRadiusRatio,
+            fan.radius,
+            spread
         )
         let pivot = TicketStampBundleLayout.pivot(
             ticketWidth: ticket.width,
             ticketHeight: ticket.height,
             radius: radius
         )
-        let step = TicketStampBundleLayout.expandedStepDegrees(
-            ticketWidth: expanded.width,
-            ticketHeight: expanded.height
-        )
         let scale = ticket.width / TicketStampBundleLayout.baseWidth
-        let nudge = TicketStampBundleLayout.placementOffset(
-            ticketWidth: ticket.width,
-            ticketHeight: ticket.height,
-            spread: spread,
-            expandedStep: step,
-            containerWidth: container.width,
-            containerHeight: max(container.height, ticket.height)
-        )
         return ZStack(alignment: .bottomTrailing) {
             ForEach(Array(stamps.enumerated()), id: \.element.id) { index, stamp in
                 let depth = TicketStampBundleLayout.visualDepth(
@@ -178,7 +169,7 @@ struct TicketStampBundleDeckView: View {
                 let angle = TicketStampBundleLayout.angleDegrees(
                     depth: depth,
                     spread: spread,
-                    expandedStep: step
+                    expandedStep: fan.stepDegrees
                 )
                 StampedMarsTicketFace(
                     stamp: stamp,
@@ -195,7 +186,7 @@ struct TicketStampBundleDeckView: View {
                 )
                 .opacity(cardOpacity(depth))
                 .shadow(color: .black.opacity(0.10), radius: 2, y: 1)
-                .zIndex(-depth)
+                .compositingGroup()
                 .onTapGesture {
                     guard style == .viewer else { return }
                     onSelect(stamp)
@@ -204,9 +195,14 @@ struct TicketStampBundleDeckView: View {
                 .accessibilityAction(named: "詳細") {
                     onSelect(stamp)
                 }
+                .zIndex(TicketStampBundleLayout.stackRank(index: index))
             }
         }
-        .offset(nudge)
+        .compositingGroup()
+        .offset(
+            x: -fan.cornerInset.width - TicketStampBundleLayout.safeMargin,
+            y: -fan.cornerInset.height
+        )
     }
 
     private func cardOpacity(_ depth: Double) -> Double {
@@ -220,28 +216,25 @@ struct TicketStampBundleDeckView: View {
         return 1
     }
 
-    private func expandedTicketSize(in proposed: CGSize) -> CGSize {
+    private func fittedFan(in proposed: CGSize) -> TicketStampBundleLayout.ExpandedFan {
+        let box: CGSize
         switch style {
         case .viewer:
-            return TicketStampBundleLayout.expandedTicketSize(
-                fittingWidth: max(proposed.width - 12, 80),
-                fittingHeight: max(proposed.height - 12, 80)
+            box = CGSize(
+                width: max(proposed.width - TicketStampBundleLayout.safeMargin * 2, 80),
+                height: max(proposed.height - TicketStampBundleLayout.safeMargin * 2, 80)
             )
         case .shutdown, .historyStrip:
-            let screen = Self.screenBounds
-            return TicketStampBundleLayout.expandedTicketSize(
-                fittingWidth: max(screen.width - 28, 80),
-                fittingHeight: max(screen.height * 0.72, 120)
+            box = CGSize(
+                width: max(layoutViewport.width, 80),
+                height: max(layoutViewport.height, 80)
             )
         }
-    }
-
-    private static var screenBounds: CGSize {
-        let scene = UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .first { $0.activationState == .foregroundActive }
-            ?? UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
-        return scene?.screen.bounds.size ?? CGSize(width: 390, height: 844)
+        return TicketStampBundleLayout.expandedFan(
+            fittingWidth: box.width,
+            fittingHeight: box.height,
+            depth: TicketStampBundleLayout.depthCap
+        )
     }
 
     private var cardAnimation: Animation {

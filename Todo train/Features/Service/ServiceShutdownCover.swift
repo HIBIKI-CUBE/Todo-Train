@@ -22,7 +22,6 @@ struct ServiceShutdownCover: View {
     @State private var localError = ""
     @State private var showLocalError = false
     @State private var prefaceHeight: CGFloat = 168
-    @State private var bundleSpread: CGFloat = 0
     @State private var viewportHeight: CGFloat = 0
     @State private var overviewSettled = false
     @State private var bundleFocusIndex = 0
@@ -137,16 +136,13 @@ struct ServiceShutdownCover: View {
             let fittingPreface = max(0, geo.size.height - clockFloor - prefaceHeight)
             // 前文まで残すと横向きで束が消える。そのときは前文をスクロールに回し、時計の下限だけ守る。
             let prefaceFits = fittingPreface >= 96
-            // 盤の縦余白を足しても 140 を超えない。開いた扇は帯の外へ重なる。
-            let bundleBand = stampCount == 0
-                ? 0
-                : TicketStampBundleLayout.collapsedFanHeight + 28
-            let scrollHeight = max(0, geo.size.height - bundleBand)
+            let bundleReserve = stampCount == 0 ? 0 : TicketStampBundleLayout.collapsedFanSize.height
+            let scrollHeight = geo.size.height
             let clockHeight = max(
                 Self.minimumClockHeight,
                 scrollHeight - prefaceHeight - 4
             )
-            VStack(spacing: 0) {
+            ZStack(alignment: .bottomTrailing) {
                 ScrollViewReader { proxy in
                     ScrollView {
                         VStack(spacing: 0) {
@@ -178,9 +174,10 @@ struct ServiceShutdownCover: View {
                         }
                     }
                     .scrollIndicators(.hidden)
+                    .contentMargins(.bottom, bundleReserve, for: .scrollContent)
                     // 前文と時計が同時に入らないときは、下端（時計）を最初から見せる。
                     .defaultScrollAnchor(prefaceFits ? .top : .bottom)
-                    .frame(height: scrollHeight)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .onAppear { viewportHeight = scrollHeight }
                     .onChange(of: scrollHeight) { _, height in
                         viewportHeight = height
@@ -206,34 +203,34 @@ struct ServiceShutdownCover: View {
                 }
 
                 if let stampBundle, lamp >= .live {
-                    FocusControlDivider()
-                    ServiceCabinPanel(powered: true) {
-                        TicketStampBundleDeckView(
-                            stamps: stampBundle.stamps,
-                            focusIndex: $bundleFocusIndex,
-                            style: .shutdown,
-                            dayBoundaries: [],
-                            pinnedSpread: previewPinnedSpread,
-                            playsSpreadDemo: previewPlaysSpreadDemo
+                    TicketStampBundleDeckView(
+                        stamps: stampBundle.stamps,
+                        focusIndex: $bundleFocusIndex,
+                        style: .shutdown,
+                        dayBoundaries: [],
+                        pinnedSpread: previewPinnedSpread,
+                        playsSpreadDemo: previewPlaysSpreadDemo,
+                        layoutViewport: CGSize(
+                            width: max(80, geo.size.width - TicketStampBundleLayout.safeMargin * 2),
+                            height: max(80, geo.size.height - 8)
                         )
-                        .padding(.horizontal, 8)
-                        .onAppear {
-                            #if DEBUG
-                            if sessionManager.uiPreviewShowsServiceShutdown {
-                                bundleFocusIndex = min(
-                                    sessionManager.uiPreviewBundleFocusIndex,
-                                    max(0, stampBundle.stamps.count - 1)
-                                )
-                                return
-                            }
-                            #endif
-                            bundleFocusIndex = max(0, stampBundle.stamps.count - 1)
-                        }
-                    }
-                    .frame(height: bundleBand)
-                    .zIndex(bundleSpread > 0.04 ? 4 : 0)
-                    .onPreferenceChange(TicketStampBundleSpreadPreference.self) { bundleSpread = $0 }
+                    )
+                    .padding(.trailing, TicketStampBundleLayout.fanTrailingPadding)
+                    .padding(.bottom, 4)
+                    .zIndex(4)
                     .allowsHitTesting(!poweringDown)
+                    .onAppear {
+                        #if DEBUG
+                        if sessionManager.uiPreviewShowsServiceShutdown {
+                            bundleFocusIndex = min(
+                                sessionManager.uiPreviewBundleFocusIndex,
+                                max(0, stampBundle.stamps.count - 1)
+                            )
+                            return
+                        }
+                        #endif
+                        bundleFocusIndex = max(0, stampBundle.stamps.count - 1)
+                    }
                 }
             }
         }

@@ -183,33 +183,77 @@ struct TicketStampBundleLayoutTests {
         #expect(abs(newer - 2) < 0.001)
     }
 
-    @Test func expandedTicketFitsTheOfferedBox() {
-        let size = TicketStampBundleLayout.expandedTicketSize(fittingWidth: 360, fittingHeight: 520)
-        let step = TicketStampBundleLayout.expandedStepDegrees(
-            ticketWidth: size.width,
-            ticketHeight: size.height
+    @Test func openFanKeepsTheCornerNearTheBoxCorner() {
+        let fan = TicketStampBundleLayout.expandedFan(fittingWidth: 390, fittingHeight: 720, depth: 4)
+        #expect(fan.cornerInset.width <= TicketStampBundleLayout.maxCornerInset + 0.5)
+        #expect(fan.cornerInset.height <= TicketStampBundleLayout.maxCornerInset + 0.5)
+        #expect(fan.ticket.width > 160)
+    }
+
+    @Test func openFanFitsASmallPhone() {
+        assertFanFits(width: 351, height: 480, depth: TicketStampBundleLayout.depthCap)
+    }
+
+    @Test func openFanFitsLandscape() {
+        assertFanFits(width: 640, height: 210, depth: TicketStampBundleLayout.depthCap)
+    }
+
+    @Test func openFanFitsManyCards() {
+        assertFanFits(width: 360, height: 520, depth: 8)
+    }
+
+    @Test func expandedRadiusAndStepStayUnderTheCaps() {
+        let roomy = TicketStampBundleLayout.expandedFan(fittingWidth: 390, fittingHeight: 720, depth: 4)
+        let tight = TicketStampBundleLayout.expandedFan(fittingWidth: 640, fittingHeight: 210, depth: 4)
+        #expect(roomy.radius <= roomy.ticket.width * TicketStampBundleLayout.expandedRadiusRatio + 0.01)
+        #expect(tight.radius <= tight.ticket.width * TicketStampBundleLayout.expandedRadiusRatio + 0.01)
+        #expect(roomy.stepDegrees <= TicketStampBundleLayout.maxExpandedStepDegrees + 0.01)
+        #expect(tight.stepDegrees <= TicketStampBundleLayout.maxExpandedStepDegrees + 0.01)
+        #expect(openness(tight) <= openness(roomy) + 0.02)
+        #expect(openness(roomy) > 0.85)
+        let clearance = TicketStampBundleLayout.expandedStepDegrees(
+            ticketWidth: roomy.ticket.width,
+            ticketHeight: roomy.ticket.height
         )
-        let bounds = TicketStampBundleLayout.fanBounds(
-            ticketWidth: size.width,
-            ticketHeight: size.height,
-            spread: 1,
-            expandedStep: step
+        #expect(roomy.stepDegrees + 0.6 >= min(clearance, TicketStampBundleLayout.maxExpandedStepDegrees))
+    }
+
+    private func openness(_ fan: TicketStampBundleLayout.ExpandedFan) -> CGFloat {
+        let minRadius = fan.ticket.width * TicketStampBundleLayout.compactRadiusRatio
+        let maxRadius = fan.ticket.width * TicketStampBundleLayout.expandedRadiusRatio
+        guard maxRadius - minRadius > 0.001 else { return 0 }
+        return (fan.radius - minRadius) / (maxRadius - minRadius)
+    }
+
+    @Test func stackRankKeepsNewerTicketsAboveOlderOnes() {
+        let count = 6
+        var previous = TicketStampBundleLayout.stackRank(index: 0)
+        for index in 1..<count {
+            let rank = TicketStampBundleLayout.stackRank(index: index)
+            #expect(rank > previous)
+            previous = rank
+        }
+        let newest = TicketStampBundleLayout.stackRank(index: count - 1)
+        let oldest = TicketStampBundleLayout.stackRank(index: 0)
+        #expect(newest > oldest)
+    }
+
+    private func assertFanFits(width: CGFloat, height: CGFloat, depth: Int) {
+        let fan = TicketStampBundleLayout.expandedFan(
+            fittingWidth: width,
+            fittingHeight: height,
+            depth: depth
         )
-        let usedWidth = max(bounds.maxX, size.width) - min(bounds.minX, 0)
-        let usedHeight = max(bounds.maxY, size.height) - min(bounds.minY, 0)
-        #expect(usedWidth <= 360.5)
-        #expect(usedHeight <= 520.5)
-        #expect(size.width > 80)
-        let offset = TicketStampBundleLayout.placementOffset(
-            ticketWidth: size.width,
-            ticketHeight: size.height,
-            spread: 1,
-            expandedStep: step,
-            containerWidth: 360,
-            containerHeight: 520
+        let rect = TicketStampBundleLayout.expandedFanRect(
+            fan: fan,
+            fittingWidth: width,
+            fittingHeight: height,
+            depth: depth
         )
-        let originX = 360 - size.width + offset.width
-        #expect(bounds.maxX + originX <= 360.5)
-        #expect(bounds.minX + originX >= -0.5)
+        #expect(rect.minX >= -0.5)
+        #expect(rect.minY >= -0.5)
+        #expect(rect.maxX <= width + 0.5)
+        #expect(rect.maxY <= height + 0.5)
+        #expect(fan.ticket.width > 40)
     }
 }

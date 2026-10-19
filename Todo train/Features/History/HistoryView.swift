@@ -30,7 +30,6 @@ struct HistoryView: View {
     @State private var daysVisible: CGFloat = 1
     @State private var showBundleViewer = false
     @State private var bundleStripFocusIndex = 0
-    @State private var bundleSpread: CGFloat = 0
     @FocusState private var searchFieldFocused: Bool
 
     init(focusDay: Date? = nil) {
@@ -284,7 +283,16 @@ struct HistoryView: View {
     }
 
     private var calendarDay: some View {
-        VStack(spacing: 0) {
+        GeometryReader { geo in
+            calendarDayStack(viewport: geo.size)
+        }
+    }
+
+    private func calendarDayStack(viewport: CGSize) -> some View {
+        let bundleReserve = dayStampBundle?.stamps.isEmpty == false && rideDensity == .day
+            ? TicketStampBundleLayout.collapsedFanSize.height
+            : 0
+        return VStack(spacing: 0) {
             HistoryCalendarStrip(
                 selectedDay: selectedDay,
                 daysWithRides: daysWithRides,
@@ -308,26 +316,6 @@ struct HistoryView: View {
                 )
                 .padding(.horizontal, TrainTheme.Space.md)
                 .padding(.bottom, TrainTheme.Space.sm)
-            }
-
-            if rideDensity == .day, let bundle = dayStampBundle, !bundle.stamps.isEmpty {
-                TicketStampBundleDeckView(
-                    stamps: bundle.stamps,
-                    focusIndex: $bundleStripFocusIndex,
-                    style: .historyStrip,
-                    onOpenViewer: { showBundleViewer = true },
-                    pinnedSpread: previewPinnedSpread,
-                    playsSpreadDemo: previewPlaysSpreadDemo
-                )
-                .onAppear {
-                    bundleStripFocusIndex = max(0, bundle.stamps.count - 1)
-                }
-                .padding(.horizontal, TrainTheme.Space.md)
-                .padding(.bottom, TrainTheme.Space.sm)
-                .zIndex(bundleSpread > 0.04 ? 4 : 0)
-                .onPreferenceChange(TicketStampBundleSpreadPreference.self) { bundleSpread = $0 }
-                .accessibilityLabel("この日の切符の束")
-                .accessibilityHint("開いて切符をめくれます")
             }
 
             if !selectedDayPassengerRides.isEmpty {
@@ -362,7 +350,8 @@ struct HistoryView: View {
                     },
                     onReissue: reissue,
                     onDelete: deleteSession,
-                    stripsByDay: timetableStripsByDay
+                    stripsByDay: timetableStripsByDay,
+                    bottomContentInset: bundleReserve
                 )
                 .safeAreaPadding(.bottom)
             }
@@ -370,6 +359,30 @@ struct HistoryView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(TrainTheme.platform)
+        .overlay(alignment: .bottomTrailing) {
+            if rideDensity == .day, let bundle = dayStampBundle, !bundle.stamps.isEmpty {
+                TicketStampBundleDeckView(
+                    stamps: bundle.stamps,
+                    focusIndex: $bundleStripFocusIndex,
+                    style: .historyStrip,
+                    onOpenViewer: { showBundleViewer = true },
+                    pinnedSpread: previewPinnedSpread,
+                    playsSpreadDemo: previewPlaysSpreadDemo,
+                    layoutViewport: CGSize(
+                        width: max(80, viewport.width - TicketStampBundleLayout.safeMargin * 2),
+                        height: max(80, viewport.height - 8)
+                    )
+                )
+                .padding(.trailing, TicketStampBundleLayout.fanTrailingPadding)
+                .padding(.bottom, 6)
+                .zIndex(4)
+                .onAppear {
+                    bundleStripFocusIndex = max(0, bundle.stamps.count - 1)
+                }
+                .accessibilityLabel("この日の切符の束")
+                .accessibilityHint("開いて切符をめくれます")
+            }
+        }
     }
 
     private func toggleSearch() {
