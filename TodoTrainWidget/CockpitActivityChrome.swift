@@ -4,7 +4,7 @@
 //
 //  Left: ticket name and state. Right: remaining mm:ss, with 「予定 HH:mm」 under it.
 //  Bottom: tick gauge, or the pause / check-in row. The bottom row is reserved first.
-//  The gauge is ProgressView(timerInterval:) with ticks and a train-head pointer.
+//  The gauge is that update's position on the track, with ticks and a train head.
 //  Outer inset and corner radius belong to CockpitSafeChrome. Do not pad the face.
 //
 
@@ -767,8 +767,8 @@ private struct CockpitFrozenGaugeKey: EnvironmentKey {
 }
 
 extension EnvironmentValues {
-    /// When set, the gauge draws this track fraction instead of `ProgressView(timerInterval:)`.
-    /// ImageRenderer does not tick a timer interval, so previews freeze the train head here.
+    /// When set, the gauge draws this track fraction instead of the live position.
+    /// ImageRenderer does not tick, so previews freeze the train head here.
     var cockpitFrozenGaugeFraction: Double? {
         get { self[CockpitFrozenGaugeKey.self] }
         set { self[CockpitFrozenGaugeKey.self] = newValue }
@@ -814,12 +814,13 @@ struct CockpitProgressHost<S: ProgressViewStyle>: View {
     }
 
     private func live(_ range: ClosedRange<Date>) -> some View {
-        ProgressView(timerInterval: range, countsDown: false) {
-            EmptyView()
-        } currentValueLabel: {
-            EmptyView()
-        }
-        .progressViewStyle(style)
+        // A custom style's `fractionCompleted` stays nil for `ProgressView(timerInterval:)`
+        // in a Live Activity, so the fill, the red tail, and the train were drawn at 0
+        // even after the interval had started. The system only interpolates its built-in
+        // styles. This is the position at the last content update. The clock still uses
+        // `Text(timerInterval:)`.
+        ProgressView(value: CockpitGaugeRange.fraction(in: range, now: Date()))
+            .progressViewStyle(style)
     }
 }
 
