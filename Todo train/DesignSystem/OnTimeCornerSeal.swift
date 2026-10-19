@@ -2,7 +2,7 @@
 //  OnTimeCornerSeal.swift
 //  Todo train
 //
-//  位置と大きさは今のまま。中身は風景印。
+//  中身は風景印。位置は束の上の帯に「定時」が収まるところ。
 //
 
 import SwiftUI
@@ -18,7 +18,7 @@ struct OnTimeCornerSealMark: View {
 
     var body: some View {
         GeometryReader { geo in
-            let size = min(geo.size.width, geo.size.height) * 0.30
+            let size = min(geo.size.width, geo.size.height) * TicketStampBundleLayout.cornerSealSideRatio
             FukeiSealView(
                 input: FukeiSealInput(
                     luxury: luxury,
@@ -30,10 +30,13 @@ struct OnTimeCornerSealMark: View {
                 )
             )
             .frame(width: size, height: size)
-            .rotationEffect(.degrees(-8))
+            .rotationEffect(.degrees(TicketStampBundleLayout.cornerSealRotationDegrees))
             .scaleEffect(0.7 + 0.3 * settled)
             .opacity(Double(settled))
-            .position(x: geo.size.width * 0.84, y: geo.size.height * 0.38)
+            .position(
+                x: geo.size.width * TicketStampBundleLayout.cornerSealCenterXRatio,
+                y: geo.size.height * TicketStampBundleLayout.cornerSealCenterYRatio
+            )
         }
         .allowsHitTesting(false)
     }

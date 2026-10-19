@@ -20,6 +20,7 @@ struct HistoryDayPager: View {
     var onReissue: ((Ticket) -> Void)?
     var onDelete: (WorkSession) -> Void
     var stripsByDay: [String: [DayClockStrip]] = [:]
+    var bottomContentInset: CGFloat = 0
 
     @Environment(\.calendar) private var calendar
 
@@ -60,7 +61,8 @@ struct HistoryDayPager: View {
             onSelect: onSelect,
             onReissue: onReissue,
             onDelete: onDelete,
-            stripsByDay: stripsByDay
+            stripsByDay: stripsByDay,
+            bottomContentInset: bottomContentInset
         )
     }
 }
@@ -76,6 +78,7 @@ private struct HistoryDayInteractiveCanvas: View {
     var onReissue: ((Ticket) -> Void)?
     var onDelete: (WorkSession) -> Void
     var stripsByDay: [String: [DayClockStrip]] = [:]
+    var bottomContentInset: CGFloat = 0
 
     @Environment(\.calendar) private var calendar
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -149,6 +152,7 @@ private struct HistoryDayInteractiveCanvas: View {
                 }
                 .frame(minHeight: clockMinHeight, alignment: .top)
             }
+            .contentMargins(.bottom, bottomContentInset, for: .scrollContent)
             .scrollBounceBehavior(.basedOnSize)
             .scrollDisabled(dragX != 0 && !isPinching)
         }

@@ -29,6 +29,8 @@ struct ServiceShutdownCover: View {
     private static let overviewID = "service-overview"
     private static let bundleID = "ticket-stamp-bundle"
     private static let minimumClockHeight: CGFloat = 88
+    /// 区切り線と「キャンセル / 運行終了」の行。扇の安全領域の下端に含める。
+    private static let consoleBlockHeight: CGFloat = 72 + FocusPanel.hairlineWidth
 
     private var pausedSessions: [WorkSession] {
         sessionManager.pausedSessions
@@ -125,24 +127,24 @@ struct ServiceShutdownCover: View {
                 .disabled(!canConfirmEnd)
                 .accessibilityHint(canConfirmEnd ? "盤を落として運行を終了します" : endBlockedReason)
             }
-            .frame(height: 72)
+            .frame(height: Self.consoleBlockHeight - FocusPanel.hairlineWidth)
         }
     }
 
     private func cabinBody(now: Date) -> some View {
         GeometryReader { geo in
-            let bundleBand = stampBundle == nil
-                ? 0
-                : TicketStampBundleDeckView.shutdownBandHeight(
-                    containerWidth: geo.size.width,
-                    bandViewportHeight: max(120, geo.size.height * 0.38)
-                )
-            let scrollHeight = max(0, geo.size.height - bundleBand)
+            let stampCount = stampBundle?.stamps.count ?? 0
+            let clockFloor = Self.minimumClockHeight + 4
+            let fittingPreface = max(0, geo.size.height - clockFloor - prefaceHeight)
+            // 前文まで残すと横向きで束が消える。そのときは前文をスクロールに回し、時計の下限だけ守る。
+            let prefaceFits = fittingPreface >= 96
+            let bundleReserve = stampCount == 0 ? 0 : TicketStampBundleLayout.collapsedFanSize.height
+            let scrollHeight = geo.size.height
             let clockHeight = max(
                 Self.minimumClockHeight,
                 scrollHeight - prefaceHeight - 4
             )
-            VStack(spacing: 0) {
+            ZStack(alignment: .bottomTrailing) {
                 ScrollViewReader { proxy in
                     ScrollView {
                         VStack(spacing: 0) {
@@ -174,7 +176,10 @@ struct ServiceShutdownCover: View {
                         }
                     }
                     .scrollIndicators(.hidden)
-                    .frame(height: scrollHeight)
+                    .contentMargins(.bottom, bundleReserve, for: .scrollContent)
+                    // 前文と時計が同時に入らないときは、下端（時計）を最初から見せる。
+                    .defaultScrollAnchor(prefaceFits ? .top : .bottom)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .onAppear { viewportHeight = scrollHeight }
                     .onChange(of: scrollHeight) { _, height in
                         viewportHeight = height
@@ -200,28 +205,35 @@ struct ServiceShutdownCover: View {
                 }
 
                 if let stampBundle, lamp >= .live {
-                    FocusControlDivider()
-                    ServiceCabinPanel(powered: true) {
-                        TicketStampBundleDeckView(
-                            stamps: stampBundle.stamps,
-                            focusIndex: $bundleFocusIndex,
-                            style: .shutdown,
-                            dayBoundaries: []
-                        )
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 2)
-                        .onAppear {
-                            #if DEBUG
-                            if sessionManager.uiPreviewShowsServiceShutdown {
-                                bundleFocusIndex = sessionManager.uiPreviewBundleFocusIndex
-                                return
-                            }
-                            #endif
-                            bundleFocusIndex = 0
-                        }
-                    }
-                    .frame(height: bundleBand)
+                    TicketStampBundleDeckView(
+                        stamps: stampBundle.stamps,
+                        focusIndex: $bundleFocusIndex,
+                        style: .shutdown,
+                        dayBoundaries: [],
+                        pinnedSpread: previewPinnedSpread,
+                        playsSpreadDemo: previewPlaysSpreadDemo,
+                        layoutViewport: CGSize(
+                            width: max(80, geo.size.width),
+                            height: max(80, geo.size.height + Self.consoleBlockHeight)
+                        ),
+                        bottomObstacle: Self.consoleBlockHeight
+                    )
+                    .padding(.trailing, TicketStampBundleLayout.safeMargin)
+                    .padding(.bottom, TicketStampBundleLayout.bottomClearance)
+                    .zIndex(4)
                     .allowsHitTesting(!poweringDown)
+                    .onAppear {
+                        #if DEBUG
+                        if sessionManager.uiPreviewShowsServiceShutdown {
+                            bundleFocusIndex = min(
+                                sessionManager.uiPreviewBundleFocusIndex,
+                                max(0, stampBundle.stamps.count - 1)
+                            )
+                            return
+                        }
+                        #endif
+                        bundleFocusIndex = max(0, stampBundle.stamps.count - 1)
+                    }
                 }
             }
         }
@@ -406,6 +418,23 @@ struct ServiceShutdownCover: View {
         } catch {
             present(error)
         }
+    }
+
+    private var previewPinnedSpread: CGFloat? {
+        #if DEBUG
+        if let value = sessionManager.uiPreviewBundleSpread {
+            return CGFloat(value)
+        }
+        #endif
+        return nil
+    }
+
+    private var previewPlaysSpreadDemo: Bool {
+        #if DEBUG
+        sessionManager.uiPreviewBundleFanDemo
+        #else
+        false
+        #endif
     }
 
     private func powerOff() async {

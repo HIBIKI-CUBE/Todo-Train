@@ -283,7 +283,17 @@ struct HistoryView: View {
     }
 
     private var calendarDay: some View {
-        VStack(spacing: 0) {
+        GeometryReader { geo in
+            // この矩形はタブバーの上で終わる。下端の余白だけ足す。
+            calendarDayStack(viewport: geo.size, bottomObstacle: 0)
+        }
+    }
+
+    private func calendarDayStack(viewport: CGSize, bottomObstacle: CGFloat) -> some View {
+        let bundleReserve = dayStampBundle?.stamps.isEmpty == false && rideDensity == .day
+            ? TicketStampBundleLayout.collapsedFanSize.height
+            : 0
+        return VStack(spacing: 0) {
             HistoryCalendarStrip(
                 selectedDay: selectedDay,
                 daysWithRides: daysWithRides,
@@ -307,28 +317,6 @@ struct HistoryView: View {
                 )
                 .padding(.horizontal, TrainTheme.Space.md)
                 .padding(.bottom, TrainTheme.Space.sm)
-            }
-
-            if rideDensity == .day, let bundle = dayStampBundle, !bundle.stamps.isEmpty {
-                Button {
-                    showBundleViewer = true
-                } label: {
-                    TicketStampBundleDeckView(
-                        stamps: bundle.stamps,
-                        focusIndex: $bundleStripFocusIndex,
-                        style: .historyStrip
-                    )
-                    .allowsHitTesting(false)
-                    .onAppear {
-                        bundleStripFocusIndex = max(0, bundle.stamps.count - 1)
-                    }
-                }
-                .buttonStyle(.plain)
-                .frame(height: 140)
-                .padding(.horizontal, TrainTheme.Space.md)
-                .padding(.bottom, TrainTheme.Space.sm)
-                .accessibilityLabel("この日の切符の束")
-                .accessibilityHint("開いて切符をめくれます")
             }
 
             if !selectedDayPassengerRides.isEmpty {
@@ -363,7 +351,8 @@ struct HistoryView: View {
                     },
                     onReissue: reissue,
                     onDelete: deleteSession,
-                    stripsByDay: timetableStripsByDay
+                    stripsByDay: timetableStripsByDay,
+                    bottomContentInset: bundleReserve
                 )
                 .safeAreaPadding(.bottom)
             }
@@ -371,6 +360,31 @@ struct HistoryView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(TrainTheme.platform)
+        .overlay(alignment: .bottomTrailing) {
+            if rideDensity == .day, let bundle = dayStampBundle, !bundle.stamps.isEmpty {
+                TicketStampBundleDeckView(
+                    stamps: bundle.stamps,
+                    focusIndex: $bundleStripFocusIndex,
+                    style: .historyStrip,
+                    onOpenViewer: { showBundleViewer = true },
+                    pinnedSpread: previewPinnedSpread,
+                    playsSpreadDemo: previewPlaysSpreadDemo,
+                    layoutViewport: CGSize(
+                        width: max(80, viewport.width),
+                        height: max(80, viewport.height)
+                    ),
+                    bottomObstacle: bottomObstacle
+                )
+                .padding(.trailing, TicketStampBundleLayout.safeMargin)
+                .padding(.bottom, bottomObstacle + TicketStampBundleLayout.bottomClearance)
+                .zIndex(4)
+                .onAppear {
+                    bundleStripFocusIndex = max(0, bundle.stamps.count - 1)
+                }
+                .accessibilityLabel("この日の切符の束")
+                .accessibilityHint("開いて切符をめくれます")
+            }
+        }
     }
 
     private func toggleSearch() {
@@ -539,6 +553,23 @@ struct HistoryView: View {
         )
         let maxOrder = (try? modelContext.fetch(descriptor).first?.sortOrder) ?? -1
         return maxOrder + 1
+    }
+
+    private var previewPinnedSpread: CGFloat? {
+        #if DEBUG
+        if let value = sessionManager.uiPreviewBundleSpread {
+            return CGFloat(value)
+        }
+        #endif
+        return nil
+    }
+
+    private var previewPlaysSpreadDemo: Bool {
+        #if DEBUG
+        sessionManager.uiPreviewBundleFanDemo
+        #else
+        false
+        #endif
     }
 
     private static let timeFormatter: DateFormatter = {

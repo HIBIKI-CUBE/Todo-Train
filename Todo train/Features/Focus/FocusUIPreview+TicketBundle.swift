@@ -61,7 +61,7 @@ extension FocusUIPreview {
 
         insertStamped(title: "発券定時", estimate: 30 * 60, active: 30 * 60, offset: 0)
         insertStamped(
-            title: "前半見積もり直し",
+            title: "前半の見積もり直しを長くした切符",
             estimate: 30 * 60,
             active: 50 * 60,
             offset: 3600,
@@ -140,7 +140,7 @@ extension FocusUIPreview {
         switch state {
         case "shutdownBundle", "shutdownBundleLandscape":
             manager.uiPreviewShowsServiceShutdown = true
-            manager.uiPreviewBundleFocusIndex = 0
+            manager.uiPreviewBundleFocusIndex = .max
         case "shutdownBundlePeel", "shutdownBundlePeelLandscape":
             manager.uiPreviewShowsServiceShutdown = true
             manager.uiPreviewBundleFocusIndex = 1
@@ -150,6 +150,7 @@ extension FocusUIPreview {
             manager.uiPreviewSelectHistoryTab = true
             manager.uiPreviewShowsBundleViewer = true
             manager.uiPreviewBundleViewerDayKey = dayKey
+            manager.uiPreviewBundleViewerFlatIndex = .max
         case "historyBundleViewerBoundary", "historyBundleViewerBoundaryLandscape":
             insertPriorDayBundle(context: context, calendar: calendar)
             try context.save()

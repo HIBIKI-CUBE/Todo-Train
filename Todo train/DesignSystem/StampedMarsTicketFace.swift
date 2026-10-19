@@ -57,7 +57,6 @@ struct StampedMarsTicketFace: View {
         .frame(width: baseTicketSize.width, height: baseTicketSize.height)
         .background(MarsTicketSpec.paper)
         .compositingGroup()
-        .drawingGroup(opaque: true)
         .scaleEffect(scale, anchor: .bottom)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityLabel)

@@ -105,6 +105,10 @@ final class SessionManager {
     var uiPreviewBundleViewerDayKey: String?
     var uiPreviewBundleFocusIndex: Int = 0
     var uiPreviewBundleViewerFlatIndex: Int?
+    /// 束の扇をこの spread（0...1）で止める。
+    var uiPreviewBundleSpread: Double?
+    /// たたんだ扇から開いて戻す録画用。
+    var uiPreviewBundleFanDemo: Bool = false
     /// 印を押したあとの券面（穴・丸印・角判）を動きなしで出す。
     struct ArrivalUIPreviewStamp {
         var stampCommitted: Bool = true
