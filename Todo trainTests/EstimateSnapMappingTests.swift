@@ -137,6 +137,50 @@ struct EstimateSnapMappingTests {
         #expect(escaped.anchoredMinutes == 5)
     }
 
+    @Test func cabinFingerFraction_endStopsSitOnKnobCenters() {
+        let width: CGFloat = 320
+        let knob: CGFloat = 32
+        let stops = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+        let maxMinutes = 100
+        let leftCenter = knob / 2
+        let rightCenter = width - knob / 2
+
+        let left = EstimateSnapMapping.cabinFingerFraction(x: leftCenter, width: width, knobSize: knob)
+        let right = EstimateSnapMapping.cabinFingerFraction(x: rightCenter, width: width, knobSize: knob)
+        #expect(abs(left) < 0.000_001)
+        #expect(abs(right - 1) < 0.000_001)
+        #expect(EstimateSnapMapping.snap(
+            fraction: EstimateSnapMapping.cabinFraction(x: leftCenter, width: width, knobSize: knob),
+            stops: stops,
+            maxMinutes: maxMinutes
+        ) == 10)
+        #expect(EstimateSnapMapping.snap(
+            fraction: EstimateSnapMapping.cabinFraction(x: rightCenter, width: width, knobSize: knob),
+            stops: stops,
+            maxMinutes: maxMinutes
+        ) == 100)
+
+        let justLeft = EstimateSnapMapping.cabinFingerFraction(
+            x: leftCenter - 0.5,
+            width: width,
+            knobSize: knob
+        )
+        let justRight = EstimateSnapMapping.cabinFingerFraction(
+            x: rightCenter + 0.5,
+            width: width,
+            knobSize: knob
+        )
+        #expect(EstimateSnapMapping.isOverscrolling(fingerFraction: left) == false)
+        #expect(EstimateSnapMapping.isOverscrolling(fingerFraction: right) == false)
+        #expect(EstimateSnapMapping.isOverscrolling(fingerFraction: justLeft) == true)
+        #expect(EstimateSnapMapping.isOverscrolling(fingerFraction: justRight) == true)
+
+        let atCapsuleEdge = EstimateSnapMapping.cabinFingerFraction(x: 0, width: width, knobSize: knob)
+        #expect(EstimateSnapMapping.isOverscrolling(fingerFraction: atCapsuleEdge) == true)
+        #expect(EstimateSnapMapping.unboundedFraction(x: 0, width: width) == 0)
+        #expect(EstimateSnapMapping.fraction(x: leftCenter, width: width) == leftCenter / width)
+    }
+
     @Test func isOverscrolling_isFalseOnTheEndsAndTrueJustOutside() {
         #expect(EstimateSnapMapping.isOverscrolling(fingerFraction: 0) == false)
         #expect(EstimateSnapMapping.isOverscrolling(fingerFraction: 1) == false)

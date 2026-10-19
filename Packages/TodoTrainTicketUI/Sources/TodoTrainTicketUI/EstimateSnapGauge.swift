@@ -317,6 +317,26 @@ public struct EstimateSnapGauge: View {
         return inset + fraction * travel
     }
 
+    /// なぞり。`.cabin` は描画と同じ内側の座標。`.ticket` は幅そのもの。
+    private func scrubFingerFraction(x: CGFloat, width: CGFloat) -> CGFloat {
+        switch style {
+        case .ticket:
+            EstimateSnapMapping.unboundedFraction(x: x, width: width)
+        case .cabin:
+            EstimateSnapMapping.cabinFingerFraction(x: x, width: width, knobSize: knobSize)
+        }
+    }
+
+    /// タップの吸い付き。端の外は 0 か 1 に切る。
+    private func tapFraction(x: CGFloat, width: CGFloat) -> CGFloat {
+        switch style {
+        case .ticket:
+            EstimateSnapMapping.fraction(x: x, width: width)
+        case .cabin:
+            EstimateSnapMapping.cabinFraction(x: x, width: width, knobSize: knobSize)
+        }
+    }
+
     private func scrubGesture(width: CGFloat) -> some Gesture {
         DragGesture(minimumDistance: 0)
             .onChanged { value in
@@ -327,10 +347,7 @@ public struct EstimateSnapGauge: View {
                     dragStartAnchoredMinutes = startsAtLeftUnselected && minutes <= 0 ? 0 : anchoredMinutes
                 }
                 let issuingContext = willIssue()
-                let finger = EstimateSnapMapping.unboundedFraction(
-                    x: value.location.x,
-                    width: width
-                )
+                let finger = scrubFingerFraction(x: value.location.x, width: width)
                 noteOverscroll(finger)
                 let scrub: EstimateSnapMapping.StickyScrub
                 if startsAtLeftUnselected, minutes <= 0, anchoredMinutes <= 0 {
@@ -400,7 +417,7 @@ public struct EstimateSnapGauge: View {
 
                 if translation < 10 {
                     let tapped = EstimateSnapMapping.snap(
-                        fraction: EstimateSnapMapping.fraction(x: value.location.x, width: width),
+                        fraction: tapFraction(x: value.location.x, width: width),
                         stops: stopMinutes,
                         maxMinutes: maxMinutes
                     )

@@ -109,8 +109,6 @@ struct FocusReestimatePanel: View {
             stageBody
                 .padding(.horizontal, 14)
                 .padding(.vertical, 12)
-                .opacity(inputsLocked ? 0.55 : 1)
-                .allowsHitTesting(!inputsLocked)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(FocusPanel.fill)
@@ -149,6 +147,8 @@ struct FocusReestimatePanel: View {
             gauge
             if stage == .declare {
                 choices
+                    .opacity(inputsLocked ? 0.55 : 1)
+                    .allowsHitTesting(!inputsLocked)
             }
             if stage == .full {
                 fullArrival
