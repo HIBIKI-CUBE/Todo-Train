@@ -64,7 +64,7 @@ extension SessionManager {
         endBell: EndBellRefresh = .schedule
     ) {
         #if DEBUG
-        if FocusUIPreview.isActive { return }
+        if FocusUIPreview.isActive, !FocusUIPreview.wantsLiveActivity { return }
         #endif
         refreshOvertimeNotification(for: session, now: now)
         refreshLiveActivity(for: session, now: now)

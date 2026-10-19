@@ -30,7 +30,12 @@ struct Todo_trainApp: App {
             let uiPreviewLaunch = false
             #endif
             #if canImport(ActivityKit)
-            let liveActivity: any LiveActivityManaging = uiPreviewLaunch
+            #if DEBUG
+            let suppressLiveActivity = uiPreviewLaunch && !FocusUIPreview.wantsLiveActivity
+            #else
+            let suppressLiveActivity = false
+            #endif
+            let liveActivity: any LiveActivityManaging = suppressLiveActivity
                 ? NoOpLiveActivityManager()
                 : LiveActivityManager.shared
             #else

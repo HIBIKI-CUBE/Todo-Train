@@ -142,6 +142,9 @@ extension SessionManager {
         session.startedFrom = startedFrom
         modelContext.insert(session)
         applyCheckInSchedule(to: session, title: ticket.title, estimatedSeconds: estimate)
+        #if DEBUG
+        FocusUIPreview.applyQueuedRide(to: session, now: now)
+        #endif
         activeSession = session
         phase = .running
         clearTimetableQuietMessage()

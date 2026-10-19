@@ -258,6 +258,26 @@ final class CockpitLayoutContractTests: XCTestCase {
             1,
             accuracy: 0.0001
         )
+        XCTAssertEqual(
+            CockpitGaugeRange.fraction(in: range, now: deadline.addingTimeInterval(-12 * 60)),
+            8.0 / 25.0,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            CockpitGaugeRange.fraction(in: range, now: range.lowerBound.addingTimeInterval(-10)),
+            0,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            CockpitGaugeRange.fraction(in: range, now: range.upperBound.addingTimeInterval(10)),
+            1,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            CockpitGaugeRange.fraction(in: range.lowerBound...range.lowerBound, now: deadline),
+            1,
+            accuracy: 0.0001
+        )
     }
 
     func testIslandWidthContractsMatchHIG() {
@@ -351,6 +371,16 @@ final class CockpitLayoutContractTests: XCTestCase {
             XCTAssertGreaterThanOrEqual(
                 chrome.trailing.height,
                 CockpitFaceMetrics.expanded.scheduleBand,
+                sample.name
+            )
+            XCTAssertLessThanOrEqual(
+                CockpitFaceMetrics.expanded.islandTrailingScheduleHeight,
+                51,
+                sample.name
+            )
+            XCTAssertLessThanOrEqual(
+                CockpitFaceMetrics.expanded.islandTrailingScheduleHeight,
+                chrome.trailing.height,
                 sample.name
             )
             XCTAssertGreaterThan(chrome.bottom.minX, CockpitSafeChrome.expandedEdgeInset, sample.name)
