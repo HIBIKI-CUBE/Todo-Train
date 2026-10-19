@@ -1,0 +1,11 @@
+{
+  "id": "66666666-6666-4666-8666-666666666666",
+  "op": "pauseInputReport",
+  "sessionId": "11111111-1111-4111-8111-111111111111",
+  "pauseId": "44444444-4444-4444-8444-444444444444",
+  "macSampledSeconds": 300,
+  "macActiveSeconds": 270,
+  "at": 1768000420,
+  "promptedAt": 1768000300,
+  "promptAnswer": "keepPaused"
+}

@@ -10,6 +10,8 @@ describe("op support", () => {
     expect(opAck("boardReserved", CONTRACT)).toBe("ok");
     expect(opAck("presence", CONTRACT)).toBe("ok");
     expect(opAck("pauseInputReport", CONTRACT)).toBe("ok");
+    expect(opAck("reestimate", CONTRACT)).toBe("ok");
+    expect(opAck("undoReestimate", CONTRACT)).toBe("ok");
   });
 
   it("returns unsupportedOp when the receiver contract predates the op", () => {
@@ -17,6 +19,8 @@ describe("op support", () => {
     expect(opAck("boardReserved", 4)).toBe("unsupportedOp");
     expect(opAck("presence", 3)).toBe("unsupportedOp");
     expect(opAck("pauseInputReport", 11)).toBe("unsupportedOp");
+    expect(opAck("reestimate", 14)).toBe("unsupportedOp");
+    expect(opAck("undoReestimate", 14)).toBe("unsupportedOp");
     expect(opAck("extend", CONTRACT)).toBe("unsupportedOp");
     expect(opAck("arrive", CONTRACT)).toBe("unsupportedOp");
   });

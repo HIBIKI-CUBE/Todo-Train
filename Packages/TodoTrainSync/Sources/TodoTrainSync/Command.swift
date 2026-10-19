@@ -40,6 +40,20 @@ public struct CommandPlaintext: Codable, Equatable, Sendable {
     public var promptedAt: Int?
     /// `pauseInputReport` only. Absent when the question was not shown.
     public var promptAnswer: PausePromptAnswer?
+    /// `reestimate` only. Omitted when the commit did not use a progress ratio.
+    public var progressAnswer: Double?
+    /// `reestimate` only.
+    public var committedRemainingSeconds: Int?
+    /// `reestimate` only.
+    public var mode: WireReestimateMode?
+    /// `reestimate` only.
+    public var trigger: WireReestimateTrigger?
+    /// `reestimate` only.
+    public var promptId: String?
+    /// `reestimate` only.
+    public var surface: WireReestimateSurface?
+    /// `reestimate` only.
+    public var input: WireReestimateInput?
 
     public init(
         id: UUID,
@@ -63,7 +77,14 @@ public struct CommandPlaintext: Codable, Equatable, Sendable {
         macSampledSeconds: Double? = nil,
         macActiveSeconds: Double? = nil,
         promptedAt: Int? = nil,
-        promptAnswer: PausePromptAnswer? = nil
+        promptAnswer: PausePromptAnswer? = nil,
+        progressAnswer: Double? = nil,
+        committedRemainingSeconds: Int? = nil,
+        mode: WireReestimateMode? = nil,
+        trigger: WireReestimateTrigger? = nil,
+        promptId: String? = nil,
+        surface: WireReestimateSurface? = nil,
+        input: WireReestimateInput? = nil
     ) {
         self.id = id
         self.op = op
@@ -87,6 +108,13 @@ public struct CommandPlaintext: Codable, Equatable, Sendable {
         self.macActiveSeconds = nil
         self.promptedAt = nil
         self.promptAnswer = nil
+        self.progressAnswer = nil
+        self.committedRemainingSeconds = nil
+        self.mode = nil
+        self.trigger = nil
+        self.promptId = nil
+        self.surface = nil
+        self.input = nil
         switch op {
         case .issueAndBoard:
             self.title = title
@@ -110,7 +138,15 @@ public struct CommandPlaintext: Codable, Equatable, Sendable {
             self.macActiveSeconds = macActiveSeconds
             self.promptedAt = promptedAt
             self.promptAnswer = promptAnswer
-        case .resume, .still, .unknown:
+        case .reestimate:
+            self.progressAnswer = progressAnswer
+            self.committedRemainingSeconds = committedRemainingSeconds
+            self.mode = mode
+            self.trigger = trigger
+            self.promptId = promptId
+            self.surface = surface
+            self.input = input
+        case .resume, .still, .undoReestimate, .unknown:
             break
         }
     }
@@ -124,6 +160,7 @@ public struct CommandPlaintext: Codable, Equatable, Sendable {
         case nudgeId, choice, addSeconds, answeredOn, ticketId, pipVisible, attending
         case heldBy
         case pauseId, macSampledSeconds, macActiveSeconds, promptedAt, promptAnswer
+        case progressAnswer, committedRemainingSeconds, mode, trigger, promptId, surface, input
     }
 
     public init(from decoder: Decoder) throws {
@@ -153,6 +190,13 @@ public struct CommandPlaintext: Codable, Equatable, Sendable {
         macActiveSeconds = nil
         promptedAt = nil
         promptAnswer = nil
+        progressAnswer = nil
+        committedRemainingSeconds = nil
+        mode = nil
+        trigger = nil
+        promptId = nil
+        surface = nil
+        input = nil
         switch op {
         case .issueAndBoard:
             title = try container.decodeIfPresent(String.self, forKey: .title)
@@ -176,7 +220,15 @@ public struct CommandPlaintext: Codable, Equatable, Sendable {
             macActiveSeconds = try container.decodeIfPresent(Double.self, forKey: .macActiveSeconds)
             promptedAt = try container.decodeIfPresent(Int.self, forKey: .promptedAt)
             promptAnswer = try container.decodeIfPresent(PausePromptAnswer.self, forKey: .promptAnswer)
-        case .resume, .still, .unknown:
+        case .reestimate:
+            progressAnswer = try container.decodeIfPresent(Double.self, forKey: .progressAnswer)
+            committedRemainingSeconds = try container.decodeIfPresent(Int.self, forKey: .committedRemainingSeconds)
+            mode = try container.decodeIfPresent(WireReestimateMode.self, forKey: .mode)
+            trigger = try container.decodeIfPresent(WireReestimateTrigger.self, forKey: .trigger)
+            promptId = try container.decodeIfPresent(String.self, forKey: .promptId)
+            surface = try container.decodeIfPresent(WireReestimateSurface.self, forKey: .surface)
+            input = try container.decodeIfPresent(WireReestimateInput.self, forKey: .input)
+        case .resume, .still, .undoReestimate, .unknown:
             break
         }
         build = WireBuildInfo.decodeLenient(from: container, forKey: .build)
@@ -217,7 +269,15 @@ public struct CommandPlaintext: Codable, Equatable, Sendable {
             try container.encodeIfPresent(macActiveSeconds, forKey: .macActiveSeconds)
             try container.encodeIfPresent(promptedAt, forKey: .promptedAt)
             try container.encodeIfPresent(promptAnswer, forKey: .promptAnswer)
-        case .resume, .still, .unknown:
+        case .reestimate:
+            try container.encodeIfPresent(progressAnswer, forKey: .progressAnswer)
+            try container.encodeIfPresent(committedRemainingSeconds, forKey: .committedRemainingSeconds)
+            try container.encodeIfPresent(mode, forKey: .mode)
+            try container.encodeIfPresent(trigger, forKey: .trigger)
+            try container.encodeIfPresent(promptId, forKey: .promptId)
+            try container.encodeIfPresent(surface, forKey: .surface)
+            try container.encodeIfPresent(input, forKey: .input)
+        case .resume, .still, .undoReestimate, .unknown:
             break
         }
         try container.encodeIfPresent(build, forKey: .build)

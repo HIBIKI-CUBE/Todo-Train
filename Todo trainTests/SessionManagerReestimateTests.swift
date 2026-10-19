@@ -110,4 +110,91 @@ struct SessionManagerReestimateTests {
         let pause = try #require(manager.activeSession?.pauses.first { $0.id == pauseID })
         #expect(pause.undoneAt == clock.now)
     }
+
+    @Test func companionReestimateRecordsSurfaceAndInputThenUndoRemovesIt() throws {
+        let (manager, context, clock, _) = try SessionManagerFixtures.makeHarness()
+        try manager.startService()
+        let ticket = try SessionManagerFixtures.makeTicket(context, seconds: 45 * 60)
+        try manager.board(ticket: ticket)
+        let budgetAtBoard = try #require(manager.activeSession?.currentBudgetSeconds)
+        clock.advance(by: 12 * 60)
+        let sessionID = try #require(manager.activeSession?.id)
+
+        let ack = try CompanionCommandApplying.apply(
+            reestimateCommand(sessionID: sessionID, at: clock.now),
+            sessionManager: manager
+        )
+        #expect(ack.ok)
+        #expect(ack.error == nil)
+
+        let session = try #require(manager.activeSession)
+        let event = try #require(session.reestimateEvents.last)
+        #expect(event.undoneAt == nil)
+        #expect(event.surface == .macPip)
+        #expect(event.input == .click)
+        #expect(event.mode == .progress)
+        #expect(event.trigger == .manual)
+        #expect(event.promptId == ReestimatePromptID.progressV1)
+        #expect(event.progressAnswer == 0.5)
+        #expect(event.committedRemainingSeconds == 20 * 60)
+        let active = Int(session.elapsedSeconds(at: clock.now).rounded())
+        #expect(session.currentBudgetSeconds == active + 20 * 60)
+
+        let undo = try CompanionCommandApplying.apply(
+            CommandPlaintext(
+                id: UUID(),
+                op: .undoReestimate,
+                sessionId: sessionID,
+                at: Int(clock.now.timeIntervalSince1970)
+            ),
+            sessionManager: manager
+        )
+        #expect(undo.ok)
+        let after = try #require(manager.activeSession)
+        #expect(after.reestimateEvents.last?.undoneAt == clock.now)
+        #expect(after.currentBudgetSeconds == budgetAtBoard)
+
+        let again = try CompanionCommandApplying.apply(
+            CommandPlaintext(
+                id: UUID(),
+                op: .undoReestimate,
+                sessionId: sessionID,
+                at: Int(clock.now.timeIntervalSince1970)
+            ),
+            sessionManager: manager
+        )
+        #expect(!again.ok)
+        #expect(again.error == .invalidPayload)
+    }
+
+    @Test func companionReestimateRejectsUnknownSurfaceWithoutARecord() throws {
+        let (manager, context, clock, _) = try SessionManagerFixtures.makeHarness()
+        try manager.startService()
+        let ticket = try SessionManagerFixtures.makeTicket(context, seconds: 30 * 60)
+        try manager.board(ticket: ticket)
+        let sessionID = try #require(manager.activeSession?.id)
+        var command = reestimateCommand(sessionID: sessionID, at: clock.now)
+        command.surface = .unknown("watch")
+
+        let ack = try CompanionCommandApplying.apply(command, sessionManager: manager)
+        #expect(!ack.ok)
+        #expect(ack.error == .invalidPayload)
+        #expect(manager.activeSession?.reestimateEvents.isEmpty == true)
+    }
+
+    private func reestimateCommand(sessionID: UUID, at: Date) -> CommandPlaintext {
+        CommandPlaintext(
+            id: UUID(),
+            op: .reestimate,
+            sessionId: sessionID,
+            at: Int(at.timeIntervalSince1970),
+            progressAnswer: 0.5,
+            committedRemainingSeconds: 20 * 60,
+            mode: .progress,
+            trigger: .manual,
+            promptId: ReestimatePromptID.progressV1,
+            surface: .macPip,
+            input: .click
+        )
+    }
 }

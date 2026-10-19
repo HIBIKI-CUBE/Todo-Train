@@ -1,7 +1,7 @@
 {
-  "contract": 14,
+  "contract": 15,
   "minReadable": 3,
-  "fingerprint": "24fdd85597bcf247358844233697ca692c3f8a35b6e55652367c3ed1ab16c2f5",
+  "fingerprint": "75610e65d61da21e1dcf5d00bf496e1391d69996c2e36cadcaad328b8085ef79",
   "history": [
     {
       "contract": 3,
@@ -62,6 +62,11 @@
       "contract": 14,
       "date": "2026-10-13",
       "note": "予定の時刻では停車しない。理由の無い停車は user"
+    },
+    {
+      "contract": 15,
+      "date": "2026-10-19",
+      "note": "見積もり直しと取り消しのコマンド、乗車中の snap にホームを足す"
     }
   ]
 }

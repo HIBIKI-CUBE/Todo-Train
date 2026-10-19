@@ -25,6 +25,7 @@ const swiftWire = [
   "Packages/TodoTrainSync/Sources/TodoTrainSync/PauseHeldBy.swift",
   "Packages/TodoTrainSync/Sources/TodoTrainSync/PauseInput.swift",
   "Packages/TodoTrainSync/Sources/TodoTrainSync/CabinKind.swift",
+  "Packages/TodoTrainSync/Sources/TodoTrainSync/ReestimateWire.swift",
 ];
 
 const workerWire = [

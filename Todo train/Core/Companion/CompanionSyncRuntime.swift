@@ -97,17 +97,15 @@ final class CompanionSyncRuntime {
     }
 
     func handleScenePhase(_ phase: ScenePhase, sessionManager: SessionManager) {
-        switch phase {
-        case .active:
+        switch Policy.foregroundLoop(for: phase) {
+        case .start:
             guard foregroundTask == nil else { return }
             foregroundTask = Task { [weak self] in
                 await self?.runForeground(sessionManager: sessionManager)
             }
-        case .inactive:
+        case .keep:
             break
-        case .background:
-            fallthrough
-        default:
+        case .stop:
             foregroundTask?.cancel()
             foregroundTask = nil
         }
@@ -378,5 +376,33 @@ final class CompanionSyncRuntime {
 
     private func userFacing(_ error: Error) -> String {
         SyncCopy.connectionStatus(error)
+    }
+}
+
+extension CompanionSyncRuntime {
+    /// Pairing, scene phase, and whether progress notifications stay quiet.
+    enum Policy {
+        enum ForegroundLoop: Equatable {
+            /// `.active` starts the foreground sync loop.
+            case start
+            /// `.inactive` leaves the loop as it is.
+            case keep
+            /// `.background` stops the loop.
+            case stop
+        }
+
+        /// Progress notifications stay off while a companion is paired. Scene phase does not change this.
+        static func suppressProgressNotifications(isPaired: Bool) -> Bool {
+            isPaired
+        }
+
+        static func foregroundLoop(for phase: ScenePhase) -> ForegroundLoop {
+            switch phase {
+            case .active: .start
+            case .inactive: .keep
+            case .background: .stop
+            @unknown default: .stop
+            }
+        }
     }
 }

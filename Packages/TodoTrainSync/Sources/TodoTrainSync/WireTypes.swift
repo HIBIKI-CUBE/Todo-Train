@@ -35,6 +35,10 @@ public enum WireOp: Sendable, Equatable {
     case presence
     /// Mac samples of input during one pause. Stored seconds only rise.
     case pauseInputReport
+    /// Commit a reestimate. The iPhone records it through the existing entry.
+    case reestimate
+    /// Undo the latest reestimate that is still in effect.
+    case undoReestimate
     case unknown(String)
 
     /// Contract that introduced this op. Unknown ops have no version.
@@ -43,6 +47,7 @@ public enum WireOp: Sendable, Equatable {
         case .pause, .resume, .still, .issueAndBoard: 3
         case .answer, .boardReserved, .presence: 5
         case .pauseInputReport: 12
+        case .reestimate, .undoReestimate: 15
         case .unknown: nil
         }
     }
@@ -57,6 +62,8 @@ public enum WireOp: Sendable, Equatable {
         case .boardReserved: "boardReserved"
         case .presence: "presence"
         case .pauseInputReport: "pauseInputReport"
+        case .reestimate: "reestimate"
+        case .undoReestimate: "undoReestimate"
         case .unknown(let value): value
         }
     }
@@ -71,6 +78,8 @@ public enum WireOp: Sendable, Equatable {
         case "boardReserved": self = .boardReserved
         case "presence": self = .presence
         case "pauseInputReport": self = .pauseInputReport
+        case "reestimate": self = .reestimate
+        case "undoReestimate": self = .undoReestimate
         default: self = .unknown(rawValue)
         }
     }

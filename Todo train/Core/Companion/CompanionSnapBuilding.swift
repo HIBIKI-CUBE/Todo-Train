@@ -42,6 +42,7 @@ enum CompanionSnapBuilding {
         }
         let open = Self.openPause(session: session, phase: phase)
         let samples = Self.openPauseSamples(session: session, phase: phase)
+        let home = Self.home(session: session, now: now)
         let started = Int(session.startedAt.timeIntervalSince1970)
         let elapsedActive = Int(session.elapsedSeconds(at: now).rounded(.towardZero))
         let pausedAtUnix: Int?
@@ -80,7 +81,51 @@ enum CompanionSnapBuilding {
             pauseHeldBy: pauseHeldBy ?? open?.heldBy,
             pauseId: open?.id,
             macSampledSeconds: samples?.sampled,
-            macActiveSeconds: samples?.active
+            macActiveSeconds: samples?.active,
+            home: home
+        )
+    }
+
+    /// Values from `PunctualityJudgment`. Mac and Watch display them as sent.
+    static func home(session: WorkSession, now: Date) -> WireHome {
+        let commits = session.reestimateEvents
+            .filter { $0.undoneAt == nil && $0.declaration != .recovery }
+            .map {
+                PunctualityJudgment.ReestimateCommit(
+                    reestimateIndex: $0.reestimateIndex,
+                    activeSeconds: $0.activeSeconds,
+                    committedRemainingSeconds: $0.committedRemainingSeconds
+                )
+            }
+        let judgment = PunctualityJudgment.judge(
+            PunctualityJudgment.RideInput(
+                arrived: session.outcome == .arrived,
+                activeSeconds: session.elapsedSeconds(at: now),
+                estimatedSecondsAtStart: session.estimatedSecondsAtStart,
+                reestimates: commits
+            )
+        )
+        let judged: WireJudgedEstimate
+        switch judgment.source {
+        case .original:
+            judged = WireJudgedEstimate(kind: .original)
+        case .reestimate(let index):
+            let active = commits.first { $0.reestimateIndex == index }?.activeSeconds
+            judged = WireJudgedEstimate(
+                kind: .reestimate,
+                reestimateIndex: index,
+                activeSeconds: active
+            )
+        }
+        let luxury = judgment.signal == .off
+            ? nil
+            : PunctualityJudgment.sealLuxury(source: judgment.source, reestimates: commits)
+        return WireHome(
+            startSeconds: judgment.lowerBound,
+            endSeconds: judgment.upperBound,
+            signal: WireHomeSignal(judgment.signal),
+            judgedEstimate: judged,
+            sealLuxury: luxury
         )
     }
 
