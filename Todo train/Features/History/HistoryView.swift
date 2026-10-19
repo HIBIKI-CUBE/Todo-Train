@@ -30,6 +30,7 @@ struct HistoryView: View {
     @State private var daysVisible: CGFloat = 1
     @State private var showBundleViewer = false
     @State private var bundleStripFocusIndex = 0
+    @State private var bundleTouching = false
     @FocusState private var searchFieldFocused: Bool
 
     init(focusDay: Date? = nil) {
@@ -248,11 +249,41 @@ struct HistoryView: View {
                 bundles: sessionManager.ticketStampBundles(),
                 initialDayKey: bundleViewerInitialDayKey,
                 initialFlatIndex: bundleViewerInitialFlatIndex,
+                pinnedFocusUnit: previewPinnedFocusUnit,
+                pinnedSpread: previewPinnedSpread,
                 onSelectStamp: { stamp in
                     showBundleViewer = false
                     selectedRideID = stamp.sessionID
                 }
             )
+        }
+        .overlay {
+            historyBundleOverlay
+        }
+    }
+
+    @ViewBuilder
+    private var historyBundleOverlay: some View {
+        if !isSearching, rideDensity == .day, let bundle = dayStampBundle, !bundle.stamps.isEmpty {
+            TicketStampBundleDeckView(
+                stamps: bundle.stamps,
+                focusIndex: $bundleStripFocusIndex,
+                style: .historyStrip,
+                onOpenViewer: { showBundleViewer = true },
+                bundleTouching: $bundleTouching,
+                pinnedSpread: previewPinnedSpread,
+                pinnedFocusUnit: previewPinnedFocusUnit,
+                playsSpreadDemo: previewPlaysSpreadDemo,
+                bottomObstacle: 0
+            )
+            .id(bundle.calendarDayKey)
+            .ignoresSafeArea()
+            .onAppear {
+                guard previewPinnedFocusUnit == nil else { return }
+                bundleStripFocusIndex = max(0, bundle.stamps.count - 1)
+            }
+            .accessibilityLabel("この日の切符の束")
+            .accessibilityHint("開いて切符をめくれます")
         }
     }
 
@@ -283,13 +314,11 @@ struct HistoryView: View {
     }
 
     private var calendarDay: some View {
-        GeometryReader { geo in
-            // この矩形はタブバーの上で終わる。下端の余白だけ足す。
-            calendarDayStack(viewport: geo.size, bottomObstacle: 0)
-        }
+        // この矩形はタブバーの上で終わる。下端の余白だけ足す。
+        calendarDayStack()
     }
 
-    private func calendarDayStack(viewport: CGSize, bottomObstacle: CGFloat) -> some View {
+    private func calendarDayStack() -> some View {
         let bundleReserve = dayStampBundle?.stamps.isEmpty == false && rideDensity == .day
             ? TicketStampBundleLayout.collapsedFanSize.height
             : 0
@@ -352,7 +381,8 @@ struct HistoryView: View {
                     onReissue: reissue,
                     onDelete: deleteSession,
                     stripsByDay: timetableStripsByDay,
-                    bottomContentInset: bundleReserve
+                    bottomContentInset: bundleReserve,
+                    bundleTouching: bundleTouching
                 )
                 .safeAreaPadding(.bottom)
             }
@@ -360,31 +390,6 @@ struct HistoryView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(TrainTheme.platform)
-        .overlay(alignment: .bottomTrailing) {
-            if rideDensity == .day, let bundle = dayStampBundle, !bundle.stamps.isEmpty {
-                TicketStampBundleDeckView(
-                    stamps: bundle.stamps,
-                    focusIndex: $bundleStripFocusIndex,
-                    style: .historyStrip,
-                    onOpenViewer: { showBundleViewer = true },
-                    pinnedSpread: previewPinnedSpread,
-                    playsSpreadDemo: previewPlaysSpreadDemo,
-                    layoutViewport: CGSize(
-                        width: max(80, viewport.width),
-                        height: max(80, viewport.height)
-                    ),
-                    bottomObstacle: bottomObstacle
-                )
-                .padding(.trailing, TicketStampBundleLayout.safeMargin)
-                .padding(.bottom, bottomObstacle + TicketStampBundleLayout.bottomClearance)
-                .zIndex(4)
-                .onAppear {
-                    bundleStripFocusIndex = max(0, bundle.stamps.count - 1)
-                }
-                .accessibilityLabel("この日の切符の束")
-                .accessibilityHint("開いて切符をめくれます")
-            }
-        }
     }
 
     private func toggleSearch() {
@@ -570,6 +575,15 @@ struct HistoryView: View {
         #else
         false
         #endif
+    }
+
+    private var previewPinnedFocusUnit: CGFloat? {
+        #if DEBUG
+        if let value = sessionManager.uiPreviewBundleFocus {
+            return CGFloat(value)
+        }
+        #endif
+        return nil
     }
 
     private static let timeFormatter: DateFormatter = {

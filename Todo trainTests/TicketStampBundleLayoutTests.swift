@@ -174,194 +174,157 @@ struct TicketStampBundleLayoutTests {
         #expect(lowest <= namePoint(1).y + 0.5)
     }
 
-    @Test func dragTowardOlderLowersDepth() {
-        let still = TicketStampBundleLayout.visualDepth(index: 2, focus: 3, drag: 0)
-        let older = TicketStampBundleLayout.visualDepth(index: 2, focus: 3, drag: 72)
-        let newer = TicketStampBundleLayout.visualDepth(index: 2, focus: 3, drag: -72)
-        #expect(abs(still - 1) < 0.001)
-        #expect(abs(older - 0) < 0.001)
-        #expect(abs(newer - 2) < 0.001)
+    @Test func rightDragLowersFocusAndStaysInRange() {
+        let travel = TicketStampBundleLayout.travelPerCard(viewportWidth: 402, count: 8)
+        let older = TicketStampBundleLayout.focus(
+            start: 5,
+            translation: travel,
+            travelPerCard: travel,
+            count: 8
+        )
+        let newer = TicketStampBundleLayout.focus(
+            start: 5,
+            translation: -travel * 2,
+            travelPerCard: travel,
+            count: 8
+        )
+        let clamped = TicketStampBundleLayout.focus(
+            start: 1,
+            translation: 500,
+            travelPerCard: travel,
+            count: 8
+        )
+        #expect(older < 5)
+        #expect(abs(older - 4) < 0.001)
+        #expect(newer > 5)
+        #expect(clamped == 0)
+        let high = TicketStampBundleLayout.focus(
+            start: 6,
+            translation: -500,
+            travelPerCard: travel,
+            count: 8
+        )
+        #expect(high == 7)
+    }
+
+    @Test func liftIsFullOnFocusAndZeroOnNeighbors() {
+        #expect(TicketStampBundleLayout.lift(index: 3, focus: 3) == 1)
+        #expect(TicketStampBundleLayout.lift(index: 2, focus: 3) == 0)
+        #expect(TicketStampBundleLayout.lift(index: 4, focus: 3) == 0)
+        #expect(abs(TicketStampBundleLayout.lift(index: 3, focus: 3.25) - 0.75) < 0.001)
+    }
+
+    @Test func expandedWidthMatchesHubFaceOnPortraitPhone() {
+        let size = TicketStampBundleLayout.expandedTicketSize(hubColumnWidth: 402, usableHeight: 800)
+        let hub = TrainLayout.ticketFaceSize(containerWidth: 402)
+        #expect(abs(size.width - hub.width) < 0.01)
+        #expect(abs(size.width - 370) < 0.01)
+        #expect(abs(size.height - hub.height) < 0.01)
+    }
+
+    @Test func expandedHeightShrinksOnlyPastTheRatio() {
+        let portrait = TicketStampBundleLayout.expandedTicketSize(hubColumnWidth: 402, usableHeight: 800)
+        let natural = TrainLayout.ticketFaceSize(containerWidth: 402)
+        #expect(abs(portrait.height - natural.height) < 0.01)
+
+        let column = TicketStampBundleLayout.hubColumnWidth(containerWidth: 874, compactHeight: true)
+        let landscapeNatural = TrainLayout.ticketFaceSize(containerWidth: column)
+        let usable: CGFloat = 360
+        let limit = usable * TicketStampBundleLayout.expandedHeightMaxRatio
+        #expect(landscapeNatural.height > limit)
+        let fitted = TicketStampBundleLayout.expandedTicketSize(
+            hubColumnWidth: column,
+            usableHeight: usable
+        )
+        #expect(fitted.height <= limit + 0.5)
+        #expect(fitted.height > limit - 1.5)
+        #expect(fitted.width < landscapeNatural.width)
+    }
+
+    @Test func spreadInterpolatesWidthRadiusPivotAndOriginWithoutAJump() {
+        let screen = portraitScreen()
+        let count = 8
+        var previous = TicketStampBundleLayout.placement(spread: 0, count: count, screen: screen)
+        for index in 1...20 {
+            let spread = CGFloat(index) / 20
+            let place = TicketStampBundleLayout.placement(spread: spread, count: count, screen: screen)
+            let widthStep = (place.ticket.width - previous.ticket.width)
+            let radiusStep = place.radius - previous.radius
+            let pivotStep = place.pivot.x - previous.pivot.x
+            let originStep = hypot(
+                place.frontOrigin.x - previous.frontOrigin.x,
+                place.frontOrigin.y - previous.frontOrigin.y
+            )
+            #expect(widthStep >= -0.01)
+            #expect(radiusStep >= -0.01)
+            #expect(pivotStep >= -0.01)
+            let widthSpan = TicketStampBundleLayout.placement(spread: 1, count: count, screen: screen).ticket.width
+                - TicketStampBundleLayout.placement(spread: 0, count: count, screen: screen).ticket.width
+            #expect(widthStep < widthSpan / 20 * 1.35 + 0.5)
+            #expect(originStep < 48)
+            previous = place
+        }
+    }
+
+    @Test func openFanKeepsTheFrontCardAndEveryBandInsideTheSafeArea() {
+        let screens = [portraitScreen(), landscapeScreen()]
+        for screen in screens {
+            for count in [2, 5, 8, 20] {
+                let place = TicketStampBundleLayout.placement(spread: 1, count: count, screen: screen)
+                let front = TicketStampBundleLayout.frontRect(place)
+                #expect(contains(screen.safeRect, front, slack: 0.75))
+                for index in 0..<count {
+                    let mark = TicketStampBundleLayout.markCenter(
+                        index: index,
+                        count: count,
+                        placement: place
+                    )
+                    #expect(contains(screen.safeRect, mark, slack: 0.75))
+                }
+                #expect(place.step > 0)
+                #expect(place.step <= TicketStampBundleLayout.maxExpandedStepDegrees + 0.01)
+            }
+        }
     }
 
     @Test func openFanBottomStaysAboveTheBottomObstacle() {
-        let width: CGFloat = 390
-        let height: CGFloat = 780
-        let obstacle: CGFloat = 72
-        let clearance = TicketStampBundleLayout.bottomClearance
-        let fan = TicketStampBundleLayout.expandedFan(
-            fittingWidth: width,
-            fittingHeight: height,
-            depth: 4,
-            bottomObstacle: obstacle,
-            bottomClearance: clearance
-        )
-        let rect = TicketStampBundleLayout.expandedFanRect(
-            fan: fan,
-            fittingWidth: width,
-            fittingHeight: height,
-            depth: 4,
-            bottomObstacle: obstacle,
-            bottomClearance: clearance
-        )
-        let obstacleTop = height - obstacle
-        let frontBottom = rect.maxY - fan.cornerInset.height
-        #expect(rect.maxY <= obstacleTop - clearance + 0.5)
-        #expect(frontBottom <= obstacleTop - clearance + 0.5)
-        #expect(rect.minY >= -0.5)
-        #expect(fan.ticket.width > 120)
+        var screen = portraitScreen()
+        screen.bottomObstacle = 72
+        screen.safeBottom = 0
+        let place = TicketStampBundleLayout.placement(spread: 1, count: 5, screen: screen)
+        let front = TicketStampBundleLayout.frontRect(place)
+        let obstacleTop = screen.height - screen.bottomObstacle
+        #expect(front.maxY <= obstacleTop - TicketStampBundleLayout.bottomClearance + 0.5)
+        #expect(front.minY >= screen.safeTop - 0.5)
+        #expect(place.ticket.width > 120)
     }
 
     @Test func collapsedFanRightEdgeSitsOnTheTrailingMargin() {
-        let width: CGFloat = 390
-        let height: CGFloat = 780
-        let obstacle: CGFloat = 72
-        let clearance = TicketStampBundleLayout.bottomClearance
-        let fan = fittedFan(width: width, height: height, obstacle: obstacle, clearance: clearance)
-        let rect = TicketStampBundleLayout.placedFanRect(
-            fan: fan,
-            spread: 0,
-            fittingWidth: width,
-            fittingHeight: height,
-            depth: 4,
-            bottomObstacle: obstacle,
-            bottomClearance: clearance
-        )
-        let usable = TicketStampBundleLayout.usableFanHeight(
-            fittingHeight: height,
-            bottomObstacle: obstacle,
-            bottomClearance: clearance
-        )
-        #expect(abs(rect.maxX - (width - TicketStampBundleLayout.safeMargin)) < 0.5)
-        #expect(abs(rect.maxY - usable) < 0.5)
+        var screen = portraitScreen()
+        screen.safeTrailing = 0
+        screen.safeBottom = 0
+        screen.bottomObstacle = 72
+        let place = TicketStampBundleLayout.placement(spread: 0, count: 5, screen: screen)
+        let bounds = TicketStampBundleLayout.stackBounds(count: 5, placement: place)
+        let bottom = screen.height - screen.bottomObstacle - TicketStampBundleLayout.bottomClearance
+        #expect(abs(bounds.maxX - (screen.width - TicketStampBundleLayout.safeMargin)) < 0.5)
+        #expect(abs(bounds.maxY - bottom) < 0.5)
     }
 
-    @Test func openFanCentersHorizontallyInsideTheSafeRect() {
-        let clearance = TicketStampBundleLayout.bottomClearance
-        let phone = fittedFan(width: 390, height: 780, obstacle: 72, clearance: clearance)
-        let phoneRect = TicketStampBundleLayout.placedFanRect(
-            fan: phone,
-            spread: 1,
-            fittingWidth: 390,
-            fittingHeight: 780,
-            depth: 4,
-            bottomObstacle: 72,
-            bottomClearance: clearance
-        )
-        #expect(abs(phoneRect.midX - 195) < 0.5)
-        #expect(phoneRect.minX >= -0.5)
-        #expect(phoneRect.maxX <= 390.5)
-
-        let wide = fittedFan(width: 700, height: 240, obstacle: 0, clearance: clearance)
-        let wideRect = TicketStampBundleLayout.placedFanRect(
-            fan: wide,
-            spread: 1,
-            fittingWidth: 700,
-            fittingHeight: 240,
-            depth: 4,
-            bottomObstacle: 0,
-            bottomClearance: clearance
-        )
-        #expect(wideRect.minX >= -0.5)
-        #expect(wideRect.maxX <= 700.5)
-        #expect(abs(wideRect.midX - 350) < 0.5)
-    }
-
-    @Test func fanOriginSlidesLinearlyBetweenTheCornerAndTheCenter() {
-        let width: CGFloat = 390
-        let height: CGFloat = 780
-        let obstacle: CGFloat = 72
-        let clearance = TicketStampBundleLayout.bottomClearance
-        let fan = fittedFan(width: width, height: height, obstacle: obstacle, clearance: clearance)
-        func origin(_ spread: CGFloat) -> CGPoint {
-            TicketStampBundleLayout.fanOrigin(
-                fan: fan,
-                spread: spread,
-                fittingWidth: width,
-                fittingHeight: height,
-                depth: 4,
-                bottomObstacle: obstacle,
-                bottomClearance: clearance
-            )
-        }
-        let start = origin(0)
-        let middle = origin(0.5)
-        let end = origin(1)
-        #expect(abs(middle.x - (start.x + end.x) / 2) < 0.01)
+    @Test func frontOriginSlidesWithoutAJump() {
+        let screen = portraitScreen()
+        let start = TicketStampBundleLayout.placement(spread: 0, count: 6, screen: screen).frontOrigin
+        let middle = TicketStampBundleLayout.placement(spread: 0.5, count: 6, screen: screen).frontOrigin
+        let end = TicketStampBundleLayout.placement(spread: 1, count: 6, screen: screen).frontOrigin
+        #expect(abs(middle.x - (start.x + end.x) / 2) < 0.05)
+        #expect(abs(middle.y - (start.y + end.y) / 2) < 0.05)
         #expect(start.x > end.x)
-        let usable = TicketStampBundleLayout.usableFanHeight(
-            fittingHeight: height,
-            bottomObstacle: obstacle,
-            bottomClearance: clearance
-        )
-        for spread in [CGFloat(0), 0.25, 0.5, 0.75, 1] {
-            let rect = TicketStampBundleLayout.placedFanRect(
-                fan: fan,
-                spread: spread,
-                fittingWidth: width,
-                fittingHeight: height,
-                depth: 4,
-                bottomObstacle: obstacle,
-                bottomClearance: clearance
-            )
-            #expect(abs(rect.maxY - usable) < 0.5)
-        }
     }
 
-    private func fittedFan(
-        width: CGFloat,
-        height: CGFloat,
-        obstacle: CGFloat,
-        clearance: CGFloat
-    ) -> TicketStampBundleLayout.ExpandedFan {
-        TicketStampBundleLayout.expandedFan(
-            fittingWidth: width,
-            fittingHeight: height,
-            depth: 4,
-            bottomObstacle: obstacle,
-            bottomClearance: clearance
-        )
-    }
-
-    @Test func openFanKeepsTheCornerNearTheBoxCorner() {
-        let fan = TicketStampBundleLayout.expandedFan(fittingWidth: 390, fittingHeight: 720, depth: 4)
-        #expect(fan.cornerInset.width <= TicketStampBundleLayout.maxCornerInset + 0.5)
-        #expect(fan.cornerInset.height <= TicketStampBundleLayout.maxCornerInset + 0.5)
-        #expect(fan.ticket.width > 160)
-    }
-
-    @Test func openFanFitsASmallPhone() {
-        assertFanFits(width: 351, height: 480, depth: TicketStampBundleLayout.depthCap)
-    }
-
-    @Test func openFanFitsLandscape() {
-        assertFanFits(width: 640, height: 210, depth: TicketStampBundleLayout.depthCap)
-    }
-
-    @Test func openFanFitsManyCards() {
-        assertFanFits(width: 360, height: 520, depth: 8)
-    }
-
-    @Test func expandedRadiusAndStepStayUnderTheCaps() {
-        let roomy = TicketStampBundleLayout.expandedFan(fittingWidth: 390, fittingHeight: 720, depth: 4)
-        let tight = TicketStampBundleLayout.expandedFan(fittingWidth: 640, fittingHeight: 210, depth: 4)
-        #expect(roomy.radius <= roomy.ticket.width * TicketStampBundleLayout.expandedRadiusRatio + 0.01)
-        #expect(tight.radius <= tight.ticket.width * TicketStampBundleLayout.expandedRadiusRatio + 0.01)
-        #expect(roomy.stepDegrees <= TicketStampBundleLayout.maxExpandedStepDegrees + 0.01)
-        #expect(tight.stepDegrees <= TicketStampBundleLayout.maxExpandedStepDegrees + 0.01)
-        #expect(openness(tight) <= openness(roomy) + 0.02)
-        #expect(openness(roomy) > 0.85)
-        let clearance = TicketStampBundleLayout.expandedStepDegrees(
-            ticketWidth: roomy.ticket.width,
-            ticketHeight: roomy.ticket.height
-        )
-        #expect(roomy.stepDegrees + 0.6 >= min(clearance, TicketStampBundleLayout.maxExpandedStepDegrees))
-    }
-
-    private func openness(_ fan: TicketStampBundleLayout.ExpandedFan) -> CGFloat {
-        let minRadius = fan.ticket.width * TicketStampBundleLayout.compactRadiusRatio
-        let maxRadius = fan.ticket.width * TicketStampBundleLayout.expandedRadiusRatio
-        guard maxRadius - minRadius > 0.001 else { return 0 }
-        return (fan.radius - minRadius) / (maxRadius - minRadius)
+    @Test func expandedRadiusUsesTheRatio() {
+        let place = TicketStampBundleLayout.placement(spread: 1, count: 4, screen: portraitScreen())
+        #expect(abs(place.radius - place.ticket.width * TicketStampBundleLayout.expandedRadiusRatio) < 0.01)
+        #expect(place.step <= TicketStampBundleLayout.maxExpandedStepDegrees + 0.01)
     }
 
     @Test func stackRankKeepsNewerTicketsAboveOlderOnes() {
@@ -377,22 +340,45 @@ struct TicketStampBundleLayoutTests {
         #expect(newest > oldest)
     }
 
-    private func assertFanFits(width: CGFloat, height: CGFloat, depth: Int) {
-        let fan = TicketStampBundleLayout.expandedFan(
-            fittingWidth: width,
-            fittingHeight: height,
-            depth: depth
+    private func portraitScreen() -> TicketStampBundleLayout.Screen {
+        TicketStampBundleLayout.Screen(
+            width: 402,
+            height: 874,
+            safeTop: 59,
+            safeLeading: 0,
+            safeTrailing: 0,
+            safeBottom: 83,
+            bottomObstacle: 0,
+            hubColumnWidth: 402
         )
-        let rect = TicketStampBundleLayout.expandedFanRect(
-            fan: fan,
-            fittingWidth: width,
-            fittingHeight: height,
-            depth: depth
+    }
+
+    private func landscapeScreen() -> TicketStampBundleLayout.Screen {
+        let width: CGFloat = 874
+        let column = TicketStampBundleLayout.hubColumnWidth(containerWidth: width, compactHeight: true)
+        return TicketStampBundleLayout.Screen(
+            width: width,
+            height: 402,
+            safeTop: 0,
+            safeLeading: 59,
+            safeTrailing: 59,
+            safeBottom: 21,
+            bottomObstacle: 0,
+            hubColumnWidth: column
         )
-        #expect(rect.minX >= -0.5)
-        #expect(rect.minY >= -0.5)
-        #expect(rect.maxX <= width + 0.5)
-        #expect(rect.maxY <= height + 0.5)
-        #expect(fan.ticket.width > 40)
+    }
+
+    private func contains(_ rect: CGRect, _ point: CGPoint, slack: CGFloat) -> Bool {
+        point.x >= rect.minX - slack
+            && point.x <= rect.maxX + slack
+            && point.y >= rect.minY - slack
+            && point.y <= rect.maxY + slack
+    }
+
+    private func contains(_ outer: CGRect, _ inner: CGRect, slack: CGFloat) -> Bool {
+        inner.minX >= outer.minX - slack
+            && inner.minY >= outer.minY - slack
+            && inner.maxX <= outer.maxX + slack
+            && inner.maxY <= outer.maxY + slack
     }
 }

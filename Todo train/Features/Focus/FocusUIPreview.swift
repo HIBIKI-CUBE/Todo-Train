@@ -48,6 +48,7 @@ enum FocusUIPreview {
     static let stateArgument = "-uiPreviewState"
     static let landscapeArgument = "-uiPreviewLandscape"
     static let bundleSpreadArgument = "-uiPreviewBundleSpread"
+    static let bundleFocusArgument = "-uiPreviewBundleFocus"
     static let bundleFanDemoArgument = "-uiPreviewBundleFanDemo"
 
     static func parsedState() -> String? {
@@ -65,6 +66,14 @@ enum FocusUIPreview {
     static var requestedBundleSpread: Double? {
         let args = ProcessInfo.processInfo.arguments
         guard let index = args.firstIndex(of: bundleSpreadArgument), index + 1 < args.count else {
+            return nil
+        }
+        return Double(args[index + 1])
+    }
+
+    static var requestedBundleFocus: Double? {
+        let args = ProcessInfo.processInfo.arguments
+        guard let index = args.firstIndex(of: bundleFocusArgument), index + 1 < args.count else {
             return nil
         }
         return Double(args[index + 1])
@@ -111,11 +120,13 @@ enum FocusUIPreview {
         switch state {
         case "shutdownBundle", "shutdownBundlePeel", "shutdownBundleLandscape", "shutdownBundlePeelLandscape",
             "historyBundle", "historyBundleLandscape", "historyEmptyBundle",
+            "historyBundleMany", "historyBundleManyLandscape",
             "historyBundleViewer", "historyBundleViewerLandscape",
             "historyBundleViewerBoundary", "historyBundleViewerBoundaryLandscape":
             try configureTicketBundlePreview(manager: manager, context: context, state: state)
             manager.uiPreviewLandscape = wantsLandscape
             manager.uiPreviewBundleSpread = requestedBundleSpread
+            manager.uiPreviewBundleFocus = requestedBundleFocus
             manager.uiPreviewBundleFanDemo = wantsBundleFanDemo
             return
         case "sealGallery":

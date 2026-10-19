@@ -9,6 +9,8 @@ struct TicketStampBundleViewer: View {
     let bundles: [TicketStampBundleAssembly.DayBundle]
     let initialDayKey: String
     var initialFlatIndex: Int?
+    var pinnedFocusUnit: CGFloat? = nil
+    var pinnedSpread: CGFloat? = nil
     var onSelectStamp: (TicketStampBundleAssembly.Stamp) -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -18,7 +20,7 @@ struct TicketStampBundleViewer: View {
     @State private var deckFocusIndex: Int = 0
     @State private var selectionPulse = 0
     @State private var boundaryPulse = 0
-    @State private var deckShuttleEngaged = false
+    @State private var deckVerticalLocked = false
 
     private var flat: [TicketStampBundleAssembly.FlatStamp] {
         TicketStampBundleAssembly.flatten(bundles)
@@ -57,18 +59,21 @@ struct TicketStampBundleViewer: View {
                         .font(.title3.weight(.semibold))
                         .foregroundStyle(.primary)
                         .padding(.top, TrainTheme.Space.sm)
+                    Color.clear
+                }
 
-                    if let bundle = currentBundle {
-                        TicketStampBundleDeckView(
-                            stamps: bundle.stamps,
-                            focusIndex: $deckFocusIndex,
-                            style: .viewer,
-                            dayBoundaries: dayBoundaryIndicesForLocalFocus(),
-                            onSelect: onSelectStamp,
-                            verticalGesturesLocked: $deckShuttleEngaged
-                        )
-                        .padding(.horizontal, TrainTheme.Space.md)
-                    }
+                if let bundle = currentBundle {
+                    TicketStampBundleDeckView(
+                        stamps: bundle.stamps,
+                        focusIndex: $deckFocusIndex,
+                        style: .viewer,
+                        dayBoundaries: dayBoundaryIndicesForLocalFocus(),
+                        onSelect: onSelectStamp,
+                        verticalGesturesLocked: $deckVerticalLocked,
+                        pinnedSpread: pinnedSpread,
+                        pinnedFocusUnit: pinnedFocusUnit
+                    )
+                    .ignoresSafeArea()
                 }
 
                 edgeScrubber
@@ -78,7 +83,7 @@ struct TicketStampBundleViewer: View {
             .simultaneousGesture(
                 DragGesture(minimumDistance: 24)
                     .onEnded { value in
-                        guard !deckShuttleEngaged else { return }
+                        guard !deckVerticalLocked else { return }
                         guard value.translation.height > 72,
                               abs(value.translation.height) > abs(value.translation.width)
                         else { return }
@@ -122,7 +127,7 @@ struct TicketStampBundleViewer: View {
             .gesture(
                 DragGesture(minimumDistance: 4)
                     .onEnded { value in
-                        guard !deckShuttleEngaged else { return }
+                        guard !deckVerticalLocked else { return }
                         let steps = scrubSteps(
                             translation: value.translation.height,
                             velocity: value.velocity.height
@@ -157,7 +162,7 @@ struct TicketStampBundleViewer: View {
     }
 
     private func scrubSteps(translation: CGFloat, velocity: CGFloat) -> Int {
-        TicketStampBundleSwipe.steps(
+        TicketStampBundleGesture.steps(
             translation: Double(translation),
             velocity: Double(velocity),
             threshold: 40,

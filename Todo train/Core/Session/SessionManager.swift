@@ -107,7 +107,9 @@ final class SessionManager {
     var uiPreviewBundleViewerFlatIndex: Int?
     /// 束の扇をこの spread（0...1）で止める。
     var uiPreviewBundleSpread: Double?
-    /// たたんだ扇から開いて戻す録画用。
+    /// 0 が最古、1 が最新。束の扇をこの位置で止める。
+    var uiPreviewBundleFocus: Double?
+    /// 開いて、最古までなぞって、最新側へなぞって、畳む録画用。
     var uiPreviewBundleFanDemo: Bool = false
     /// 印を押したあとの券面（穴・丸印・角判）を動きなしで出す。
     struct ArrivalUIPreviewStamp {
