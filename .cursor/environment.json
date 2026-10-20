@@ -1,0 +1,5 @@
+{
+  "name": "Todo Train (Swift on Linux toolchain)",
+  "user": "ubuntu",
+  "install": "bash .cursor/install.sh"
+}
