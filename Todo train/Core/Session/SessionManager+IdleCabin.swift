@@ -12,6 +12,12 @@ import UIKit
 #endif
 
 extension SessionManager {
+    func preArrivalIdleSeconds(at now: Date) -> Int? {
+        guard let day = activeServiceDay ?? fetchOpenServiceDay() else { return nil }
+        let activity = day.lastCabinActivityAt ?? day.startedAt
+        return max(0, Int(now.timeIntervalSince(activity).rounded()))
+    }
+
     func noteCabinActivity(now: Date? = nil, clearPendingIdle: Bool = true) {
         let now = now ?? clock.now
         guard let day = activeServiceDay ?? fetchOpenServiceDay(), day.isOpen else { return }
@@ -22,7 +28,7 @@ extension SessionManager {
         cancelIdleWatch()
         checkInNotifier.cancelIdle(serviceDayID: day.id)
         idleLocalNotificationArmed = false
-        try? save()
+        _ = saveBestEffort()
         refreshIdleCabin(now: now)
     }
 
@@ -46,7 +52,7 @@ extension SessionManager {
         if touch {
             day.lastCabinActivityAt = now
         }
-        try? save()
+        _ = saveBestEffort()
     }
 
     func consumeIdleCabinStill(now: Date) {
@@ -67,7 +73,7 @@ extension SessionManager {
         checkInNotifier.cancelIdle(serviceDayID: day.id)
         idleLocalNotificationArmed = false
         bumpCompanionSync()
-        try? save()
+        _ = saveBestEffort()
         refreshIdleCabin(now: now)
     }
 
@@ -77,10 +83,10 @@ extension SessionManager {
             idleLocalNotificationArmed = false
             return
         }
-        if hasOpenRide() {
+        if hasOpenRide() || fetchOpenPassengerRide() != nil {
             if day.pendingCabin == .idle {
                 day.pendingCabin = nil
-                try? save()
+                _ = saveBestEffort()
             }
             cancelIdleWatch()
             checkInNotifier.cancelIdle(serviceDayID: day.id)
@@ -90,7 +96,7 @@ extension SessionManager {
         guard settings.cabinAnnouncementsEnabled else {
             if day.pendingCabin == .idle {
                 day.pendingCabin = nil
-                try? save()
+                _ = saveBestEffort()
             }
             cancelIdleWatch()
             checkInNotifier.cancelIdle(serviceDayID: day.id)
@@ -104,7 +110,12 @@ extension SessionManager {
         let elapsed = now.timeIntervalSince(activity)
 
         if day.pendingCabin == .idle {
-            armIdleLocalNotification(serviceDayID: day.id, fireAt: now.addingTimeInterval(1))
+            if iphonePosts(.idle, turn: day.cabinIdleFiredCount, now: now) {
+                armIdleLocalNotification(serviceDayID: day.id, fireAt: now.addingTimeInterval(1))
+            } else {
+                checkInNotifier.cancelIdle(serviceDayID: day.id)
+                idleLocalNotificationArmed = false
+            }
             return
         }
 
@@ -114,25 +125,39 @@ extension SessionManager {
             hasPending: false,
             seed: day.id
         ) {
+            let previousCabin = day.pendingCabin
             day.pendingCabin = .idle
+            guard saveBestEffort() else {
+                day.pendingCabin = previousCabin
+                return
+            }
             bumpCompanionSync()
-            try? save()
-            armIdleLocalNotification(serviceDayID: day.id, fireAt: now.addingTimeInterval(1))
+            if iphonePosts(.idle, turn: day.cabinIdleFiredCount, now: now) {
+                armIdleLocalNotification(serviceDayID: day.id, fireAt: now.addingTimeInterval(1))
+            } else {
+                checkInNotifier.cancelIdle(serviceDayID: day.id)
+                idleLocalNotificationArmed = false
+            }
             return
         }
 
-        if let fireAt = CabinIdleScheduling.wallFireAt(
+        if let fireAt = CheckInNotificationSchedule.idleFireAt(
             firedCount: day.cabinIdleFiredCount,
             elapsedSinceActivity: elapsed,
             seed: day.id,
             now: now
         ) {
-            checkInNotifier.scheduleIdle(
-                serviceDayID: day.id,
-                body: CabinCopy.idle,
-                fireAt: fireAt
-            )
-            idleLocalNotificationArmed = true
+            if iphonePosts(.idle, turn: day.cabinIdleFiredCount, now: now) {
+                checkInNotifier.scheduleIdle(
+                    serviceDayID: day.id,
+                    body: CabinCopy.idle,
+                    fireAt: fireAt
+                )
+                idleLocalNotificationArmed = true
+            } else {
+                checkInNotifier.cancelIdle(serviceDayID: day.id)
+                idleLocalNotificationArmed = false
+            }
             armIdleWatch(at: fireAt, serviceDayID: day.id)
         } else {
             cancelIdleWatch()

@@ -52,6 +52,16 @@ enum FocusPanel {
 struct FocusProgressBar: View {
     let progress: Double
     let phase: FocusTimerPhase
+    var occupancy: TimetableProgressOccupancy = .empty
+    var pinch: Bool = false
+    var overrun: Bool = false
+    var budgetSeconds: Int = 20 * 60
+    /// On-time home band as fractions of the planned budget (0…1+).
+    var homeBand: (start: Double, end: Double)? = nil
+    /// 位置確認で触れている間の見込み。予算に対する割合（1 を超えてよい）。点線の頭。
+    var projectedMarker: Double? = nil
+    /// 触れていて、答えが定時の幅の中のとき、ホーム帯を明るくする。
+    var homeBandLit: Bool = false
 
     private var clampedProgress: Double {
         min(max(progress, 0), 1)
@@ -59,24 +69,117 @@ struct FocusProgressBar: View {
 
     var body: some View {
         GeometryReader { proxy in
-            ZStack(alignment: .leading) {
-                Rectangle()
+            let width = proxy.size.width
+            let height = proxy.size.height
+            let planned = width * CGFloat(CockpitGaugeRange.plannedSpan)
+            let trackH: CGFloat = 6
+            let trackY = (height - trackH) / 2
+            let pointer = width * CGFloat(CockpitGaugeRange.trackFraction(progress: progress))
+            let plannedFill = min(pointer, planned)
+            let tail = max(pointer - planned, 0)
+            let fill = progress > 1 ? CockpitColors.red : phase.accentColor
+            ZStack(alignment: .topLeading) {
+                Capsule()
                     .fill(Color.white.opacity(0.08))
-                Rectangle()
-                    .fill(phase.accentColor)
-                    .frame(width: max(proxy.size.width * clampedProgress, progress > 0 ? 2 : 0))
-                if phase == .overtime, progress > 1 {
-                    Rectangle()
-                        .fill(TrainTheme.signalRed.opacity(0.45))
-                        .frame(width: 4)
-                        .frame(maxWidth: .infinity, alignment: .trailing)
+                    .frame(width: width, height: trackH)
+                    .offset(y: trackY)
+                Capsule()
+                    .fill(fill)
+                    .frame(width: max(plannedFill, progress > 0 ? 2 : 0), height: trackH)
+                    .offset(y: trackY)
+                if tail > 0 {
+                    Capsule()
+                        .fill(CockpitColors.red)
+                        .frame(width: tail, height: trackH)
+                        .offset(x: planned, y: trackY)
+                }
+                homeBandMark(plannedWidth: planned, trackH: trackH, trackY: trackY)
+                occupancyMarks(plannedWidth: planned, trackH: trackH, trackY: trackY)
+                gaugeTicks(plannedWidth: planned, height: height, width: width)
+                if progress > 0 {
+                    let headW: CGFloat = 12
+                    let headH: CGFloat = 8
+                    TrainHeadShape()
+                        .fill(fill)
+                        .frame(width: headW, height: headH)
+                        .offset(
+                            x: min(max(pointer - headW * 0.72, 0), max(width - headW, 0)),
+                            y: (height - headH) / 2
+                        )
+                }
+                if let projectedMarker {
+                    let headW: CGFloat = 12
+                    let headH: CGFloat = 8
+                    let marker = width * CGFloat(CockpitGaugeRange.trackFraction(progress: projectedMarker))
+                    TrainHeadShape()
+                        .stroke(
+                            Color.white.opacity(0.92),
+                            style: StrokeStyle(lineWidth: 1.15, dash: [1.6, 1.3])
+                        )
+                        .frame(width: headW, height: headH)
+                        .offset(
+                            x: min(max(marker - headW * 0.72, 0), max(width - headW, 0)),
+                            y: (height - headH) / 2
+                        )
                 }
             }
         }
-        .frame(height: 10)
+        .frame(height: 14)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("進捗")
         .accessibilityValue("\(Int(clampedProgress * 100))パーセント")
+    }
+
+    private func gaugeTicks(plannedWidth: CGFloat, height: CGFloat, width: CGFloat) -> some View {
+        let marks = CockpitGaugeTicks.fractions(budgetSeconds: budgetSeconds)
+        return ZStack(alignment: .topLeading) {
+            ForEach(Array(marks.enumerated()), id: \.offset) { _, tick in
+                let full = tick >= 0.999
+                let x = CGFloat(tick) * plannedWidth
+                Rectangle()
+                    .fill(full ? Color.white.opacity(0.92) : Color.white.opacity(0.5))
+                    .frame(width: full ? 1.5 : 1, height: full ? height : height * 0.72)
+                    .offset(x: min(max(x - 0.5, 0), max(width - 1.5, 0)), y: full ? 0 : height * 0.14)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func homeBandMark(plannedWidth: CGFloat, trackH: CGFloat, trackY: CGFloat) -> some View {
+        if let homeBand {
+            let startX = plannedWidth * CGFloat(min(max(homeBand.start, 0), 1))
+            let endX = plannedWidth * CGFloat(min(max(homeBand.end, 0), 1.25))
+            let bandWidth = max(endX - startX, 4)
+            Capsule()
+                .fill(Color.white.opacity(homeBandLit ? 0.28 : 0.14))
+                .frame(width: bandWidth, height: trackH + 4)
+                .offset(x: startX, y: trackY - 2)
+        }
+    }
+
+    @ViewBuilder
+    private func occupancyMarks(plannedWidth: CGFloat, trackH: CGFloat, trackY: CGFloat) -> some View {
+        let heat = pinch || overrun
+        let band = heat ? LEDPhosphor.heat.opacity(overrun ? 0.5 : 0.42) : Color.white.opacity(0.28)
+        let tick = heat ? LEDPhosphor.heat.opacity(0.95) : Color.white.opacity(0.92)
+        if overrun, let start = occupancy.mark ?? occupancy.spanStart ?? occupancy.spanEnd {
+            Rectangle()
+                .fill(LEDPhosphor.heat.opacity(0.22))
+                .frame(width: max(4, plannedWidth * (1 - start)), height: trackH)
+                .offset(x: plannedWidth * start, y: trackY)
+        }
+        if let start = occupancy.spanStart, let end = occupancy.spanEnd, end > start {
+            Capsule()
+                .fill(band)
+                .frame(width: max(6, plannedWidth * (end - start)), height: trackH)
+                .offset(x: plannedWidth * start, y: trackY)
+        }
+        if let mark = occupancy.mark {
+            Capsule()
+                .fill(tick)
+                .frame(width: 5, height: trackH)
+                .offset(x: plannedWidth * mark - 2.5, y: trackY)
+        }
     }
 }
 
@@ -171,5 +274,32 @@ struct FocusControlCellStyle: ButtonStyle {
             .background(fill.opacity(configuration.isPressed ? 0.78 : 1))
             .contentShape(Rectangle())
             .animation(TrainTheme.Motion.spring, value: configuration.isPressed)
+    }
+}
+
+/// 駅名標: short CJK titles open out. Not a JY/Metro code.
+nonisolated enum StationSignMetrics {
+    static func nameTracking(_ title: String, compact: Bool) -> CGFloat {
+        let trimmed = title.filter { !$0.isWhitespace && $0 != "　" }
+        guard (2...4).contains(trimmed.count),
+              trimmed.unicodeScalars.allSatisfy(isJapaneseLetter)
+        else { return 0 }
+        switch (trimmed.count, compact) {
+        case (2, true): return 5
+        case (2, false): return 11
+        case (3, true): return 2
+        case (3, false): return 6
+        case (_, true): return 1
+        default: return 3
+        }
+    }
+
+    private static func isJapaneseLetter(_ scalar: Unicode.Scalar) -> Bool {
+        switch scalar.value {
+        case 0x3040...0x30FF, 0x3400...0x9FFF, 0xF900...0xFAFF:
+            true
+        default:
+            false
+        }
     }
 }

@@ -14,6 +14,10 @@ struct HistoryView: View {
 
     @Query(sort: \WorkSession.endedAt, order: .reverse)
     private var sessions: [WorkSession]
+    @Query(sort: \TimetableBlock.startsAt)
+    private var timetableBlocks: [TimetableBlock]
+    @Query(sort: \PassengerRide.endedAt, order: .reverse)
+    private var passengerRides: [PassengerRide]
 
     @State private var searchText = ""
     @State private var errorMessage = ""
@@ -24,6 +28,9 @@ struct HistoryView: View {
     @State private var didFocusInitialDay = false
     @State private var isSearchPresented = false
     @State private var daysVisible: CGFloat = 1
+    @State private var showBundleViewer = false
+    @State private var bundleStripFocusIndex = 0
+    @State private var bundleTouching = false
     @FocusState private var searchFieldFocused: Bool
 
     init(focusDay: Date? = nil) {
@@ -57,11 +64,47 @@ struct HistoryView: View {
     }
 
     private var daysWithRides: Set<String> {
-        Set(HistoryStats.groupByDay(sessions: endedSessions, calendar: calendar).map(\.dayKey))
+        var days = Set(HistoryStats.groupByDay(sessions: endedSessions, calendar: calendar).map(\.dayKey))
+        for ride in passengerRides {
+            guard let endedAt = ride.endedAt else { continue }
+            days.insert(HistoryStats.dayKey(for: endedAt, calendar: calendar))
+        }
+        return days
+    }
+
+    private var selectedDayPassengerRides: [PassengerRide] {
+        passengerRides.filter { ride in
+            guard let endedAt = ride.endedAt, ride.endReason != nil else { return false }
+            return calendar.isDate(endedAt, inSameDayAs: selectedDay)
+        }
     }
 
     private var sessionsByDay: [String: [WorkSession]] {
         Dictionary(uniqueKeysWithValues: groups.map { ($0.dayKey, $0.sessions) })
+    }
+
+    private var timetableStripsByDay: [String: [DayClockStrip]] {
+        var map: [String: [DayClockStrip]] = [:]
+        for block in timetableBlocks where block.isActive {
+            let start = calendar.startOfDay(for: block.startsAt)
+            let endDay = calendar.startOfDay(for: block.endsAt.addingTimeInterval(-1))
+            var day = start
+            while day <= endDay {
+                let key = HistoryStats.dayKey(for: day, calendar: calendar)
+                map[key, default: []].append(
+                    DayClockStrip(
+                        id: block.id,
+                        title: block.title,
+                        startsAt: block.startsAt,
+                        endsAt: block.endsAt,
+                        style: .history
+                    )
+                )
+                guard let next = calendar.date(byAdding: .day, value: 1, to: day) else { break }
+                day = next
+            }
+        }
+        return map
     }
 
     private var canvasDayRange: (start: Date, end: Date) {
@@ -85,6 +128,26 @@ struct HistoryView: View {
 
     private var rideDensity: HistoryRideDensity {
         HistoryRideDensity(daysVisible: daysVisible)
+    }
+
+    private var dayStampBundle: TicketStampBundleAssembly.DayBundle? {
+        sessionManager.ticketStampBundle(forCalendarDayKey: selectedDayKey)
+    }
+
+    private var bundleViewerInitialDayKey: String {
+        #if DEBUG
+        sessionManager.uiPreviewBundleViewerDayKey ?? selectedDayKey
+        #else
+        selectedDayKey
+        #endif
+    }
+
+    private var bundleViewerInitialFlatIndex: Int? {
+        #if DEBUG
+        sessionManager.uiPreviewBundleViewerFlatIndex
+        #else
+        nil
+        #endif
     }
 
     private var visibleDayKeys: Set<String> {
@@ -172,8 +235,56 @@ struct HistoryView: View {
             }
         }
         .errorAlert(isPresented: $showError, message: errorMessage)
-        .onAppear(perform: focusInitialDayIfNeeded)
+        .onAppear {
+            focusInitialDayIfNeeded()
+            #if DEBUG
+            if sessionManager.uiPreviewShowsBundleViewer {
+                showBundleViewer = true
+            }
+            #endif
+        }
         .sensoryFeedback(.selection, trigger: selectedDayKey)
+        .fullScreenCover(isPresented: $showBundleViewer) {
+            TicketStampBundleViewer(
+                bundles: sessionManager.ticketStampBundles(),
+                initialDayKey: bundleViewerInitialDayKey,
+                initialFlatIndex: bundleViewerInitialFlatIndex,
+                pinnedFocusUnit: previewPinnedFocusUnit,
+                pinnedSpread: previewPinnedSpread,
+                onSelectStamp: { stamp in
+                    showBundleViewer = false
+                    selectedRideID = stamp.sessionID
+                }
+            )
+        }
+        .overlay {
+            historyBundleOverlay
+        }
+    }
+
+    @ViewBuilder
+    private var historyBundleOverlay: some View {
+        if !isSearching, rideDensity == .day, let bundle = dayStampBundle, !bundle.stamps.isEmpty {
+            TicketStampBundleDeckView(
+                stamps: bundle.stamps,
+                focusIndex: $bundleStripFocusIndex,
+                style: .historyStrip,
+                onOpenViewer: { showBundleViewer = true },
+                bundleTouching: $bundleTouching,
+                pinnedSpread: previewPinnedSpread,
+                pinnedFocusUnit: previewPinnedFocusUnit,
+                playsSpreadDemo: previewPlaysSpreadDemo,
+                bottomObstacle: 0
+            )
+            .id(bundle.calendarDayKey)
+            .ignoresSafeArea()
+            .onAppear {
+                guard previewPinnedFocusUnit == nil else { return }
+                bundleStripFocusIndex = max(0, bundle.stamps.count - 1)
+            }
+            .accessibilityLabel("この日の切符の束")
+            .accessibilityHint("開いて切符をめくれます")
+        }
     }
 
     private var searchFieldRow: some View {
@@ -203,7 +314,15 @@ struct HistoryView: View {
     }
 
     private var calendarDay: some View {
-        VStack(spacing: 0) {
+        // この矩形はタブバーの上で終わる。下端の余白だけ足す。
+        calendarDayStack()
+    }
+
+    private func calendarDayStack() -> some View {
+        let bundleReserve = dayStampBundle?.stamps.isEmpty == false && rideDensity == .day
+            ? TicketStampBundleLayout.collapsedFanSize.height
+            : 0
+        return VStack(spacing: 0) {
             HistoryCalendarStrip(
                 selectedDay: selectedDay,
                 daysWithRides: daysWithRides,
@@ -229,6 +348,25 @@ struct HistoryView: View {
                 .padding(.bottom, TrainTheme.Space.sm)
             }
 
+            if !selectedDayPassengerRides.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(selectedDayPassengerRides, id: \.id) { ride in
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            Text(ride.title)
+                                .lineLimit(1)
+                            Spacer(minLength: 8)
+                            if let reason = ride.endReason {
+                                Text(PassengerCopy.history(reason))
+                            }
+                        }
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    }
+                }
+                .padding(.horizontal, TrainTheme.Space.md)
+                .padding(.bottom, TrainTheme.Space.sm)
+            }
+
             GeometryReader { geo in
                 HistoryDayPager(
                     sessionsByDay: sessionsByDay,
@@ -241,7 +379,10 @@ struct HistoryView: View {
                         selectedRideID = session.id
                     },
                     onReissue: reissue,
-                    onDelete: deleteSession
+                    onDelete: deleteSession,
+                    stripsByDay: timetableStripsByDay,
+                    bottomContentInset: bundleReserve,
+                    bundleTouching: bundleTouching
                 )
                 .safeAreaPadding(.bottom)
             }
@@ -370,7 +511,12 @@ struct HistoryView: View {
                     )
                 ) {
                     withAnimation {
-                        try? sessionManager.restoreDeletedTicket(record)
+                        do {
+                            try sessionManager.restoreDeletedTicket(record)
+                        } catch {
+                            errorMessage = error.localizedDescription
+                            showError = true
+                        }
                     }
                 }
             } else {
@@ -383,7 +529,12 @@ struct HistoryView: View {
                     )
                 ) {
                     withAnimation {
-                        try? sessionManager.restoreDeletedSession(record)
+                        do {
+                            try sessionManager.restoreDeletedSession(record)
+                        } catch {
+                            errorMessage = error.localizedDescription
+                            showError = true
+                        }
                     }
                 }
             }
@@ -407,6 +558,32 @@ struct HistoryView: View {
         )
         let maxOrder = (try? modelContext.fetch(descriptor).first?.sortOrder) ?? -1
         return maxOrder + 1
+    }
+
+    private var previewPinnedSpread: CGFloat? {
+        #if DEBUG
+        if let value = sessionManager.uiPreviewBundleSpread {
+            return CGFloat(value)
+        }
+        #endif
+        return nil
+    }
+
+    private var previewPlaysSpreadDemo: Bool {
+        #if DEBUG
+        sessionManager.uiPreviewBundleFanDemo
+        #else
+        false
+        #endif
+    }
+
+    private var previewPinnedFocusUnit: CGFloat? {
+        #if DEBUG
+        if let value = sessionManager.uiPreviewBundleFocus {
+            return CGFloat(value)
+        }
+        #endif
+        return nil
     }
 
     private static let timeFormatter: DateFormatter = {

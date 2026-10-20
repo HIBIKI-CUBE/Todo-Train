@@ -5,14 +5,37 @@ struct CompanionPopover: View {
     @Environment(CompanionMacRuntime.self) private var runtime
 
     var body: some View {
-        Group {
-            if !runtime.isPaired {
-                CompanionPairingPane()
-            } else {
-                pairedBody
+        VStack(alignment: .leading, spacing: 0) {
+            Group {
+                if !runtime.isPaired {
+                    CompanionPairingPane()
+                } else {
+                    pairedBody
+                }
             }
+            .padding(16)
+
+            Divider()
+
+            Button {
+                NSApp.terminate(nil)
+            } label: {
+                HStack {
+                    Text("Todo train を終了")
+                    Spacer(minLength: 24)
+                    Text("⌘Q")
+                        .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .keyboardShortcut("q")
+            .frame(maxWidth: .infinity)
         }
-        .padding(16)
     }
 
     private var pairedBody: some View {
@@ -48,9 +71,42 @@ struct CompanionPopover: View {
                     .foregroundStyle(.secondary)
             }
 
+            let notice = ContractPresentation.make(
+                peer: runtime.peerContract,
+                relay: runtime.relayContract,
+                side: .mac
+            )
+            if !notice.guidance.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(ContractCopy.heading)
+                    ForEach(notice.guidance, id: \.self) { line in
+                        Text(line)
+                    }
+                }
+                .font(.callout)
+                .foregroundStyle(.secondary)
+            }
+
             if view.canReconnect {
                 Button("つなぎ直す") {
                     runtime.reconnect()
+                }
+                .buttonStyle(.bordered)
+            }
+
+            if view.canBoardReserved {
+                Button(CabinCopy.boardReserved) {
+                    Task { await runtime.sendBoardReserved() }
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(view.isSending)
+                .accessibilityHint(CabinCopy.boardHint)
+            }
+
+            if runtime.canOfferImaYaru {
+                Button("いまやる") {
+                    CompanionSettingsOpener.dismissPopover?()
+                    runtime.openImaYaru()
                 }
                 .buttonStyle(.bordered)
             }
@@ -131,6 +187,20 @@ struct RelaySettingsView: View {
             }
 
             Section {
+                LabeledContent("キーボードショートカット") {
+                    ImaYaruShortcutField(shortcut: $runtime.imaYaruShortcut)
+                }
+                if runtime.imaYaruShortcutRejected {
+                    Text("そのキーは使えません")
+                        .foregroundStyle(.red)
+                }
+            } header: {
+                Text("いまやる")
+            } footer: {
+                Text("ペア済みで運行中のとき、このキーで開きます。")
+            }
+
+            Section {
                 Toggle("車内放送", isOn: $runtime.cabinAnnouncementsEnabled)
             } header: {
                 Text("フォーカス")
@@ -148,7 +218,7 @@ struct RelaySettingsView: View {
         .formStyle(.grouped)
         .frame(width: 420)
         .alert("連携を解除しますか？", isPresented: $confirmUnpair) {
-            Button("解除する", role: .destructive) {
+            Button("解除", role: .destructive) {
                 runtime.unpair()
                 CompanionSettingsOpener.close()
             }

@@ -1,5 +1,12 @@
 import Foundation
 
+/// Who posts the safety-net notification. Absent on snaps from before contract 11.
+public enum NotifyOn: String, Codable, Sendable, Equatable {
+    case iphone
+    case mac
+    case none
+}
+
 public struct SnapPlaintext: Codable, Equatable, Sendable {
     public var rev: Int
     public var sessionId: UUID?
@@ -15,6 +22,36 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
     public var cabinEnabled: Bool
     public var checkInFiredCount: Int
     public var pendingCabin: CabinKind?
+    public var nextBlockTitle: String?
+    public var nextBlockStartsAt: Int?
+    public var nextBlockEndsAt: Int?
+    public var timetablePauseAt: Int?
+    /// Sender's build. Absent on older iPhones.
+    public var build: WireBuildInfo?
+    /// Sender's contract. Absent on peers that predate the announcement (those are v3).
+    public var contract: Int?
+    public var minReadable: Int?
+    /// The nudge on screen now. Absent on older snaps.
+    public var nudge: WireNudge?
+    /// Stages that have not been reached. Absent on older snaps.
+    public var nudgePlan: [WireNudgePlanItem]?
+    /// Ticket that can board after arrival. Absent when there is none.
+    public var reserved: WireReservedTicket?
+    /// Reason for the open pause. Present only while `phase` is `paused`.
+    public var pauseHeldBy: PauseHeldBy?
+    /// Open pause. Present only while `phase` is `paused`. A broken value is dropped.
+    public var pauseId: UUID?
+    /// Seconds already stored for the open pause. Present only while `phase` is `paused`.
+    public var macSampledSeconds: Double?
+    public var macActiveSeconds: Double?
+    /// Which device posts the safety-net. Absent means an older iPhone.
+    public var notifyOn: NotifyOn?
+    /// Turn inside the 4-ring cap. Present with `notifyOn` when a post is assigned.
+    public var notifyTurn: Int?
+    /// Unix seconds for Mac's away or idle notification. Overtime is computed from the ride.
+    public var notifyFireAt: Int?
+    /// Home band, signal, judged estimate, and seal sample. Present only while riding.
+    public var home: WireHome?
 
     public init(
         rev: Int,
@@ -30,7 +67,25 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
         serviceActive: Bool = false,
         cabinEnabled: Bool = true,
         checkInFiredCount: Int = 0,
-        pendingCabin: CabinKind? = nil
+        pendingCabin: CabinKind? = nil,
+        nextBlockTitle: String? = nil,
+        nextBlockStartsAt: Int? = nil,
+        nextBlockEndsAt: Int? = nil,
+        timetablePauseAt: Int? = nil,
+        build: WireBuildInfo? = nil,
+        contract: Int? = nil,
+        minReadable: Int? = nil,
+        nudge: WireNudge? = nil,
+        nudgePlan: [WireNudgePlanItem]? = nil,
+        reserved: WireReservedTicket? = nil,
+        pauseHeldBy: PauseHeldBy? = nil,
+        pauseId: UUID? = nil,
+        macSampledSeconds: Double? = nil,
+        macActiveSeconds: Double? = nil,
+        notifyOn: NotifyOn? = nil,
+        notifyTurn: Int? = nil,
+        notifyFireAt: Int? = nil,
+        home: WireHome? = nil
     ) {
         self.rev = rev
         self.sessionId = sessionId
@@ -46,12 +101,41 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
         self.cabinEnabled = cabinEnabled
         self.checkInFiredCount = checkInFiredCount
         self.pendingCabin = pendingCabin
+        self.nextBlockTitle = nextBlockTitle
+        self.nextBlockStartsAt = nextBlockStartsAt
+        self.nextBlockEndsAt = nextBlockEndsAt
+        self.timetablePauseAt = timetablePauseAt
+        self.build = build
+        self.contract = contract
+        self.minReadable = minReadable
+        self.nudge = nudge
+        self.nudgePlan = nudgePlan
+        self.reserved = reserved
+        self.pauseHeldBy = phase == .paused ? pauseHeldBy : nil
+        self.pauseId = phase == .paused ? pauseId : nil
+        let stored = Self.consistentPauseSeconds(sampled: macSampledSeconds, active: macActiveSeconds)
+        self.macSampledSeconds = phase == .paused ? stored?.sampled : nil
+        self.macActiveSeconds = phase == .paused ? stored?.active : nil
+        self.notifyOn = notifyOn
+        self.notifyTurn = notifyTurn
+        self.notifyFireAt = notifyFireAt
+        self.home = Self.riding(phase) ? home : nil
+    }
+
+    public var announcement: ContractAnnouncement {
+        .resolved(contract: contract, minReadable: minReadable)
     }
 
     enum CodingKeys: String, CodingKey {
         case rev, sessionId, ticketId, title, phase
         case startedAt, estimatedSeconds, pausedAccumulated, pausedAt, boardedDeviceID
         case serviceActive, cabinEnabled, checkInFiredCount, pendingCabin
+        case nextBlockTitle, nextBlockStartsAt, nextBlockEndsAt, timetablePauseAt, build
+        case contract, minReadable
+        case nudge, nudgePlan, reserved, pauseHeldBy, pauseId
+        case macSampledSeconds, macActiveSeconds
+        case notifyOn, notifyTurn, notifyFireAt
+        case home
     }
 
     public init(from decoder: Decoder) throws {
@@ -78,6 +162,35 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
         } else {
             pendingCabin = nil
         }
+        nextBlockTitle = try container.decodeIfPresent(String.self, forKey: .nextBlockTitle)
+        nextBlockStartsAt = try container.decodeIfPresent(Int.self, forKey: .nextBlockStartsAt)
+        nextBlockEndsAt = try container.decodeIfPresent(Int.self, forKey: .nextBlockEndsAt)
+        timetablePauseAt = try container.decodeIfPresent(Int.self, forKey: .timetablePauseAt)
+        build = WireBuildInfo.decodeLenient(from: container, forKey: .build)
+        contract = ContractKeyDecoding.positiveInt(container, .contract)
+        minReadable = ContractKeyDecoding.positiveInt(container, .minReadable)
+        nudge = Self.lenient(WireNudge.self, from: container, forKey: .nudge)
+        nudgePlan = Self.lenient([WireNudgePlanItem].self, from: container, forKey: .nudgePlan)
+        reserved = Self.lenient(WireReservedTicket.self, from: container, forKey: .reserved)
+        let decodedPauseHeldBy = try container.decodeIfPresent(PauseHeldBy.self, forKey: .pauseHeldBy)
+        pauseHeldBy = phase == .paused ? decodedPauseHeldBy : nil
+        let decodedPauseId = Self.lenientUUID(from: container, forKey: .pauseId)
+        pauseId = phase == .paused ? decodedPauseId : nil
+        let stored = Self.consistentPauseSeconds(
+            sampled: Self.lenientNonNegativeDouble(from: container, forKey: .macSampledSeconds),
+            active: Self.lenientNonNegativeDouble(from: container, forKey: .macActiveSeconds)
+        )
+        macSampledSeconds = phase == .paused ? stored?.sampled : nil
+        macActiveSeconds = phase == .paused ? stored?.active : nil
+        if let raw = try container.decodeIfPresent(String.self, forKey: .notifyOn) {
+            notifyOn = NotifyOn(rawValue: raw)
+        } else {
+            notifyOn = nil
+        }
+        notifyTurn = try container.decodeIfPresent(Int.self, forKey: .notifyTurn)
+        notifyFireAt = try container.decodeIfPresent(Int.self, forKey: .notifyFireAt)
+        let decodedHome = Self.lenient(WireHome.self, from: container, forKey: .home)
+        home = Self.riding(phase) ? decodedHome : nil
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -96,6 +209,81 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
         try container.encode(cabinEnabled, forKey: .cabinEnabled)
         try container.encode(checkInFiredCount, forKey: .checkInFiredCount)
         try container.encode(pendingCabin, forKey: .pendingCabin)
+        try container.encodeIfPresent(nextBlockTitle, forKey: .nextBlockTitle)
+        try container.encodeIfPresent(nextBlockStartsAt, forKey: .nextBlockStartsAt)
+        try container.encodeIfPresent(nextBlockEndsAt, forKey: .nextBlockEndsAt)
+        try container.encodeIfPresent(timetablePauseAt, forKey: .timetablePauseAt)
+        try container.encodeIfPresent(build, forKey: .build)
+        try container.encodeIfPresent(contract, forKey: .contract)
+        try container.encodeIfPresent(minReadable, forKey: .minReadable)
+        try container.encodeIfPresent(nudge, forKey: .nudge)
+        try container.encodeIfPresent(nudgePlan, forKey: .nudgePlan)
+        try container.encodeIfPresent(reserved, forKey: .reserved)
+        if phase == .paused {
+            try container.encodeIfPresent(pauseHeldBy, forKey: .pauseHeldBy)
+            try container.encodeIfPresentLowercaseUUID(pauseId, forKey: .pauseId)
+            try container.encodeIfPresent(macSampledSeconds, forKey: .macSampledSeconds)
+            try container.encodeIfPresent(macActiveSeconds, forKey: .macActiveSeconds)
+        }
+        try container.encodeIfPresent(notifyOn, forKey: .notifyOn)
+        try container.encodeIfPresent(notifyTurn, forKey: .notifyTurn)
+        try container.encodeIfPresent(notifyFireAt, forKey: .notifyFireAt)
+        if Self.riding(phase) {
+            try container.encodeIfPresent(home, forKey: .home)
+        }
+    }
+
+    /// Running, paused, and overtime still have a ride. Idle omits `home`.
+    static func riding(_ phase: WirePhase) -> Bool {
+        switch phase {
+        case .running, .paused, .overtime: true
+        case .idle, .unknown: false
+        }
+    }
+
+    /// A broken optional field is dropped. The rest of the snap still decodes.
+    private static func lenient<T: Decodable, K: CodingKey>(
+        _ type: T.Type,
+        from container: KeyedDecodingContainer<K>,
+        forKey key: K
+    ) -> T? {
+        guard container.contains(key) else { return nil }
+        if (try? container.decodeNil(forKey: key)) == true { return nil }
+        return try? container.decode(T.self, forKey: key)
+    }
+
+    /// Both seconds, or neither. A broken or impossible pair is dropped.
+    private static func consistentPauseSeconds(
+        sampled: Double?,
+        active: Double?
+    ) -> (sampled: Double, active: Double)? {
+        guard let sampled, let active, sampled >= 0, active >= 0, active <= sampled, sampled.isFinite, active.isFinite else {
+            return nil
+        }
+        return (sampled, active)
+    }
+
+    private static func lenientNonNegativeDouble<K: CodingKey>(
+        from container: KeyedDecodingContainer<K>,
+        forKey key: K
+    ) -> Double? {
+        guard container.contains(key) else { return nil }
+        if (try? container.decodeNil(forKey: key)) == true { return nil }
+        guard let value = try? container.decode(Double.self, forKey: key), value >= 0, value.isFinite else {
+            return nil
+        }
+        return value
+    }
+
+    /// A broken pause id is dropped. The rest of the snap still decodes.
+    private static func lenientUUID<K: CodingKey>(
+        from container: KeyedDecodingContainer<K>,
+        forKey key: K
+    ) -> UUID? {
+        guard container.contains(key) else { return nil }
+        if (try? container.decodeNil(forKey: key)) == true { return nil }
+        guard let raw = try? container.decode(String.self, forKey: key) else { return nil }
+        return UUID(uuidString: raw)
     }
 
     /// Remaining seconds using the contract formula. Idle / missing fields → nil.
@@ -125,10 +313,17 @@ extension KeyedEncodingContainer where K: CodingKey {
             try encodeNil(forKey: key)
         }
     }
+
+    mutating func encodeIfPresentLowercaseUUID(_ value: UUID?, forKey key: K) throws {
+        if let value {
+            try encode(value.canonicalLowercase, forKey: key)
+        }
+    }
 }
 
 extension KeyedDecodingContainer where K: CodingKey {
     func decodeLowercaseUUIDIfPresent(_ key: K) throws -> UUID? {
+        guard contains(key) else { return nil }
         if try decodeNil(forKey: key) { return nil }
         let raw = try decode(String.self, forKey: key)
         guard let uuid = UUID(uuidString: raw) else {

@@ -15,13 +15,15 @@ import UIKit
 @MainActor
 final class SessionManager {
     var phase: SessionPhase = .idle
-    /// Bumps when the open ride changes so the Mac companion can push a snap.
+    /// Bumps when the open ride changes so the Mac companion and the Watch can push a snap.
     var companionSyncTick: Int = 0
     var activeServiceDay: ServiceDay?
     var activeSession: WorkSession?
     var needsServiceDayEndPrompt = false
 
     let modelContext: ModelContext
+    /// Tests set this so `save()` throws before the store write.
+    var saveErrorForTesting: Error?
     let clock: any SessionClock
     let calendar: Calendar
     let settings: AppSettings
@@ -32,9 +34,38 @@ final class SessionManager {
     let alarmScheduler: any AlarmScheduling
     let deviceIdentity: any DeviceIdentifying
     let deviceLock: any DeviceLockReading
+    let calendarBoard: any CalendarBoard
 
     var awayFireTask: Task<Void, Never>?
     var idleWatchTask: Task<Void, Never>?
+    /// Foreground 1 Hz reconcile while a ride or passenger lane needs wall time.
+    var foregroundReconcileTask: Task<Void, Never>?
+    /// Set by the app scene; the loop itself only runs with `SystemSessionClock`.
+    var isForegroundForReconcile = false
+    /// `.active` only. `.inactive` keeps the 1 Hz loop and is not Focus for a nudge.
+    var iphoneSceneActive = false
+    /// Mac presence. Until a presence command, Mac is not foreground.
+    var macPipVisible = false
+    var macAttending = false
+    /// False until a presence op arrives, and again when the relay link drops.
+    var macPresenceKnown = false
+    /// Bumps when this iPhone should play the overrun presentation once.
+    var nudgeRingTick = 0
+    /// Hub is the front surface. Focus and other tabs are not.
+    var iphoneHubVisible = false
+    /// Focus cover is up. Background does not count as the desk.
+    var iphoneFocusVisible = false
+    /// Arrival stamp screen is still up. Gap stays down until it closes.
+    var arrivalScreenOpen = false
+    /// Bumps once when this iPhone's gap turn is fresh. Focus does not listen.
+    var gapCueTick = 0
+    /// Banner on Hub during the arrival blank. Nil on Focus.
+    var arrivalGapBanner: ArrivalGapBannerState?
+    var gapWatchTask: Task<Void, Never>?
+    /// Working seconds at the previous nudge sample. A jump larger than the tick does not ring.
+    var nudgeObservedElapsed: TimeInterval?
+    var nudgeObservedSessionID: UUID?
+    var nudgeObservedStageRaw: String?
     /// Avoid re-enqueueing the same idle banner on every `reconcile`.
     var idleLocalNotificationArmed = false
     #if canImport(UIKit)
@@ -45,50 +76,52 @@ final class SessionManager {
     /// Prevents recover / foreground from silently re-scheduling the same bell.
     var suppressedEndBellSessionIDs: Set<UUID> = []
 
-    /// Ephemeral moments. Not persisted, not a score.
-    /// Arrival haptic is owned by `ArrivalInvalidateOverlay`; enqueue ticks only for 定時運行.
-    var punctualityQueue: [PunctualityMoment] = []
-    /// Bumps when a 定時運行 moment is enqueued (haptic). Consume must not tick.
-    var punctualityHapticTick: Int = 0
-    /// Bumps when a 車内放送 panel appears.
-    var checkInHapticTick: Int = 0
-    /// Paired Mac owns the desk progress interrupt; skip iPhone progress local notifications.
+    /// Paired Mac. Progress questions are never local notifications.
     var suppressProgressLocalNotifications = false
+    var lastNotifyOn: NotifyOn?
+    var lastNotifyTurn: Int?
+    var lastNotifyFireAt: Int?
+    /// Calendar 掲示 (eligible, not necessarily adopted). Warmed from the ダイヤ tab, and Hub if already authorized.
+    var noticeOccurrences: [CalendarOccurrence] = []
+    /// Last AlarmKit / end-bell fire we scheduled, so reconcile does not hammer AlarmKit.
+    var lastScheduledEndBellFireAt: Date?
+    /// 乗客レーン。SessionPhase には混ぜない。
+    var passengerChrome: PassengerChrome = .none
+    var passengerMemory = PassengerLaneMemory.empty
+    /// Ephemeral UI chrome (haptics, quiet line, punctuality queue).
+    let presentation = SessionPresentation()
 
-    var punctualityMoment: PunctualityMoment? { punctualityQueue.first }
+    var reestimateRequest: SessionManager.ReestimateRequest?
+    var focusUndoOffer: SessionManager.FocusUndoOffer?
+    var focusUndoTask: Task<Void, Never>?
+    #if DEBUG
+    var focusReestimatePreview: FocusReestimatePreviewConfiguration?
+    var uiPreviewForcesFocusCover: Bool = false
+    var uiPreviewLandscape: Bool = false
+    var uiPreviewSuppressMotion: Bool = false
+    var uiPreviewShowsServiceShutdown: Bool = false
+    var uiPreviewSelectHistoryTab: Bool = false
+    var uiPreviewShowsBundleViewer: Bool = false
+    var uiPreviewBundleViewerDayKey: String?
+    var uiPreviewBundleFocusIndex: Int = 0
+    var uiPreviewBundleViewerFlatIndex: Int?
+    /// 束の扇をこの spread（0...1）で止める。
+    var uiPreviewBundleSpread: Double?
+    /// 0 が最古、1 が最新。束の扇をこの位置で止める。
+    var uiPreviewBundleFocus: Double?
+    /// 開いて、最古までなぞって、最新側へなぞって、畳む録画用。
+    var uiPreviewBundleFanDemo: Bool = false
+    /// 印を押したあとの券面（穴・丸印・角判）を動きなしで出す。
+    struct ArrivalUIPreviewStamp {
+        var stampCommitted: Bool = true
+    }
+    var arrivalUIPreviewStamp: ArrivalUIPreviewStamp?
+    #endif
 
     var pauseLimit: Int { settings.pauseLimit }
 
     func bumpCompanionSync() {
         companionSyncTick += 1
-    }
-
-    var pendingCheckIn: CheckInKind? { activeSession?.pendingCheckIn }
-
-    /// Focus cover is only for a ride boarded on this device.
-    var shouldPresentFocusCover: Bool {
-        (phase == .running || phase == .overtime) && ownsActiveRide
-    }
-
-    /// `nil` boardedDeviceID is legacy local data — treat as this device.
-    var ownsActiveRide: Bool {
-        guard let activeSession else { return false }
-        return ownsDeviceSideEffects(activeSession)
-    }
-
-    var checkInPromptLine: String {
-        if let line = activeSession?.checkInPromptLine, !line.isEmpty {
-            return line
-        }
-        return CheckInCopy.fallback(title: activeSession?.ticket?.title ?? "")
-    }
-
-    /// True when Settings end-bell is on and AlarmKit is authorized (owns LA + alert).
-    var isAlarmKitEndBellActive: Bool {
-        EndBellDelivery.channel(
-            endBellEnabled: settings.endBellEnabled,
-            alarmKitAuthorized: alarmScheduler.isAuthorized
-        ) == .alarmKit
     }
 
     init(
@@ -102,7 +135,8 @@ final class SessionManager {
         liveActivityManager: (any LiveActivityManaging)? = nil,
         alarmScheduler: (any AlarmScheduling)? = nil,
         deviceIdentity: (any DeviceIdentifying)? = nil,
-        deviceLock: (any DeviceLockReading)? = nil
+        deviceLock: (any DeviceLockReading)? = nil,
+        calendarBoard: (any CalendarBoard)? = nil
     ) {
         self.modelContext = modelContext
         self.clock = clock
@@ -115,30 +149,7 @@ final class SessionManager {
         self.alarmScheduler = alarmScheduler ?? NoOpAlarmScheduler()
         self.deviceIdentity = deviceIdentity ?? SystemDeviceIdentity()
         self.deviceLock = deviceLock ?? SystemDeviceLock()
-    }
-
-    var elapsedSeconds: TimeInterval {
-        guard let activeSession else { return 0 }
-        return activeSession.elapsedSeconds(at: clock.now)
-    }
-
-    var remainingSeconds: TimeInterval {
-        guard let activeSession else { return 0 }
-        return activeSession.remainingSeconds(at: clock.now)
-    }
-
-    var pausedTicketCount: Int {
-        pausedSessions.count
-    }
-
-    /// Open sessions that are currently paused (for Hub resume UI).
-    var pausedSessions: [WorkSession] {
-        openPausedSessions()
-    }
-
-    var isInService: Bool {
-        guard let activeServiceDay, activeServiceDay.isOpen else { return false }
-        return activeServiceDay.calendarDayKey == ServiceDay.dayKey(for: clock.now, calendar: calendar)
+        self.calendarBoard = calendarBoard ?? EventKitCalendarBoard()
     }
 }
 

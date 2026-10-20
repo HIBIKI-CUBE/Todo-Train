@@ -321,26 +321,90 @@ struct SessionManagerBoardingTests {
         #expect(manager.companionSyncTick == 1)
 
         try manager.board(ticket: ticket)
-        #expect(manager.companionSyncTick == 2)
-
-        try manager.pause()
+        // Board, then the approach stage is already due on a one-minute ride.
         #expect(manager.companionSyncTick == 3)
 
-        try manager.resume()
+        try manager.pause()
         #expect(manager.companionSyncTick == 4)
 
-        try manager.extend(by: 60)
+        try manager.resume()
         #expect(manager.companionSyncTick == 5)
+
+        try manager.extend(by: 60)
+        // The new estimate moves approach, so the snap bumps again.
+        #expect(manager.companionSyncTick == 7)
 
         clock.advance(by: 121)
         manager.reconcile()
         #expect(manager.phase == .overtime)
-        #expect(manager.companionSyncTick == 6)
+        // Crossing the estimate records that stage and bumps once more.
+        #expect(manager.companionSyncTick == 9)
         manager.reconcile()
-        #expect(manager.companionSyncTick == 6)
+        #expect(manager.companionSyncTick == 9)
 
         try manager.arrive()
-        #expect(manager.companionSyncTick == 7)
+        #expect(manager.companionSyncTick == 10)
         #expect(manager.phase == .idle)
+    }
+
+    @Test func issueAndBoard_usesOneClockForTicketCreatedAtAndRideStart() throws {
+        let (manager, _, clock, _) = try SessionManagerFixtures.makeHarness()
+        try manager.startService()
+        let at = clock.now
+        try manager.issueAndBoard(title: "同期", estimatedSeconds: 600)
+        let ticket = try #require(manager.activeSession?.ticket)
+        #expect(ticket.createdAt == at)
+        #expect(manager.activeSession?.startedAt == at)
+        #expect((manager.activeSession?.startedAt ?? .distantPast) >= ticket.createdAt)
+    }
+
+    @Test func extend_coalescesDoubleTapWithinOneSecond() throws {
+        let (manager, context, clock, _) = try SessionManagerFixtures.makeHarness()
+        try manager.startService()
+        let ticket = try SessionManagerFixtures.makeTicket(context, seconds: 600)
+        try manager.board(ticket: ticket)
+        try manager.extend(by: 300, reason: "作業増")
+        clock.advance(by: 0.5)
+        try manager.extend(by: 300, reason: "作業増")
+        #expect(manager.activeSession?.extensions.count == 1)
+        try manager.extend(by: 180)
+        #expect(manager.activeSession?.extensions.count == 2)
+    }
+
+    @Test func issueAndBoard_startsANewRide() throws {
+        let (manager, _, _, _) = try SessionManagerFixtures.makeHarness()
+        try manager.startService()
+
+        try manager.issueAndBoard(title: "  週次レビュー  ", estimatedSeconds: 1500)
+
+        #expect(manager.phase == .running)
+        #expect(manager.activeSession?.ticket?.title == "週次レビュー")
+        #expect(manager.activeSession?.ticket?.estimatedSeconds == 1500)
+    }
+
+    @Test func issueAndBoard_interruptsTheOpenRide() throws {
+        let (manager, context, _, _) = try SessionManagerFixtures.makeHarness()
+        try manager.startService()
+        let current = try SessionManagerFixtures.makeTicket(context, title: "いま")
+        try manager.board(ticket: current)
+        let previous = manager.activeSession?.id
+
+        try manager.issueAndBoard(title: "割り込み", estimatedSeconds: 600)
+
+        #expect(manager.phase == .running)
+        #expect(manager.activeSession?.id != previous)
+        #expect(manager.activeSession?.ticket?.title == "割り込み")
+        #expect(current.isOpen)
+        let parked = try #require(manager.pausedSessions.first { $0.id == previous })
+        #expect(parked.pauses.first?.heldBy == .rideSwitch)
+        #expect(parked.pauses.first?.pausedOn == .iphone)
+        #expect(parked.pauses.first?.heldByInferred == false)
+    }
+
+    @Test func issueAndBoard_refusesWithoutService() throws {
+        let (manager, _, _, _) = try SessionManagerFixtures.makeHarness()
+        #expect(throws: SessionError.noActiveService) {
+            try manager.issueAndBoard(title: "下書き", estimatedSeconds: 600)
+        }
     }
 }

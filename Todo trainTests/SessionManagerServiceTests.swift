@@ -147,8 +147,28 @@ struct SessionManagerServiceTests {
         manager.reconcile()
 
         #expect(manager.phase == .running)
-        #expect(manager.activeSession?.budgetSecondsAtStart == 180)
+        #expect(manager.activeSession?.currentBudgetSeconds == 180)
+        #expect(manager.activeSession?.budgetSecondsAtStart == 60)
         #expect(manager.remainingSeconds > 0)
+    }
+
+    @Test func extend_workingSecondsNeverExceedFinalActiveAfterPauseResume() throws {
+        let (manager, context, clock, _) = try SessionManagerFixtures.makeHarness()
+        try manager.startService()
+        let ticket = try SessionManagerFixtures.makeTicket(context, seconds: 30 * 60)
+        try manager.board(ticket: ticket)
+        clock.advance(by: 80)
+        try manager.pause()
+        clock.advance(by: 400)
+        try manager.resume()
+        clock.advance(by: 40)
+        manager.reconcile()
+        try manager.extend(by: 300)
+        let sessionID = try #require(manager.activeSession?.id)
+        let working = try #require(manager.activeSession?.extensions.first?.workingSeconds)
+        try manager.arrive()
+        let session = try #require(manager.fetchWorkSession(id: sessionID))
+        #expect(working <= session.accumulatedActiveSeconds + 1)
     }
 
     @Test func extend_recordsReason() throws {
@@ -241,5 +261,19 @@ struct SessionManagerServiceTests {
         try manager.board(ticket: a)
         #expect(manager.phase == .running)
         #expect(manager.activeSession?.ticket?.id == a.id)
+    }
+
+    @Test func workSessions_onDayKey_includeOpenRides() throws {
+        let (manager, context, clock, _) = try SessionManagerFixtures.makeHarness()
+        try manager.startService()
+        let ticket = try SessionManagerFixtures.makeTicket(context, title: "A")
+        try manager.board(ticket: ticket)
+        let key = try #require(manager.activeServiceDay?.calendarDayKey)
+        let sessions = manager.workSessions(onDayKey: key)
+        #expect(sessions.count == 1)
+        #expect(sessions.first?.ticket?.id == ticket.id)
+        clock.advance(by: 60)
+        try manager.arrive()
+        #expect(manager.workSessions(onDayKey: key).count == 1)
     }
 }

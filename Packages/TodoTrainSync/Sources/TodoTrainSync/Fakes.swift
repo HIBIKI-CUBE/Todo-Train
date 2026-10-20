@@ -86,9 +86,19 @@ public actor ScriptedWebSocket: WebSocketConnecting, WebSocketConnection {
         return self
     }
 
+    public private(set) var sentText: [String] = []
+
     public func receive() async throws -> WSFrame {
         guard !frames.isEmpty else { throw SyncError.notPaired }
         return frames.removeFirst()
+    }
+
+    public func receiveIncoming() async throws -> WSIncoming {
+        .frame(try await receive())
+    }
+
+    public func send(_ text: String) async throws {
+        sentText.append(text)
     }
 
     public func close() async {}

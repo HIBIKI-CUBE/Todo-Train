@@ -11,16 +11,10 @@ import SwiftData
 enum TicketIssuer {
     static func resolveMinutes(
         requested: Int?,
-        sessions: [WorkSession],
         lastIssued: Int?
     ) -> Int {
         if let requested {
             return AppSettings.clampEstimateMinutes(requested)
-        }
-        if let suggestion = EstimateHeuristic.suggestion(
-            from: EstimateHeuristic.arrivedSamples(from: sessions, matchingAnyTagIDs: nil)
-        ) {
-            return suggestion.minutes
         }
         if let lastIssued {
             return AppSettings.clampEstimateMinutes(lastIssued)
@@ -34,7 +28,23 @@ enum TicketIssuer {
         minutes: Int,
         into context: ModelContext
     ) throws -> Ticket {
-        let minutes = AppSettings.clampEstimateMinutes(minutes)
+        try issue(
+            title: title,
+            estimatedSeconds: AppSettings.clampEstimateMinutes(minutes) * 60,
+            into: context
+        )
+    }
+
+    /// `estimatedSeconds` is stored as given after clamping to 1...`Ticket.maxEstimatedSeconds`.
+    /// Remote `issueAndBoard` validates 60...3600 before calling this.
+    @discardableResult
+    static func issue(
+        title: String,
+        estimatedSeconds: Int,
+        createdAt: Date? = nil,
+        into context: ModelContext
+    ) throws -> Ticket {
+        let seconds = min(max(estimatedSeconds, 1), Ticket.maxEstimatedSeconds)
         let descriptor = FetchDescriptor<Ticket>(sortBy: [SortDescriptor(\.sortOrder)])
         let all = (try? context.fetch(descriptor)) ?? []
         let open = all.filter(\.isOpen)
@@ -45,8 +55,9 @@ enum TicketIssuer {
         )
         let ticket = Ticket(
             title: title,
-            estimatedSeconds: minutes * 60,
-            sortOrder: insertAt
+            estimatedSeconds: seconds,
+            sortOrder: insertAt,
+            createdAt: createdAt ?? .now
         )
         context.insert(ticket)
         orderedIDs.insert(ticket.id, at: insertAt)

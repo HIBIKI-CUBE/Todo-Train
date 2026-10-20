@@ -7,10 +7,11 @@ import SwiftUI
 
 struct FocusControlsView: View {
     let onPause: () -> Void
-    let onPartialDisembark: () -> Void
+    let onReserve: () -> Void
     let onArrive: () -> Void
-    let onExtendMenu: () -> Void
+    let onReestimate: () -> Void
     let onInterrupt: () -> Void
+    var showsReserve: Bool = true
 
     var body: some View {
         GeometryReader { geo in
@@ -24,7 +25,7 @@ struct FocusControlsView: View {
                     prominence: .primary,
                     action: onArrive
                 )
-                .accessibilityHint("切符を到着として閉じ、Hub に戻ります")
+                .accessibilityHint("切符を到着として閉じ、Hub を開きます")
                 .frame(height: row)
 
                 FocusControlDivider()
@@ -38,20 +39,20 @@ struct FocusControlsView: View {
                         prominence: .secondary,
                         action: onPause
                     )
-                    .accessibilityHint("セッションを停車し、Hub に戻ります。Live Activity から再乗車できます")
+                    .accessibilityHint("セッションを停車し、Hub を開きます。Live Activity から再乗車できます。")
                     .frame(maxWidth: .infinity)
 
                     FocusControlVerticalDivider()
 
                     FocusControlButton(
-                        title: "延長",
-                        systemImage: "plus",
+                        title: "位置確認",
+                        systemImage: "scope",
                         fill: FocusPanel.fillRaised,
                         foreground: FocusPanel.ink,
                         prominence: .secondary,
-                        action: onExtendMenu
+                        action: onReestimate
                     )
-                    .accessibilityHint("見積もり時間を追加します。フォーカスは継続します")
+                    .accessibilityHint("いまの地点から、着の見込みを確かめます。")
                     .frame(maxWidth: .infinity)
                 }
                 .frame(height: row)
@@ -70,18 +71,20 @@ struct FocusControlsView: View {
                     .accessibilityHint("新しい切符を発行し、今の切符を停車して発車します")
                     .frame(maxWidth: .infinity)
 
-                    FocusControlVerticalDivider()
+                    if showsReserve {
+                        FocusControlVerticalDivider()
 
-                    FocusControlButton(
-                        title: "途中下車",
-                        systemImage: "arrow.turn.up.right",
-                        fill: FocusPanel.fill,
-                        foreground: FocusPanel.muted,
-                        prominence: .tertiary,
-                        action: onPartialDisembark
-                    )
-                    .accessibilityHint("途中下車して乗り継ぎ切符を掃き出します")
-                    .frame(maxWidth: .infinity)
+                        FocusControlButton(
+                            title: "予約",
+                            systemImage: "bookmark",
+                            fill: FocusPanel.fill,
+                            foreground: FocusPanel.ink,
+                            prominence: .secondary,
+                            action: onReserve
+                        )
+                        .accessibilityHint("次の一本の予約欄を開きます。乗車は始まりません。")
+                        .frame(maxWidth: .infinity)
+                    }
                 }
                 .frame(height: row)
             }

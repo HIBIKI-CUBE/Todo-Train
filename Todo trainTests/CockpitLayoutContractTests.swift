@@ -26,14 +26,14 @@ final class CockpitLayoutContractTests: XCTestCase {
         )
     }
 
-    func testLockScreenRegularExceedsMaxWithControls() {
+    func testLockScreenRegularFitsMaxWithControls() {
         let regular = CockpitLayoutPolicy.requiredTotalHeight(
             density: .regular,
             hasControls: true,
             surface: .lockScreen
         )
-        XCTAssertGreaterThan(regular, CockpitSizeContract.lockScreenMaxHeight)
-        XCTAssertFalse(
+        XCTAssertLessThanOrEqual(regular, CockpitSizeContract.lockScreenMaxHeight)
+        XCTAssertTrue(
             CockpitLayoutPolicy.fits(
                 proposedHeight: 160,
                 density: .regular,
@@ -96,7 +96,7 @@ final class CockpitLayoutContractTests: XCTestCase {
             ),
             .regular
         )
-        // With controls: full regular overflows 160, but title+progress still prefer regular tier.
+        // With controls the reserved action row still fits the 160pt cap, so the regular tier stays.
         XCTAssertEqual(
             CockpitLayoutPolicy.resolvedDensity(
                 proposedHeight: 160,
@@ -199,6 +199,87 @@ final class CockpitLayoutContractTests: XCTestCase {
         }
     }
 
+    func testGaugeTicksFollowThePlannedBudget() {
+        XCTAssertEqual(CockpitGaugeTicks.fractions(budgetSeconds: 20 * 60, limited: true), [0.5, 1])
+        XCTAssertEqual(
+            CockpitGaugeTicks.fractions(budgetSeconds: 4 * 60),
+            [0.25, 0.5, 0.75, 1]
+        )
+        XCTAssertEqual(
+            CockpitGaugeTicks.fractions(budgetSeconds: 20 * 60),
+            [0.25, 0.5, 0.75, 1]
+        )
+        XCTAssertEqual(
+            CockpitGaugeTicks.fractions(budgetSeconds: 12 * 60),
+            [2, 4, 6, 8, 10, 12].map { Double($0) / 12 }
+        )
+        XCTAssertEqual(CockpitGaugeTicks.fractions(budgetSeconds: 8 * 60).last, 1)
+    }
+
+    func testGaugeTrackKeepsARedTailPastThePlan() {
+        XCTAssertEqual(CockpitGaugeRange.trackFraction(progress: 0), 0)
+        XCTAssertEqual(CockpitGaugeRange.trackFraction(progress: 1), 0.8, accuracy: 0.0001)
+        XCTAssertEqual(CockpitGaugeRange.trackFraction(progress: 1.25), 1, accuracy: 0.0001)
+        XCTAssertEqual(CockpitGaugeRange.trackFraction(progress: 3), 1, accuracy: 0.0001)
+
+        let deadline = Date(timeIntervalSince1970: 1_700_000_000)
+        let range = CockpitGaugeRange.timerInterval(deadline: deadline, budgetSeconds: 20 * 60)
+        let budget: TimeInterval = 20 * 60
+        XCTAssertEqual(range.lowerBound, deadline.addingTimeInterval(-budget))
+        XCTAssertEqual(
+            range.upperBound.timeIntervalSince(deadline),
+            budget * 0.25,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            CockpitGaugeRange.fractionAlongTrack(
+                deadline: deadline,
+                budgetSeconds: 20 * 60,
+                now: deadline.addingTimeInterval(-12 * 60)
+            ),
+            8.0 / 25.0,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            CockpitGaugeRange.fractionAlongTrack(
+                deadline: deadline,
+                budgetSeconds: 20 * 60,
+                now: deadline
+            ),
+            0.8,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            CockpitGaugeRange.fractionAlongTrack(
+                deadline: deadline,
+                budgetSeconds: 20 * 60,
+                now: deadline.addingTimeInterval(budget * 0.25)
+            ),
+            1,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            CockpitGaugeRange.fraction(in: range, now: deadline.addingTimeInterval(-12 * 60)),
+            8.0 / 25.0,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            CockpitGaugeRange.fraction(in: range, now: range.lowerBound.addingTimeInterval(-10)),
+            0,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            CockpitGaugeRange.fraction(in: range, now: range.upperBound.addingTimeInterval(10)),
+            1,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            CockpitGaugeRange.fraction(in: range.lowerBound...range.lowerBound, now: deadline),
+            1,
+            accuracy: 0.0001
+        )
+    }
+
     func testIslandWidthContractsMatchHIG() {
         XCTAssertEqual(CockpitSizeContract.islandCompactSide.width, 62.33, accuracy: 0.01)
         XCTAssertEqual(CockpitSizeContract.islandMinimalMaxWidth, 45)
@@ -210,5 +291,132 @@ final class CockpitLayoutContractTests: XCTestCase {
             CockpitSizeContract.islandCompactSide.width,
             CockpitSizeContract.islandCompactSide.width
         )
+    }
+
+    func testLockScreenPreferredHeightFitsTheSystemCap() {
+        for sample in faceStates {
+            let preferred = CockpitFaceBudget.preferred(
+                mode: sample.mode,
+                metrics: .lockScreen,
+                showsOvertimeMark: sample.overtime,
+                showsInlineState: sample.inline
+            )
+            let total = preferred.idealHeight + CockpitSafeChrome.lockScreenEdgeInset * 2
+            XCTAssertLessThanOrEqual(
+                total,
+                CockpitSizeContract.lockScreenMaxHeight,
+                sample.name
+            )
+            XCTAssertGreaterThan(preferred.bottom, 0, sample.name)
+        }
+    }
+
+    func testEveryStateFitsEverySurfaceHeight() {
+        let canvases: [(CockpitSafeSurface, CGSize, Bool)] = [
+            (.lockScreen, CGSize(width: 408, height: 160), false),
+            (.lockScreen, CGSize(width: 408, height: 84), false),
+            (.lockScreen, CGSize(width: 408, height: 100), false),
+            (.lockScreen, CGSize(width: 371, height: 160), false),
+            (.standBy, CGSize(width: 408, height: 160), true),
+            (.standBy, CGSize(width: 408, height: 84), true),
+            (.standBy, CGSize(width: 956, height: 160), true),
+            (.stack, CGSize(width: 184, height: 72), false),
+            (.stack, CGSize(width: 198, height: 140), false)
+        ]
+        for (surface, canvas, fullscreen) in canvases {
+            let chrome = CockpitSafeChrome.resolve(surface: surface, canvas: canvas)
+            let metrics = fullscreen
+                ? CockpitFaceMetrics.standBy
+                : CockpitFaceMetrics.resolve(width: canvas.width, height: canvas.height, fullscreen: false)
+            for sample in faceStates {
+                let budget = CockpitFaceBudget.resolve(
+                    mode: sample.mode,
+                    metrics: metrics,
+                    contentHeight: chrome.content.height,
+                    showsOvertimeMark: sample.overtime,
+                    showsInlineState: sample.inline
+                )
+                XCTAssertLessThanOrEqual(
+                    budget.idealHeight,
+                    chrome.content.height + 0.5,
+                    "\(sample.name) \(surface) \(canvas)"
+                )
+                XCTAssertEqual(
+                    budget.bottom,
+                    CockpitFaceBudget.bottomHeight(mode: sample.mode, metrics: metrics),
+                    accuracy: 0.01,
+                    "\(sample.name) dropped the bottom row on \(surface) \(canvas)"
+                )
+            }
+        }
+    }
+
+    func testExpandedStackFitsUnderTheCapForEveryState() {
+        for sample in faceStates {
+            let height = CockpitFaceBudget.expandedCanvasHeight(mode: sample.mode)
+            XCTAssertLessThanOrEqual(height, CockpitSizeContract.lockScreenMaxHeight, sample.name)
+            XCTAssertGreaterThanOrEqual(height, CockpitSizeContract.lockScreenMinHeight, sample.name)
+            let chrome = CockpitSafeChrome.resolve(
+                surface: .islandExpanded,
+                canvas: CGSize(width: CockpitSizeContract.proMaxWidth, height: height)
+            )
+            XCTAssertGreaterThanOrEqual(
+                chrome.bottom.height,
+                CockpitFaceBudget.bottomHeight(mode: sample.mode, metrics: .expanded),
+                sample.name
+            )
+            XCTAssertTrue(chrome.contains(chrome.bottom), sample.name)
+            XCTAssertTrue(chrome.contains(chrome.leading), sample.name)
+            XCTAssertTrue(chrome.contains(chrome.trailing), sample.name)
+            XCTAssertGreaterThanOrEqual(
+                chrome.trailing.height,
+                CockpitFaceMetrics.expanded.scheduleBand,
+                sample.name
+            )
+            XCTAssertLessThanOrEqual(
+                CockpitFaceMetrics.expanded.islandTrailingScheduleHeight,
+                51,
+                sample.name
+            )
+            XCTAssertLessThanOrEqual(
+                CockpitFaceMetrics.expanded.islandTrailingScheduleHeight,
+                chrome.trailing.height,
+                sample.name
+            )
+            XCTAssertGreaterThan(chrome.bottom.minX, CockpitSafeChrome.expandedEdgeInset, sample.name)
+        }
+        let compactCanvases = [
+            CockpitSizeContract.islandCompactSide,
+            CGSize(width: 52.33, height: 36.67)
+        ]
+        for canvas in compactCanvases {
+            let chrome = CockpitSafeChrome.resolve(surface: .islandCompact, canvas: canvas)
+            let side = CockpitCompactMark.side(fitting: chrome.content.size)
+            let mark = CGRect(
+                x: chrome.content.midX - side / 2,
+                y: chrome.content.midY - side / 2,
+                width: side,
+                height: side
+            )
+            for sample in faceStates {
+                XCTAssertGreaterThanOrEqual(
+                    side,
+                    CockpitCompactMark.legibleSide,
+                    "\(sample.name) compact \(canvas)"
+                )
+                XCTAssertEqual(mark.width, mark.height, accuracy: 0.01, sample.name)
+                XCTAssertGreaterThan(side, CockpitCompactMark.barThickness, sample.name)
+                XCTAssertTrue(chrome.contains(mark), "\(sample.name) compact \(canvas)")
+            }
+        }
+    }
+
+    private var faceStates: [(name: String, mode: CockpitChromeMode, overtime: Bool, inline: Bool)] {
+        [
+            ("riding", .riding, false, true),
+            ("paused", .paused, false, false),
+            ("prompt", .prompt("まだ乗ってる？"), false, false),
+            ("overtime", .riding, true, false)
+        ]
     }
 }

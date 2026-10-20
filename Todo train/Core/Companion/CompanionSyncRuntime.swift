@@ -23,6 +23,12 @@ final class CompanionSyncRuntime {
     private(set) var companionName: String?
     private(set) var pairingShortID: String?
     private(set) var lastStatus: String?
+    /// Last build received from the Mac, inside a command.
+    private(set) var peerBuild: WireBuildInfo?
+    /// Mac contract from a command. Nil until a command arrives.
+    private(set) var peerContract: ContractAnnouncement?
+    /// Relay contract from hello or hint.
+    private(set) var relayContract: ContractAnnouncement?
 
     init(
         secrets: any SecretStoring = KeychainSecretStore(),
@@ -36,6 +42,9 @@ final class CompanionSyncRuntime {
         self.defaults = defaults
         let stored = defaults.stringArray(forKey: Defaults.processedCmdIDs) ?? []
         self.processedCommandIDs = Set(stored.compactMap(UUID.init(uuidString:)))
+        self.peerBuild = PeerBuildStore.load(from: defaults)
+        self.peerContract = PeerContractStore.load(from: defaults, key: PeerContractStore.peerKey)
+        self.relayContract = PeerContractStore.load(from: defaults, key: PeerContractStore.relayKey)
         refreshPaired()
     }
 
@@ -77,22 +86,26 @@ final class CompanionSyncRuntime {
         snapRev = 0
         processedCommandIDs = []
         persistProcessed()
+        peerBuild = nil
+        PeerBuildStore.save(nil, to: defaults)
+        peerContract = nil
+        relayContract = nil
+        PeerContractStore.save(nil, to: defaults, key: PeerContractStore.peerKey)
+        PeerContractStore.save(nil, to: defaults, key: PeerContractStore.relayKey)
         refreshPaired()
         lastStatus = nil
     }
 
     func handleScenePhase(_ phase: ScenePhase, sessionManager: SessionManager) {
-        switch phase {
-        case .active:
+        switch Policy.foregroundLoop(for: phase) {
+        case .start:
             guard foregroundTask == nil else { return }
             foregroundTask = Task { [weak self] in
                 await self?.runForeground(sessionManager: sessionManager)
             }
-        case .inactive:
+        case .keep:
             break
-        case .background:
-            fallthrough
-        default:
+        case .stop:
             foregroundTask?.cancel()
             foregroundTask = nil
         }
@@ -130,13 +143,14 @@ final class CompanionSyncRuntime {
             connection = try await socket.connect()
         } catch {
             lastStatus = userFacing(error)
+            sessionManager.noteMacPresenceUnreachable()
             return
         }
         defer { Task { await connection.close() } }
         while !Task.isCancelled {
-            let frame: WSFrame
+            let incoming: WSIncoming
             do {
-                frame = try await connection.receive()
+                incoming = try await connection.receiveIncoming()
             } catch is CancellationError {
                 return
             } catch SyncError.invalidJSON {
@@ -144,15 +158,21 @@ final class CompanionSyncRuntime {
             } catch {
                 if Task.isCancelled { return }
                 lastStatus = userFacing(error)
+                sessionManager.noteMacPresenceUnreachable()
                 return
             }
-            do {
-                if frame.t == .cmd {
-                    try await handleCommandEnvelope(frame.envelope, sessionManager: sessionManager)
-                    try await pushSnap(sessionManager: sessionManager)
+            switch incoming {
+            case .hello(let announcement):
+                noteRelayContract(announcement)
+            case .frame(let frame):
+                do {
+                    if frame.t == .cmd {
+                        try await handleCommandEnvelope(frame.envelope, sessionManager: sessionManager)
+                        try await pushSnap(sessionManager: sessionManager)
+                    }
+                } catch {
+                    lastStatus = userFacing(error)
                 }
-            } catch {
-                lastStatus = userFacing(error)
             }
         }
     }
@@ -173,9 +193,11 @@ final class CompanionSyncRuntime {
                 case .ignore:
                     break
                 case .remember(let hint, let tag):
+                    noteRelayContract(hint.relayAnnouncement)
                     previous = hint
                     etag = tag
                 case .catchUp(let catchUp, let hint, let tag):
+                    noteRelayContract(hint.relayAnnouncement)
                     previous = hint
                     etag = tag
                     if catchUp.cmd {
@@ -192,6 +214,7 @@ final class CompanionSyncRuntime {
             } catch {
                 if Task.isCancelled { return }
                 lastStatus = userFacing(error)
+                sessionManager.noteMacPresenceUnreachable()
             }
             try? await Task.sleep(nanoseconds: HintPolling.intervalNanoseconds)
         }
@@ -248,25 +271,16 @@ final class CompanionSyncRuntime {
             pairingId: pairingId,
             encKey: encKey
         )
-        if processedCommandIDs.contains(command.id) { return }
-        let decision = RemotePauseEvaluating.evaluate(
-            openSessionId: sessionManager.activeSession?.id,
-            pausedCount: sessionManager.pausedTicketCount,
-            pauseLimit: sessionManager.pauseLimit,
-            isPaused: sessionManager.activeSession?.isPaused == true,
-            command: command
-        )
-        if decision.shouldApply {
-            switch command.op {
-            case .pause:
-                try sessionManager.pause()
-            case .resume:
-                try sessionManager.resume()
-            case .still:
-                sessionManager.acknowledgeCabinStill()
-            }
+        if let build = command.build {
+            peerBuild = build
+            PeerBuildStore.save(build, to: defaults)
         }
-        let ack = RemotePauseEvaluating.ack(decision: decision, commandId: command.id)
+        notePeerContract(command.announcement)
+        if processedCommandIDs.contains(command.id) { return }
+        var ack = try CompanionCommandApplying.apply(command, sessionManager: sessionManager)
+        ack.build = LocalWireBuild.current
+        ack.contract = ContractVersion.contract
+        ack.minReadable = ContractVersion.minReadable
         let ackEnvelope = try SyncCrypto.sealJSON(
             ack,
             pairingId: pairingId,
@@ -274,9 +288,17 @@ final class CompanionSyncRuntime {
             rev: envelope.rev,
             encKey: encKey
         )
+        // issueAndBoard has already boarded. A debounced snap push re-pulls cmds
+        // during putAck; applying twice acks sessionMismatch and the Mac drops the ride.
+        if command.op == .issueAndBoard {
+            processedCommandIDs.insert(command.id)
+            persistProcessed()
+        }
         _ = try await client.putAck(ackEnvelope)
-        processedCommandIDs.insert(command.id)
-        persistProcessed()
+        if command.op != .issueAndBoard {
+            processedCommandIDs.insert(command.id)
+            persistProcessed()
+        }
     }
 
     private func pushSnap(sessionManager: SessionManager) async throws {
@@ -298,14 +320,12 @@ final class CompanionSyncRuntime {
         client: SyncHTTPClient
     ) async throws {
         snapRev += 1
-        let plaintext = CompanionSnapBuilding.snap(
+        let now = Date()
+        let plaintext = RideWireSnap.make(
+            sessionManager: sessionManager,
+            settings: settings,
             rev: snapRev,
-            phase: sessionManager.phase,
-            session: sessionManager.activeSession,
-            now: Date(),
-            serviceActive: sessionManager.activeServiceDay?.isOpen == true,
-            cabinEnabled: settings.cabinAnnouncementsEnabled,
-            pendingCabin: sessionManager.activeServiceDay?.pendingCabin?.cabin
+            now: now
         )
         let envelope = try SyncCrypto.sealJSON(
             plaintext,
@@ -344,7 +364,45 @@ final class CompanionSyncRuntime {
         defaults.set(Array(kept), forKey: Defaults.processedCmdIDs)
     }
 
+    private func notePeerContract(_ announcement: ContractAnnouncement) {
+        peerContract = announcement
+        PeerContractStore.save(announcement, to: defaults, key: PeerContractStore.peerKey)
+    }
+
+    private func noteRelayContract(_ announcement: ContractAnnouncement) {
+        relayContract = announcement
+        PeerContractStore.save(announcement, to: defaults, key: PeerContractStore.relayKey)
+    }
+
     private func userFacing(_ error: Error) -> String {
         SyncCopy.connectionStatus(error)
+    }
+}
+
+extension CompanionSyncRuntime {
+    /// Pairing, scene phase, and whether progress notifications stay quiet.
+    enum Policy {
+        enum ForegroundLoop: Equatable {
+            /// `.active` starts the foreground sync loop.
+            case start
+            /// `.inactive` leaves the loop as it is.
+            case keep
+            /// `.background` stops the loop.
+            case stop
+        }
+
+        /// Progress notifications stay off while a companion is paired. Scene phase does not change this.
+        static func suppressProgressNotifications(isPaired: Bool) -> Bool {
+            isPaired
+        }
+
+        static func foregroundLoop(for phase: ScenePhase) -> ForegroundLoop {
+            switch phase {
+            case .active: .start
+            case .inactive: .keep
+            case .background: .stop
+            @unknown default: .stop
+            }
+        }
     }
 }

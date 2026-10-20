@@ -18,16 +18,31 @@ enum CompanionSnapBuilding {
         now: Date,
         serviceActive: Bool,
         cabinEnabled: Bool,
-        pendingCabin: CabinKind? = nil
+        pendingCabin: CabinKind? = nil,
+        nextBlockTitle: String? = nil,
+        nextBlockStartsAt: Int? = nil,
+        nextBlockEndsAt: Int? = nil,
+        timetablePauseAt: Int? = nil,
+        pauseHeldBy: PauseHeldBy? = nil,
+        nudge: WireNudge? = nil,
+        nudgePlan: [WireNudgePlanItem]? = nil,
+        reserved: WireReservedTicket? = nil,
+        openPendingCabin: CabinKind? = nil
     ) -> SnapPlaintext {
         guard let session, session.isOpen, phase != .idle else {
             return idle(
                 rev: rev,
                 serviceActive: serviceActive,
                 cabinEnabled: cabinEnabled,
-                pendingCabin: pendingCabin
+                pendingCabin: openPendingCabin ?? pendingCabin,
+                nudge: nudge,
+                nudgePlan: nudgePlan,
+                reserved: reserved
             )
         }
+        let open = Self.openPause(session: session, phase: phase)
+        let samples = Self.openPauseSamples(session: session, phase: phase)
+        let home = Self.home(session: session, now: now)
         let started = Int(session.startedAt.timeIntervalSince1970)
         let elapsedActive = Int(session.elapsedSeconds(at: now).rounded(.towardZero))
         let pausedAtUnix: Int?
@@ -48,22 +63,96 @@ enum CompanionSnapBuilding {
             title: session.ticket?.title,
             phase: wirePhase(phase),
             startedAt: started,
-            estimatedSeconds: session.budgetSecondsAtStart,
+            estimatedSeconds: session.activeBudgetSeconds,
             pausedAccumulated: pausedAccumulated,
             pausedAt: pausedAtUnix,
             boardedDeviceID: session.boardedDeviceID,
             serviceActive: serviceActive,
             cabinEnabled: cabinEnabled,
             checkInFiredCount: session.checkInFiredCount,
-            pendingCabin: session.pendingCheckIn?.cabin
+            pendingCabin: openPendingCabin ?? session.pendingCheckIn?.cabin,
+            nextBlockTitle: nextBlockTitle,
+            nextBlockStartsAt: nextBlockStartsAt,
+            nextBlockEndsAt: nextBlockEndsAt,
+            timetablePauseAt: timetablePauseAt,
+            nudge: nudge,
+            nudgePlan: nudgePlan,
+            reserved: reserved,
+            pauseHeldBy: pauseHeldBy ?? open?.heldBy,
+            pauseId: open?.id,
+            macSampledSeconds: samples?.sampled,
+            macActiveSeconds: samples?.active,
+            home: home
         )
+    }
+
+    /// Values from `PunctualityJudgment`. Mac and Watch display them as sent.
+    static func home(session: WorkSession, now: Date) -> WireHome {
+        let commits = session.reestimateEvents
+            .filter { $0.undoneAt == nil && $0.declaration != .recovery }
+            .map {
+                PunctualityJudgment.ReestimateCommit(
+                    reestimateIndex: $0.reestimateIndex,
+                    activeSeconds: $0.activeSeconds,
+                    committedRemainingSeconds: $0.committedRemainingSeconds
+                )
+            }
+        let judgment = PunctualityJudgment.judge(
+            PunctualityJudgment.RideInput(
+                arrived: session.outcome == .arrived,
+                activeSeconds: session.elapsedSeconds(at: now),
+                estimatedSecondsAtStart: session.estimatedSecondsAtStart,
+                reestimates: commits
+            )
+        )
+        let judged: WireJudgedEstimate
+        switch judgment.source {
+        case .original:
+            judged = WireJudgedEstimate(kind: .original)
+        case .reestimate(let index):
+            let active = commits.first { $0.reestimateIndex == index }?.activeSeconds
+            judged = WireJudgedEstimate(
+                kind: .reestimate,
+                reestimateIndex: index,
+                activeSeconds: active
+            )
+        }
+        let luxury = judgment.signal == .off
+            ? nil
+            : PunctualityJudgment.sealLuxury(source: judgment.source, reestimates: commits)
+        return WireHome(
+            startSeconds: judgment.lowerBound,
+            endSeconds: judgment.upperBound,
+            signal: WireHomeSignal(judgment.signal),
+            judgedEstimate: judged,
+            sealLuxury: luxury
+        )
+    }
+
+    /// Seconds already stored on the open pause. The pair stays within itself.
+    static func openPauseSamples(
+        session: WorkSession,
+        phase: SessionPhase
+    ) -> (sampled: Double, active: Double)? {
+        guard let pause = openPause(session: session, phase: phase) else { return nil }
+        let sampled = max(0, pause.macSampledSeconds)
+        let active = min(max(0, pause.macActiveSeconds), sampled)
+        return (sampled, active)
+    }
+
+    private static func openPause(session: WorkSession, phase: SessionPhase) -> SessionPause? {
+        guard phase == .paused else { return nil }
+        return session.pauses.first { $0.endedAt == nil }
     }
 
     static func idle(
         rev: Int,
         serviceActive: Bool,
         cabinEnabled: Bool,
-        pendingCabin: CabinKind? = nil
+        pendingCabin: CabinKind? = nil,
+        nudge: WireNudge? = nil,
+        nudgePlan: [WireNudgePlanItem]? = nil,
+        reserved: WireReservedTicket? = nil
     ) -> SnapPlaintext {
         SnapPlaintext(
             rev: rev,
@@ -79,7 +168,10 @@ enum CompanionSnapBuilding {
             serviceActive: serviceActive,
             cabinEnabled: cabinEnabled,
             checkInFiredCount: 0,
-            pendingCabin: pendingCabin
+            pendingCabin: pendingCabin,
+            nudge: nudge,
+            nudgePlan: nudgePlan,
+            reserved: reserved
         )
     }
 }

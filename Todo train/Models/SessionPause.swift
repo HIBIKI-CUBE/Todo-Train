@@ -12,6 +12,17 @@ final class SessionPause {
     var id: UUID = UUID()
     var startedAt: Date = Date.now
     var endedAt: Date?
+    /// 停車を保っている主体。`PauseHeldBy` の raw。空は理由が残っていない古い停車。
+    var heldByRaw: String?
+    /// 停車した端末。
+    var pausedOnRaw: String?
+    var heldByInferred: Bool = false
+    var macSampledSeconds: Double = 0
+    var macActiveSeconds: Double = 0
+    var promptedAt: Date?
+    var promptAnswerRaw: String?
+    /// 停車の取り消しを残す。記録は消さない。
+    var undoneAt: Date?
     var session: WorkSession?
 
     init(
@@ -23,6 +34,13 @@ final class SessionPause {
         self.id = id
         self.startedAt = startedAt
         self.endedAt = endedAt
+        self.heldByRaw = nil
+        self.pausedOnRaw = nil
+        self.heldByInferred = false
+        self.macSampledSeconds = 0
+        self.macActiveSeconds = 0
+        self.promptedAt = nil
+        self.promptAnswerRaw = nil
         self.session = session
     }
 }

@@ -86,6 +86,8 @@ public protocol HTTPTransport: Sendable {
 
 public protocol WebSocketConnection: Sendable {
     func receive() async throws -> WSFrame
+    func receiveIncoming() async throws -> WSIncoming
+    func send(_ text: String) async throws
     func close() async
 }
 

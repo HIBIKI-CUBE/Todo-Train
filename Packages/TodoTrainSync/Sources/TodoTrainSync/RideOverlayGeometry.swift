@@ -128,6 +128,34 @@ public enum RideOverlayGeometry {
         return min(total, max(total * clamped, minimum))
     }
 
+    /// Occupancy band on one axis. The span stays inside `length`, including when a minimum width is applied.
+    public static func containedSpan(
+        start: Double,
+        end: Double,
+        length: Double,
+        minimum: Double = 2
+    ) -> (origin: Double, length: Double)? {
+        guard length > 0, end > start, minimum > 0 else { return nil }
+        let leading = min(max(length * start, 0), length)
+        let trailing = min(max(length * end, leading), length)
+        let span = min(length, max(trailing - leading, min(minimum, length)))
+        let origin = min(leading, length - span)
+        guard span > 0 else { return nil }
+        return (origin, span)
+    }
+
+    /// Occupancy tick on one axis. Thickness is clamped so the mark cannot leave `length`.
+    public static func containedTick(
+        position: Double,
+        length: Double,
+        thickness: Double
+    ) -> (origin: Double, length: Double)? {
+        guard length > 0, thickness > 0 else { return nil }
+        let tick = min(thickness, length)
+        let origin = min(max(length * position - tick / 2, 0), length - tick)
+        return (origin, tick)
+    }
+
     public static func frame(
         for state: OverlayLayoutState,
         screen: OverlayScreen,

@@ -21,6 +21,9 @@ enum DeletionUndo {
         var dueDate: Date?
         var closedAt: Date?
         var closureKindRaw: String?
+        var reservedAt: Date?
+        var reservedFromRideId: UUID?
+        var reservedViaRaw: String?
         var tagIDs: [UUID]
         var sessions: [SessionRecord]
         var lineages: [LineageRecord]
@@ -35,13 +38,20 @@ enum DeletionUndo {
         var accumulatedActiveSeconds: TimeInterval
         var estimatedSecondsAtStart: Int
         var budgetSecondsAtStart: Int
+        var currentBudgetSeconds: Int = 0
+        var reestimateEventsJSON: String = "[]"
+        var preArrivalIdleSeconds: Int?
         var outcomeRaw: String?
         var overtimeResolutionRaw: String?
+        var arrivalActionRaw: String?
+        var arrivalStampedAt: Date?
+        var startedFromRaw: String?
         var checkInOffsetSeconds: [Double]
         var checkInFiredCount: Int
         var pendingCheckInKindRaw: String?
         var checkInPromptLine: String?
         var checkInAnswersJSON: String
+        var nudgeEventsJSON: String = "[]"
         var awayDueAt: Date?
         var boardedDeviceID: String?
         var ticketID: UUID?
@@ -54,12 +64,16 @@ enum DeletionUndo {
         var addedSeconds: Int
         var reason: String?
         var createdAt: Date
+        var workingSeconds: Double?
     }
 
     struct PauseRecord: Equatable {
         var id: UUID
         var startedAt: Date
         var endedAt: Date?
+        var heldByRaw: String?
+        var pausedOnRaw: String?
+        var heldByInferred: Bool
     }
 
     struct LineageRecord: Equatable {
@@ -93,6 +107,9 @@ enum DeletionUndo {
             dueDate: ticket.dueDate,
             closedAt: ticket.closedAt,
             closureKindRaw: ticket.closureKindRaw,
+            reservedAt: ticket.reservedAt,
+            reservedFromRideId: ticket.reservedFromRideId,
+            reservedViaRaw: ticket.reservedViaRaw,
             tagIDs: ticket.tags.map(\.id),
             sessions: ticket.sessions.map { captureSession($0) },
             lineages: lineages
@@ -109,13 +126,20 @@ enum DeletionUndo {
             accumulatedActiveSeconds: session.accumulatedActiveSeconds,
             estimatedSecondsAtStart: session.estimatedSecondsAtStart,
             budgetSecondsAtStart: session.budgetSecondsAtStart,
+            currentBudgetSeconds: session.currentBudgetSeconds,
+            reestimateEventsJSON: session.reestimateEventsJSON,
+            preArrivalIdleSeconds: session.preArrivalIdleSeconds,
             outcomeRaw: session.outcomeRaw,
             overtimeResolutionRaw: session.overtimeResolutionRaw,
+            arrivalActionRaw: session.arrivalActionRaw,
+            arrivalStampedAt: session.arrivalStampedAt,
+            startedFromRaw: session.startedFromRaw,
             checkInOffsetSeconds: session.checkInOffsetSeconds,
             checkInFiredCount: session.checkInFiredCount,
             pendingCheckInKindRaw: session.pendingCheckInKindRaw,
             checkInPromptLine: session.checkInPromptLine,
             checkInAnswersJSON: session.checkInAnswersJSON,
+            nudgeEventsJSON: session.nudgeEventsJSON,
             awayDueAt: session.awayDueAt,
             boardedDeviceID: session.boardedDeviceID,
             ticketID: session.ticket?.id,
@@ -124,14 +148,18 @@ enum DeletionUndo {
                     id: $0.id,
                     addedSeconds: $0.addedSeconds,
                     reason: $0.reason,
-                    createdAt: $0.createdAt
+                    createdAt: $0.createdAt,
+                    workingSeconds: $0.workingSeconds
                 )
             },
             pauses: session.pauses.map {
                 PauseRecord(
                     id: $0.id,
                     startedAt: $0.startedAt,
-                    endedAt: $0.endedAt
+                    endedAt: $0.endedAt,
+                    heldByRaw: $0.heldByRaw,
+                    pausedOnRaw: $0.pausedOnRaw,
+                    heldByInferred: $0.heldByInferred
                 )
             }
         )
@@ -168,6 +196,9 @@ enum DeletionUndo {
         ticket.dueDate = record.dueDate
         ticket.closedAt = record.closedAt
         ticket.closureKindRaw = record.closureKindRaw
+        ticket.reservedAt = record.reservedAt
+        ticket.reservedFromRideId = record.reservedFromRideId
+        ticket.reservedViaRaw = record.reservedViaRaw
         ticket.tags = record.tagIDs.compactMap { fetchTag($0, in: context) }
         for sessionRecord in record.sessions {
             restoreSession(sessionRecord, onto: ticket, into: context)
@@ -200,13 +231,24 @@ enum DeletionUndo {
         session.accumulatedActiveSeconds = record.accumulatedActiveSeconds
         session.estimatedSecondsAtStart = record.estimatedSecondsAtStart
         session.budgetSecondsAtStart = record.budgetSecondsAtStart
+        session.currentBudgetSeconds = record.currentBudgetSeconds > 0
+            ? record.currentBudgetSeconds
+            : max(record.budgetSecondsAtStart, record.estimatedSecondsAtStart)
+        session.reestimateEventsJSON = record.reestimateEventsJSON
+        session.preArrivalIdleSeconds = record.preArrivalIdleSeconds
         session.outcomeRaw = record.outcomeRaw
         session.overtimeResolutionRaw = record.overtimeResolutionRaw
+        session.arrivalActionRaw = record.arrivalActionRaw
+        session.arrivalStampedAt = record.arrivalStampedAt
+        if let startedFromRaw = record.startedFromRaw {
+            session.startedFromRaw = startedFromRaw
+        }
         session.checkInOffsetSeconds = record.checkInOffsetSeconds
         session.checkInFiredCount = record.checkInFiredCount
         session.pendingCheckInKindRaw = record.pendingCheckInKindRaw
         session.checkInPromptLine = record.checkInPromptLine
         session.checkInAnswersJSON = record.checkInAnswersJSON
+        session.nudgeEventsJSON = record.nudgeEventsJSON
         session.awayDueAt = record.awayDueAt
         session.boardedDeviceID = record.boardedDeviceID
         session.ticket = parent
@@ -217,6 +259,7 @@ enum DeletionUndo {
                     addedSeconds: ext.addedSeconds,
                     reason: ext.reason,
                     createdAt: ext.createdAt,
+                    workingSeconds: ext.workingSeconds,
                     session: session
                 )
                 context.insert(created)
@@ -225,6 +268,7 @@ enum DeletionUndo {
             existing.addedSeconds = ext.addedSeconds
             existing.reason = ext.reason
             existing.createdAt = ext.createdAt
+            existing.workingSeconds = ext.workingSeconds
             existing.session = session
         }
         for pause in record.pauses {
@@ -240,6 +284,9 @@ enum DeletionUndo {
             }()
             existing.startedAt = pause.startedAt
             existing.endedAt = pause.endedAt
+            existing.heldByRaw = pause.heldByRaw
+            existing.pausedOnRaw = pause.pausedOnRaw
+            existing.heldByInferred = pause.heldByInferred
             existing.session = session
         }
     }

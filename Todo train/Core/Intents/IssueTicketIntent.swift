@@ -4,50 +4,69 @@
 //
 
 import AppIntents
-import SwiftData
+
+struct IssueEstimateMinuteOptions: DynamicOptionsProvider {
+    func results() async throws -> IntentItemCollection<Int> {
+        let items = EstimateSnapMapping.stops.map { minutes in
+            IntentItem(
+                minutes,
+                title: LocalizedStringResource(stringLiteral: "\(minutes)分")
+            )
+        }
+        return IntentItemCollection(sections: [IntentItemSection(items: items)])
+    }
+}
 
 struct IssueTicketIntent: AppIntent {
     static var title: LocalizedStringResource = "切符を発行"
     static var description = IntentDescription("Hub に新しい切符を追加します。発車はしません。")
     static var openAppWhenRun: Bool = false
 
-    @Parameter(title: "タイトル")
+    @Parameter(title: "題名")
     var title: String
 
-    @Parameter(title: "見積もり（分）")
+    @Parameter(
+        title: "見積もり（分）",
+        requestValueDialog: "見積もりは何分ですか",
+        optionsProvider: IssueEstimateMinuteOptions()
+    )
     var minutes: Int?
 
     static var parameterSummary: some ParameterSummary {
-        Summary("「\(\.$title)」の切符を発行")
+        Summary("「\(\.$title)」を\(\.$minutes)分で発行")
     }
 
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
-            return .result(dialog: "切符の名前を入力してください")
+            return .result(dialog: "題名を入れてください")
         }
 
-        let container = try resolvedContainer()
-        let context = ModelContext(container)
-        let sessions = (try? context.fetch(FetchDescriptor<WorkSession>())) ?? []
-        let resolved = TicketIssuer.resolveMinutes(
-            requested: minutes,
-            sessions: sessions,
-            lastIssued: AppSettings.shared.lastIssuedEstimateMinutes
-        )
-        let ticket = try TicketIssuer.issue(title: trimmed, minutes: resolved, into: context)
-        AppSettings.shared.lastIssuedEstimateMinutes = resolved
-        AppRuntime.sessionManager?.noteCabinActivity()
-        return .result(dialog: "「\(ticket.title)」を \(resolved) 分で発行しました")
-    }
-
-    @MainActor
-    private func resolvedContainer() throws -> ModelContainer {
-        if let container = AppRuntime.modelContainer {
-            return container
+        let resolvedMinutes: Int
+        if let minutes {
+            resolvedMinutes = minutes
+        } else {
+            resolvedMinutes = try await $minutes.requestValue("見積もりは何分ですか")
         }
-        return try AppModelContainer.make()
+
+        let issued: (ticket: Ticket, minutes: Int)
+        switch try InventoryIssueTarget.resolve(
+            sessionManager: AppRuntime.sessionManager,
+            modelContainer: AppRuntime.modelContainer,
+            makeContainer: { try AppModelContainer.make() }
+        ) {
+        case .manager(let manager):
+            issued = try manager.issueInventoryTicket(title: trimmed, minutes: resolvedMinutes)
+        case .context(let context):
+            issued = try InventoryTicketIssue.issue(
+                title: trimmed,
+                minutes: resolvedMinutes,
+                into: context,
+                settings: AppSettings.shared
+            )
+        }
+        return .result(dialog: "「\(issued.ticket.title)」を \(issued.minutes) 分で発行しました")
     }
 }
 

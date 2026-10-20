@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import TodoTrainSync
 import WidgetKit
 
 struct TodoTrainEntry: TimelineEntry {
@@ -25,6 +26,10 @@ struct TodoTrainProvider: TimelineProvider {
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<TodoTrainEntry>) -> Void) {
+        if WidgetPauseInput.showsQuestion() || WidgetOffscreen.delivers(.overtime) {
+            completion(Timeline(entries: [], policy: .never))
+            return
+        }
         let entry = entry(from: WidgetSnapshotStore.load())
             ?? TodoTrainEntry(date: .now, isInService: false, pausedCount: 0, focusMinutesToday: 0)
         let timeline = Timeline(entries: [entry], policy: .after(.now.addingTimeInterval(15 * 60)))

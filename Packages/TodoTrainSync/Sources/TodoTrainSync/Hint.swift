@@ -5,11 +5,26 @@ public struct HintPlaintext: Codable, Equatable, Sendable {
     public var snapRev: Int
     public var ackRev: Int
     public var cmdCount: Int
+    /// Relay contract. Absent on a relay that does not announce (that relay is v3).
+    public var contract: Int?
+    public var minReadable: Int?
 
-    public init(snapRev: Int, ackRev: Int, cmdCount: Int) {
+    public init(
+        snapRev: Int,
+        ackRev: Int,
+        cmdCount: Int,
+        contract: Int? = nil,
+        minReadable: Int? = nil
+    ) {
         self.snapRev = snapRev
         self.ackRev = ackRev
         self.cmdCount = cmdCount
+        self.contract = contract
+        self.minReadable = minReadable
+    }
+
+    public var relayAnnouncement: ContractAnnouncement {
+        .resolved(contract: contract, minReadable: minReadable)
     }
 }
 
@@ -55,8 +70,16 @@ public enum HintPollOutcome: Equatable, Sendable {
 public enum HintPolling: Sendable {
     public static let intervalNanoseconds: UInt64 = 5_000_000_000
 
-    public static func shouldPoll(isPaired: Bool, connection: ConnectionStatus) -> Bool {
-        isPaired && connection == .disconnected
+    public static func shouldPoll(
+        isPaired: Bool,
+        connection: ConnectionStatus,
+        isIdle: Bool = false
+    ) -> Bool {
+        isPaired && connection == .disconnected && !isIdle
+    }
+
+    public static func shouldListen(isPaired: Bool, isIdle: Bool = false) -> Bool {
+        isPaired && !isIdle
     }
 
     public static func etag(for hint: HintPlaintext) -> String {

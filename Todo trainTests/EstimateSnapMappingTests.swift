@@ -101,4 +101,158 @@ struct EstimateSnapMappingTests {
         #expect(scrub.displayFraction < finger)
         #expect(scrub.displayFraction > from)
     }
+
+    @Test func shouldCommitScrub_alwaysCommitsWhenDragNotRequired() {
+        #expect(
+            EstimateSnapMapping.shouldCommitScrub(
+                requiresDragToCommit: false,
+                translation: 0,
+                minimumTranslation: 24,
+                isPrimarilyVertical: true,
+                startAnchoredMinutes: 30,
+                endAnchoredMinutes: 30,
+                startsAtLeftUnselected: false
+            )
+        )
+    }
+
+    @Test func scrubFromUnselected_staysAtZeroUntilFirstStopEscape() {
+        let firstF = EstimateSnapMapping.fraction(minutes: 5)
+        let before = firstF * (EstimateSnapMapping.stickyEscapeProgress - 0.05)
+        let scrub = EstimateSnapMapping.scrubFromUnselected(
+            fingerFraction: before,
+            stops: EstimateSnapMapping.stops
+        )
+        #expect(scrub.anchoredMinutes == 0)
+        #expect(scrub.didEscape == false)
+        #expect(scrub.displayFraction > 0)
+        #expect(scrub.displayFraction < firstF)
+
+        let past = firstF * (EstimateSnapMapping.stickyEscapeProgress + 0.05)
+        let escaped = EstimateSnapMapping.scrubFromUnselected(
+            fingerFraction: past,
+            stops: EstimateSnapMapping.stops
+        )
+        #expect(escaped.didEscape == true)
+        #expect(escaped.anchoredMinutes == 5)
+    }
+
+    @Test func cabinFingerFraction_endStopsSitOnKnobCenters() {
+        let width: CGFloat = 320
+        let knob: CGFloat = 32
+        let stops = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+        let maxMinutes = 100
+        let leftCenter = knob / 2
+        let rightCenter = width - knob / 2
+
+        let left = EstimateSnapMapping.cabinFingerFraction(x: leftCenter, width: width, knobSize: knob)
+        let right = EstimateSnapMapping.cabinFingerFraction(x: rightCenter, width: width, knobSize: knob)
+        #expect(abs(left) < 0.000_001)
+        #expect(abs(right - 1) < 0.000_001)
+        #expect(EstimateSnapMapping.snap(
+            fraction: EstimateSnapMapping.cabinFraction(x: leftCenter, width: width, knobSize: knob),
+            stops: stops,
+            maxMinutes: maxMinutes
+        ) == 10)
+        #expect(EstimateSnapMapping.snap(
+            fraction: EstimateSnapMapping.cabinFraction(x: rightCenter, width: width, knobSize: knob),
+            stops: stops,
+            maxMinutes: maxMinutes
+        ) == 100)
+
+        let justLeft = EstimateSnapMapping.cabinFingerFraction(
+            x: leftCenter - 0.5,
+            width: width,
+            knobSize: knob
+        )
+        let justRight = EstimateSnapMapping.cabinFingerFraction(
+            x: rightCenter + 0.5,
+            width: width,
+            knobSize: knob
+        )
+        #expect(EstimateSnapMapping.isOverscrolling(fingerFraction: left) == false)
+        #expect(EstimateSnapMapping.isOverscrolling(fingerFraction: right) == false)
+        #expect(EstimateSnapMapping.isOverscrolling(fingerFraction: justLeft) == true)
+        #expect(EstimateSnapMapping.isOverscrolling(fingerFraction: justRight) == true)
+
+        let atCapsuleEdge = EstimateSnapMapping.cabinFingerFraction(x: 0, width: width, knobSize: knob)
+        #expect(EstimateSnapMapping.isOverscrolling(fingerFraction: atCapsuleEdge) == true)
+        #expect(EstimateSnapMapping.unboundedFraction(x: 0, width: width) == 0)
+        #expect(EstimateSnapMapping.fraction(x: leftCenter, width: width) == leftCenter / width)
+    }
+
+    @Test func isOverscrolling_isFalseOnTheEndsAndTrueJustOutside() {
+        #expect(EstimateSnapMapping.isOverscrolling(fingerFraction: 0) == false)
+        #expect(EstimateSnapMapping.isOverscrolling(fingerFraction: 1) == false)
+        #expect(EstimateSnapMapping.isOverscrolling(fingerFraction: 0.5) == false)
+        #expect(EstimateSnapMapping.isOverscrolling(fingerFraction: -0.001) == true)
+        #expect(EstimateSnapMapping.isOverscrolling(fingerFraction: 1.001) == true)
+    }
+
+    @Test func stickyScrub_tenStopsUseTheSameEscapeAndStretch() {
+        let stops = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+        let maxMinutes = 100
+        let from = EstimateSnapMapping.fraction(minutes: 60, maxMinutes: maxMinutes)
+        let to = EstimateSnapMapping.fraction(minutes: 70, maxMinutes: maxMinutes)
+        let gap = to - from
+
+        let before = from + gap * (EstimateSnapMapping.stickyEscapeProgress - 0.01)
+        let held = EstimateSnapMapping.stickyScrub(
+            fingerFraction: before,
+            anchoredMinutes: 60,
+            stops: stops,
+            maxMinutes: maxMinutes
+        )
+        #expect(held.didEscape == false)
+        #expect(held.anchoredMinutes == 60)
+        let expectedStretch = from + gap * (EstimateSnapMapping.stickyEscapeProgress - 0.01) * EstimateSnapMapping.stickyStretch
+        #expect(abs(held.displayFraction - expectedStretch) < 0.0001)
+
+        let past = from + gap * (EstimateSnapMapping.stickyEscapeProgress + 0.01)
+        let escaped = EstimateSnapMapping.stickyScrub(
+            fingerFraction: past,
+            anchoredMinutes: 60,
+            stops: stops,
+            maxMinutes: maxMinutes
+        )
+        #expect(escaped.didEscape == true)
+        #expect(escaped.anchoredMinutes == 70)
+        #expect(escaped.displayFraction == to)
+    }
+
+    @Test func shouldCommitScrub_rejectsVerticalShortOrSameStop() {
+        #expect(
+            EstimateSnapMapping.shouldCommitScrub(
+                requiresDragToCommit: true,
+                translation: 30,
+                minimumTranslation: 24,
+                isPrimarilyVertical: true,
+                startAnchoredMinutes: 0,
+                endAnchoredMinutes: 10,
+                startsAtLeftUnselected: true
+            ) == false
+        )
+        #expect(
+            EstimateSnapMapping.shouldCommitScrub(
+                requiresDragToCommit: true,
+                translation: 30,
+                minimumTranslation: 24,
+                isPrimarilyVertical: false,
+                startAnchoredMinutes: 20,
+                endAnchoredMinutes: 20,
+                startsAtLeftUnselected: false
+            ) == false
+        )
+        #expect(
+            EstimateSnapMapping.shouldCommitScrub(
+                requiresDragToCommit: true,
+                translation: 30,
+                minimumTranslation: 24,
+                isPrimarilyVertical: false,
+                startAnchoredMinutes: 0,
+                endAnchoredMinutes: 20,
+                startsAtLeftUnselected: true
+            ) == true
+        )
+    }
 }

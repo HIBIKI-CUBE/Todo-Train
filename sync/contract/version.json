@@ -1,0 +1,72 @@
+{
+  "contract": 15,
+  "minReadable": 3,
+  "fingerprint": "75610e65d61da21e1dcf5d00bf496e1391d69996c2e36cadcaad328b8085ef79",
+  "history": [
+    {
+      "contract": 3,
+      "date": "2026-10-12",
+      "note": "いまの約束を版 3 として登録する"
+    },
+    {
+      "contract": 4,
+      "date": "2026-10-12",
+      "note": "未知の op を受け、端末と relay が版を名乗る"
+    },
+    {
+      "contract": 5,
+      "date": "2026-10-12",
+      "note": "声掛けの snap 欄と op answer・boardReserved・presence を足す"
+    },
+    {
+      "contract": 6,
+      "date": "2026-10-12",
+      "note": "停車の理由 heldBy と snap の pauseHeldBy を足す"
+    },
+    {
+      "contract": 7,
+      "date": "2026-10-13",
+      "note": "壊れた nudge・nudgePlan・reserved は捨てて snap を読む"
+    },
+    {
+      "contract": 8,
+      "date": "2026-10-13",
+      "note": "Mac PiP の声掛けの文言を足す。ワイヤの形は変えない"
+    },
+    {
+      "contract": 9,
+      "date": "2026-10-13",
+      "note": "到着後の空白の文言を足す。ワイヤの形は変えない"
+    },
+    {
+      "contract": 10,
+      "date": "2026-10-13",
+      "note": "版 8 と版 9 の fixture を凍結する。ワイヤの形は変えない"
+    },
+    {
+      "contract": 11,
+      "date": "2026-10-13",
+      "note": "画面の外の通知先 notifyOn を足す"
+    },
+    {
+      "contract": 12,
+      "date": "2026-10-13",
+      "note": "停車中の入力 pauseInputReport と snap の pauseId を足す"
+    },
+    {
+      "contract": 13,
+      "date": "2026-10-13",
+      "note": "停車中の snap に測った秒を足し、記録は下げない"
+    },
+    {
+      "contract": 14,
+      "date": "2026-10-13",
+      "note": "予定の時刻では停車しない。理由の無い停車は user"
+    },
+    {
+      "contract": 15,
+      "date": "2026-10-19",
+      "note": "見積もり直しと取り消しのコマンド、乗車中の snap にホームを足す"
+    }
+  ]
+}

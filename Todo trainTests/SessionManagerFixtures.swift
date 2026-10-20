@@ -13,14 +13,17 @@ import TodoTrainSync
 enum SessionManagerFixtures {
     static func makeHarness(
         now: Date = Date(timeIntervalSince1970: 1_700_000_000),
+        calendar: Calendar = .current,
         pauseLimit: Int = PauseLimitGuard.defaultLimit,
         endBellEnabled: Bool = false,
         cabinAnnouncementsEnabled: Bool = true,
         alarmScheduler: InMemoryAlarmScheduler? = nil,
         checkInNotifier: (any CheckInNotifying)? = nil,
+        overtimeNotifier: (any OvertimeNotifying)? = nil,
         liveActivityManager: (any LiveActivityManaging)? = nil,
         deviceIdentity: (any DeviceIdentifying)? = nil,
-        deviceLock: (any DeviceLockReading)? = nil
+        deviceLock: (any DeviceLockReading)? = nil,
+        calendarBoard: (any CalendarBoard)? = nil
     ) throws -> (SessionManager, ModelContext, FixedSessionClock, InMemoryAlarmScheduler) {
         let container = try AppModelContainer.make(inMemory: true)
         let context = ModelContext(container)
@@ -34,12 +37,15 @@ enum SessionManagerFixtures {
         let manager = SessionManager(
             modelContext: context,
             clock: clock,
+            calendar: calendar,
             settings: settings,
+            overtimeNotifier: overtimeNotifier,
             checkInNotifier: checkInNotifier ?? NoOpCheckInNotifier(),
             liveActivityManager: liveActivityManager,
             alarmScheduler: scheduler,
             deviceIdentity: deviceIdentity ?? FixedDeviceIdentity(id: "test-device"),
-            deviceLock: deviceLock ?? FixedDeviceLock(isLocked: false)
+            deviceLock: deviceLock ?? FixedDeviceLock(isLocked: false),
+            calendarBoard: calendarBoard ?? InMemoryCalendarBoard()
         )
         return (manager, context, clock, scheduler)
     }

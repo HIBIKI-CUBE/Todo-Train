@@ -6,22 +6,16 @@ import Testing
 struct CabinBroadcastSchedulingTests {
     private let seed = UUID(uuidString: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE")!
 
-    @Test func progressCountMatchesBands() {
+    @Test func legacyBroadcastBandsStayForIdleSalt() {
         #expect(CabinBroadcastScheduling.progressCount(estimatedSeconds: 10 * 60) == 0)
         #expect(CabinBroadcastScheduling.progressCount(estimatedSeconds: 11 * 60) == 1)
         #expect(CabinBroadcastScheduling.progressCount(estimatedSeconds: 30 * 60) == 2)
     }
 
-    @Test func offsetsAreStableAndInsideBands() {
-        let first = CabinBroadcastScheduling.offsets(estimatedSeconds: 1800, seed: seed)
-        let again = CabinBroadcastScheduling.offsets(estimatedSeconds: 1800, seed: seed)
-        #expect(first == again)
-        #expect(first.count == 2)
-        let budget = 1800.0
-        #expect(first[0] >= budget * CabinBroadcastScheduling.firstBand.lowerBound)
-        #expect(first[0] <= budget * CabinBroadcastScheduling.firstBand.upperBound)
-        #expect(first[1] >= budget * CabinBroadcastScheduling.secondBand.lowerBound)
-        #expect(first[0] < first[1])
+    @Test func checkInTimingMatchesNudgePlanner() {
+        let offset = CheckInTiming.offset(rideID: seed, estimateSeconds: 1800)
+        let nudge = NudgePlanner.checkInOffset(estimatedSeconds: 1800, rideID: seed)
+        #expect(offset == nudge)
     }
 }
 
@@ -81,8 +75,8 @@ struct CabinDeliveryTests {
         #expect(CabinDelivery.surface(kind: .progress, hasRide: true) == .pip)
     }
 
-    @Test func progressWithoutRideUsesNotification() {
-        #expect(CabinDelivery.surface(kind: .progress, hasRide: false) == .notification)
+    @Test func progressWithoutRideDoesNotNotify() {
+        #expect(CabinDelivery.surface(kind: .progress, hasRide: false) == .ignore)
     }
 
     @Test func idleUsesNotification() {
@@ -97,6 +91,14 @@ struct CabinDeliveryTests {
     @Test func unknownKindIsIgnored() {
         #expect(CabinDelivery.surface(kind: .unknown("future"), hasRide: true) == .ignore)
     }
+
+    @Test func overrunStaysOffTheNotificationPath() {
+        #expect(CabinDelivery.surface(kind: .overrun, hasRide: true) == .ignore)
+    }
+
+    @Test func arrivalGapUsesThePip() {
+        #expect(CabinDelivery.surface(kind: .gap, hasRide: false) == .pip)
+    }
 }
 
 @Suite("Cabin interrupt watch")
@@ -108,9 +110,9 @@ struct CabinInterruptWatchTests {
 
     @Test func sameSeedMatchesOffsets() {
         let seed = running.sessionId!
-        let offsets = CabinBroadcastScheduling.offsets(
-            estimatedSeconds: running.estimatedSeconds!,
-            seed: seed
+        let offsets = CheckInTiming.progressOffsets(
+            rideID: seed,
+            budgetSecondsAtStart: running.estimatedSeconds!
         )
         #expect(!offsets.isEmpty)
     }
@@ -254,10 +256,11 @@ struct CabinInterruptWatchTests {
     @Test func elapsedDueWithoutPendingShowsPip() {
         var snap = running
         snap.pendingCabin = nil
+        snap.nudgePlan = nil
         snap.checkInFiredCount = 0
-        let offsets = CabinBroadcastScheduling.offsets(
-            estimatedSeconds: snap.estimatedSeconds!,
-            seed: snap.sessionId!
+        let offsets = CheckInTiming.progressOffsets(
+            rideID: snap.sessionId!,
+            budgetSecondsAtStart: snap.estimatedSeconds!
         )
         let fireAt = 1_768_000_000 + Int(offsets[0].rounded(.towardZero)) + 1
         let interrupt = CabinInterruptWatch.evaluate(
@@ -268,6 +271,66 @@ struct CabinInterruptWatchTests {
         )
         #expect(interrupt.isDue)
         #expect(interrupt.showsPip)
+    }
+
+    @Test func planCheckInInFutureIgnoresShrunkEstimate() {
+        let started = 1_768_000_000
+        var snap = running
+        snap.pendingCabin = nil
+        snap.startedAt = started
+        snap.estimatedSeconds = 30 * 60
+        snap.checkInFiredCount = 0
+        let offsets = CheckInTiming.progressOffsets(
+            rideID: snap.sessionId!,
+            budgetSecondsAtStart: snap.estimatedSeconds!
+        )
+        let localDueAt = started + Int(offsets[0].rounded(.towardZero)) + 1
+        let planFireAt = localDueAt + 600
+        snap.nudgePlan = [
+            WireNudgePlanItem(
+                stage: .checkIn,
+                fireAt: planFireAt,
+                surface: .none,
+                rings: false
+            ),
+        ]
+        let now = localDueAt
+        let interrupt = CabinInterruptWatch.evaluate(
+            snap: snap,
+            now: now,
+            localEnabled: true,
+            optimisticFiredCount: 0
+        )
+        #expect(!interrupt.isDue)
+    }
+
+    @Test func planWithoutCheckInIsNeverProgressDue() {
+        let started = 1_768_000_000
+        var snap = running
+        snap.pendingCabin = nil
+        snap.startedAt = started
+        snap.estimatedSeconds = 30 * 60
+        snap.checkInFiredCount = 0
+        let offsets = CheckInTiming.progressOffsets(
+            rideID: snap.sessionId!,
+            budgetSecondsAtStart: snap.estimatedSeconds!
+        )
+        let now = started + Int(offsets[0].rounded(.towardZero)) + 1
+        snap.nudgePlan = [
+            WireNudgePlanItem(
+                stage: .approach,
+                fireAt: started + 2_000,
+                surface: .none,
+                rings: false
+            ),
+        ]
+        let interrupt = CabinInterruptWatch.evaluate(
+            snap: snap,
+            now: now,
+            localEnabled: true,
+            optimisticFiredCount: 0
+        )
+        #expect(!interrupt.isDue)
     }
 
     @Test func optimisticIdleConsumeHidesNotification() {

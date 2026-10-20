@@ -12,12 +12,14 @@ struct HubView: View {
     @Environment(SessionManager.self) private var sessionManager
     @Environment(\.modelContext) private var modelContext
     @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @Environment(\.scenePhase) private var scenePhase
     @Environment(DeletionUndoCenter.self) private var undoCenter
 
     @Query(sort: \Ticket.sortOrder) private var allTickets: [Ticket]
 
     @State private var showQuickAdd = false
-    @State private var showServiceEndSheet = false
+    @State private var showServiceBootCover = false
+    @State private var showServiceShutdownCover = false
     @State private var hubDestination: HubDestination?
     @State private var detailTicket: Ticket?
     @State private var errorMessage = ""
@@ -28,10 +30,13 @@ struct HubView: View {
     @State private var hubIssueEject: TicketIssueEjectEvent?
     @State private var focusedTicketID: UUID?
     @State private var ticketSlotFrames: [UUID: CGRect] = [:]
+    @State private var slotFrameCache = HubSlotFrameCache()
     @State private var departingTicketID: UUID?
     @State private var isPuttingBack = false
+    @State private var lastWarmedBand: WorkHourBand?
 
     @Environment(TicketMotionBridge.self) private var ticketMotion
+    @Environment(ArrivalForecastStore.self) private var forecastStore
     @Environment(\.focusZoomNamespace) private var focusZoomNamespace
     @Environment(\.isFocusCoverPresented) private var isFocusCoverPresented
     @Namespace private var previewZoomNamespace
@@ -63,30 +68,31 @@ struct HubView: View {
         return list
     }
 
+    private var currentBand: WorkHourBand {
+        WorkHourBand.of(hour: Calendar.current.component(.hour, from: .now))
+    }
+
+    private func warmForecasts() {
+        guard !isFocusCoverPresented else { return }
+        lastWarmedBand = currentBand
+        let sessions = (try? modelContext.fetch(FetchDescriptor<WorkSession>())) ?? []
+        forecastStore.warm(tickets: stackTickets, sessions: sessions)
+    }
+
     private var zoomNamespace: Namespace.ID {
         focusZoomNamespace ?? previewZoomNamespace
     }
 
+    private var boardingEligibility: BoardingEligibility {
+        sessionManager.boardingEligibility
+    }
+
     private var canBoardGenerally: Bool {
-        sessionManager.isInService
-            && sessionManager.phase != .running
-            && sessionManager.phase != .overtime
+        boardingEligibility.allowsInteraction
     }
 
     private var boardDisabledReason: String {
-        if sessionManager.needsServiceDayEndPrompt {
-            return "昨日の運行を終了してください"
-        }
-        if !sessionManager.isInService {
-            return "運行開始が必要です"
-        }
-        if sessionManager.phase == .running || sessionManager.phase == .overtime {
-            return "すでに走行中の切符があります"
-        }
-        if sessionManager.pausedTicketCount >= sessionManager.pauseLimit {
-            return "停車が上限です。先に片付けるか、停車中から再乗車してください"
-        }
-        return "発車できません"
+        boardingEligibility.disabledReason
     }
 
     private var isCompactHeight: Bool {
@@ -162,18 +168,22 @@ struct HubView: View {
             }
         }
         .errorAlert(isPresented: $showError, message: errorMessage)
+        .task {
+            await sessionManager.refreshCalendarBoardIfAuthorized()
+        }
         .sheet(isPresented: $showPauseLimitSheet) {
             PauseLimitSheet(
                 pendingTicket: pendingBoardTicket,
                 onSlotFreedTryBoard: {
                     if let pendingBoardTicket {
-                        board(pendingBoardTicket)
+                        requestBoard(pendingBoardTicket)
                     }
                 }
             )
         }
         .sheet(isPresented: $showQuickAdd) {
             QuickAddSheet { event in
+                ticketSlotFrames = slotFrameCache.frames
                 hubIssueEject = event
                 sessionManager.noteCabinActivity()
                 // Stay on the list so the issue celebration can play; do not auto-enter focus.
@@ -191,14 +201,34 @@ struct HubView: View {
                 }
             }
         }
-        .sheet(isPresented: $showServiceEndSheet) {
-            ServiceEndSheet { message in
+        .fullScreenCover(isPresented: $showServiceBootCover) {
+            ServiceBootCover()
+                .environment(sessionManager)
+        }
+        .fullScreenCover(isPresented: $showServiceShutdownCover) {
+            ServiceShutdownCover { message in
                 errorMessage = message
                 showError = true
             }
+            .environment(sessionManager)
         }
         .onAppear {
             presentServiceEndIfNeeded()
+            warmForecasts()
+            #if DEBUG
+            if sessionManager.uiPreviewShowsServiceShutdown {
+                showServiceShutdownCover = true
+            }
+            #endif
+        }
+        .task {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(60))
+                guard !Task.isCancelled else { return }
+                if !isFocusCoverPresented, lastWarmedBand != currentBand {
+                    warmForecasts()
+                }
+            }
         }
         .onChange(of: sessionManager.needsServiceDayEndPrompt) { _, needs in
             if needs {
@@ -209,14 +239,39 @@ struct HubView: View {
             presentServiceEndIfNeeded()
         }
         .onChange(of: isFocusCoverPresented) { _, presented in
-            guard presented else { return }
-            var transaction = Transaction()
-            transaction.disablesAnimations = true
-            withTransaction(transaction) {
-                departingTicketID = nil
-                focusedTicketID = nil
-                isPuttingBack = false
+            if presented {
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) {
+                    departingTicketID = nil
+                    focusedTicketID = nil
+                    isPuttingBack = false
+                }
+            } else if lastWarmedBand != currentBand {
+                warmForecasts()
             }
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            focusUndoBannerInset
+        }
+        .animation(TrainTheme.Motion.soft, value: sessionManager.focusUndoOffer?.eventID)
+    }
+
+    @ViewBuilder
+    private var focusUndoBannerInset: some View {
+        if let offer = sessionManager.focusUndoOffer, !isFocusCoverPresented {
+            FocusUndoBanner(offer: offer) {
+                switch offer.kind {
+                case .pause:
+                    try? sessionManager.undoPauseFromFocus(pauseID: offer.eventID)
+                case .reestimate:
+                    try? sessionManager.undoReestimate(eventID: offer.eventID)
+                }
+                sessionManager.focusUndoOffer = nil
+            }
+            .padding(.horizontal, TrainTheme.Space.lg)
+            .padding(.bottom, TrainTheme.Space.sm)
+            .transition(.move(edge: .bottom).combined(with: .opacity))
         }
     }
 
@@ -226,6 +281,7 @@ struct HubView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: TrainTheme.Space.lg) {
                 VStack(alignment: .leading, spacing: TrainTheme.Space.lg) {
+                    arrivalGapBanner
                     serviceBlock
                     if !sessionManager.pausedSessions.isEmpty {
                         pausedBlock
@@ -249,6 +305,7 @@ struct HubView: View {
         HStack(alignment: .top, spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: TrainTheme.Space.md) {
+                    arrivalGapBanner
                     serviceBlock
                     if !sessionManager.pausedSessions.isEmpty {
                         pausedBlock
@@ -277,6 +334,23 @@ struct HubView: View {
 
     // MARK: - Blocks
 
+    @ViewBuilder
+    private var arrivalGapBanner: some View {
+        if let state = sessionManager.arrivalGapBanner, !isFocusCoverPresented {
+            ArrivalGapBanner(state: state) {
+                do {
+                    try sessionManager.boardReservedFromHub()
+                } catch {
+                    errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                    showError = true
+                }
+            } onClose: {
+                sessionManager.dismissArrivalGap()
+            }
+            .padding(.horizontal, TrainTheme.Space.lg)
+        }
+    }
+
     private var serviceBlock: some View {
         VStack(alignment: .leading, spacing: TrainTheme.Space.sm) {
             Text("運行")
@@ -284,13 +358,27 @@ struct HubView: View {
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, TrainTheme.Space.lg)
             ServiceSummaryBar(
-                onError: { message in
-                    errorMessage = message
-                    showError = true
+                onRequestStartService: {
+                    requestStartService()
                 },
                 onRequestEndService: {
                     requestEndService()
                 }
+            )
+            .padding(.horizontal, TrainTheme.Space.md)
+            ApproachClearOfferGate(
+                world: ApproachClearWorld(
+                    inService: sessionManager.isInService,
+                    dayEndPrompt: sessionManager.needsServiceDayEndPrompt,
+                    paused: !sessionManager.pausedSessions.isEmpty
+                        || sessionManager.pausedCountTowardLimit >= 1
+                ),
+                interactionsFrozen: isPresentingOnDeck || isFocusCoverPresented,
+                taskRunning: {
+                    guard let session = sessionManager.activeSession else { return false }
+                    return session.isOpen && !session.isPaused
+                }(),
+                passengerClaimsScreen: sessionManager.passengerChrome.blocksApproachClear
             )
             .padding(.horizontal, TrainTheme.Space.md)
         }
@@ -303,6 +391,21 @@ struct HubView: View {
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, TrainTheme.Space.lg)
+
+            if let quiet = sessionManager.presentation.timetableQuietMessage {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(quiet)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    if sessionManager.timetableFit().currentOccupancy?.isAdopted == true {
+                        Button(TimetableCopy.unadoptThisTime) {
+                            sessionManager.unadoptCurrentOccurrence()
+                        }
+                        .font(.footnote.weight(.semibold))
+                    }
+                }
+                .padding(.horizontal, TrainTheme.Space.lg)
+            }
 
             VStack(spacing: TrainTheme.Space.sm) {
                 ForEach(sessionManager.pausedSessions, id: \.id) { session in
@@ -350,18 +453,15 @@ struct HubView: View {
                     isPuttingBack: isPuttingBack,
                     onFocusTicket: { focusTicket($0) },
                     onDismissFocus: { dismissTicketFocus() },
-                    onBoard: { boardFromFocus($0) },
+                    onBoard: { requestBoard($0) },
                     onOpenDetail: { ticket in
                         detailTicket = ticket
                     },
                     onDelete: { deleteTicket($0) },
                     zoomNamespace: zoomNamespace
                 )
-                .onPreferenceChange(TicketSlotFramesKey.self) { reported in
-                    ticketSlotFrames = TrainLayout.slotFrames(
-                        reported: reported,
-                        keeping: Set(stackTickets.map(\.id))
-                    )
+                .onPreferenceChange(TicketDeckFrameKey.self) { deckFrame in
+                    consumeDeckFrame(deckFrame)
                 }
             }
         }
@@ -423,7 +523,7 @@ struct HubView: View {
                         onDismiss: { dismissTicketFocus() },
                         onHoldDragEnded: { finishPresentDrag($0, ticket: ticket) },
                         onOpenDetail: { detailTicket = ticket },
-                        onBoard: { boardFromFocus(ticket) },
+                        onBoard: { requestBoard(ticket) },
                         onDelete: { deleteTicket(ticket) }
                     )
                 }
@@ -518,11 +618,26 @@ struct HubView: View {
             )
         case .board:
             UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-            boardFromFocus(ticket)
+            proceedBoard(ticket)
         case .snap:
             break
         }
         return action
+    }
+
+    private func consumeDeckFrame(_ deckFrame: CGRect) {
+        let reported = TrainLayout.slotFrames(
+            deckFrame: deckFrame,
+            orderedIDs: stackTickets.map(\.id)
+        )
+        slotFrameCache.frames = reported
+        if TrainLayout.shouldPublishSlotFrames(
+            needsLiveFrames: focusedTicketID != nil || hubIssueEject != nil,
+            reported: reported,
+            published: ticketSlotFrames
+        ) {
+            ticketSlotFrames = reported
+        }
     }
 
     private func focusTicket(_ id: UUID) {
@@ -531,12 +646,17 @@ struct HubView: View {
         insert.animation = nil
         withTransaction(insert) {
             isPuttingBack = false
+            ticketSlotFrames = slotFrameCache.frames
             focusedTicketID = id
         }
     }
 
-    private func boardFromFocus(_ ticket: Ticket) {
+    private func requestBoard(_ ticket: Ticket) {
         guard canBoardGenerally else { return }
+        proceedBoard(ticket)
+    }
+
+    private func proceedBoard(_ ticket: Ticket) {
         ticketMotion.zoomSourceID = ticket.id
         departingTicketID = ticket.id
         board(ticket)
@@ -556,26 +676,31 @@ struct HubView: View {
         }
     }
 
-    /// S-03: after a day change, surface the end-of-service flow (once Focus is not blocking).
+    /// S-03: after a day change, surface shutdown (once Focus is not blocking).
     private func presentServiceEndIfNeeded() {
         guard sessionManager.needsServiceDayEndPrompt else { return }
         guard sessionManager.phase != .running, sessionManager.phase != .overtime else { return }
-        if !showServiceEndSheet {
-            showServiceEndSheet = true
+        if !showServiceShutdownCover {
+            showServiceShutdownCover = true
+        }
+    }
+
+    private func requestStartService() {
+        do {
+            try sessionManager.startService()
+            showServiceBootCover = true
+        } catch {
+            if sessionManager.needsServiceDayEndPrompt {
+                showServiceShutdownCover = true
+            } else {
+                errorMessage = error.localizedDescription
+                showError = true
+            }
         }
     }
 
     private func requestEndService() {
-        if sessionManager.pausedTicketCount == 0 {
-            do {
-                try sessionManager.endService()
-            } catch {
-                errorMessage = error.localizedDescription
-                showError = true
-            }
-        } else {
-            showServiceEndSheet = true
-        }
+        showServiceShutdownCover = true
     }
 
     @ViewBuilder
@@ -593,6 +718,18 @@ struct HubView: View {
                         .font(TrainTheme.TypeScale.meta())
                         .foregroundStyle(TrainTheme.signalAmber)
                         .monospacedDigit()
+                    if scenePhase == .active, let pausedAt = session.pausedAt {
+                        TimelineView(.periodic(from: .now, by: 1)) { timeline in
+                            if let label = PauseInputCopy.gauge(
+                                elapsed: timeline.date.timeIntervalSince(pausedAt)
+                            ) {
+                                Text(label)
+                                    .font(TrainTheme.TypeScale.meta())
+                                    .foregroundStyle(TrainTheme.signalAmber)
+                                    .monospacedDigit()
+                            }
+                        }
+                    }
                     SignalBadge(kind: .paused)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -600,14 +737,13 @@ struct HubView: View {
             .buttonStyle(.plain)
 
             Button("再乗車") {
-                ticketMotion.zoomSourceID = ticket.id
-                board(ticket)
+                requestBoard(ticket)
             }
             .buttonStyle(.borderedProminent)
             .tint(TrainTheme.rail)
             .matchedTransitionSource(id: ticket.id, in: zoomNamespace)
             .disabled(!canBoardGenerally)
-            .accessibilityHint(canBoardGenerally ? "停車中の切符を再開" : boardDisabledReason)
+            .accessibilityHint(canBoardGenerally ? "停車中の切符を再開します" : boardDisabledReason)
         }
         .padding(TrainTheme.Space.md)
         .background(TrainTheme.surface, in: RoundedRectangle(cornerRadius: TrainTheme.Radius.control, style: .continuous))
@@ -641,7 +777,12 @@ struct HubView: View {
             try sessionManager.deleteTicket(ticket)
             undoCenter.offer(message: DeletionUndo.bannerMessage(ticketTitle: title)) {
                 withAnimation {
-                    try? sessionManager.restoreDeletedTicket(record)
+                    do {
+                        try sessionManager.restoreDeletedTicket(record)
+                    } catch {
+                        errorMessage = error.localizedDescription
+                        showError = true
+                    }
                 }
             }
         } catch {

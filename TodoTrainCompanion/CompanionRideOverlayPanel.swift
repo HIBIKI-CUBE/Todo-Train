@@ -57,6 +57,8 @@ final class OverlayRootView: NSView {
     var onDragChanged: ((_ mouse: NSPoint, _ startFrame: NSRect, _ startMouse: NSPoint) -> Void)?
     var onDragEnded: ((NSPoint) -> Void)?
     var onClick: ((NSPoint) -> Void)?
+    var boardGestureEnabled: (() -> Bool)?
+    var onBoardGesture: (() -> Void)?
     var isTucked = false
     var edge = OverlayEdge.trailing
 
@@ -64,6 +66,9 @@ final class OverlayRootView: NSView {
     private var dragStartMouse: NSPoint?
     private var dragStartFrame: NSRect?
     private var isDragging = false
+    private var boardStart: NSPoint?
+    private var scrollX: CGFloat = 0
+    private var scrollY: CGFloat = 0
 
     override var isOpaque: Bool { false }
     override var mouseDownCanMoveWindow: Bool { false }
@@ -122,12 +127,22 @@ final class OverlayRootView: NSView {
     }
 
     override func mouseDown(with event: NSEvent) {
+        let local = convert(event.locationInWindow, from: nil)
+        if boardGestureEnabled?() == true, local.x >= CompanionRideOverlayController.handleWidth {
+            boardStart = local
+            dragStartMouse = nil
+            dragStartFrame = nil
+            isDragging = false
+            return
+        }
+        boardStart = nil
         dragStartMouse = NSEvent.mouseLocation
         dragStartFrame = window?.frame
         isDragging = false
     }
 
     override func mouseDragged(with event: NSEvent) {
+        guard boardStart == nil else { return }
         guard let startMouse = dragStartMouse, let startFrame = dragStartFrame else { return }
         let mouse = NSEvent.mouseLocation
         let distance = hypot(mouse.x - startMouse.x, mouse.y - startMouse.y)
@@ -140,6 +155,18 @@ final class OverlayRootView: NSView {
     }
 
     override func mouseUp(with event: NSEvent) {
+        if let start = boardStart {
+            let local = convert(event.locationInWindow, from: nil)
+            boardStart = nil
+            if ArrivalGapBoardGesture.commits(
+                translationX: local.x - start.x,
+                translationY: local.y - start.y,
+                cardWidth: bounds.width
+            ) {
+                onBoardGesture?()
+            }
+            return
+        }
         let mouse = NSEvent.mouseLocation
         let dragged = isDragging
         isDragging = false
@@ -150,5 +177,28 @@ final class OverlayRootView: NSView {
             return
         }
         onClick?(convert(event.locationInWindow, from: nil))
+    }
+
+    override func scrollWheel(with event: NSEvent) {
+        guard boardGestureEnabled?() == true else { return }
+        if event.phase == .began {
+            scrollX = 0
+            scrollY = 0
+        }
+        if event.phase == .began || event.phase == .changed {
+            scrollX += event.scrollingDeltaX
+            scrollY += event.scrollingDeltaY
+        }
+        if event.phase == .ended {
+            if ArrivalGapBoardGesture.commits(
+                translationX: scrollX,
+                translationY: scrollY,
+                cardWidth: bounds.width
+            ) {
+                onBoardGesture?()
+            }
+            scrollX = 0
+            scrollY = 0
+        }
     }
 }

@@ -34,9 +34,16 @@ extension SessionManager {
         activeServiceDay = day
         needsServiceDayEndPrompt = false
         try save()
-        overtimeNotifier.requestAuthorizationIfNeeded()
-        checkInNotifier.requestAuthorizationIfNeeded()
-        alarmScheduler.requestAuthorizationIfNeeded()
+        #if DEBUG
+        let skipNotificationPrompt = FocusUIPreview.isActive
+        #else
+        let skipNotificationPrompt = false
+        #endif
+        if !skipNotificationPrompt {
+            overtimeNotifier.requestAuthorizationIfNeeded()
+            checkInNotifier.requestAuthorizationIfNeeded()
+            alarmScheduler.requestAuthorizationIfNeeded()
+        }
         reconcile(now: now)
         bumpCompanionSync()
     }

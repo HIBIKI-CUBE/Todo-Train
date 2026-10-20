@@ -10,6 +10,7 @@ export function hintHeaders(hint: HintBody): Headers {
   return new Headers({
     ETag: hintETag(hint),
     "Cache-Control": `public, max-age=${HINT_MAX_AGE_SECONDS}`,
+    "X-TT-Contract": `${hint.contract};min=${hint.minReadable}`,
   });
 }
 

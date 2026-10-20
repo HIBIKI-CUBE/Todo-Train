@@ -22,6 +22,7 @@ final class CompanionMacRuntime {
     var listenTask: Task<Void, Never>?
     var hintTask: Task<Void, Never>?
     var tickTask: Task<Void, Never>?
+    var presence = RelayPresence()
     let cabinNotifier = CompanionCabinNotifier()
     var optimisticIdleConsumed = false
     var pairingFlow: PairingFlow?
@@ -34,10 +35,36 @@ final class CompanionMacRuntime {
     var companionName: String?
     var pairingShortID: String?
     var snap: SnapPlaintext?
+    /// When the relay last confirmed `snap`. A dropped relay leaves this behind.
+    var snapConfirmedAt: Date?
     var connection: ConnectionStatus = .disconnected
     var outgoingPause: OutgoingPauseState = .idle
+    var issueBoardTrack: IssueBoardTrack = .idle
+    /// Hide the ride PiP while いまやる is in flight, so it appears under the dispensed ticket.
+    var suppressRideOverlay = false
     var now = Int(Date().timeIntervalSince1970)
     var lastStatus: String?
+    /// Last build received from the iPhone, inside a snap or ack.
+    var peerBuild: WireBuildInfo?
+    /// iPhone contract from a snap or ack. Nil until one arrives.
+    var peerContract: ContractAnnouncement?
+    /// Relay contract from hello or hint.
+    var relayContract: ContractAnnouncement?
+    var sentTimetablePauseAt: Int?
+    /// Extend answer in flight, in minutes. Nil for the other three answers.
+    var pendingExtendMinutes: Int?
+    var answerEstimateBefore: Int?
+    var answerNudgeID: UUID?
+    var staleWinner = false
+    var nudgeWinnerLine: String?
+    var transportNotice: String?
+    var screenLocked = false
+    var pauseInput = PauseInputEngine()
+    var pausePromptLine: String?
+    var pendingPauseReports: [UUID: PauseInputReport] = [:]
+    var lastPresence: MacPresenceSample?
+    var presenceInFlight = false
+    var presenceObservers: [NSObjectProtocol] = []
     var pairingPhase: PairingPhase = .idle
     var pairingQR: PairingURL?
     var pairingCue: PairingCue = .scanning
@@ -56,6 +83,15 @@ final class CompanionMacRuntime {
     var cabinAnnouncementsEnabled: Bool {
         didSet { defaults.set(cabinAnnouncementsEnabled, forKey: Defaults.cabinEnabled) }
     }
+
+    var imaYaruShortcut: ImaYaruShortcut? {
+        didSet {
+            ImaYaruShortcutStore.write(imaYaruShortcut, to: defaults)
+            imaYaruShortcutRejected = !ImaYaruHotKeyCenter.shared.register(imaYaruShortcut)
+        }
+    }
+
+    var imaYaruShortcutRejected = false
 
     init(
         secrets: any SecretStoring = KeychainSecretStore(),
@@ -78,6 +114,10 @@ final class CompanionMacRuntime {
         } else {
             self.cabinAnnouncementsEnabled = defaults.bool(forKey: Defaults.cabinEnabled)
         }
+        self.imaYaruShortcut = ImaYaruShortcutStore.read(defaults)
+        self.peerBuild = PeerBuildStore.load(from: defaults)
+        self.peerContract = PeerContractStore.load(from: defaults, key: PeerContractStore.peerKey)
+        self.relayContract = PeerContractStore.load(from: defaults, key: PeerContractStore.relayKey)
         refreshPaired()
         applyLoginItem()
         cabinNotifier.configure()
@@ -85,6 +125,7 @@ final class CompanionMacRuntime {
             Task { await self?.sendStill() }
         }
         startTicking()
+        startScreenLockObservation()
         if isPaired {
             startListening()
         }
@@ -101,12 +142,28 @@ final class CompanionMacRuntime {
             outgoingPause: outgoingPause,
             cabinEnabledLocal: cabinAnnouncementsEnabled,
             optimisticFiredCount: optimisticFiredCount,
-            optimisticIdleConsumed: optimisticIdleConsumed
+            optimisticIdleConsumed: optimisticIdleConsumed,
+            sendingExtendMinutes: pendingExtendMinutes,
+            nudgeWinnerLine: nudgeWinnerLine,
+            transportNotice: transportNotice,
+            pausePromptLine: pausePromptLine
         )
     }
 
     var presentation: MenuBarPresentation {
         MenuBarPresentation.make(menuBarInput)
+    }
+
+    var canOfferImaYaru: Bool {
+        ImaYaruOffer.isAvailable(isPaired: isPaired, serviceActive: snap?.serviceActive)
+    }
+
+    func openImaYaru() {
+        ImaYaruOpener.present?()
+    }
+
+    func activateImaYaruShortcut() {
+        imaYaruShortcutRejected = !ImaYaruHotKeyCenter.shared.register(imaYaruShortcut)
     }
 
     var overlayPresentation: RideOverlayPresentation {

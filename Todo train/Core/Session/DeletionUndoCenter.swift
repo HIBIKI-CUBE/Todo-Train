@@ -12,6 +12,8 @@ import Observation
 @MainActor
 final class DeletionUndoCenter {
     private(set) var bannerMessage: String?
+    /// Restore failed after the offering screen was already dismissed.
+    var restoreErrorMessage: String?
     private var restore: (() -> Void)?
     private var hideTask: Task<Void, Never>?
 

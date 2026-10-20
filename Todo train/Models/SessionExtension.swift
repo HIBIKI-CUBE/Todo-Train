@@ -12,6 +12,8 @@ final class SessionExtension {
     var addedSeconds: Int = 0
     var reason: String?
     var createdAt: Date = Date.now
+    /// Active seconds at `createdAt`. A later pause stays in the accumulated total, so the reading is stored here.
+    var workingSeconds: Double?
     var session: WorkSession?
 
     init(
@@ -19,12 +21,14 @@ final class SessionExtension {
         addedSeconds: Int,
         reason: String? = nil,
         createdAt: Date = .now,
+        workingSeconds: Double? = nil,
         session: WorkSession? = nil
     ) {
         self.id = id
         self.addedSeconds = max(0, addedSeconds)
         self.reason = reason
         self.createdAt = createdAt
+        self.workingSeconds = workingSeconds
         self.session = session
     }
 }

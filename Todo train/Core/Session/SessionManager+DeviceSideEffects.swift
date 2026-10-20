@@ -63,6 +63,9 @@ extension SessionManager {
         now: Date,
         endBell: EndBellRefresh = .schedule
     ) {
+        #if DEBUG
+        if FocusUIPreview.isActive, !FocusUIPreview.wantsLiveActivity { return }
+        #endif
         refreshOvertimeNotification(for: session, now: now)
         refreshLiveActivity(for: session, now: now)
         if endBell == .schedule {
@@ -93,19 +96,21 @@ extension SessionManager {
         let remaining = session.remainingSeconds(at: now)
         let title = session.ticket?.title ?? "切符"
         let deadline = now.addingTimeInterval(remaining)
-        let awayPrompt = (!session.isPaused && session.pendingCheckIn == .away) ? CheckInCopy.away : nil
+        let instrument = nudgeInstrument(for: session, now: now, remaining: remaining)
         liveActivityManager.startOrUpdate(
             LiveActivitySessionContent(
                 sessionID: session.id,
                 title: title,
                 deadline: deadline,
                 isOvertime: remaining <= 0 && !session.isPaused,
-                budgetSeconds: session.budgetSecondsAtStart,
+                budgetSeconds: session.activeBudgetSeconds,
                 isPaused: session.isPaused,
                 pausedAt: session.pausedAt,
-                checkInPrompt: awayPrompt,
+                checkInPrompt: instrument.prompt,
                 alertTitle: presentAwayAlert ? CheckInCopy.away : nil,
-                alertBody: presentAwayAlert ? title : nil
+                alertBody: presentAwayAlert ? title : nil,
+                instrumentPhaseRaw: instrument.phaseRaw,
+                promptKeepsTimerColor: instrument.keepsTimerColor
             )
         )
     }
@@ -120,9 +125,18 @@ extension SessionManager {
 
     func fireAwayInterrupt(_ session: WorkSession, now: Date, presentAlert: Bool) {
         cancelAwayFireTask()
+        let previousPending = session.pendingCheckIn
+        let previousAwayDue = session.awayDueAt
         session.awayDueAt = nil
         session.pendingCheckIn = .away
-        try? save()
+        guard saveBestEffort() else {
+            session.pendingCheckIn = previousPending
+            session.awayDueAt = previousAwayDue
+            if let previousAwayDue {
+                armAwayFire(at: previousAwayDue, sessionID: session.id)
+            }
+            return
+        }
         refreshLiveActivity(for: session, now: now, presentAwayAlert: presentAlert)
     }
 
@@ -190,6 +204,7 @@ extension SessionManager {
             return
         }
         guard settings.endBellEnabled else {
+            lastScheduledEndBellFireAt = nil
             alarmScheduler.cancel(sessionID: session.id)
             return
         }
@@ -202,20 +217,30 @@ extension SessionManager {
         // Keep a paused AlarmKit Live Activity; resume / retention / a new ride tears it down.
         guard !session.isPaused else { return }
         let elapsed = session.elapsedSeconds(at: now)
-        guard let fireAt = SessionEndSchedule.fireAt(
-            budgetSeconds: session.budgetSecondsAtStart,
+        let budgetFire = SessionEndSchedule.fireAt(
+            budgetSeconds: session.activeBudgetSeconds,
             elapsedSeconds: elapsed,
             now: now
-        ) else {
+        )
+        let nextBlockStart = timetableFit(at: now).nextBlock?.startsAt
+        let fireAt = [budgetFire, nextBlockStart].compactMap { $0 }.filter { $0 > now }.min()
+        guard let fireAt else {
+            lastScheduledEndBellFireAt = nil
             alarmScheduler.cancel(sessionID: session.id)
             return
         }
+        if let last = lastScheduledEndBellFireAt,
+           abs(last.timeIntervalSince(fireAt)) < 0.5,
+           alarmScheduler.hasAlarm(sessionID: session.id) {
+            return
+        }
+        lastScheduledEndBellFireAt = fireAt
         let title = session.ticket?.title ?? "切符"
         alarmScheduler.scheduleEndBell(
             sessionID: session.id,
             ticketTitle: title,
             fireAt: fireAt,
-            budgetSeconds: session.budgetSecondsAtStart
+            budgetSeconds: session.activeBudgetSeconds
         )
     }
 
@@ -237,9 +262,13 @@ extension SessionManager {
             overtimeNotifier.cancel(sessionID: session.id)
             return
         }
+        guard iphonePosts(.overtime, turn: 0, now: now) else {
+            overtimeNotifier.cancel(sessionID: session.id)
+            return
+        }
         let elapsed = session.elapsedSeconds(at: now)
         guard let fireAt = OvertimeSchedule.fireAt(
-            budgetSeconds: session.budgetSecondsAtStart,
+            budgetSeconds: session.activeBudgetSeconds,
             elapsedSeconds: elapsed,
             now: now
         ) else {

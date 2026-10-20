@@ -13,6 +13,11 @@ nonisolated enum PauseLimitGuard {
     static func canBoardNewRide(pausedCount: Int, limit: Int = defaultLimit) -> Bool {
         pausedCount < limit
     }
+
+    /// ダイヤを理由にした停車は、占有が続くあいだ上限に数えない。
+    static func pausedCountTowardLimit(isHeld: [Bool]) -> Int {
+        isHeld.filter { !$0 }.count
+    }
 }
 
 /// Paused Live Activities stay for StandBy resume, but must not ride ActivityKit's 8h cap.

@@ -19,6 +19,9 @@ struct HistoryDayPager: View {
     var onSelect: (WorkSession) -> Void
     var onReissue: ((Ticket) -> Void)?
     var onDelete: (WorkSession) -> Void
+    var stripsByDay: [String: [DayClockStrip]] = [:]
+    var bottomContentInset: CGFloat = 0
+    var bundleTouching: Bool = false
 
     @Environment(\.calendar) private var calendar
 
@@ -58,7 +61,10 @@ struct HistoryDayPager: View {
             viewportWidth: viewportWidth,
             onSelect: onSelect,
             onReissue: onReissue,
-            onDelete: onDelete
+            onDelete: onDelete,
+            stripsByDay: stripsByDay,
+            bottomContentInset: bottomContentInset,
+            bundleTouching: bundleTouching
         )
     }
 }
@@ -73,6 +79,9 @@ private struct HistoryDayInteractiveCanvas: View {
     var onSelect: (WorkSession) -> Void
     var onReissue: ((Ticket) -> Void)?
     var onDelete: (WorkSession) -> Void
+    var stripsByDay: [String: [DayClockStrip]] = [:]
+    var bottomContentInset: CGFloat = 0
+    var bundleTouching: Bool = false
 
     @Environment(\.calendar) private var calendar
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -146,13 +155,14 @@ private struct HistoryDayInteractiveCanvas: View {
                 }
                 .frame(minHeight: clockMinHeight, alignment: .top)
             }
+            .contentMargins(.bottom, bottomContentInset, for: .scrollContent)
             .scrollBounceBehavior(.basedOnSize)
             .scrollDisabled(dragX != 0 && !isPinching)
         }
         .gesture(pagePan)
         .gesture(zoomPinch)
         .onAppear { haptics.prepare() }
-        .accessibilityHint("左右にスワイプで日付、横ピンチで1画面の日数")
+        .accessibilityHint("左右にスワイプすると日付を、横にピンチすると1画面の日数を変えます")
         .accessibilityValue("\(snappedDays)日表示")
         .accessibilityAction(named: "次の日") { shiftDay(1) }
         .accessibilityAction(named: "前の日") { shiftDay(-1) }
@@ -215,7 +225,8 @@ private struct HistoryDayInteractiveCanvas: View {
                 minHeight: clockMinHeight,
                 onSelect: onSelect,
                 onReissue: onReissue,
-                onDelete: onDelete
+                onDelete: onDelete,
+                strips: stripsByDay[key] ?? []
             )
             if sessions.isEmpty {
                 emptyDayChrome(day: day)
@@ -306,7 +317,7 @@ private struct HistoryDayInteractiveCanvas: View {
 
     private var pagePan: DeckHorizontalPanGesture {
         DeckHorizontalPanGesture(
-            isEnabled: !isPinching && !isSettlingPage,
+            isEnabled: !isPinching && !isSettlingPage && !bundleTouching,
             cancelsTouchesInView: true
         ) { x in
             dragX = x

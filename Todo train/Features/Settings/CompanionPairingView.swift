@@ -1,4 +1,5 @@
 import SwiftUI
+import TodoTrainQRUI
 import TodoTrainSync
 
 struct CompanionPairingView: View {
@@ -22,7 +23,13 @@ struct CompanionPairingView: View {
                     .padding(.horizontal, TrainTheme.Space.lg)
 
                 if let encoded = qr?.encoded {
-                    CompanionQRCodeView(encoded: encoded, dimension: 220)
+                    CompanionQRCodeView(
+                        encoded: encoded,
+                        dimension: 220,
+                        chromePadding: 16,
+                        cornerRadius: TrainTheme.Radius.control,
+                        accessibilityLabel: "Mac に向ける QR"
+                    )
                 }
 
                 if showsCamera {
@@ -104,7 +111,7 @@ struct CompanionPairingView: View {
     private var instruction: String {
         switch phase {
         case .established:
-            "つながった。この Mac だけが読める。"
+            "つながりました。この Mac だけが読めます。"
         case .awaitingLocalAuth, .confirming:
             "端末を自分に戻して Face ID"
         case .aborted:

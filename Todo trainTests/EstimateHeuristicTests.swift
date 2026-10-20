@@ -50,4 +50,31 @@ struct EstimateHeuristicTests {
                 == "過去の中央値 約20分（5件）"
         )
     }
+
+    @Test func arrivedRides_dropsImmediateArrivalButKeepsEarlyFinish() {
+        let ticket = Ticket(title: "T", estimatedSeconds: 30 * 60)
+        let immediate = ride(ticket: ticket, active: 8, estimate: 30 * 60)
+        let almostMinute = ride(ticket: ticket, active: 59, estimate: 30 * 60)
+        let justRode = ride(ticket: ticket, active: 60, estimate: 30 * 60)
+        let earlyFinish = ride(ticket: ticket, active: 8 * 60, estimate: 30 * 60)
+
+        let samples = EstimateHeuristic.arrivedSamples(
+            from: [immediate, almostMinute, justRode, earlyFinish],
+            matchingAnyTagIDs: nil
+        )
+        #expect(samples == [60, 8 * 60])
+    }
+
+    private func ride(ticket: Ticket, active: TimeInterval, estimate: Int) -> WorkSession {
+        let session = WorkSession(
+            startedAt: Date(timeIntervalSince1970: 1_700_000_000),
+            estimatedSecondsAtStart: estimate,
+            ticket: ticket
+        )
+        session.endedAt = session.startedAt.addingTimeInterval(active)
+        session.outcome = .arrived
+        session.accumulatedActiveSeconds = active
+        session.budgetSecondsAtStart = estimate
+        return session
+    }
 }

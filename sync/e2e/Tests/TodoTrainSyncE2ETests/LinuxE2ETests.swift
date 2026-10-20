@@ -100,7 +100,13 @@ struct LinuxE2ETests {
 
         let publicClient = SyncHTTPClient(baseURL: baseURL, transport: recording)
         let hint = try await publicClient.getHint(pairingId: pairingId)
-        #expect(hint.hint == HintPlaintext(snapRev: snap.rev, ackRev: 0, cmdCount: 0))
+        #expect(hint.hint == HintPlaintext(
+            snapRev: snap.rev,
+            ackRev: 0,
+            cmdCount: 0,
+            contract: ContractVersion.contract,
+            minReadable: ContractVersion.minReadable
+        ))
         let hintExchanges = await recording.exchanges.filter { $0.0.path.contains("/v1/hint/") }
         #expect(hintExchanges.last?.0.headers["Authorization"] == nil)
 
