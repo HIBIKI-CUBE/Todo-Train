@@ -19,6 +19,10 @@ struct HistoryDayClockView: View {
     var onSelect: (WorkSession) -> Void
     var onReissue: ((Ticket) -> Void)?
     var onDelete: (WorkSession) -> Void
+    var strips: [DayClockStrip] = []
+    var openEndedAt: Date? = nil
+    /// Overrides the density stride when the shutdown overview compresses a long window.
+    var hourLabelStride: Int? = nil
 
     @Environment(\.calendar) private var calendar
 
@@ -26,7 +30,11 @@ struct HistoryDayClockView: View {
         if let prepared {
             HStack(alignment: .top, spacing: 0) {
                 if showsGutter {
-                    HistoryTimeGutter(layout: prepared.layout, density: density)
+                    HistoryTimeGutter(
+                        layout: prepared.layout,
+                        density: density,
+                        hourLabelStride: hourLabelStride
+                    )
                 }
                 laneStack(layout: prepared.layout, rides: prepared.rides)
             }
@@ -40,7 +48,7 @@ struct HistoryDayClockView: View {
 
     private var prepared: PreparedDay? {
         let clipped: [TimelineRide] = {
-            let raw = SessionTimeline.rides(from: sessions)
+            let raw = SessionTimeline.rides(from: sessions, openEndedAt: openEndedAt)
             guard let day else { return raw }
             return raw.compactMap { SessionTimeline.clip($0, toDay: day, calendar: calendar) }
         }()
@@ -78,6 +86,8 @@ struct HistoryDayClockView: View {
                 .frame(height: canvasHeight(layout))
                 .allowsHitTesting(false)
 
+            stripOverlay(layout: layout)
+
             HStack(alignment: .top, spacing: density.laneSpacing) {
                 ForEach(0..<layout.laneCount, id: \.self) { lane in
                     laneColumn(lane, layout: layout, rides: rides, sessionByID: sessionByID)
@@ -96,6 +106,52 @@ struct HistoryDayClockView: View {
             }
         }
         .frame(maxWidth: .infinity, minHeight: canvasHeight(layout), alignment: .topLeading)
+    }
+
+    @ViewBuilder
+    private func stripOverlay(layout: DayClockLayout) -> some View {
+        ForEach(strips) { strip in
+            let y = CGFloat(layout.y(for: max(strip.startsAt, layout.start)))
+            let height = max(
+                CGFloat(layout.height(from: max(strip.startsAt, layout.start), to: min(strip.endsAt, layout.end))),
+                4
+            )
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                .fill(Self.stripFill(strip.style))
+                .overlay {
+                    if strip.style != .history {
+                        RoundedRectangle(cornerRadius: 4, style: .continuous)
+                            .strokeBorder(Self.stripStroke(strip.style), lineWidth: strip.style == .adopted ? 0 : 1)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: height)
+                .padding(.top, y)
+                .accessibilityHidden(true)
+                .allowsHitTesting(false)
+        }
+    }
+
+    private static func stripFill(_ style: DayClockStrip.Style) -> Color {
+        switch style {
+        case .notice:
+            return TrainTheme.rail.opacity(0.10)
+        case .adopted:
+            return TrainTheme.rail.opacity(0.32)
+        case .history:
+            return TrainTheme.rail.opacity(0.14)
+        }
+    }
+
+    private static func stripStroke(_ style: DayClockStrip.Style) -> Color {
+        switch style {
+        case .notice:
+            return TrainTheme.rail.opacity(0.28)
+        case .adopted:
+            return TrainTheme.rail.opacity(0.55)
+        case .history:
+            return .clear
+        }
     }
 
     private func laneColumn(
@@ -181,7 +237,7 @@ struct HistoryDayClockView: View {
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(SessionTimeline.spokenSummary(for: ride, timeFormatter: Self.timeFormatter))
-            .accessibilityHint("詳細を表示")
+            .accessibilityHint("詳細を表示します")
             .accessibilityAddTraits(.isButton)
             .accessibilityAction(named: "削除") {
                 onDelete(session)
@@ -363,11 +419,12 @@ private extension HistoryRideDensity {
 struct HistoryTimeGutter: View {
     let layout: DayClockLayout
     var density: HistoryRideDensity = .day
+    var hourLabelStride: Int? = nil
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
-            ForEach(layout.hourTicks, id: \.self) { tick in
-                if shouldLabel(tick) {
+            ForEach(Array(layout.hourTicks.enumerated()), id: \.element) { index, tick in
+                if shouldLabel(tick, index: index) {
                     Text(label(tick))
                         .font(density == .week ? Font.caption2.weight(.semibold).monospacedDigit() : Font.caption.weight(.semibold).monospacedDigit())
                         .foregroundStyle(.secondary)
@@ -380,7 +437,10 @@ struct HistoryTimeGutter: View {
         .accessibilityHidden(true)
     }
 
-    private func shouldLabel(_ tick: Date) -> Bool {
+    private func shouldLabel(_ tick: Date, index: Int) -> Bool {
+        if let hourLabelStride {
+            return index % max(hourLabelStride, 1) == 0
+        }
         let hour = Calendar.current.component(.hour, from: tick)
         return hour % density.hourLabelStride == 0
     }
@@ -402,7 +462,7 @@ struct HistoryTimeGutter: View {
     }()
 }
 
-private struct HourGridCanvas: View {
+struct HourGridCanvas: View {
     let layout: DayClockLayout
     var density: HistoryRideDensity = .day
 

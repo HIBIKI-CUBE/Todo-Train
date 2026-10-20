@@ -4,11 +4,15 @@
 //
 
 import Foundation
+import TodoTrainSync
 
 enum EstimateHeuristic {
     static let presets = EstimateChips.ticketPresets
     static let minimumSampleCount = 3
     static let defaultHighlightMinutes = 30
+    /// Below this, an arrival is 開始忘れ→すぐ到着, not a ride to learn from.
+    /// Genuine 早着 that already rode for a while stays in the sample.
+    static let immediateArrivalLimitSeconds: TimeInterval = 60
 
     /// Median of sample durations in seconds. Returns nil if empty.
     static func medianSeconds(_ samples: [TimeInterval]) -> TimeInterval? {
@@ -41,8 +45,83 @@ enum EstimateHeuristic {
         return (snapToPresetMinutes(median), samples.count)
     }
 
+    /// Past arrivals chosen by `RideSimilarity`, then snapped. Nil below the sample floor.
+    @MainActor
+    static func suggestion(
+        title: String,
+        tagIDs: Set<UUID> = [],
+        ticket: Ticket? = nil,
+        sessions: [WorkSession],
+        now: Date = .now,
+        calendar: Calendar = .current
+    ) -> (minutes: Int, sampleCount: Int)? {
+        let chosen = RideSimilarity.select(
+            title: title,
+            tagIDs: tagIDs,
+            ticket: ticket,
+            sessions: sessions,
+            now: now,
+            calendar: calendar
+        ).chosen
+        return suggestion(from: chosen.map(\.ride.activeSeconds))
+    }
+
     static func caption(minutes: Int, sampleCount: Int) -> String {
         "過去の中央値 約\(minutes)分（\(sampleCount)件）"
+    }
+
+    struct ArrivedRide: Equatable, Sendable {
+        var id: UUID
+        var ticketID: UUID?
+        var title: String
+        var tagIDs: Set<UUID>
+        var startedAt: Date
+        var activeSeconds: TimeInterval
+        var estimatedSeconds: Int
+        var budgetSeconds: Int
+        var extensionAddedSeconds: Int
+        var extensionReasons: [String]
+        var punctuality: ArrivalPunctuality
+        /// Sum of stored `macActiveSeconds` on pauses held by `user`.
+        var pauseInputSeconds: TimeInterval
+    }
+
+    /// Arrived rides, optionally filtered by tag IDs (any match).
+    static func arrivedRides(
+        from sessions: [WorkSession],
+        matchingAnyTagIDs tagIDs: Set<UUID>?
+    ) -> [ArrivedRide] {
+        sessions.compactMap { session -> ArrivedRide? in
+            guard session.endedAt != nil, session.outcome == .arrived else { return nil }
+            guard session.accumulatedActiveSeconds >= immediateArrivalLimitSeconds else { return nil }
+            if let tagIDs, !tagIDs.isEmpty {
+                let ticketTags = Set(session.ticket?.tags.map(\.id) ?? [])
+                guard !ticketTags.isDisjoint(with: tagIDs) else { return nil }
+            }
+            let added = session.extensions.reduce(0) { $0 + $1.addedSeconds }
+            let reasons = session.extensions.compactMap { extensionRecord -> String? in
+                let reason = extensionRecord.reason?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                return reason.isEmpty ? nil : String(reason.prefix(40))
+            }
+            return ArrivedRide(
+                id: session.id,
+                ticketID: session.ticket?.id,
+                title: session.ticket?.title ?? "",
+                tagIDs: Set(session.ticket?.tags.map(\.id) ?? []),
+                startedAt: session.startedAt,
+                activeSeconds: session.accumulatedActiveSeconds,
+                estimatedSeconds: session.estimatedSecondsAtStart,
+                budgetSeconds: session.activeBudgetSeconds,
+                extensionAddedSeconds: added,
+                extensionReasons: reasons,
+                punctuality: Punctuality.classify(session),
+                pauseInputSeconds: ForecastExclusion.pauseInputSeconds(
+                    session.pauses.map {
+                        PauseInputReading(heldByRaw: $0.heldByRaw, macActiveSeconds: $0.macActiveSeconds)
+                    }
+                )
+            )
+        }
     }
 
     /// Collect active seconds from arrived sessions, optionally filtered by tag IDs (any match).
@@ -50,13 +129,6 @@ enum EstimateHeuristic {
         from sessions: [WorkSession],
         matchingAnyTagIDs tagIDs: Set<UUID>?
     ) -> [TimeInterval] {
-        sessions.compactMap { session -> TimeInterval? in
-            guard session.endedAt != nil, session.outcome == .arrived else { return nil }
-            if let tagIDs, !tagIDs.isEmpty {
-                let ticketTags = Set(session.ticket?.tags.map(\.id) ?? [])
-                guard !ticketTags.isDisjoint(with: tagIDs) else { return nil }
-            }
-            return session.accumulatedActiveSeconds
-        }
+        arrivedRides(from: sessions, matchingAnyTagIDs: tagIDs).map(\.activeSeconds)
     }
 }

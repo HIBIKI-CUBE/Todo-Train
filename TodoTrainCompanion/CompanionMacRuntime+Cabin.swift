@@ -3,7 +3,15 @@ import TodoTrainSync
 
 extension CompanionMacRuntime {
     func syncCabinNotification() {
-        cabinNotifier.sync(interrupt: cabinInterrupt)
+        let pipVisible = overlayPresentation.isVisible && !suppressRideOverlay
+        cabinNotifier.apply(
+            CompanionOffscreenNotify.requests(
+                snap: snap,
+                pipVisible: pipVisible,
+                now: Date(timeIntervalSince1970: TimeInterval(now)),
+                snapAt: snapConfirmedAt
+            )
+        )
     }
 
     var optimisticFiredCount: Int {

@@ -22,9 +22,13 @@ protocol CheckInNotifying: AnyObject {
     )
     func scheduleAway(sessionID: UUID, ticketTitle: String, body: String, fireAt: Date)
     func scheduleIdle(serviceDayID: UUID, body: String, fireAt: Date)
+    func scheduleTimetablePause(sessionID: UUID, guardID: UUID, title: String, fireAt: Date)
+    func schedulePassengerBoard(intervalID: String, title: String, fireAt: Date)
+    func cancelPassengerBoard()
     func cancel(sessionID: UUID)
     func cancelProgress(sessionID: UUID)
     func cancelIdle(serviceDayID: UUID)
+    func cancelTimetable(sessionID: UUID)
     func cancelAll()
 }
 
@@ -40,9 +44,13 @@ final class NoOpCheckInNotifier: CheckInNotifying {
     ) {}
     func scheduleAway(sessionID: UUID, ticketTitle: String, body: String, fireAt: Date) {}
     func scheduleIdle(serviceDayID: UUID, body: String, fireAt: Date) {}
+    func scheduleTimetablePause(sessionID: UUID, guardID: UUID, title: String, fireAt: Date) {}
+    func schedulePassengerBoard(intervalID: String, title: String, fireAt: Date) {}
+    func cancelPassengerBoard() {}
     func cancel(sessionID: UUID) {}
     func cancelProgress(sessionID: UUID) {}
     func cancelIdle(serviceDayID: UUID) {}
+    func cancelTimetable(sessionID: UUID) {}
     func cancelAll() {}
 }
 
@@ -51,6 +59,8 @@ final class InMemoryCheckInNotifier: CheckInNotifying {
     private(set) var progress: [(sessionID: UUID, index: Int, fireAt: Date, body: String)] = []
     private(set) var away: [(sessionID: UUID, fireAt: Date, body: String)] = []
     private(set) var idle: [(serviceDayID: UUID, fireAt: Date, body: String)] = []
+    private(set) var timetable: [(sessionID: UUID, guardID: UUID, fireAt: Date, title: String)] = []
+    private(set) var passenger: [(intervalID: String, fireAt: Date, title: String)] = []
 
     func requestAuthorizationIfNeeded() {}
 
@@ -75,9 +85,23 @@ final class InMemoryCheckInNotifier: CheckInNotifying {
         idle.append((serviceDayID, fireAt, body))
     }
 
+    func scheduleTimetablePause(sessionID: UUID, guardID: UUID, title: String, fireAt: Date) {
+        timetable.removeAll { $0.sessionID == sessionID }
+        timetable.append((sessionID, guardID, fireAt, title))
+    }
+
+    func schedulePassengerBoard(intervalID: String, title: String, fireAt: Date) {
+        passenger = [(intervalID, fireAt, title)]
+    }
+
+    func cancelPassengerBoard() {
+        passenger.removeAll()
+    }
+
     func cancel(sessionID: UUID) {
         progress.removeAll { $0.sessionID == sessionID }
         away.removeAll { $0.sessionID == sessionID }
+        timetable.removeAll { $0.sessionID == sessionID }
     }
 
     func cancelProgress(sessionID: UUID) {
@@ -88,10 +112,16 @@ final class InMemoryCheckInNotifier: CheckInNotifying {
         idle.removeAll { $0.serviceDayID == serviceDayID }
     }
 
+    func cancelTimetable(sessionID: UUID) {
+        timetable.removeAll { $0.sessionID == sessionID }
+    }
+
     func cancelAll() {
         progress.removeAll()
         away.removeAll()
         idle.removeAll()
+        timetable.removeAll()
+        passenger.removeAll()
     }
 }
 
@@ -125,6 +155,45 @@ nonisolated enum CheckInNotification {
     static func isIdle(_ identifier: String) -> Bool {
         identifier.hasPrefix("checkin.idle.")
     }
+
+    static func isProgress(_ identifier: String) -> Bool {
+        identifier.hasPrefix("checkin.progress.")
+    }
+}
+
+nonisolated enum TimetableNotification {
+    static let categoryIdentifier = "todotrain.timetable"
+    static let pauseAction = "todotrain.timetable.pause"
+
+    static func identifier(sessionID: UUID, guardID: UUID) -> String {
+        "timetable.pause.\(sessionID.uuidString).\(guardID.uuidString)"
+    }
+
+    static func isTimetable(_ identifier: String) -> Bool {
+        identifier.hasPrefix("timetable.pause.")
+    }
+
+    static func parse(_ identifier: String) -> (sessionID: UUID, guardID: UUID)? {
+        let parts = identifier.split(separator: ".")
+        guard parts.count == 4, parts[0] == "timetable", parts[1] == "pause" else { return nil }
+        guard let sessionID = UUID(uuidString: String(parts[2])),
+              let guardID = UUID(uuidString: String(parts[3])) else { return nil }
+        return (sessionID, guardID)
+    }
+}
+
+nonisolated enum PassengerNotification {
+    static let categoryIdentifier = "todotrain.passenger"
+    static let boardAction = "todotrain.passenger.board"
+    static let identifierPrefix = "passenger.board."
+
+    static func identifier(intervalID: String) -> String {
+        identifierPrefix + intervalID
+    }
+
+    static func isPassenger(_ identifier: String) -> Bool {
+        identifier.hasPrefix(identifierPrefix)
+    }
 }
 
 @MainActor
@@ -145,7 +214,7 @@ final class CheckInNotifier: CheckInNotifying {
         )
         let still = UNNotificationAction(
             identifier: CheckInNotification.stillOnItAction,
-            title: "まだやってる",
+            title: CabinCopy.still,
             options: []
         )
         let progress = UNNotificationCategory(
@@ -166,10 +235,35 @@ final class CheckInNotifier: CheckInNotifying {
             intentIdentifiers: [],
             options: []
         )
-        center.setNotificationCategories([progress, away, idle])
+        let timetablePause = UNNotificationAction(
+            identifier: TimetableNotification.pauseAction,
+            title: TimetableCopy.pause,
+            options: []
+        )
+        let board = UNNotificationAction(
+            identifier: PassengerNotification.boardAction,
+            title: PassengerCopy.board,
+            options: [.foreground]
+        )
+        let timetable = UNNotificationCategory(
+            identifier: TimetableNotification.categoryIdentifier,
+            actions: [timetablePause, board],
+            intentIdentifiers: [],
+            options: []
+        )
+        let passenger = UNNotificationCategory(
+            identifier: PassengerNotification.categoryIdentifier,
+            actions: [board],
+            intentIdentifiers: [],
+            options: []
+        )
+        center.setNotificationCategories([progress, away, idle, timetable, passenger])
     }
 
     func requestAuthorizationIfNeeded() {
+        #if DEBUG
+        if FocusUIPreview.skipsNotificationAuthorization { return }
+        #endif
         Task {
             let settings = await center.notificationSettings()
             guard settings.authorizationStatus == .notDetermined else { return }
@@ -210,10 +304,43 @@ final class CheckInNotifier: CheckInNotifying {
         enqueue(
             identifier: identifier,
             title: CabinCopy.idle,
-            body: CabinCopy.still,
+            body: "",
             fireAt: fireAt,
             categoryIdentifier: CheckInNotification.idleCategoryIdentifier
         )
+    }
+
+    func scheduleTimetablePause(sessionID: UUID, guardID: UUID, title: String, fireAt: Date) {
+        cancelTimetable(sessionID: sessionID)
+        let identifier = TimetableNotification.identifier(sessionID: sessionID, guardID: guardID)
+        enqueue(
+            identifier: identifier,
+            title: TimetableCopy.board,
+            body: TimetableCopy.notificationBody(title: title),
+            fireAt: fireAt,
+            categoryIdentifier: TimetableNotification.categoryIdentifier
+        )
+    }
+
+    func schedulePassengerBoard(intervalID: String, title: String, fireAt: Date) {
+        cancelPassengerBoard()
+        enqueue(
+            identifier: PassengerNotification.identifier(intervalID: intervalID),
+            title: PassengerCopy.now,
+            body: PassengerCopy.notificationBody(title: title),
+            fireAt: fireAt,
+            categoryIdentifier: PassengerNotification.categoryIdentifier
+        )
+    }
+
+    func cancelPassengerBoard() {
+        let prefix = PassengerNotification.identifierPrefix
+        center.getPendingNotificationRequests { requests in
+            let ids = requests.map(\.identifier).filter { $0.hasPrefix(prefix) }
+            guard !ids.isEmpty else { return }
+            self.center.removePendingNotificationRequests(withIdentifiers: ids)
+            self.center.removeDeliveredNotifications(withIdentifiers: ids)
+        }
     }
 
     func cancel(sessionID: UUID) {
@@ -223,6 +350,7 @@ final class CheckInNotifier: CheckInNotifying {
         }
         center.removePendingNotificationRequests(withIdentifiers: identifiers)
         center.removeDeliveredNotifications(withIdentifiers: identifiers)
+        cancelTimetable(sessionID: sessionID)
     }
 
     func cancelProgress(sessionID: UUID) {
@@ -240,11 +368,25 @@ final class CheckInNotifier: CheckInNotifying {
         center.removeDeliveredNotifications(withIdentifiers: [identifier])
     }
 
+    func cancelTimetable(sessionID: UUID) {
+        let prefix = "timetable.pause.\(sessionID.uuidString)."
+        center.getPendingNotificationRequests { requests in
+            let ids = requests.map(\.identifier).filter { $0.hasPrefix(prefix) }
+            guard !ids.isEmpty else { return }
+            self.center.removePendingNotificationRequests(withIdentifiers: ids)
+            self.center.removeDeliveredNotifications(withIdentifiers: ids)
+        }
+    }
+
     func cancelAll() {
         Task {
             let ids = await center.pendingNotificationRequests()
                 .map(\.identifier)
-                .filter(CheckInNotification.isCheckIn)
+                .filter {
+                    CheckInNotification.isCheckIn($0)
+                        || TimetableNotification.isTimetable($0)
+                        || PassengerNotification.isPassenger($0)
+                }
             center.removePendingNotificationRequests(withIdentifiers: ids)
         }
     }

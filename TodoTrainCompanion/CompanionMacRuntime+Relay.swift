@@ -7,7 +7,11 @@ extension CompanionMacRuntime {
         tickTask = Task { [weak self] in
             while !Task.isCancelled {
                 self?.now = Int(Date().timeIntervalSince1970)
+                self?.notePauseInputClock()
+                self?.confirmSnapWhileConnected()
                 self?.syncCabinNotification()
+                self?.maybeSendTimetablePause()
+                self?.refreshMacPresence()
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
             }
         }
@@ -17,22 +21,71 @@ extension CompanionMacRuntime {
         hintTask?.cancel()
         hintTask = nil
         listenTask?.cancel()
+        listenTask = nil
+        guard HintPolling.shouldListen(isPaired: isPaired, isIdle: presence.isIdle) else { return }
         listenTask = Task { [weak self] in
             await self?.connectOnce()
         }
     }
 
     func startHintPolling() {
-        guard HintPolling.shouldPoll(isPaired: isPaired, connection: connection) else { return }
+        guard HintPolling.shouldPoll(
+            isPaired: isPaired,
+            connection: connection,
+            isIdle: presence.isIdle
+        ) else { return }
         hintTask?.cancel()
         hintTask = Task { [weak self] in
             await self?.pollHints()
         }
     }
 
+    func noteSystemSleep() {
+        applyPresence { $0.systemAsleep = true }
+    }
+
+    func noteSystemWake() {
+        applyPresence { $0.systemAsleep = false }
+    }
+
+    func noteScreensSleep() {
+        applyPresence { $0.screensAsleep = true }
+    }
+
+    func noteScreensWake() {
+        applyPresence { $0.screensAsleep = false }
+    }
+
+    func noteScreensaverDidStart() {
+        applyPresence { $0.screensaver = true }
+    }
+
+    func noteScreensaverDidStop() {
+        applyPresence { $0.screensaver = false }
+    }
+
+    func applyPresence(_ mutate: (inout RelayPresence) -> Void) {
+        let wasIdle = presence.isIdle
+        mutate(&presence)
+        if RelayPresence.shouldSuppress(wasIdle: wasIdle, isIdle: presence.isIdle) {
+            suppressRelay()
+        } else if RelayPresence.shouldResume(wasIdle: wasIdle, isIdle: presence.isIdle) {
+            startListening()
+        }
+        refreshMacPresence()
+    }
+
+    func suppressRelay() {
+        hintTask?.cancel()
+        hintTask = nil
+        listenTask?.cancel()
+        listenTask = nil
+        connection = .disconnected
+    }
+
     func connectOnce() async {
         refreshPaired()
-        guard isPaired, !Task.isCancelled else {
+        guard HintPolling.shouldListen(isPaired: isPaired, isIdle: presence.isIdle), !Task.isCancelled else {
             connection = .disconnected
             return
         }
@@ -59,6 +112,7 @@ extension CompanionMacRuntime {
         if let envelope = try? await client.getAck() {
             try applyAck(envelope, pairingId: pairing.pairingId, encKey: keys.enc)
         }
+        guard !Task.isCancelled, !presence.isIdle else { throw CancellationError() }
         connection = .connected
         lastStatus = nil
     }
@@ -67,7 +121,11 @@ extension CompanionMacRuntime {
         var previous: HintPlaintext?
         var etag: String?
         while !Task.isCancelled {
-            guard HintPolling.shouldPoll(isPaired: isPaired, connection: connection) else { return }
+            guard HintPolling.shouldPoll(
+                isPaired: isPaired,
+                connection: connection,
+                isIdle: presence.isIdle
+            ) else { return }
             do {
                 let pairing = try requireSecrets()
                 let client = try authedClient(pairing)
@@ -78,11 +136,14 @@ extension CompanionMacRuntime {
                     result: result
                 ) {
                 case .ignore:
-                    break
+                    if result.notModified { confirmSnapFromRelay() }
                 case .remember(let hint, let tag):
+                    noteRelayContract(hint.relayAnnouncement)
                     previous = hint
                     etag = tag
+                    confirmSnapFromRelay()
                 case .catchUp(let catchUp, let hint, let tag):
+                    noteRelayContract(hint.relayAnnouncement)
                     previous = hint
                     etag = tag
                     let keys = try SyncCrypto.deriveKeys(
@@ -95,6 +156,7 @@ extension CompanionMacRuntime {
                     if catchUp.ack, let envelope = try? await client.getAck() {
                         try applyAck(envelope, pairingId: pairing.pairingId, encKey: keys.enc)
                     }
+                    confirmSnapFromRelay()
                 case .stop:
                     return
                 }
@@ -125,43 +187,122 @@ extension CompanionMacRuntime {
         lastStatus = nil
         defer { Task { await connection.close() } }
         while !Task.isCancelled {
-            let frame: WSFrame
+            let incoming: WSIncoming
             do {
-                frame = try await connection.receive()
+                incoming = try await connection.receiveIncoming()
             } catch SyncError.invalidJSON {
                 continue
             }
-            let keys = try SyncCrypto.deriveKeys(masterKey: pairing.masterKey, pairingId: pairing.pairingId)
-            do {
-                switch frame.t {
-                case .snap:
-                    try applySnap(frame.envelope, pairingId: pairing.pairingId, encKey: keys.enc)
-                case .ack:
-                    try applyAck(frame.envelope, pairingId: pairing.pairingId, encKey: keys.enc)
-                case .cmd:
-                    break
+            switch incoming {
+            case .hello(let announcement):
+                noteRelayContract(announcement)
+            case .frame(let frame):
+                let keys = try SyncCrypto.deriveKeys(masterKey: pairing.masterKey, pairingId: pairing.pairingId)
+                do {
+                    switch frame.t {
+                    case .snap:
+                        try applySnap(frame.envelope, pairingId: pairing.pairingId, encKey: keys.enc)
+                    case .ack:
+                        try applyAck(frame.envelope, pairingId: pairing.pairingId, encKey: keys.enc)
+                    case .cmd:
+                        break
+                    }
+                } catch {
+                    lastStatus = userFacing(error)
                 }
-            } catch {
-                lastStatus = userFacing(error)
             }
         }
     }
 
+    func confirmSnapWhileConnected() {
+        guard connection == .connected, snap != nil else { return }
+        snapConfirmedAt = Date(timeIntervalSince1970: TimeInterval(now))
+    }
+
+    func confirmSnapFromRelay() {
+        guard snap != nil else { return }
+        snapConfirmedAt = Date()
+    }
+
     func applySnap(_ envelope: Envelope, pairingId: UUID, encKey: Data) throws {
         snap = try SyncCrypto.openJSON(SnapPlaintext.self, envelope: envelope, pairingId: pairingId, encKey: encKey)
+        snapConfirmedAt = Date()
+        if let build = snap?.build {
+            notePeerBuild(build)
+        }
+        if let snap {
+            notePeerContract(snap.announcement)
+        }
+        notePauseInputClock()
         reconcileOptimisticCabin()
         if snap?.pendingCabin != .idle {
             optimisticIdleConsumed = false
         }
+        if staleWinner, let current = snap?.nudge?.id, current != answerNudgeID {
+            staleWinner = false
+            nudgeWinnerLine = nil
+        }
+        refreshStaleWinner()
         syncCabinNotification()
     }
 
     func applyAck(_ envelope: Envelope, pairingId: UUID, encKey: Data) throws {
         let ack = try SyncCrypto.openJSON(AckPlaintext.self, envelope: envelope, pairingId: pairingId, encKey: encKey)
+        if let build = ack.build {
+            notePeerBuild(build)
+        }
+        notePeerContract(ack.announcement)
+        let inFlight: UUID?
+        if case .sending(let id) = outgoingPause { inFlight = id } else { inFlight = nil }
         outgoingPause = OutgoingPauseApplying.applyAck(ack, current: outgoingPause)
-        if case .failed = outgoingPause {
+        issueBoardTrack = IssueBoardTracking.applyAck(ack, current: issueBoardTrack)
+        guard ack.cmdId == inFlight else { return }
+        transportNotice = nil
+        pendingExtendMinutes = nil
+        if ack.ok {
+            staleWinner = false
+            nudgeWinnerLine = nil
+        } else if ack.error == .nudgeStale {
+            staleWinner = true
+            clearOptimisticCabin()
+            optimisticIdleConsumed = false
+            refreshStaleWinner()
+        } else {
             clearOptimisticCabin()
             optimisticIdleConsumed = false
         }
+    }
+
+    func refreshStaleWinner() {
+        guard staleWinner, let snap else { return }
+        nudgeWinnerLine = MacNudgeReceipt.winnerLine(snap: snap, estimateBefore: answerEstimateBefore)
+    }
+
+    func noteCommandTransportFailure(_ error: Error) {
+        if let sync = error as? SyncError, case .transport(_, let code) = sync, code == "fifoFull" {
+            outgoingPause = .idle
+            pendingExtendMinutes = nil
+            transportNotice = SyncCopy.fifoFull
+            lastStatus = SyncCopy.fifoFull
+            return
+        }
+        outgoingPause = .failed(.decryptFailed)
+        lastStatus = userFacing(error)
+    }
+
+    func notePeerBuild(_ build: WireBuildInfo) {
+        peerBuild = build
+        PeerBuildStore.save(build, to: defaults)
+    }
+
+    func notePeerContract(_ announcement: ContractAnnouncement) {
+        peerContract = announcement
+        PeerContractStore.save(announcement, to: defaults, key: PeerContractStore.peerKey)
+        flushPauseInputReports()
+    }
+
+    func noteRelayContract(_ announcement: ContractAnnouncement) {
+        relayContract = announcement
+        PeerContractStore.save(announcement, to: defaults, key: PeerContractStore.relayKey)
     }
 }

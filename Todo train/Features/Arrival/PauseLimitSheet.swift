@@ -52,7 +52,7 @@ struct PauseLimitSheet: View {
                 }
 
                 if let pendingTicket,
-                   sessionManager.pausedTicketCount < sessionManager.pauseLimit {
+                   sessionManager.pausedCountTowardLimit < sessionManager.pauseLimit {
                     Section {
                         Button("「\(pendingTicket.title)」を発車") {
                             onSlotFreedTryBoard()
@@ -115,7 +115,7 @@ struct PauseLimitSheet: View {
 
     private func resumePaused(_ ticket: Ticket) {
         do {
-            if sessionManager.phase == .running || sessionManager.phase == .overtime {
+            if sessionManager.fetchRunningSession() != nil {
                 try sessionManager.switchBoard(ticket: ticket)
             } else {
                 try sessionManager.board(ticket: ticket)

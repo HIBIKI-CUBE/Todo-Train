@@ -83,7 +83,7 @@ final class URLSessionWebSocketConnection: WebSocketConnection, @unchecked Senda
         }
     }
 
-    func receive() async throws -> WSFrame {
+    func receiveIncoming() async throws -> WSIncoming {
         let message = try await task.receive()
         let data: Data
         switch message {
@@ -95,10 +95,25 @@ final class URLSessionWebSocketConnection: WebSocketConnection, @unchecked Senda
             throw SyncError.invalidJSON
         }
         do {
-            return try WireJSON.decoder().decode(WSFrame.self, from: data)
+            return try WSIncoming.decode(data)
         } catch {
             throw SyncError.invalidJSON
         }
+    }
+
+    func receive() async throws -> WSFrame {
+        while true {
+            switch try await receiveIncoming() {
+            case .frame(let frame):
+                return frame
+            case .hello:
+                continue
+            }
+        }
+    }
+
+    func send(_ text: String) async throws {
+        try await task.send(.string(text))
     }
 
     func close() async {
@@ -130,12 +145,15 @@ public struct BearerWebSocket {
 
     public func connect() async throws -> any WebSocketConnection {
         var headers = ["Authorization": "Bearer \(Base64URL.encode(writeToken))"]
+        headers[ContractAnnouncement.headerName] = ContractAnnouncement.current.headerValue
         if let pairingId {
             headers[SyncHTTPClient.pairingIdHeaderName] = pairingId.canonicalLowercase
         }
-        return try await connector.connect(
+        let connection = try await connector.connect(
             path: "/v1/ws",
             headers: headers
         )
+        try await connection.send(ContractHello.text())
+        return connection
     }
 }

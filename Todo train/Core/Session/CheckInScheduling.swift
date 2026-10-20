@@ -14,13 +14,24 @@ enum CheckInKind: String, Codable, Sendable, Equatable {
     case progress
     case away
     case idle
+    /// Stages 3...6. Stage 1 stays `progress`.
+    case overrun
+    /// Arrival gap.
+    case gap
 
     var cabin: CabinKind {
         switch self {
         case .progress: .progress
         case .away: .away
         case .idle: .idle
+        case .overrun: .overrun
+        case .gap: .gap
         }
+    }
+
+    /// Stage 1 is `progress`. Later ride stages are `overrun`.
+    static func recorded(for stage: NudgeStage) -> CheckInKind {
+        stage.number >= 3 ? .overrun : .progress
     }
 }
 
@@ -29,19 +40,73 @@ enum CheckInAnswerKind: String, Codable, Sendable, Equatable {
     case paused
     case alreadyDone
     case willExtend
+    /// Boarded the reserved ticket from the arrival gap.
+    case board
 }
 
-struct CheckInAnswerRecord: Codable, Equatable, Sendable {
+struct CheckInAnswerRecord: Equatable, Sendable {
     var kind: CheckInKind
     var answer: CheckInAnswerKind
     var answeredAt: Date
+    /// Stable nudge id. Absent on answers recorded before the nudge stamp.
+    var nudgeID: String?
+    /// Set for `willExtend` once the minutes are known.
+    var addSeconds: Int?
+    /// `iphone` or `mac`.
+    var answeredOn: String?
+    /// Ride stage or gap name. Absent on answers recorded before the stage stamp.
+    var answeredStage: String?
+
+    init(
+        kind: CheckInKind,
+        answer: CheckInAnswerKind,
+        answeredAt: Date,
+        nudgeID: String? = nil,
+        addSeconds: Int? = nil,
+        answeredOn: String? = nil,
+        answeredStage: String? = nil
+    ) {
+        self.kind = kind
+        self.answer = answer
+        self.answeredAt = answeredAt
+        self.nudgeID = nudgeID
+        self.addSeconds = addSeconds
+        self.answeredOn = answeredOn
+        self.answeredStage = answeredStage
+    }
+}
+
+extension CheckInAnswerRecord: Codable {
+    enum CodingKeys: String, CodingKey {
+        case kind, answer, answeredAt, nudgeID, addSeconds, answeredOn, answeredStage
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        kind = try container.decode(CheckInKind.self, forKey: .kind)
+        answer = try container.decode(CheckInAnswerKind.self, forKey: .answer)
+        answeredAt = try container.decode(Date.self, forKey: .answeredAt)
+        nudgeID = try container.decodeIfPresent(String.self, forKey: .nudgeID)
+        addSeconds = try container.decodeIfPresent(Int.self, forKey: .addSeconds)
+        answeredOn = try container.decodeIfPresent(String.self, forKey: .answeredOn)
+        answeredStage = try container.decodeIfPresent(String.self, forKey: .answeredStage)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(kind, forKey: .kind)
+        try container.encode(answer, forKey: .answer)
+        try container.encode(answeredAt, forKey: .answeredAt)
+        try container.encodeIfPresent(nudgeID, forKey: .nudgeID)
+        try container.encodeIfPresent(addSeconds, forKey: .addSeconds)
+        try container.encodeIfPresent(answeredOn, forKey: .answeredOn)
+        try container.encodeIfPresent(answeredStage, forKey: .answeredStage)
+    }
 }
 
 enum CheckInCopy {
     static func fallback(title: String) -> String {
-        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty { return "まだこれ？" }
-        return "まだ『\(trimmed)』？"
+        CabinCopy.question(title: title)
     }
 
     static let away = CabinCopy.prompt
@@ -58,19 +123,16 @@ nonisolated enum AwayInterruptChannel: Equatable, Sendable {
 }
 
 enum CheckInScheduling: Sendable {
-    static let shortTripMaxSeconds = CabinBroadcastScheduling.shortTripMaxSeconds
-    static let singleCheckInMaxSeconds = CabinBroadcastScheduling.singleCheckInMaxSeconds
-    static let firstBand = CabinBroadcastScheduling.firstBand
-    static let secondBand = CabinBroadcastScheduling.secondBand
-    static let awayDelayRange: ClosedRange<TimeInterval> = 45...90
+    static let shortTripMaxSeconds = Int(CheckInTiming.minimumEstimateSeconds)
+    static let awayDelayRange = CheckInNotificationSchedule.awayDelayRange
     static let overtimeGuardSeconds = CabinBroadcastScheduling.overtimeGuardSeconds
 
-    static func progressCount(estimatedSeconds: Int) -> Int {
-        CabinBroadcastScheduling.progressCount(estimatedSeconds: estimatedSeconds)
+    static func progressCount(budgetSecondsAtStart: Int) -> Int {
+        CheckInTiming.fractionBandRange(estimateSeconds: budgetSecondsAtStart) == nil ? 0 : 1
     }
 
-    static func offsets(estimatedSeconds: Int, seed: UUID) -> [TimeInterval] {
-        CabinBroadcastScheduling.offsets(estimatedSeconds: estimatedSeconds, seed: seed)
+    static func offsets(budgetSecondsAtStart: Int, seed: UUID) -> [TimeInterval] {
+        CheckInTiming.progressOffsets(rideID: seed, budgetSecondsAtStart: budgetSecondsAtStart)
     }
 
     static func awayInterruptChannel(
@@ -85,9 +147,7 @@ enum CheckInScheduling: Sendable {
     }
 
     static func awayDelay(seed: UUID, salt: UInt64 = 99) -> TimeInterval {
-        let t = CabinBroadcastScheduling.unit(seed: seed, salt: salt)
-        return awayDelayRange.lowerBound
-            + (awayDelayRange.upperBound - awayDelayRange.lowerBound) * t
+        CheckInNotificationSchedule.awayDelay(seed: seed, salt: salt)
     }
 
     static func dueProgressOffset(
@@ -97,7 +157,7 @@ enum CheckInScheduling: Sendable {
         remainingSeconds: TimeInterval,
         hasPending: Bool
     ) -> TimeInterval? {
-        CabinBroadcastScheduling.dueProgressOffset(
+        CheckInTiming.dueProgressOffset(
             offsets: offsets,
             firedCount: firedCount,
             elapsedSeconds: elapsedSeconds,
@@ -111,7 +171,11 @@ enum CheckInScheduling: Sendable {
         elapsedSeconds: TimeInterval,
         now: Date
     ) -> Date? {
-        CabinBroadcastScheduling.wallFireAt(offset: offset, elapsedSeconds: elapsedSeconds, now: now)
+        CheckInNotificationSchedule.progressFireAt(
+            offset: offset,
+            elapsedSeconds: elapsedSeconds,
+            now: now
+        )
     }
 
     static func unit(seed: UUID, salt: UInt64) -> Double {

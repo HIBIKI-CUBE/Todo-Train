@@ -11,6 +11,7 @@ final class CompanionCabinNotifier: NSObject, UNUserNotificationCenterDelegate {
     var onStill: (() -> Void)?
     private let center = UNUserNotificationCenter.current()
     private var delivered = false
+    private var armedFire: [String: Int] = [:]
 
     func configure() {
         let still = UNNotificationAction(
@@ -33,11 +34,49 @@ final class CompanionCabinNotifier: NSObject, UNUserNotificationCenterDelegate {
         if interrupt.showsNotification, interrupt.kind == .idle {
             deliver(prompt: interrupt.prompt ?? CabinCopy.idle)
         } else {
-            remove()
+            removeIdle()
+        }
+    }
+
+    func apply(_ requests: [MacOffscreenRequest]) {
+        let stale = MacOffscreenPlanning.identifiersToClear(armed: Set(armedFire.keys), requests: requests)
+        if !stale.isEmpty {
+            let list = Array(stale)
+            center.removePendingNotificationRequests(withIdentifiers: list)
+            center.removeDeliveredNotifications(withIdentifiers: list)
+            for id in stale { armedFire.removeValue(forKey: id) }
+        }
+        for request in requests {
+            let fire = Int(request.fireAt.timeIntervalSince1970)
+            if armedFire[request.identifier] == fire { continue }
+            armedFire[request.identifier] = fire
+            let content = UNMutableNotificationContent()
+            content.title = request.title
+            content.body = request.body
+            content.sound = .default
+            if request.identifier.hasPrefix("todotrain.offscreen.idle") {
+                content.categoryIdentifier = Self.categoryIdentifier
+            }
+            let interval = request.fireAt.timeIntervalSinceNow
+            let trigger: UNNotificationTrigger? = interval > 1
+                ? UNTimeIntervalNotificationTrigger(timeInterval: interval, repeats: false)
+                : nil
+            center.removePendingNotificationRequests(withIdentifiers: [request.identifier])
+            center.add(
+                UNNotificationRequest(identifier: request.identifier, content: content, trigger: trigger)
+            )
         }
     }
 
     func remove() {
+        delivered = false
+        let ids = Array(Set(armedFire.keys).union([Self.identifier]))
+        armedFire.removeAll()
+        center.removePendingNotificationRequests(withIdentifiers: ids)
+        center.removeDeliveredNotifications(withIdentifiers: ids)
+    }
+
+    private func removeIdle() {
         delivered = false
         center.removePendingNotificationRequests(withIdentifiers: [Self.identifier])
         center.removeDeliveredNotifications(withIdentifiers: [Self.identifier])
@@ -48,7 +87,6 @@ final class CompanionCabinNotifier: NSObject, UNUserNotificationCenterDelegate {
         delivered = true
         let content = UNMutableNotificationContent()
         content.title = prompt
-        content.body = CabinCopy.still
         content.sound = .default
         content.categoryIdentifier = Self.categoryIdentifier
         let request = UNNotificationRequest(

@@ -16,7 +16,11 @@ extension SessionManager {
 
     func reconcile(now: Date? = nil) {
         let now = now ?? clock.now
-        defer { publishWidgetSnapshot(at: now) }
+        defer {
+            applyPassengerEffects(now: now)
+            publishWidgetSnapshot(at: now)
+            refreshForegroundReconcileLoop()
+        }
 
         if let day = activeServiceDay ?? fetchOpenServiceDay() {
             activeServiceDay = day
@@ -33,11 +37,16 @@ extension SessionManager {
             } else {
                 phase = .idle
                 liveActivityManager.end()
+                syncArrivalGap(now: now)
                 refreshIdleCabin(now: now)
+                applyTimetableEffects(now: now)
                 return
             }
             return reconcile(now: now)
         }
+        clearArrivalGapWatch()
+
+        applyTimetableEffects(now: now)
 
         if session.isPaused {
             phase = .paused
@@ -58,6 +67,7 @@ extension SessionManager {
             bumpCompanionSync()
         }
         if ownsDeviceSideEffects(session) {
+            syncNudge(session, now: now)
             if crossedIntoOvertime {
                 skipPendingCheckInForOvertime(session)
                 refreshLiveActivity(for: session, now: now)
@@ -123,22 +133,82 @@ extension SessionManager {
         refreshOwnedDeviceSideEffects(now: now)
     }
 
-    /// Consume pause/resume handoff from Live Activity intents (app may have been killed).
+    /// Apply pause/resume handoff from Live Activity intents (app may have been killed).
+    /// Peeks first; consumes only after the session matches and the mutation succeeds.
+    /// Mismatch or failure leaves the queue so a later foreground/recover can retry.
     @discardableResult
     func applyPendingLiveActivityAction() -> FocusPendingActionKind? {
         guard let pending = FocusPendingActionStore.peek() else { return nil }
         switch pending.kind {
         case .pause, .resume:
-            _ = FocusPendingActionStore.consume()
             guard pending.sessionID == activeSession?.id else { return nil }
-            if pending.kind == .pause {
-                try? pauseFromAlarmKit()
-            } else {
-                try? resumeFromAlarmKit()
+            do {
+                if pending.kind == .pause {
+                    try pauseFromLiveActivity()
+                } else {
+                    try resumeFromAlarmKit()
+                }
+                FocusPendingActionStore.consumeIfMatches(pending)
+                return pending.kind
+            } catch {
+                return nil
             }
-            return pending.kind
-        case .arrive, .extend:
+        case .still:
+            guard pending.sessionID == activeSession?.id else { return nil }
+            acknowledgeCabinStill()
+            FocusPendingActionStore.consumeIfMatches(pending)
+            return .still
+        case .arrive, .reestimate:
             return nil
+        }
+    }
+
+    // MARK: - Foreground reconcile
+
+    /// App scene owns foreground; SessionManager owns the tick while riding.
+    /// The rising edge reconciles immediately. Clear a due away watch first
+    /// (`endAwayWatch`), or that reconcile promotes it into an alert.
+    func setForegroundReconcileActive(_ active: Bool) {
+        let changed = isForegroundForReconcile != active
+        isForegroundForReconcile = active
+        if active, changed {
+            reconcile()
+        } else {
+            refreshForegroundReconcileLoop()
+        }
+    }
+
+    var needsForegroundReconcileTick: Bool {
+        ForegroundReconcileScheduling.needsTick(
+            hasOpenRide: activeSession?.isOpen == true,
+            passengerChrome: passengerChrome
+        )
+    }
+
+    func refreshForegroundReconcileLoop() {
+        let shouldRun = ForegroundReconcileScheduling.shouldRunLoop(
+            isForeground: isForegroundForReconcile,
+            hasOpenRide: activeSession?.isOpen == true,
+            passengerChrome: passengerChrome,
+            allowsWallClock: clock is SystemSessionClock
+        )
+        if !shouldRun {
+            foregroundReconcileTask?.cancel()
+            foregroundReconcileTask = nil
+            return
+        }
+        guard foregroundReconcileTask == nil else { return }
+        foregroundReconcileTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(1))
+                guard !Task.isCancelled else { return }
+                guard let self else { return }
+                guard self.isForegroundForReconcile, self.needsForegroundReconcileTick else {
+                    self.foregroundReconcileTask = nil
+                    return
+                }
+                self.reconcile()
+            }
         }
     }
 

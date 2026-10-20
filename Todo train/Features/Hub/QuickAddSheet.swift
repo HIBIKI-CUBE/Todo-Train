@@ -67,12 +67,11 @@ struct QuickAddSheet: View {
     }
 
     private var estimateSuggestion: (minutes: Int, sampleCount: Int)? {
-        let tagIDs: Set<UUID>? = selectedTagIDs.isEmpty ? nil : selectedTagIDs
-        let samples = EstimateHeuristic.arrivedSamples(
-            from: Array(allSessions),
-            matchingAnyTagIDs: tagIDs
+        EstimateHeuristic.suggestion(
+            title: trimmedTitle,
+            tagIDs: selectedTagIDs,
+            sessions: Array(allSessions)
         )
-        return EstimateHeuristic.suggestion(from: samples)
     }
 
     private var highlightedEstimateMinutes: Int {
@@ -124,7 +123,7 @@ struct QuickAddSheet: View {
                 }
                 Button("キャンセル", role: .cancel) {}
             } message: {
-                Text("次に発行する切符の位置。連続追加のあいだ維持されます。")
+                Text("次に発行する切符の位置です。連続追加のあいだ維持されます。")
             }
             .sheet(isPresented: $showCustomEstimate) {
                 customEstimateSheet
@@ -132,7 +131,15 @@ struct QuickAddSheet: View {
                     .presentationDragIndicator(.visible)
             }
             .onAppear {
+                #if DEBUG
+                if ProcessInfo.processInfo.arguments.contains("-uiPreviewQuickAddContinuous") {
+                    continuousDump = true
+                } else {
+                    continuousDump = false
+                }
+                #else
                 continuousDump = false
+                #endif
                 if !didSeedEstimate {
                     pendingMinutes = estimateSuggestion?.minutes
                         ?? settings.lastIssuedEstimateMinutes
@@ -155,10 +162,11 @@ struct QuickAddSheet: View {
     private var titleZone: some View {
         ComposingTextField(
             text: $title,
-            placeholder: "何をする？",
+            placeholder: "題名",
             focusNonce: titleFocusNonce,
             onSubmit: submitFromReturn
         )
+        .accessibilityIdentifier("quickAdd.title")
         .fixedSize(horizontal: false, vertical: true)
         .padding(.horizontal, TrainTheme.Space.md)
         .padding(.vertical, TrainTheme.Space.lg)
@@ -251,7 +259,7 @@ struct QuickAddSheet: View {
                         .onLongPressGesture(minimumDuration: 0.45) {
                             showCustomEstimate = true
                         }
-                        .accessibilityHint("長押しで任意の分を入力")
+                        .accessibilityHint("長押しすると任意の分を入力できます")
                     Text("分")
                         .font(.title3.weight(.semibold))
                         .foregroundStyle(.secondary)
@@ -264,9 +272,10 @@ struct QuickAddSheet: View {
                         Toggle(isOn: $continuousDump) {
                             Text("連続掃き出し")
                         }
+                        .accessibilityIdentifier("quickAdd.continuousDump")
                         .font(.subheadline.weight(.semibold))
                         .tint(TrainTheme.rail)
-                        .accessibilityHint("オンでシートを開いたまま速く発行。オフで1枚発行して閉じ、Hubで切符を見せます")
+                        .accessibilityHint("オンにするとシートを開いたまま速く発行できます。オフにすると1枚発行して閉じ、Hub で切符を見せます。")
 
                         if didAddOnce {
                             Text("発行 \(addPulse)")
@@ -290,6 +299,7 @@ struct QuickAddSheet: View {
                     }
                 }
             )
+            .accessibilityIdentifier("quickAdd.gauge")
             .padding(.bottom, TrainTheme.Space.xs)
         }
         .padding(.horizontal, TrainTheme.Space.lg)
@@ -307,7 +317,7 @@ struct QuickAddSheet: View {
                         highlightedMinutes: highlightedEstimateMinutes
                     )
                 } footer: {
-                    Text("ゲージの停泊以外の分。連続追加のあいだ維持されます。")
+                    Text("ゲージの停泊以外の分です。連続追加のあいだ維持されます。")
                 }
             }
             .navigationTitle("任意の分")
@@ -389,6 +399,8 @@ struct QuickAddSheet: View {
         didAddOnce = true
         addPulse += 1
         settings.lastIssuedEstimateMinutes = issuedMinutes
+
+        ArrivalForecastStore.shared.prefetch(ticket: ticket, sessions: Array(allSessions), priority: .user)
 
         if allowsContinuousDump && continuousDump {
             undoPayload = UndoPayload(

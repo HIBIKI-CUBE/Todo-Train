@@ -97,7 +97,9 @@ public struct SyncHTTPClient: Sendable {
     }
 
     public func getHint(pairingId: UUID, etag: String? = nil) async throws -> HintGetResult {
-        var headers: [String: String] = [:]
+        var headers: [String: String] = [
+            ContractAnnouncement.headerName: ContractAnnouncement.current.headerValue,
+        ]
         if let etag {
             headers["If-None-Match"] = etag
         }
@@ -144,6 +146,7 @@ public struct SyncHTTPClient: Sendable {
 
     private func raw(method: String, path: String, auth: Bool, body: Data?, expected: Set<Int>) async throws -> HTTPResponse {
         var headers: [String: String] = [:]
+        headers[ContractAnnouncement.headerName] = ContractAnnouncement.current.headerValue
         if body != nil {
             headers["Content-Type"] = "application/json"
         }

@@ -1,0 +1,12 @@
+# 接近クリアランス（参照）
+
+Hub 上部の「接近クリアランス」盤の設計・受け入れ・感触プロトの参照置き場。**挙動の正本は [GitHub Issue #61](https://github.com/HIBIKI-CUBE/Todo-Train/issues/61)**。本文と衝突したら Issue のロック表を優先する。
+
+| ファイル | 内容 |
+|----------|------|
+| [実装仕様_接近クリアランス_v7.md](実装仕様_接近クリアランス_v7.md) | 実装向け仕様（タイミング・状態・FX 等） |
+| [実装_受け入れ条件_v7.md](実装_受け入れ条件_v7.md) | 受け入れ条件・チェック観点 |
+| [index-v7.html](index-v7.html) | 感触・定数の参照プロト（ブラウザで開く）。判定は **touch down**（`pointerdown`）で Issue #61・本体と同じ。**CSS クラス名やダミー運行タップは Swift に写さない** |
+| [saku-blockers.md](saku-blockers.md) | 採用しなかった案と死時間を削った理由 |
+
+機能実装は `develop` から別 PR。本ディレクトリは docs のみ。

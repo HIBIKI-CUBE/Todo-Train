@@ -42,7 +42,16 @@ extension CompanionMacRuntime {
         hintTask = nil
         try? secrets.delete()
         snap = nil
+        snapConfirmedAt = nil
+        peerBuild = nil
+        PeerBuildStore.save(nil, to: defaults)
+        peerContract = nil
+        relayContract = nil
+        PeerContractStore.save(nil, to: defaults, key: PeerContractStore.peerKey)
+        PeerContractStore.save(nil, to: defaults, key: PeerContractStore.relayKey)
         outgoingPause = .idle
+        issueBoardTrack = .idle
+        suppressRideOverlay = false
         lastStatus = nil
         connection = .disconnected
         clearOptimisticCabin()

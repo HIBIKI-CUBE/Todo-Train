@@ -25,6 +25,8 @@ final class Todo_trainUITests: XCTestCase {
     @MainActor
     func testExample() throws {
         // UI tests must launch the application that they test.
+        XCTAssertFalse(OffscreenNotifyUIScope.postsFromThisTarget)
+        XCTAssertFalse(PauseInputUIScope.asksWhileStopped)
         let app = XCUIApplication()
         app.launch()
 

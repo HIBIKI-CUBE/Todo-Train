@@ -17,12 +17,20 @@ final class WorkSession {
     /// Accumulated active seconds from completed (non-paused) segments.
     var accumulatedActiveSeconds: TimeInterval = 0
     var estimatedSecondsAtStart: Int = 0
-    /// Budget including extensions.
+    /// 発車時点の予算（見積もり直しや延長では変えない）。
     var budgetSecondsAtStart: Int = 0
+    /// いまの予算（見積もり直しで更新する）。
+    var currentBudgetSeconds: Int = 0
     /// Raw value of `SessionOutcome`
     var outcomeRaw: String?
     /// Raw value of `OvertimeResolution` when closed from overtime UI.
     var overtimeResolutionRaw: String?
+    /// Raw value of `ArrivalAction`. 検札前に閉じたときは nil。
+    var arrivalActionRaw: String?
+    /// 検札印を押した時刻。検札前に閉じたときは nil。
+    var arrivalStampedAt: Date?
+    /// Raw value of `RideStartOrigin`. 検札後の右スワイプだけ `arrivalSwipe`。
+    var startedFromRaw: String = RideStartOrigin.other.rawValue
 
     /// Elapsed-active offsets (seconds) for progress 車内放送.
     var checkInOffsetSeconds: [Double] = []
@@ -38,6 +46,24 @@ final class WorkSession {
     var awayDueAt: Date?
     /// Device that boarded this ride. Alarms / 車内放送 / LA は自機だけ。
     var boardedDeviceID: String?
+    /// ダイヤを理由にした停車。占有が続いているあいだは上限に数えない。
+    var timetableHeld: Bool = false
+    /// 鳴らした声掛けの段。既定は空で、まだ読まない。
+    var nudgeFiredStagesRaw: [String] = []
+    /// 答え待ちの声掛けの段。
+    var nudgePendingStageRaw: String?
+    /// 声掛けに答えた時刻。
+    var nudgeAnsweredAt: Date?
+    /// 答えた端末。watch / iphone / mac。
+    var nudgeAnsweredOnRaw: String?
+    /// 走行中の確認の位置。発車時見積の 40〜50%（走行 5 分下限）。
+    var checkInFraction: Double?
+    /// JSON array of `NudgeEventRecord`. One row per stage, written when the stage is reached.
+    var nudgeEventsJSON: String = "[]"
+    /// JSON array of `ReestimateEventRecord`.
+    var reestimateEventsJSON: String = "[]"
+    /// 到着の操作の直前の無操作秒数。#157 で書き込む。欄だけ V7 で足す。
+    var preArrivalIdleSeconds: Int?
 
     var ticket: Ticket?
 
@@ -57,8 +83,23 @@ final class WorkSession {
         set { overtimeResolutionRaw = newValue?.rawValue }
     }
 
+    var arrivalAction: ArrivalAction? {
+        get { arrivalActionRaw.flatMap(ArrivalAction.init(rawValue:)) }
+        set { arrivalActionRaw = newValue?.rawValue }
+    }
+
+    var startedFrom: RideStartOrigin {
+        get { RideStartOrigin(rawValue: startedFromRaw) ?? .other }
+        set { startedFromRaw = newValue.rawValue }
+    }
+
     var isOpen: Bool { endedAt == nil }
     var isPaused: Bool { pausedAt != nil && endedAt == nil }
+
+    /// タイマーと残り時間の予算。
+    var activeBudgetSeconds: Int {
+        currentBudgetSeconds > 0 ? currentBudgetSeconds : budgetSecondsAtStart
+    }
 
     init(
         id: UUID = UUID(),
@@ -75,8 +116,12 @@ final class WorkSession {
         self.accumulatedActiveSeconds = 0
         self.estimatedSecondsAtStart = estimatedSecondsAtStart
         self.budgetSecondsAtStart = estimatedSecondsAtStart
+        self.currentBudgetSeconds = estimatedSecondsAtStart
         self.outcomeRaw = nil
         self.overtimeResolutionRaw = nil
+        self.arrivalActionRaw = nil
+        self.arrivalStampedAt = nil
+        self.startedFromRaw = RideStartOrigin.other.rawValue
         self.checkInOffsetSeconds = []
         self.checkInFiredCount = 0
         self.pendingCheckInKindRaw = nil
@@ -84,6 +129,15 @@ final class WorkSession {
         self.checkInAnswersJSON = "[]"
         self.awayDueAt = nil
         self.boardedDeviceID = boardedDeviceID
+        self.timetableHeld = false
+        self.nudgeFiredStagesRaw = []
+        self.nudgePendingStageRaw = nil
+        self.nudgeAnsweredAt = nil
+        self.nudgeAnsweredOnRaw = nil
+        self.checkInFraction = nil
+        self.nudgeEventsJSON = "[]"
+        self.reestimateEventsJSON = "[]"
+        self.preArrivalIdleSeconds = nil
         self.ticket = ticket
         self.extensions = []
         self.pauses = []
@@ -102,6 +156,11 @@ final class WorkSession {
     var checkInAnswers: [CheckInAnswerRecord] {
         get { Self.decodeAnswers(checkInAnswersJSON) }
         set { checkInAnswersJSON = Self.encodeAnswers(newValue) }
+    }
+
+    var reestimateEvents: [ReestimateEventRecord] {
+        get { Self.decodeReestimates(reestimateEventsJSON) }
+        set { reestimateEventsJSON = Self.encodeReestimates(newValue) }
     }
 
     private static func decodeAnswers(_ json: String) -> [CheckInAnswerRecord] {
@@ -142,6 +201,27 @@ final class WorkSession {
     }
 
     func remainingSeconds(at now: Date) -> TimeInterval {
-        TimeInterval(budgetSecondsAtStart) - elapsedSeconds(at: now)
+        let budget = currentBudgetSeconds > 0 ? currentBudgetSeconds : budgetSecondsAtStart
+        return TimeInterval(budget) - elapsedSeconds(at: now)
+    }
+
+    private static func decodeReestimates(_ json: String) -> [ReestimateEventRecord] {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        guard let data = json.data(using: .utf8),
+              let values = try? decoder.decode([ReestimateEventRecord].self, from: data) else {
+            return []
+        }
+        return values
+    }
+
+    private static func encodeReestimates(_ values: [ReestimateEventRecord]) -> String {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        guard let data = try? encoder.encode(values),
+              let string = String(data: data, encoding: .utf8) else {
+            return "[]"
+        }
+        return string
     }
 }

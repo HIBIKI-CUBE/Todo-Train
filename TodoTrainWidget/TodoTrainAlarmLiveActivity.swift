@@ -2,10 +2,8 @@
 //  TodoTrainAlarmLiveActivity.swift
 //  TodoTrainWidget
 //
-//  Dark cockpit for Lock Screen + StandBy (AlarmKit).
-//  StandBy = isActivityFullscreen. Background: showsWidgetContainerBackground
-//  for Lock Screen container; activityBackgroundTint for StandBy edge fill.
-//  Single essential control (停車 / 再乗車 / 停止). Arrive / extend via app deep link.
+//  End-bell Live Activity. Same cockpit face as the session activity.
+//  Countdown: round 停車. Paused: 「停車中」 and 再乗車. Alert: warning mark and 停止.
 //
 
 import AppIntents
@@ -24,39 +22,30 @@ struct TodoTrainAlarmLiveActivity: Widget {
             let presentation = AlarmPresentationModel(context: context)
             return DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    CockpitIslandMark(phase: presentation.phase, size: 14)
+                    AlarmExpandedFace(model: presentation, slot: .leading)
                 }
+                .safeLeadingChrome()
                 DynamicIslandExpandedRegion(.trailing) {
-                    CockpitIslandExpandedTrailing(
-                        phase: presentation.phase,
-                        headerState: presentation.headerState
-                    )
+                    AlarmExpandedFace(model: presentation, slot: .trailing)
                 }
-                DynamicIslandExpandedRegion(.center) {
-                    CockpitIslandExpandedCenter(presentation: presentation.display)
-                }
+                .safeTrailingChrome()
                 DynamicIslandExpandedRegion(.bottom) {
-                    CockpitAlarmControlRow(
-                        alarmID: context.state.alarmID,
-                        sessionID: presentation.sessionID,
-                        mode: context.state.mode,
-                        layout: .islandCompact
-                    )
-                    .padding(.horizontal, 12)
-                    .padding(.bottom, 4)
+                    AlarmExpandedFace(model: presentation, slot: .bottom)
                 }
+                .safeBottomChrome()
             } compactLeading: {
-                CockpitIslandMark(phase: presentation.phase)
+                CockpitCompactLeadingGauge(model: presentation.display)
             } compactTrailing: {
                 AlarmCompactTrailingTimer(presentation: presentation)
             } minimal: {
-                CockpitMinimalTimer(clock: presentation.clock, phase: presentation.phase)
-                    .accessibilityLabel("残り時間")
+                CockpitRingGauge(model: presentation.display)
+                    .accessibilityLabel(presentation.display.showsOvertimeMark ? "予定の時刻を過ぎています" : "残り時間")
             }
+            .safeCompactChrome()
             .keylineTint(presentation.phase.accentColor)
             .widgetURL(URL(string: "todotrain://focus"))
         }
-        .supplementalActivityFamilies([.medium])
+        .supplementalActivityFamilies([.medium, .small])
     }
 }
 
@@ -68,23 +57,20 @@ private struct AlarmCompactTrailingTimer: View {
         CockpitCompactTimer(
             clock: presentation.clock,
             phase: presentation.phase,
+            scheduledAt: presentation.display.scheduledAt,
             limitedWidth: limitedWidth
         )
-        .accessibilityLabel("残り時間")
+        .accessibilityLabel(presentation.display.showsOvertimeMark ? "予定の時刻を過ぎています" : "残り時間")
     }
 }
 
 // MARK: - Presentation model
 
 private struct AlarmPresentationModel {
-    let title: String
     let sessionID: UUID
+    let alarmID: UUID
     let clock: CockpitClockStyle
     let phase: FocusTimerPhase
-    let headerState: String?
-    let deadlineLabel: String
-    let budgetSeconds: Int
-    let pausedProgress: Double?
     let mode: AlarmPresentationState.Mode
     let display: CockpitDisplayModel
 
@@ -96,12 +82,11 @@ private struct AlarmPresentationModel {
             budgetSeconds: budget,
             now: now
         )
-        title = context.attributes.metadata?.ticketTitle ?? "乗務中"
+        let ticketTitle = context.attributes.metadata?.ticketTitle ?? "乗務中"
         sessionID = context.attributes.metadata?.sessionID ?? context.state.alarmID
-        budgetSeconds = budget
+        alarmID = context.state.alarmID
         mode = context.state.mode
         phase = snapshot.phase
-        deadlineLabel = CockpitPresentation.deadlineLabel(from: snapshot)
 
         let resolvedClock: CockpitClockStyle
         let resolvedHeader: String?
@@ -121,7 +106,7 @@ private struct AlarmPresentationModel {
             )
         case .alert:
             resolvedClock = .alert
-            resolvedHeader = "超過"
+            resolvedHeader = nil
             resolvedPaused = 1
         @unknown default:
             resolvedClock = .paused(remaining: 0)
@@ -129,14 +114,15 @@ private struct AlarmPresentationModel {
             resolvedPaused = 0
         }
         clock = resolvedClock
-        headerState = resolvedHeader
-        pausedProgress = resolvedPaused
+        let caption = context.isStale
+            ? "予定の確認中"
+            : (CockpitFormat.scheduledLabel(deadline: snapshot.deadline) ?? "予定 —")
         display = CockpitDisplayModel(
-            title: title,
+            title: ticketTitle,
             clock: resolvedClock,
             phase: phase,
             headerState: resolvedHeader,
-            deadlineLabel: deadlineLabel,
+            deadlineLabel: caption,
             budgetSeconds: budget,
             pausedProgress: resolvedPaused,
             isStale: context.isStale,
@@ -144,7 +130,74 @@ private struct AlarmPresentationModel {
                 remaining: snapshot.remaining,
                 isStale: context.isStale,
                 isOvertime: phase == .overtime
-            )
+            ),
+            scheduledAt: snapshot.deadline,
+            checkInPrompt: nil
+        )
+    }
+}
+
+private struct AlarmCockpitFace: View {
+    let model: AlarmPresentationModel
+    var metrics: CockpitFaceMetrics
+    var surface: CockpitSafeSurface
+    var slot: CockpitSafeSlot = .all
+    var showsTrainMark: Bool = true
+    var limitedWidth: Bool = false
+
+    var body: some View {
+        CockpitActivityChrome(
+            model: model.display,
+            metrics: metrics,
+            surface: surface,
+            slot: slot,
+            showsTrainMark: showsTrainMark,
+            limitedWidth: limitedWidth,
+            rideButton: { rideButton },
+            resumeButton: { resumeButton },
+            promptButtons: { EmptyView() }
+        )
+    }
+
+    @ViewBuilder
+    private var rideButton: some View {
+        if case .alert = model.mode {
+            Button(intent: EndBellStopIntent(alarmID: model.alarmID, sessionID: model.sessionID)) {
+                CockpitRoundButtonLabel(systemImage: "stop.fill", tint: CockpitColors.ink)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("終了ベルを停止")
+        } else {
+            Button(intent: EndBellPauseIntent(alarmID: model.alarmID)) {
+                CockpitRoundButtonLabel(systemImage: "pause.fill", tint: CockpitColors.amber)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("停車")
+        }
+    }
+
+    private var resumeButton: some View {
+        Button(intent: EndBellResumeIntent(alarmID: model.alarmID)) {
+            CockpitReplyLabel(title: "再乗車", systemImage: "play.fill", tint: CockpitColors.green)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("再乗車")
+    }
+}
+
+private struct AlarmExpandedFace: View {
+    let model: AlarmPresentationModel
+    var slot: CockpitSafeSlot = .all
+    @Environment(\.isDynamicIslandLimitedInWidth) private var limitedWidth
+
+    var body: some View {
+        AlarmCockpitFace(
+            model: model,
+            metrics: limitedWidth ? .expandedTight : .expanded,
+            surface: .islandExpanded,
+            slot: slot,
+            showsTrainMark: true,
+            limitedWidth: limitedWidth
         )
     }
 }
@@ -152,57 +205,23 @@ private struct AlarmPresentationModel {
 private struct AlarmCockpitRoot: View {
     let context: ActivityViewContext<AlarmAttributes<TodoTrainAlarmMetadata>>
 
-    /// StandBy / fullscreen — Apple's documented signal only.
+    @Environment(\.activityFamily) private var activityFamily
     @Environment(\.isActivityFullscreen) private var isFullscreen
     @Environment(\.showsWidgetContainerBackground) private var showsWidgetContainerBackground
     @Environment(\.isLuminanceReduced) private var isLuminanceReduced
 
     var body: some View {
         let presentation = AlarmPresentationModel(context: context)
-
         Group {
-            if isFullscreen {
-                CockpitStandByInstrument(
-                    title: presentation.title,
-                    clock: presentation.clock,
-                    phase: presentation.phase,
-                    headerState: presentation.headerState,
-                    deadlineLabel: presentation.deadlineLabel,
-                    budgetSeconds: presentation.budgetSeconds,
-                    pausedProgress: presentation.pausedProgress,
-                    accessibilityTimer: presentation.display.accessibilityTimer
-                ) {
-                    CockpitAlarmControlRow(
-                        alarmID: context.state.alarmID,
-                        sessionID: presentation.sessionID,
-                        mode: context.state.mode,
-                        layout: .standByStack
-                    )
-                }
+            if activityFamily == .small {
+                AlarmCockpitFace(model: presentation, metrics: .stackSmall, surface: .stack)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .opacity(SessionSmallLuminance.resolve(reduced: isLuminanceReduced).instrument)
             } else {
-                CockpitLockScreenInstrument(
-                    title: presentation.title,
-                    clock: presentation.clock,
-                    phase: presentation.phase,
-                    headerState: presentation.headerState,
-                    deadlineLabel: presentation.deadlineLabel,
-                    budgetSeconds: presentation.budgetSeconds,
-                    pausedProgress: presentation.pausedProgress,
-                    accessibilityTimer: presentation.display.accessibilityTimer
-                ) {
-                    CockpitAlarmControlRow(
-                        alarmID: context.state.alarmID,
-                        sessionID: presentation.sessionID,
-                        mode: context.state.mode,
-                        layout: .horizontalRow
-                    )
-                }
+                AlarmFittedFace(model: presentation, fullscreen: isFullscreen)
+                    .opacity(isLuminanceReduced ? 0.92 : 1)
             }
         }
-        .frame(maxWidth: .infinity)
-        .frame(maxHeight: isFullscreen ? .infinity : nil)
-        .opacity(isLuminanceReduced ? 0.92 : 1)
-        // LS: container black. StandBy: tint only — avoid boxed Color.black (WWDC26).
         .background {
             if showsWidgetContainerBackground {
                 Color.black
@@ -211,6 +230,54 @@ private struct AlarmCockpitRoot: View {
         .activityBackgroundTint(.black)
         .activitySystemActionForegroundColor(.white)
         .widgetURL(URL(string: "todotrain://focus"))
+    }
+}
+
+private struct AlarmFittedFace: View {
+    let model: AlarmPresentationModel
+    var fullscreen: Bool
+
+    var body: some View {
+        CockpitFittedChrome(
+            model: model.display,
+            fullscreen: fullscreen,
+            showsTrainMark: true,
+            rideButton: { AlarmRideButton(model: model) },
+            resumeButton: { AlarmResumeButton(alarmID: model.alarmID) },
+            promptButtons: { EmptyView() }
+        )
+    }
+}
+
+private struct AlarmRideButton: View {
+    let model: AlarmPresentationModel
+
+    var body: some View {
+        if case .alert = model.mode {
+            Button(intent: EndBellStopIntent(alarmID: model.alarmID, sessionID: model.sessionID)) {
+                CockpitRoundButtonLabel(systemImage: "stop.fill", tint: CockpitColors.ink)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("終了ベルを停止")
+        } else {
+            Button(intent: EndBellPauseIntent(alarmID: model.alarmID)) {
+                CockpitRoundButtonLabel(systemImage: "pause.fill", tint: CockpitColors.amber)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("停車")
+        }
+    }
+}
+
+private struct AlarmResumeButton: View {
+    let alarmID: UUID
+
+    var body: some View {
+        Button(intent: EndBellResumeIntent(alarmID: alarmID)) {
+            CockpitReplyLabel(title: "再乗車", systemImage: "play.fill", tint: CockpitColors.green)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("再乗車")
     }
 }
 
@@ -263,6 +330,18 @@ private enum AlarmPreviewFixtures {
         )
     }
 
+    static var pausedState: AlarmPresentationState {
+        AlarmPresentationState(
+            alarmID: alarmID,
+            mode: .paused(
+                .init(
+                    totalCountdownDuration: budget,
+                    previouslyElapsedDuration: budget - 12 * 60
+                )
+            )
+        )
+    }
+
     static var alertState: AlarmPresentationState {
         let comps = Calendar.current.dateComponents([.hour, .minute], from: .now)
         return AlarmPresentationState(
@@ -280,16 +359,16 @@ private enum AlarmPreviewFixtures {
 #Preview("Alarm Lock Screen", as: .content, using: AlarmPreviewFixtures.attributes) {
     TodoTrainAlarmLiveActivity()
 } contentStates: {
-    AlarmPreviewFixtures.countdownState(remaining: 19 * 60)
-    AlarmPreviewFixtures.countdownState(remaining: 5 * 60)
+    AlarmPreviewFixtures.countdownState(remaining: 12 * 60)
     AlarmPreviewFixtures.countdownState(remaining: 90)
+    AlarmPreviewFixtures.pausedState
     AlarmPreviewFixtures.alertState
 }
 
 #Preview("Alarm DI Compact", as: .dynamicIsland(.compact), using: AlarmPreviewFixtures.attributes) {
     TodoTrainAlarmLiveActivity()
 } contentStates: {
-    AlarmPreviewFixtures.countdownState(remaining: 5 * 60)
+    AlarmPreviewFixtures.countdownState(remaining: 12 * 60)
     AlarmPreviewFixtures.countdownState(remaining: 90)
     AlarmPreviewFixtures.alertState
 }
@@ -297,16 +376,97 @@ private enum AlarmPreviewFixtures {
 #Preview("Alarm DI Minimal", as: .dynamicIsland(.minimal), using: AlarmPreviewFixtures.attributes) {
     TodoTrainAlarmLiveActivity()
 } contentStates: {
-    AlarmPreviewFixtures.countdownState(remaining: 5 * 60)
+    AlarmPreviewFixtures.countdownState(remaining: 12 * 60)
     AlarmPreviewFixtures.alertState
 }
 
 #Preview("Alarm DI Expanded", as: .dynamicIsland(.expanded), using: AlarmPreviewFixtures.attributes) {
     TodoTrainAlarmLiveActivity()
 } contentStates: {
-    AlarmPreviewFixtures.countdownState(remaining: 5 * 60)
+    AlarmPreviewFixtures.countdownState(remaining: 12 * 60)
     AlarmPreviewFixtures.countdownState(remaining: 90)
+    AlarmPreviewFixtures.pausedState
     AlarmPreviewFixtures.alertState
+}
+
+#Preview("Alarm Smart Stack Small") {
+    alarmStack(metrics: .stackSmall, width: 184, height: 72)
+}
+
+#Preview("Alarm Smart Stack Medium") {
+    alarmStack(metrics: .stackMedium, width: 198, height: 140)
+}
+
+private func alarmStack(metrics: CockpitFaceMetrics, width: CGFloat, height: CGFloat) -> some View {
+    let now = Date.now
+    let running = CockpitDisplayModel(
+        title: "仕様書を書く",
+        clock: .countdown(end: now.addingTimeInterval(12 * 60)),
+        phase: .cruise,
+        headerState: nil,
+        deadlineLabel: CockpitFormat.scheduledLabel(deadline: now.addingTimeInterval(12 * 60)) ?? "予定 —",
+        budgetSeconds: Int(AlarmPreviewFixtures.budget),
+        pausedProgress: nil,
+        isStale: false,
+        accessibilityTimer: "残り12分",
+        scheduledAt: now.addingTimeInterval(12 * 60)
+    )
+    let paused = CockpitDisplayModel(
+        title: "仕様書を書く",
+        clock: .paused(remaining: 12 * 60),
+        phase: .cruise,
+        headerState: "停車中",
+        deadlineLabel: "予定 —",
+        budgetSeconds: Int(AlarmPreviewFixtures.budget),
+        pausedProgress: 0.4,
+        isStale: false,
+        accessibilityTimer: "停車中",
+        scheduledAt: now.addingTimeInterval(12 * 60)
+    )
+    let alert = CockpitDisplayModel(
+        title: "仕様書を書く",
+        clock: .alert,
+        phase: .overtime,
+        headerState: nil,
+        deadlineLabel: "予定 —",
+        budgetSeconds: Int(AlarmPreviewFixtures.budget),
+        pausedProgress: 1,
+        isStale: false,
+        accessibilityTimer: "予定の時刻を過ぎています"
+    )
+    return VStack(spacing: 8) {
+        alarmCard(running, metrics: metrics, width: width, height: height, alert: false)
+        alarmCard(paused, metrics: metrics, width: width, height: height, alert: false)
+        alarmCard(alert, metrics: metrics, width: width, height: height, alert: true)
+    }
+    .padding()
+    .background(Color.black)
+}
+
+private func alarmCard(
+    _ model: CockpitDisplayModel,
+    metrics: CockpitFaceMetrics,
+    width: CGFloat,
+    height: CGFloat,
+    alert: Bool
+) -> some View {
+    CockpitActivityChrome(
+        model: model,
+        metrics: metrics,
+        surface: .stack,
+        rideButton: {
+            CockpitRoundButtonLabel(
+                systemImage: alert ? "stop.fill" : "pause.fill",
+                tint: alert ? CockpitColors.ink : CockpitColors.amber
+            )
+        },
+        resumeButton: {
+            CockpitReplyLabel(title: "再乗車", systemImage: "play.fill", tint: CockpitColors.green)
+        },
+        promptButtons: { EmptyView() }
+    )
+    .frame(width: width, height: height)
+    .background(Color.black)
 }
 #endif
 #endif

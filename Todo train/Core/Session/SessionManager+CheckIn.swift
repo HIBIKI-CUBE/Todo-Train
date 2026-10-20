@@ -12,15 +12,28 @@ import UIKit
 #endif
 
 extension SessionManager {
-    /// 車内放送 4 択. `willExtend` only acknowledges; Focus shows the extend panel.
+    /// 車内放送 4 択。`willExtend` は見積もり直しのパネルを開く。
     func answerCheckIn(_ answer: CheckInAnswerKind, now: Date? = nil) throws {
         let now = now ?? clock.now
         guard let session = activeSession, session.isOpen else {
             throw SessionError.noActiveSession
         }
         guard session.pendingCheckIn != nil else { return }
+        guard uiCanAnswer(session: session) else {
+            releaseAnsweredCheckInPrompt(session, now: now)
+            return
+        }
 
-        consumePendingCheckIn(session, answer: answer, now: now)
+        let stamp = uiNudgeStamp(session: session)
+        consumePendingCheckIn(
+            session,
+            answer: answer,
+            now: now,
+            nudgeID: stamp?.0,
+            answeredOn: stamp == nil ? nil : "iphone",
+            answeredStage: stamp?.1.rawValue,
+            recordKind: stamp.map { CheckInKind.recorded(for: $0.1) }
+        )
         session.awayDueAt = nil
         noteCabinActivity(now: now, clearPendingIdle: true)
         bumpCompanionSync()
@@ -34,6 +47,8 @@ extension SessionManager {
             try pause(now: now)
         case .alreadyDone:
             try arrive(resolution: .alreadyDone, now: now)
+        case .board:
+            break
         }
     }
 
@@ -52,16 +67,16 @@ extension SessionManager {
             case .idle:
                 session.pendingCheckIn = nil
                 bumpCompanionSync()
-                try? save()
+                _ = saveBestEffort()
                 return
-            case .none:
+            case .overrun, .gap, .none:
                 break
             }
 
             guard !session.isPaused, session.remainingSeconds(at: now) > CheckInScheduling.overtimeGuardSeconds else {
                 return
             }
-            let elapsed = session.elapsedSeconds(at: now)
+            let elapsed = nudgeWorkingSeconds(for: session, now: now)
             guard CheckInScheduling.dueProgressOffset(
                 offsets: session.checkInOffsets,
                 firedCount: session.checkInFiredCount,
@@ -71,12 +86,26 @@ extension SessionManager {
             ) != nil else { return }
             session.checkInFiredCount += 1
             bumpCompanionSync()
-            try? save()
+            _ = saveBestEffort()
             reconcile(now: now)
             return
         }
 
+        if dismissArrivalGapIfShowing(now: now) { return }
         consumeIdleCabinStill(now: now)
+    }
+
+    func handleNotification(identifier: String, action: String) {
+        if PassengerNotification.isPassenger(identifier)
+            || (TimetableNotification.isTimetable(identifier) && action == PassengerNotification.boardAction) {
+            boardPassenger()
+            return
+        }
+        if TimetableNotification.isTimetable(identifier) {
+            handleTimetableNotification(identifier: identifier, action: action)
+            return
+        }
+        handleCheckInNotification(identifier: identifier, action: action)
     }
 
     /// Unlocked background only. Locked / end-bell LA / cabin-off: no away watch.
@@ -93,15 +122,20 @@ extension SessionManager {
         guard session.remainingSeconds(at: now) > 0 else { return }
         guard session.pendingCheckIn == nil else { return }
         guard session.awayDueAt == nil else { return }
+        guard fetchOpenPassengerRide() == nil else { return }
+        guard !timetableFit(at: now).shouldSuppressAway else { return }
 
-        let delay = CheckInScheduling.awayDelay(
+        let fireAt = CheckInNotificationSchedule.awayFireAt(
+            now: now,
             seed: session.id,
             salt: UInt64(session.checkInFiredCount) &+ 99
         )
-        let fireAt = now.addingTimeInterval(delay)
         session.awayDueAt = fireAt
-        try? save()
-        if awayInterruptChannel == .localNotification {
+        guard saveBestEffort() else {
+            session.awayDueAt = nil
+            return
+        }
+        if awayInterruptChannel == .localNotification, iphonePosts(.away, turn: 0, now: now) {
             checkInNotifier.scheduleAway(
                 sessionID: session.id,
                 ticketTitle: session.ticket?.title ?? "切符",
@@ -110,6 +144,7 @@ extension SessionManager {
             )
         }
         armAwayFire(at: fireAt, sessionID: session.id)
+        publishOffscreenAssignment(now: now)
     }
 
     /// Lock screen: drop the watch. Do not promote a pending `.away` panel.
@@ -126,7 +161,7 @@ extension SessionManager {
             session.pendingCheckIn = nil
             changed = true
         }
-        if changed { try? save() }
+        if changed { _ = saveBestEffort() }
         checkInNotifier.cancel(sessionID: session.id)
         if !session.isPaused, session.remainingSeconds(at: now) > 0, ownsDeviceSideEffects(session) {
             refreshProgressCheckInNotifications(for: session, now: now)
@@ -170,8 +205,8 @@ extension SessionManager {
                 session.awayDueAt = nil
                 cancelAwayFireTask()
             }
-            checkInHapticTick += 1
-            try? save()
+            presentation.noteCheckInHaptic()
+            _ = saveBestEffort()
         }
 
         switch action {
@@ -188,6 +223,11 @@ extension SessionManager {
     func pauseRide(sessionID: UUID) {
         guard activeSession?.id == sessionID else { return }
         try? pause()
+    }
+
+    func continueRide(sessionID: UUID) {
+        guard activeSession?.id == sessionID else { return }
+        acknowledgeCabinStill()
     }
 
     /// Settings toggle for 車内放送 — apply immediately to the active ride.
@@ -210,7 +250,7 @@ extension SessionManager {
             session.awayDueAt = nil
             cancelAwayFireTask()
             checkInNotifier.cancel(sessionID: session.id)
-            try? save()
+            _ = saveBestEffort()
             reconcile(now: now)
             return
         }
@@ -221,15 +261,24 @@ extension SessionManager {
     // MARK: - Check-in
 
     func applyCheckInSchedule(to session: WorkSession, title: String, estimatedSeconds: Int) {
-        session.checkInOffsetSeconds = CheckInScheduling.offsets(
-            estimatedSeconds: estimatedSeconds,
-            seed: session.id
-        )
+        let budgetAtStart = session.budgetSecondsAtStart > 0 ? session.budgetSecondsAtStart : estimatedSeconds
+        if let offset = NudgePlanner.checkInOffset(estimatedSeconds: budgetAtStart, rideID: session.id) {
+            session.checkInOffsetSeconds = [offset]
+            session.checkInFraction = offset / TimeInterval(max(budgetAtStart, 1))
+        } else {
+            session.checkInOffsetSeconds = []
+            session.checkInFraction = nil
+        }
         session.checkInFiredCount = 0
         session.pendingCheckInKindRaw = nil
         session.awayDueAt = nil
         session.checkInPromptLine = CheckInCopy.fallback(title: title)
         session.checkInAnswersJSON = "[]"
+        session.nudgeFiredStagesRaw = []
+        session.nudgePendingStageRaw = nil
+        session.nudgeAnsweredAt = nil
+        session.nudgeAnsweredOnRaw = nil
+        session.nudgeEventsJSON = "[]"
     }
 
     func requestCheckInPrompt(for session: WorkSession, title: String, estimatedMinutes: Int) {
@@ -244,8 +293,12 @@ extension SessionManager {
             )
             guard let line = lines.first.map(Self.sanitizeCheckInLine), !line.isEmpty else { return }
             guard let current = self.activeSession, current.id == sessionID, current.isOpen else { return }
+            let previousLine = current.checkInPromptLine
             current.checkInPromptLine = line
-            try? self.save()
+            guard self.saveBestEffort() else {
+                current.checkInPromptLine = previousLine
+                return
+            }
             self.refreshProgressCheckInNotifications(for: current, now: self.clock.now)
         }
     }
@@ -260,19 +313,59 @@ extension SessionManager {
         return String(collapsed[..<end])
     }
 
+    /// 答えの出た問いかけが画面に残っているとき、表示だけ閉じる。新しい答えは足さない。
+    func releaseAnsweredCheckInPrompt(_ session: WorkSession, now: Date) {
+        guard session.pendingCheckIn != nil else { return }
+        guard !uiCanAnswer(session: session) else { return }
+        if session.pendingCheckIn == .progress, session.checkInFiredCount == 0 {
+            session.checkInFiredCount = 1
+        }
+        session.pendingCheckIn = nil
+        session.awayDueAt = nil
+        cancelAwayFireTask()
+        bumpCompanionSync()
+        _ = saveBestEffort()
+        reconcile(now: now)
+        guard session.isOpen else { return }
+        refreshRideSideEffects(for: session, now: now)
+    }
+
     func consumePendingCheckIn(
         _ session: WorkSession,
         answer: CheckInAnswerKind,
-        now: Date
+        now: Date,
+        nudgeID: String? = nil,
+        addSeconds: Int? = nil,
+        answeredOn: String? = nil,
+        answeredStage: String? = nil,
+        recordKind: CheckInKind? = nil
     ) {
-        guard let kind = session.pendingCheckIn else { return }
+        guard let pending = session.pendingCheckIn else { return }
+        let kind = recordKind ?? pending
         var answers = session.checkInAnswers
-        answers.append(CheckInAnswerRecord(kind: kind, answer: answer, answeredAt: now))
+        answers.append(
+            CheckInAnswerRecord(
+                kind: kind,
+                answer: answer,
+                answeredAt: now,
+                nudgeID: nudgeID,
+                addSeconds: addSeconds,
+                answeredOn: answeredOn,
+                answeredStage: answeredStage
+            )
+        )
         session.checkInAnswers = answers
-        if kind == .progress {
+        if nudgeID != nil {
+            session.nudgeAnsweredAt = now
+            session.nudgeAnsweredOnRaw = answeredOn
+        }
+        if pending == .progress {
             session.checkInFiredCount += 1
         }
         session.pendingCheckIn = nil
+        if nudgeID != nil, visibleNudgeStage(session) == nil {
+            session.nudgePendingStageRaw = nil
+        }
     }
 
     func skipPendingCheckInForOvertime(_ session: WorkSession) {
@@ -283,18 +376,28 @@ extension SessionManager {
         session.awayDueAt = nil
         cancelAwayFireTask()
         checkInNotifier.cancel(sessionID: session.id)
-        try? save()
+        _ = saveBestEffort()
     }
 
     func refreshPendingCheckIn(_ session: WorkSession, now: Date) {
         guard ownsDeviceSideEffects(session) else { return }
+        if fetchOpenPassengerRide() != nil {
+            if session.pendingCheckIn != nil || session.awayDueAt != nil {
+                session.pendingCheckIn = nil
+                session.awayDueAt = nil
+                cancelAwayFireTask()
+                checkInNotifier.cancel(sessionID: session.id)
+                _ = saveBestEffort()
+            }
+            return
+        }
         guard settings.cabinAnnouncementsEnabled else {
             if session.pendingCheckIn != nil || session.awayDueAt != nil {
                 session.pendingCheckIn = nil
                 session.awayDueAt = nil
                 cancelAwayFireTask()
                 checkInNotifier.cancel(sessionID: session.id)
-                try? save()
+                _ = saveBestEffort()
             }
             return
         }
@@ -308,62 +411,13 @@ extension SessionManager {
             return
         }
 
-        let elapsed = session.elapsedSeconds(at: now)
-        if CheckInScheduling.dueProgressOffset(
-            offsets: session.checkInOffsets,
-            firedCount: session.checkInFiredCount,
-            elapsedSeconds: elapsed,
-            remainingSeconds: remaining,
-            hasPending: false
-        ) != nil {
-            session.pendingCheckIn = .progress
-            session.awayDueAt = nil
-            cancelAwayFireTask()
-            checkInHapticTick += 1
-            bumpCompanionSync()
-            try? save()
-            return
-        }
-
         if let due = session.awayDueAt, due <= now {
             fireAwayInterrupt(session, now: now, presentAlert: true)
         }
     }
 
     func refreshProgressCheckInNotifications(for session: WorkSession, now: Date) {
-        guard ownsDeviceSideEffects(session) else {
-            checkInNotifier.cancel(sessionID: session.id)
-            return
-        }
-        guard settings.cabinAnnouncementsEnabled else {
-            checkInNotifier.cancel(sessionID: session.id)
-            return
-        }
-        guard session.isOpen, !session.isPaused else {
-            checkInNotifier.cancel(sessionID: session.id)
-            return
-        }
-        if suppressProgressLocalNotifications {
-            checkInNotifier.cancelProgress(sessionID: session.id)
-            return
-        }
-        let elapsed = session.elapsedSeconds(at: now)
-        let body = session.checkInPromptLine ?? CheckInCopy.fallback(title: session.ticket?.title ?? "")
-        let title = session.ticket?.title ?? "切符"
-        for (index, offset) in session.checkInOffsets.enumerated() {
-            guard index >= session.checkInFiredCount else { continue }
-            guard let fireAt = CheckInScheduling.wallFireAt(
-                offset: offset,
-                elapsedSeconds: elapsed,
-                now: now
-            ) else { continue }
-            checkInNotifier.scheduleProgress(
-                sessionID: session.id,
-                index: index,
-                ticketTitle: title,
-                body: body,
-                fireAt: fireAt
-            )
-        }
+        _ = now
+        checkInNotifier.cancelProgress(sessionID: session.id)
     }
 }

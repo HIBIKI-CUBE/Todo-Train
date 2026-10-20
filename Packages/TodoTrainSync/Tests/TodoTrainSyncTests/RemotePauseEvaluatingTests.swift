@@ -160,4 +160,24 @@ struct RemotePauseEvaluatingTests {
         )
         #expect(decision == .sessionMismatch)
     }
+
+    @Test func unknownOpIsNotAppliedAndAcksUnsupportedOp() throws {
+        let raw = """
+        {"id":"33333333-3333-4333-8333-333333333333","op":"extend","sessionId":"11111111-1111-4111-8111-111111111111","at":1768000120}
+        """
+        let command = try WireJSON.decoder().decode(CommandPlaintext.self, from: Data(raw.utf8))
+        #expect(command.op == .unknown("extend"))
+        let decision = RemotePauseEvaluating.evaluate(
+            openSessionId: session,
+            pausedCount: 0,
+            pauseLimit: 2,
+            command: command
+        )
+        #expect(decision == .unsupportedOp)
+        #expect(!decision.shouldApply)
+        let ack = RemotePauseEvaluating.ack(decision: decision, commandId: command.id)
+        #expect(ack.ok == false)
+        #expect(ack.error == .unsupportedOp)
+        #expect(MenuBarPresentation.failureCopy(.unsupportedOp) == "この操作は Mac のアプリを更新すると使えます。")
+    }
 }

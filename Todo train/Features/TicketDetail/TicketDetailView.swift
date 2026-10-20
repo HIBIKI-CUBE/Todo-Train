@@ -22,10 +22,18 @@ struct TicketDetailView: View {
     @State private var showPauseLimitSheet = false
 
     private var canBoard: Bool {
-        sessionManager.isInService
-            && sessionManager.phase != .running
-            && sessionManager.phase != .overtime
-            && ticket.isOpen
+        ticket.isOpen && sessionManager.boardingEligibility.allowsInteraction
+    }
+
+    /// 押せるときは操作の結果。押せないときは `board()` と同じ拒否文。
+    /// `allowed` の disabledReason（「発車できません」）は使わない。
+    private var boardAccessibilityHint: String {
+        if canBoard {
+            return isPaused
+                ? "停車中の切符を再開します"
+                : "この切符を発車し、フォーカスを開きます"
+        }
+        return sessionManager.boardingEligibility.disabledReason
     }
 
     private var isPaused: Bool {
@@ -45,19 +53,19 @@ struct TicketDetailView: View {
     }
 
     private var estimateSuggestion: (minutes: Int, sampleCount: Int)? {
-        let tagIDs = Set(ticket.tags.map(\.id))
-        let samples = EstimateHeuristic.arrivedSamples(
-            from: Array(allSessions),
-            matchingAnyTagIDs: tagIDs.isEmpty ? nil : tagIDs
+        EstimateHeuristic.suggestion(
+            title: ticket.title,
+            tagIDs: Set(ticket.tags.map(\.id)),
+            ticket: ticket,
+            sessions: Array(allSessions)
         )
-        return EstimateHeuristic.suggestion(from: samples)
     }
 
     var body: some View {
         Form {
             Section("切符") {
                 if ticket.isOpen {
-                    TextField("タイトル", text: $ticket.title)
+                    TextField("題名", text: $ticket.title)
                     VStack(alignment: .leading, spacing: TrainTheme.Space.sm) {
                         Text("見積もり \(ticket.estimatedSeconds / 60) 分")
                             .font(.subheadline.weight(.medium))
@@ -203,9 +211,14 @@ struct TicketDetailView: View {
             if ticket.isOpen {
                 Section {
                     Button(isPaused ? "再乗車" : "発車") {
-                        board()
+                        requestBoard()
                     }
                     .disabled(!canBoard)
+                    .accessibilityHint(boardAccessibilityHint)
+                } footer: {
+                    if !canBoard {
+                        Text(sessionManager.boardingEligibility.disabledReason)
+                    }
                 }
             }
 
@@ -224,10 +237,13 @@ struct TicketDetailView: View {
             try? modelContext.save()
         }
         .errorAlert(isPresented: $showError, message: errorMessage)
+        .task {
+            await sessionManager.refreshCalendarBoardIfAuthorized()
+        }
         .sheet(isPresented: $showPauseLimitSheet) {
             PauseLimitSheet(
                 pendingTicket: ticket,
-                onSlotFreedTryBoard: { board() }
+                onSlotFreedTryBoard: { requestBoard() }
             )
         }
     }
@@ -255,6 +271,11 @@ struct TicketDetailView: View {
         }
     }
 
+    private func requestBoard() {
+        guard canBoard else { return }
+        board()
+    }
+
     private func board() {
         do {
             ticketMotion.zoomSourceID = ticket.id
@@ -275,7 +296,11 @@ struct TicketDetailView: View {
             try sessionManager.deleteTicket(ticket)
             undoCenter.offer(message: DeletionUndo.bannerMessage(ticketTitle: title)) {
                 withAnimation {
-                    try? sessionManager.restoreDeletedTicket(record)
+                    do {
+                        try sessionManager.restoreDeletedTicket(record)
+                    } catch {
+                        undoCenter.restoreErrorMessage = error.localizedDescription
+                    }
                 }
             }
             dismiss()
@@ -303,7 +328,11 @@ struct TicketDetailView: View {
                     )
                 ) {
                     withAnimation {
-                        try? sessionManager.restoreDeletedTicket(record)
+                        do {
+                            try sessionManager.restoreDeletedTicket(record)
+                        } catch {
+                            undoCenter.restoreErrorMessage = error.localizedDescription
+                        }
                     }
                 }
                 dismiss()
@@ -317,7 +346,11 @@ struct TicketDetailView: View {
                     )
                 ) {
                     withAnimation {
-                        try? sessionManager.restoreDeletedSession(record)
+                    do {
+                        try sessionManager.restoreDeletedSession(record)
+                    } catch {
+                        undoCenter.restoreErrorMessage = error.localizedDescription
+                    }
                     }
                 }
             }

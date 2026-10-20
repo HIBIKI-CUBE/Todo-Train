@@ -17,6 +17,10 @@ struct LiveActivitySessionContent: Equatable, Sendable {
     /// When set, the next update presents an ActivityKit alert on this LA.
     var alertTitle: String? = nil
     var alertBody: String? = nil
+    /// Approach color for stage 2. Absent leaves the timer's own phase.
+    var instrumentPhaseRaw: String? = nil
+    /// Stage 1 keeps the timer color and shows the question as the header.
+    var promptKeepsTimerColor: Bool = false
 }
 
 protocol LiveActivityManaging: Sendable {
@@ -80,7 +84,9 @@ final class LiveActivityManager: LiveActivityManaging {
             isOvertime: content.isOvertime,
             budgetSeconds: max(content.budgetSeconds, 1),
             isPaused: content.isPaused,
-            checkInPrompt: content.checkInPrompt
+            checkInPrompt: content.checkInPrompt,
+            instrumentPhaseRaw: content.instrumentPhaseRaw,
+            promptKeepsTimerColor: content.promptKeepsTimerColor
         )
 
         // Keep the activity active while paused so StandBy / Island resume still work.

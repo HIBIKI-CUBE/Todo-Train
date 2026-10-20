@@ -69,7 +69,7 @@ public enum CabinBroadcastScheduling: Sendable {
     }
 }
 
-/// iPhone-owned idle 車内放送. Mac does not schedule; it only watches `pendingCabin`.
+/// Idle 車内放送 timing. The safety-net post is `notifyOn` on the snap.
 public enum CabinIdleScheduling: Sendable {
     public static let maxCount = 2
     public static let firstBand: ClosedRange<TimeInterval> = (12 * 60)...(20 * 60)

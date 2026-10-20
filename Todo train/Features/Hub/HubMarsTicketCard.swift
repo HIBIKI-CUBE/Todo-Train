@@ -8,6 +8,7 @@
 //
 
 import SwiftUI
+import SwiftData
 
 struct HubMarsTicketCard: View {
     let ticket: Ticket
@@ -18,6 +19,7 @@ struct HubMarsTicketCard: View {
     var restOffset: CGSize = .zero
     var followsFinger: Bool = true
     var allowsDeckSwipe: Bool = false
+    var occupancyMarks: [TimetableOccupancyMark] = []
     let onSelect: () -> Void
     var onDismissLift: () -> Void = {}
     var onHoldDragEnded: ((DragGesture.Value) -> TicketStackLayout.HoldRelease)?
@@ -61,25 +63,38 @@ struct HubMarsTicketCard: View {
             if allowsDeckSwipe, !isLifted {
                 deckActionBackdrop
             }
-            MarsTicketView(content: content, density: .hub)
-                .contentShape(Rectangle())
-                .onTapGesture(perform: handleTap)
-                .gesture(isLifted && followsFinger ? holdDrag : nil)
-                .gesture(
-                    DeckHorizontalPanGesture(
-                        isEnabled: allowsDeckSwipe && !isLifted,
-                        onChanged: { x in
-                            deckX = x
-                        },
-                        onEnded: finishDeckSwipe
+            MarsTicketView(
+                content: content,
+                density: .hub,
+                occupancyMarks: occupancyMarks.map {
+                    MarsOccupancyMark(
+                        id: $0.id,
+                        position: $0.position,
+                        span: $0.span,
+                        isCurrent: $0.isCurrent,
+                        isAdopted: $0.isAdopted
                     )
+                }
+            )
+            .equatable()
+            .contentShape(Rectangle())
+            .onTapGesture(perform: handleTap)
+            .gesture(isLifted && followsFinger ? holdDrag : nil)
+            .gesture(
+                DeckHorizontalPanGesture(
+                    isEnabled: allowsDeckSwipe && !isLifted,
+                    onChanged: { x in
+                        deckX = x
+                    },
+                    onEnded: finishDeckSwipe
                 )
-                .offset(displayedOffset)
-                .shadow(
-                    color: .black.opacity(isHeldVisually || isLifted ? 0.28 : 0.18),
-                    radius: isHeldVisually || isLifted ? 16 : 10,
-                    y: isHeldVisually || isLifted ? 8 : 5
-                )
+            )
+            .offset(displayedOffset)
+            .shadow(
+                color: .black.opacity(isHeldVisually || isLifted ? 0.28 : 0.18),
+                radius: isHeldVisually || isLifted ? 16 : 10,
+                y: isHeldVisually || isLifted ? 8 : 5
+            )
         }
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isButton)
@@ -93,15 +108,20 @@ struct HubMarsTicketCard: View {
     }
 
     private var accessibilityHintText: String {
+        let reason = Self.sentence(disabledReason ?? "今は発車できません")
         if isLifted {
             return canBoard
-                ? "右に投げて発車。左または下、タップで戻す。詳細は長押しメニュー"
-                : "左または下、タップで戻す。\(disabledReason ?? "今は発車できません")。詳細は長押しメニュー"
+                ? "右に投げると発車し、左か下に投げるかタップすると戻せます。詳細は長押しメニューから開けます。"
+                : "\(reason)左か下に投げるかタップすると戻せます。詳細は長押しメニューから開けます。"
         }
         if canBoard {
-            return "ダブルタップでつまむ。発車と削除はアクションから。詳細は長押しメニュー"
+            return "ダブルタップでつまみます。発車と削除はアクションから、詳細は長押しメニューから選べます。"
         }
-        return "ダブルタップでつまむ。削除はアクションから。\(disabledReason ?? "今は発車できません")。詳細は長押しメニュー"
+        return "\(reason)ダブルタップでつまみます。削除はアクションから、詳細は長押しメニューから選べます。"
+    }
+
+    private static func sentence(_ text: String) -> String {
+        text.hasSuffix("。") ? text : text + "。"
     }
 
     @ViewBuilder
@@ -199,6 +219,7 @@ struct HubMarsTicketCard: View {
 }
 
 #Preview {
+    let (container, manager) = HubPreviewSeed.make(scenario: .inService)
     let ticket = Ticket(title: "週次レビュー", estimatedSeconds: 1_500, sortOrder: 0)
     return HubMarsTicketCard(
         ticket: ticket,
@@ -208,4 +229,6 @@ struct HubMarsTicketCard: View {
     )
     .padding()
     .background(Color(uiColor: .systemGroupedBackground))
+    .environment(manager)
+    .modelContainer(container)
 }

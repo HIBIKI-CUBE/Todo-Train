@@ -2,6 +2,39 @@ import Foundation
 
 public typealias RideOverlayTimerPhase = TimerUrgency
 
+public struct RideOccupancyInstrument: Equatable, Sendable {
+    public var prefix: String
+    public var clock: String
+    public var minutes: Int?
+    public var title: String
+    public var spokenLine: String
+    /// Next occupancy on the ride progress bar (elapsed / estimated). Nil when past the ride.
+    public var markPosition: Double?
+    /// Current occupancy band on the same progress bar.
+    public var spanStart: Double?
+    public var spanEnd: Double?
+
+    public init(
+        prefix: String,
+        clock: String,
+        minutes: Int?,
+        title: String,
+        spokenLine: String,
+        markPosition: Double?,
+        spanStart: Double?,
+        spanEnd: Double?
+    ) {
+        self.prefix = prefix
+        self.clock = clock
+        self.minutes = minutes
+        self.title = title
+        self.spokenLine = spokenLine
+        self.markPosition = markPosition
+        self.spanStart = spanStart
+        self.spanEnd = spanEnd
+    }
+}
+
 /// Mac ride PiP from the same snap input as the menu bar. Hidden when unpaired or idle.
 public struct RideOverlayPresentation: Equatable, Sendable {
     public var isVisible: Bool
@@ -19,6 +52,23 @@ public struct RideOverlayPresentation: Equatable, Sendable {
     public var peekTitle: String
     /// Progress 車内放送 on the PiP. Nil when idle.
     public var cabinPrompt: String?
+    /// Next or current ダイヤ. Title and minutes from unix timestamps so tests stay timezone-stable.
+    /// Occupancy as digits on the ride remaining fill. Spoken line stays on `nextBlockLine`.
+    public var occupancy: RideOccupancyInstrument?
+    public var nextBlockLine: String?
+    /// Dispatcher question when the snap carries a nudge. Nil on an older iPhone.
+    public var nudgePrompt: String?
+    public var showsNudgeChoices: Bool
+    /// Hold lamp for stage 1, and for stages 3...6 only on Mac's turn.
+    public var holdLamp: Bool
+    /// 「延長 +10（送信中）」 or the winning answer. Nil shows the remaining digits.
+    public var instrumentCaption: String?
+    /// Arrival gap. The card is the reserved ticket, or the idle line. No next-task preview.
+    public var showsArrivalGap: Bool = false
+    /// Gap card can send `boardReserved`.
+    public var canBoardReserved: Bool = false
+    /// 「停車のまま？」. Nil when this pause is not asking.
+    public var pausePrompt: String? = nil
 
     public static let peekTitleLimit = 6
 
@@ -36,7 +86,13 @@ public struct RideOverlayPresentation: Equatable, Sendable {
         failureLine: nil,
         statusLine: nil,
         peekTitle: "",
-        cabinPrompt: nil
+        cabinPrompt: nil,
+        occupancy: nil,
+        nextBlockLine: nil,
+        nudgePrompt: nil,
+        showsNudgeChoices: false,
+        holdLamp: false,
+        instrumentCaption: nil
     )
 
     public static func make(_ input: MenuBarInput) -> RideOverlayPresentation {
@@ -46,7 +102,13 @@ public struct RideOverlayPresentation: Equatable, Sendable {
         }
         switch snap.phase {
         case .idle, .unknown:
-            return .hidden
+            guard let gap = ArrivalGapChrome.make(
+                snap: snap,
+                cabinEnabled: input.cabinEnabledLocal && snap.cabinEnabled
+            ) else {
+                return .hidden
+            }
+            return gapPresentation(gap, input: input, bar: bar)
         case .paused, .running, .overtime:
             break
         }
@@ -82,28 +144,252 @@ public struct RideOverlayPresentation: Equatable, Sendable {
             optimisticFiredCount: input.optimisticFiredCount,
             optimisticIdleConsumed: input.optimisticIdleConsumed
         )
-        let cabinPrompt = (cabin.showsPip && !bar.isSending) ? cabin.prompt : nil
+        let nudge = MacNudgeChrome.make(
+            snap: snap,
+            now: input.now,
+            cabinEnabled: input.cabinEnabledLocal && snap.cabinEnabled,
+            sendingExtendMinutes: bar.isSending ? input.sendingExtendMinutes : nil,
+            winnerLine: bar.isSending ? nil : input.nudgeWinnerLine
+        )
+        let pausePrompt = input.pausePromptLine
+        // A snap with a nudge plan owns the question. The older offset prompt stays for snaps without one.
+        let nudgeOwnsQuestion = snap.nudgePlan?.isEmpty == false
+        let legacyProgress = nudgeOwnsQuestion && cabin.kind == .progress
+        let cabinPrompt = pausePrompt == nil && !nudge.showsChoices && cabin.showsPip && !legacyProgress && !bar.isSending
+            ? cabin.prompt
+            : nil
+        var phase = timerPhase(
+            remaining: remaining,
+            estimated: snap.estimatedSeconds,
+            overtime: bar.isOvertime
+        )
+        if nudge.forcesApproach, phase == .cruise {
+            phase = .approach
+        }
+        let failureLine = Self.failureLine(input: input, bar: bar)
 
         return RideOverlayPresentation(
             isVisible: true,
             title: title,
             remainingLabel: remainingLabel,
             progress: progress,
-            timerPhase: timerPhase(
-                remaining: remaining,
-                estimated: snap.estimatedSeconds,
-                overtime: bar.isOvertime
-            ),
+            timerPhase: phase,
             isOvertime: bar.isOvertime,
             isPaused: snap.phase == .paused,
             canPause: bar.canPause,
             canResume: bar.canResume,
             isSending: bar.isSending,
-            failureLine: bar.failureLine,
+            failureLine: failureLine,
             statusLine: statusLine,
             peekTitle: truncatedPeekTitle(title),
-            cabinPrompt: cabinPrompt
+            cabinPrompt: cabinPrompt,
+            occupancy: occupancyInstrument(snap: snap, now: input.now),
+            nextBlockLine: nextBlockLine(snap: snap, now: input.now),
+            nudgePrompt: pausePrompt == nil ? nudge.prompt : nil,
+            showsNudgeChoices: pausePrompt == nil && nudge.showsChoices,
+            holdLamp: nudge.holdLamp || pausePrompt != nil,
+            instrumentCaption: nudge.instrumentCaption,
+            pausePrompt: pausePrompt
         )
+    }
+
+    /// Blank after arrival. One face or the idle line. Occupancy stays off this card.
+    private static func gapPresentation(
+        _ gap: ArrivalGapChrome,
+        input: MenuBarInput,
+        bar: MenuBarPresentation
+    ) -> RideOverlayPresentation {
+        let statusLine: String?
+        if input.connection == .disconnected {
+            statusLine = SyncCopy.relayDisconnected
+        } else if bar.isSending {
+            statusLine = SyncCopy.sentToIPhone
+        } else {
+            statusLine = nil
+        }
+        return RideOverlayPresentation(
+            isVisible: true,
+            title: gap.title,
+            remainingLabel: "",
+            progress: 0,
+            timerPhase: .cruise,
+            isOvertime: false,
+            isPaused: false,
+            canPause: false,
+            canResume: false,
+            isSending: bar.isSending,
+            failureLine: failureLine(input: input, bar: bar),
+            statusLine: statusLine,
+            peekTitle: gap.title.isEmpty ? "" : truncatedPeekTitle(gap.title),
+            cabinPrompt: nil,
+            occupancy: nil,
+            nextBlockLine: nil,
+            nudgePrompt: gap.prompt,
+            showsNudgeChoices: false,
+            holdLamp: gap.holdLamp,
+            instrumentCaption: nil,
+            showsArrivalGap: true,
+            canBoardReserved: gap.canBoard
+        )
+    }
+
+    public static func nextBlockLine(
+        snap: SnapPlaintext,
+        now: Int,
+        timeZone: TimeZone = .current
+    ) -> String? {
+        guard let title = snap.nextBlockTitle, !title.isEmpty else { return nil }
+        if let startsAt = snap.nextBlockStartsAt, startsAt > now {
+            return occupancyLine(
+                prefix: "次",
+                title: title,
+                unix: startsAt,
+                now: now,
+                timeZone: timeZone
+            )
+        }
+        if let endsAt = snap.nextBlockEndsAt {
+            return occupancyLine(
+                prefix: "いま",
+                title: title,
+                unix: endsAt,
+                now: now,
+                timeZone: timeZone
+            )
+        }
+        return "いま \(title)"
+    }
+
+    public static func occupancyInstrument(
+        snap: SnapPlaintext,
+        now: Int,
+        timeZone: TimeZone = .current
+    ) -> RideOccupancyInstrument? {
+        guard let title = snap.nextBlockTitle, !title.isEmpty else { return nil }
+        let remaining = snap.remainingSeconds(at: now)
+        let estimated = snap.estimatedSeconds
+        if let startsAt = snap.nextBlockStartsAt, startsAt > now {
+            return RideOccupancyInstrument(
+                prefix: "次",
+                clock: clockTime(unix: startsAt, timeZone: timeZone),
+                minutes: remainingMinutes(until: startsAt, now: now),
+                title: title,
+                spokenLine: occupancyLine(
+                    prefix: "次",
+                    title: title,
+                    unix: startsAt,
+                    now: now,
+                    timeZone: timeZone
+                ),
+                markPosition: occupancyOnProgress(
+                    secondsFromNow: startsAt - now,
+                    remaining: remaining,
+                    estimated: estimated
+                ),
+                spanStart: nil,
+                spanEnd: nil
+            )
+        }
+        let edge = snap.nextBlockEndsAt ?? now
+        let occupancyRemaining = max(0, edge - now)
+        let spanStart = occupancyOnProgress(
+            secondsFromNow: 0,
+            remaining: remaining,
+            estimated: estimated
+        )
+        let mappedEnd = occupancyOnProgress(
+            secondsFromNow: occupancyRemaining,
+            remaining: remaining,
+            estimated: estimated
+        )
+        let spanEnd: Double?
+        if let spanStart {
+            let end = mappedEnd ?? 1
+            spanEnd = end > spanStart ? end : nil
+        } else {
+            spanEnd = nil
+        }
+        return RideOccupancyInstrument(
+            prefix: "いま",
+            clock: clockTime(unix: edge, timeZone: timeZone),
+            minutes: remainingMinutes(until: edge, now: now),
+            title: title,
+            spokenLine: occupancyLine(
+                prefix: "いま",
+                title: title,
+                unix: edge,
+                now: now,
+                timeZone: timeZone
+            ),
+            markPosition: nil,
+            spanStart: spanEnd == nil ? nil : spanStart,
+            spanEnd: spanEnd
+        )
+    }
+
+    /// Map a wall-clock offset onto remaining ride progress (elapsed / estimated).
+    public static func occupancyOnProgress(
+        secondsFromNow: Int,
+        remaining: Int?,
+        estimated: Int?
+    ) -> Double? {
+        guard let estimated, estimated > 0, let remaining else { return nil }
+        let elapsed = max(0, Double(estimated - remaining))
+        let position = (elapsed + Double(secondsFromNow)) / Double(estimated)
+        guard position >= 0, position <= 1 else { return nil }
+        return position
+    }
+
+    /// Same window as iOS `TimetableFit.markMinutes`. Floor minutes, 1...60.
+    public static func markMinutes(until unix: Int, now: Int) -> Int? {
+        let interval = unix - now
+        guard interval >= 30 else { return nil }
+        let minutes = interval / 60
+        guard (1...60).contains(minutes) else { return nil }
+        return minutes
+    }
+
+    /// Floor minutes until a occupancy edge. 30s floor. No 60 cap.
+    public static func remainingMinutes(until unix: Int, now: Int) -> Int? {
+        let interval = unix - now
+        guard interval >= 30 else { return nil }
+        let minutes = interval / 60
+        guard minutes >= 1 else { return nil }
+        return minutes
+    }
+
+    public static func clockTime(unix: Int, timeZone: TimeZone = .current) -> String {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+        let date = Date(timeIntervalSince1970: TimeInterval(unix))
+        return String(
+            format: "%02d:%02d",
+            calendar.component(.hour, from: date),
+            calendar.component(.minute, from: date)
+        )
+    }
+
+    private static func occupancyLine(
+        prefix: String,
+        title: String,
+        unix: Int,
+        now: Int,
+        timeZone: TimeZone
+    ) -> String {
+        let clock = clockTime(unix: unix, timeZone: timeZone)
+        if let minutes = remainingMinutes(until: unix, now: now) {
+            return "\(prefix) \(clock) \(minutes)分 \(title)"
+        }
+        return "\(prefix) \(clock) \(title)"
+    }
+
+    /// `nudgeStale` names the winner on the instrument. The queue notice replaces a decrypt failure.
+    static func failureLine(input: MenuBarInput, bar: MenuBarPresentation) -> String? {
+        if let notice = input.transportNotice { return notice }
+        if input.nudgeWinnerLine != nil, case .failed(.nudgeStale) = input.outgoingPause {
+            return nil
+        }
+        return bar.failureLine
     }
 
     public static func progress(

@@ -180,13 +180,36 @@ final class RawWebSocketConnection: WebSocketConnection, @unchecked Sendable {
         throw E2EError.websocket("upgrade timed out")
     }
 
-    func receive() async throws -> WSFrame {
+    func receiveIncoming() async throws -> WSIncoming {
         try await withCheckedThrowingContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
                 do {
                     let payload = try self.readTextFrame()
-                    let frame = try SyncCrypto.decodeJSON(WSFrame.self, from: payload)
-                    continuation.resume(returning: frame)
+                    continuation.resume(returning: try WSIncoming.decode(payload))
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
+    }
+
+    func receive() async throws -> WSFrame {
+        while true {
+            switch try await receiveIncoming() {
+            case .frame(let frame):
+                return frame
+            case .hello:
+                continue
+            }
+        }
+    }
+
+    func send(_ text: String) async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            DispatchQueue.global(qos: .userInitiated).async {
+                do {
+                    try self.writeClientText(Data(text.utf8))
+                    continuation.resume()
                 } catch {
                     continuation.resume(throwing: error)
                 }
@@ -214,6 +237,25 @@ final class RawWebSocketConnection: WebSocketConnection, @unchecked Sendable {
             DarwinOrGlibc.write(fd, raw.baseAddress, frame.count)
         }
         _ = DarwinOrGlibc.close(fd)
+    }
+
+    private func writeClientText(_ payload: Data) throws {
+        var frame = Data([0x81])
+        let mask = (0..<4).map { _ in UInt8.random(in: 0...255) }
+        if payload.count < 126 {
+            frame.append(0x80 | UInt8(payload.count))
+        } else if payload.count < 65_536 {
+            frame.append(0x80 | 126)
+            frame.append(UInt8((payload.count >> 8) & 0xFF))
+            frame.append(UInt8(payload.count & 0xFF))
+        } else {
+            throw E2EError.websocket("frame too long")
+        }
+        frame.append(contentsOf: mask)
+        for (index, byte) in payload.enumerated() {
+            frame.append(byte ^ mask[index % 4])
+        }
+        try writeAll(fd: fd, frame)
     }
 
     private func readTextFrame() throws -> Data {

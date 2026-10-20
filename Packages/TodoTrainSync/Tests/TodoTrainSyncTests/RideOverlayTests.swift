@@ -4,6 +4,7 @@ import Testing
 
 @Suite("Ride overlay presentation")
 struct RideOverlayPresentationTests {
+    let utc = TimeZone(secondsFromGMT: 0)!
     let running: SnapPlaintext = {
         let data = try! ContractFixtures.data("fixtures/snap.json")
         return try! WireJSON.decoder().decode(SnapPlaintext.self, from: data)
@@ -29,6 +30,7 @@ struct RideOverlayPresentationTests {
         #expect(view.peekTitle == "週次レポート")
         #expect(view.timerPhase == .cruise)
         #expect(view.cabinPrompt == nil)
+        #expect(view.nextBlockLine == nil)
     }
 
     @Test func overtimeFillsProgress() {
@@ -93,7 +95,7 @@ struct RideOverlayPresentationTests {
         )
         #expect(sending.isSending)
         #expect(sending.canPause)
-        #expect(sending.statusLine == "iPhone に送った")
+        #expect(sending.statusLine == "iPhone に送りました")
 
         let failed = RideOverlayPresentation.make(
             MenuBarInput(
@@ -146,7 +148,7 @@ struct RideOverlayPresentationTests {
         )
         #expect(view.isVisible)
         #expect(view.progress == 120.0 / 1500.0)
-        #expect(view.statusLine == "リレーが切れた")
+        #expect(view.statusLine == "リレーが切れました")
     }
 
     @Test func truncatesPeekTitle() {
@@ -165,6 +167,74 @@ struct RideOverlayPresentationTests {
         #expect(RideOverlayPresentation.timerPhase(remaining: 30, estimated: budget, overtime: false) == .final)
         #expect(RideOverlayPresentation.timerPhase(remaining: -1, estimated: budget, overtime: false) == .overtime)
         #expect(RideOverlayPresentation.timerPhase(remaining: 120, estimated: budget, overtime: true) == .overtime)
+    }
+
+    @Test func nextBlockLine_appendsMinutesInsideWindow() {
+        var snap = running
+        snap.nextBlockTitle = "週次レポート"
+        snap.nextBlockStartsAt = 1_768_000_400
+        let upcoming = RideOverlayPresentation.nextBlockLine(
+            snap: snap,
+            now: 1_768_000_120,
+            timeZone: utc
+        )
+        #expect(upcoming == "次 23:13 4分 週次レポート")
+        snap.nextBlockStartsAt = 1_768_000_000
+        snap.nextBlockEndsAt = 1_768_001_320
+        let current = RideOverlayPresentation.nextBlockLine(
+            snap: snap,
+            now: 1_768_000_120,
+            timeZone: utc
+        )
+        #expect(current == "いま 23:28 20分 週次レポート")
+        snap.nextBlockTitle = nil
+        #expect(RideOverlayPresentation.nextBlockLine(snap: snap, now: 1_768_000_120) == nil)
+        snap.nextBlockTitle = "週次レポート"
+        snap.nextBlockStartsAt = 1_768_003_780
+        snap.nextBlockEndsAt = nil
+        let far = RideOverlayPresentation.nextBlockLine(
+            snap: snap,
+            now: 1_768_000_120,
+            timeZone: utc
+        )
+        #expect(far == "次 00:09 61分 週次レポート")
+        let instrument = RideOverlayPresentation.occupancyInstrument(
+            snap: snap,
+            now: 1_768_000_120,
+            timeZone: utc
+        )
+        #expect(instrument?.prefix == "次")
+        #expect(instrument?.clock == "00:09")
+        #expect(instrument?.minutes == 61)
+        #expect(instrument?.markPosition == nil)
+        #expect(instrument?.spanStart == nil)
+        snap.nextBlockStartsAt = 1_768_000_400
+        let near = RideOverlayPresentation.occupancyInstrument(
+            snap: snap,
+            now: 1_768_000_120,
+            timeZone: utc
+        )
+        #expect(near?.clock == "23:13")
+        #expect(near?.minutes == 4)
+        #expect(near?.markPosition != nil)
+        #expect(abs((near?.markPosition ?? -1) - (400.0 / 1500.0)) < 0.0001)
+        snap.nextBlockStartsAt = 1_768_000_000
+        snap.nextBlockEndsAt = 1_768_001_320
+        let occupying = RideOverlayPresentation.occupancyInstrument(
+            snap: snap,
+            now: 1_768_000_120,
+            timeZone: utc
+        )
+        #expect(occupying?.prefix == "いま")
+        #expect(occupying?.markPosition == nil)
+        #expect(abs((occupying?.spanStart ?? -1) - (120.0 / 1500.0)) < 0.0001)
+        #expect(abs((occupying?.spanEnd ?? -1) - (1320.0 / 1500.0)) < 0.0001)
+    }
+
+    @Test func markMinutes_floorsAndCaps() {
+        #expect(RideOverlayPresentation.markMinutes(until: 1_768_001_320, now: 1_768_000_120) == 20)
+        #expect(RideOverlayPresentation.markMinutes(until: 1_768_000_150, now: 1_768_000_120) == nil)
+        #expect(RideOverlayPresentation.markMinutes(until: 1_768_003_780, now: 1_768_000_120) == nil)
     }
 }
 
@@ -365,6 +435,28 @@ struct RideOverlayGeometryTests {
         #expect(placement.state.isTucked)
         #expect(placement.screenIndex == 1)
         #expect(placement.state.corner == .bottomTrailing)
+    }
+
+    @Test func occupancyMarksStayInsideTheAxis() {
+        let length = 280.0
+        let edge = RideOverlayGeometry.containedSpan(start: 0.99, end: 1, length: length, minimum: 6)
+        #expect(edge?.origin == length - 6)
+        #expect(edge?.length == 6)
+        let tick = RideOverlayGeometry.containedTick(position: 1, length: length, thickness: 5)
+        #expect(tick?.origin == length - 5)
+        #expect(tick?.length == 5)
+        let start = RideOverlayGeometry.containedTick(position: 0, length: length, thickness: 5)
+        #expect(start?.origin == 0)
+        #expect(start?.length == 5)
+        let mid = RideOverlayGeometry.containedSpan(start: 0.2, end: 0.5, length: length)
+        #expect(mid?.origin == 56)
+        #expect(mid?.length == 84)
+        let full = RideOverlayGeometry.containedSpan(start: 0, end: 1, length: length)
+        #expect(full?.origin == 0)
+        #expect(full?.length == length)
+        #expect(RideOverlayGeometry.containedSpan(start: 0.4, end: 0.4, length: length) == nil)
+        #expect(RideOverlayGeometry.containedSpan(start: 0.2, end: 0.5, length: 0) == nil)
+        #expect(RideOverlayGeometry.containedTick(position: 0.5, length: 0, thickness: 2) == nil)
     }
 
     @Test func fillLengthKeepsASliverUntilEmpty() {

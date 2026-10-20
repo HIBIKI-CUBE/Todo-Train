@@ -59,7 +59,7 @@ struct SessionManagerPunctualityTests {
         let ticket = try SessionManagerFixtures.makeTicket(context, seconds: 120)
 
         try manager.board(ticket: ticket)
-        clock.advance(by: 180)
+        clock.advance(by: 200)
         try manager.arrive(resolution: .justFinished)
 
         let moment = try #require(manager.punctualityMoment)
@@ -67,7 +67,7 @@ struct SessionManagerPunctualityTests {
             moment.kind == .arrival(
                 title: ticket.title,
                 estimateSeconds: 120,
-                actualSeconds: 180,
+                actualSeconds: 200,
                 punctuality: .late
             )
         )
@@ -98,7 +98,7 @@ struct SessionManagerPunctualityTests {
         #expect(manager.punctualityHapticTick == 0)
     }
 
-    @Test func endService_withEarlyArrival_enqueuesServiceMoment() throws {
+    @Test func endService_withEarlyArrival_doesNotEnqueueServiceMoment() throws {
         let (manager, context, clock, _) = try SessionManagerFixtures.makeHarness()
         try manager.startService()
         let ticket = try SessionManagerFixtures.makeTicket(context, seconds: 600)
@@ -109,8 +109,7 @@ struct SessionManagerPunctualityTests {
         manager.consumePunctualityMoment()
 
         try manager.endService()
-        let moment = try #require(manager.punctualityMoment)
-        #expect(moment.kind == .onTimeService)
+        #expect(manager.punctualityMoment == nil)
     }
 
     @Test func endService_withOvertimeArrival_doesNotEnqueueServiceMoment() throws {
@@ -119,7 +118,7 @@ struct SessionManagerPunctualityTests {
         let ticket = try SessionManagerFixtures.makeTicket(context, seconds: 120)
 
         try manager.board(ticket: ticket)
-        clock.advance(by: 180)
+        clock.advance(by: 200)
         try manager.arrive(resolution: .justFinished)
         manager.consumePunctualityMoment()
 

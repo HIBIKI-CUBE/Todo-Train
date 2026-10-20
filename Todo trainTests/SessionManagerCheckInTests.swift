@@ -20,14 +20,15 @@ struct SessionManagerCheckInTests {
         #expect(manager.pendingCheckIn == nil)
     }
 
-    @Test func board_thirtyMinutes_schedulesTwoProgressCheckIns() throws {
+    @Test func board_thirtyMinutes_schedulesOneProgressCheckIn() throws {
         let (manager, context, _, _) = try SessionManagerFixtures.makeHarness()
         try manager.startService()
         let ticket = try SessionManagerFixtures.makeTicket(context, seconds: 30 * 60)
         try manager.board(ticket: ticket)
         let offsets = manager.activeSession?.checkInOffsets ?? []
-        #expect(offsets.count == 2)
-        #expect(offsets[0] < offsets[1])
+        let band = try #require(NudgePlanner.checkInBand(estimatedSeconds: 30 * 60))
+        #expect(offsets.count == 1)
+        #expect(band.contains(offsets[0]))
     }
 
     @Test func reconcile_firesProgressCheckIn_whenElapsedPassesOffset() throws {

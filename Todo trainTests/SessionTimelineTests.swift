@@ -351,4 +351,13 @@ struct SessionTimelineTests {
         #expect(layout.y(for: projectedMonday.startedAt) == layout.y(for: projectedWednesday.startedAt))
         #expect(layout.pointsPerMinute == SessionTimeline.pointsPerMinute)
     }
+
+    @Test func calendarDayLayout_coversMidnightToMidnight() {
+        let day = utcCalendar.startOfDay(for: date(hour: 0, minute: 0))
+        let layout = SessionTimeline.calendarDayLayout(on: day, calendar: utcCalendar)
+        #expect(layout.start == day)
+        #expect(layout.end == day.addingTimeInterval(86_400))
+        #expect(layout.height == 24 * 60 * SessionTimeline.pointsPerMinute)
+        #expect(layout.y(for: date(hour: 19, minute: 45)) == (19 * 60 + 45) * SessionTimeline.pointsPerMinute)
+    }
 }

@@ -17,6 +17,16 @@ nonisolated enum FocusTimerPhase: Equatable {
         self = Self.phase(remaining: remaining, budgetSeconds: budgetSeconds)
     }
 
+    static func instrument(raw: String?) -> FocusTimerPhase? {
+        switch raw {
+        case "cruise": .cruise
+        case "approach": .approach
+        case "final": .final
+        case "overtime": .overtime
+        default: nil
+        }
+    }
+
     static func phase(remaining: TimeInterval, budgetSeconds: TimeInterval) -> FocusTimerPhase {
         switch TimerUrgency.phase(remaining: remaining, budgetSeconds: budgetSeconds) {
         case .cruise: .cruise
@@ -65,6 +75,8 @@ nonisolated enum CockpitColors {
     static let muted = Color.white.opacity(0.55)
     static let hairline = Color.white.opacity(0.14)
     static let track = Color.white.opacity(0.08)
+    /// Compact leading ring. The long gauge can stay faint; this circle has to read on its own.
+    static let ringTrack = Color.white.opacity(0.42)
     static let fill = Color.white.opacity(0.04)
     static let fillRaised = Color.white.opacity(0.07)
     static let approach = Color(red: 1.0, green: 0.82, blue: 0.42)
@@ -122,13 +134,17 @@ nonisolated enum CockpitFormat {
         return String(format: "%d:%02d", minutes, seconds)
     }
 
-    static func deadlineLabel(remaining: TimeInterval, deadline: Date?) -> String {
-        if remaining <= 0 { return "予定を超過" }
-        guard let deadline else { return "予定 —" }
+    static func scheduledLabel(deadline: Date?) -> String? {
+        guard let deadline else { return nil }
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "ja_JP")
         formatter.dateFormat = "予定 HH:mm"
         return formatter.string(from: deadline)
+    }
+
+    static func deadlineLabel(remaining: TimeInterval, deadline: Date?) -> String {
+        _ = remaining
+        return scheduledLabel(deadline: deadline) ?? "予定 —"
     }
 
     static func progress(elapsed: TimeInterval, budget: TimeInterval) -> Double {
@@ -138,10 +154,16 @@ nonisolated enum CockpitFormat {
 
     static func accessibilityTimerValue(remaining: TimeInterval, isStale: Bool, isOvertime: Bool) -> String {
         if isStale { return "表示の更新を待っています" }
-        if isOvertime || remaining < 0 { return "予定を超過" }
+        if isOvertime || remaining < 0 { return "予定の時刻を過ぎています" }
         let total = max(0, Int(remaining.rounded()))
         return "残り\(total / 60)分\(total % 60)秒"
     }
+}
+
+nonisolated enum CockpitChromeMode: Equatable {
+    case riding
+    case paused
+    case prompt(String)
 }
 
 /// Shared glanceable model for Session LA and Alarm LA.
@@ -155,6 +177,41 @@ nonisolated struct CockpitDisplayModel: Equatable {
     var pausedProgress: Double?
     var isStale: Bool
     var accessibilityTimer: String
+    var scheduledAt: Date? = nil
+    var checkInPrompt: String? = nil
+
+    var showsOvertimeMark: Bool {
+        switch clock {
+        case .overtime, .alert:
+            return true
+        default:
+            return phase == .overtime
+        }
+    }
+
+    var chromeMode: CockpitChromeMode {
+        if case .paused = clock { return .paused }
+        if showsOvertimeMark { return .riding }
+        if let checkInPrompt, !checkInPrompt.isEmpty {
+            return .prompt(checkInPrompt)
+        }
+        return .riding
+    }
+
+    /// Phase word under the title. Pause, the prompt, and overtime use the bottom row or the mark.
+    var inlineState: String? {
+        switch chromeMode {
+        case .riding where !showsOvertimeMark:
+            return headerState
+        default:
+            return nil
+        }
+    }
+
+    var gaugeCaption: String? {
+        if isStale { return "予定の確認中" }
+        return CockpitFormat.scheduledLabel(deadline: scheduledAt)
+    }
 
     static func session(
         title: String,
@@ -164,6 +221,8 @@ nonisolated struct CockpitDisplayModel: Equatable {
         isStale: Bool,
         isPaused: Bool = false,
         checkInPrompt: String? = nil,
+        instrumentPhaseRaw: String? = nil,
+        promptKeepsTimerColor: Bool = false,
         now: Date = .now
     ) -> CockpitDisplayModel {
         let snapshot = CockpitInstrumentSnapshot.session(
@@ -199,14 +258,27 @@ nonisolated struct CockpitDisplayModel: Equatable {
             headerState = hasPrompt ? prompt : snapshot.headerState
             pausedProgress = nil
         }
+        let instrument = FocusTimerPhase.instrument(raw: instrumentPhaseRaw)
+        let phase: FocusTimerPhase = {
+            if isPaused {
+                return FocusTimerPhase(remaining: remaining, budgetSeconds: TimeInterval(budgetSeconds))
+            }
+            if !isOvertime, let instrument {
+                return instrument
+            }
+            if hasPrompt, !promptKeepsTimerColor {
+                return .approach
+            }
+            return snapshot.phase
+        }()
         return CockpitDisplayModel(
             title: title,
             clock: clock,
-            phase: isPaused
-                ? FocusTimerPhase(remaining: remaining, budgetSeconds: TimeInterval(budgetSeconds))
-                : (hasPrompt ? .approach : snapshot.phase),
+            phase: phase,
             headerState: headerState,
-            deadlineLabel: isPaused ? "停車中" : CockpitPresentation.deadlineLabel(from: snapshot),
+            deadlineLabel: isStale && !isOvertime
+                ? "予定の確認中"
+                : (CockpitFormat.scheduledLabel(deadline: deadline) ?? "予定 —"),
             budgetSeconds: budgetSeconds,
             pausedProgress: pausedProgress,
             isStale: isStale,
@@ -220,7 +292,9 @@ nonisolated struct CockpitDisplayModel: Equatable {
                     remaining: snapshot.remaining,
                     isStale: isStale,
                     isOvertime: isOvertime || snapshot.remaining <= 0
-                )
+                ),
+            scheduledAt: deadline,
+            checkInPrompt: hasPrompt ? prompt : nil
         )
     }
 }

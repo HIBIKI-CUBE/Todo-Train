@@ -60,6 +60,7 @@ struct GoldenJSONTests {
         #expect(decoded.id == UUID(uuidString: "33333333-3333-4333-8333-333333333333"))
         #expect(decoded.sessionId == UUID(uuidString: "11111111-1111-4111-8111-111111111111"))
         #expect(decoded.at == 1_768_000_120)
+        #expect(decoded.heldBy == nil)
 
         let encoded = try WireJSON.encoder().encode(decoded)
         let again = try WireJSON.decoder().decode(CommandPlaintext.self, from: encoded)
@@ -67,6 +68,84 @@ struct GoldenJSONTests {
         let object = try JSONSerialization.jsonObject(with: encoded) as! [String: Any]
         #expect(object["op"] as? String == "pause")
         #expect((object["id"] as? String)?.contains("A") == false)
+        #expect(object["title"] == nil)
+        #expect(object["estimatedSeconds"] == nil)
+        #expect(object["heldBy"] == nil)
+    }
+
+    @Test func cmdPauseTimetableRoundTrip() throws {
+        let data = try ContractFixtures.data("fixtures/cmd-pause-timetable.json")
+        let decoded = try WireJSON.decoder().decode(CommandPlaintext.self, from: data)
+        #expect(decoded.op == .pause)
+        #expect(decoded.heldBy == .timetable)
+        let encoded = try WireJSON.encoder().encode(decoded)
+        let object = try JSONSerialization.jsonObject(with: encoded) as! [String: Any]
+        #expect(object["heldBy"] as? String == "timetable")
+        #expect(object["title"] == nil)
+    }
+
+    @Test func snapPausedCarriesPauseHeldByAndRunningOmitsIt() throws {
+        let paused = try WireJSON.decoder().decode(
+            SnapPlaintext.self,
+            from: ContractFixtures.data("fixtures/snap-paused.json")
+        )
+        #expect(paused.phase == .paused)
+        #expect(paused.pauseHeldBy == .user)
+        #expect(paused.pauseId == UUID(uuidString: "44444444-4444-4444-8444-444444444444"))
+        let pausedObject = try JSONSerialization.jsonObject(with: try WireJSON.encoder().encode(paused)) as! [String: Any]
+        #expect(paused.macSampledSeconds == 300)
+        #expect(paused.macActiveSeconds == 270)
+        #expect(pausedObject["pauseHeldBy"] as? String == "user")
+        #expect(pausedObject["pauseId"] as? String == "44444444-4444-4444-8444-444444444444")
+        #expect(pausedObject["macSampledSeconds"] as? Int == 300)
+        #expect(pausedObject["macActiveSeconds"] as? Int == 270)
+
+        let running = try WireJSON.decoder().decode(
+            SnapPlaintext.self,
+            from: ContractFixtures.data("fixtures/snap.json")
+        )
+        #expect(running.pauseHeldBy == nil)
+        #expect(running.pauseId == nil)
+        #expect(running.macSampledSeconds == nil)
+        let runningObject = try JSONSerialization.jsonObject(with: try WireJSON.encoder().encode(running)) as! [String: Any]
+        #expect(runningObject["pauseHeldBy"] == nil)
+        #expect(runningObject["pauseId"] == nil)
+        #expect(runningObject["macSampledSeconds"] == nil)
+
+        var leaked = running
+        leaked.pauseHeldBy = .timetable
+        leaked.pauseId = UUID(uuidString: "44444444-4444-4444-8444-444444444444")
+        leaked.macSampledSeconds = 300
+        leaked.macActiveSeconds = 270
+        let leakedObject = try JSONSerialization.jsonObject(with: try WireJSON.encoder().encode(leaked)) as! [String: Any]
+        #expect(leakedObject["pauseHeldBy"] == nil)
+        #expect(leakedObject["pauseId"] == nil)
+        #expect(leakedObject["macSampledSeconds"] == nil)
+    }
+
+    @Test func cmdIssueAndBoardRoundTripOmitsNothingRequired() throws {
+        let data = try ContractFixtures.data("fixtures/cmd-issueAndBoard.json")
+        let decoded = try WireJSON.decoder().decode(CommandPlaintext.self, from: data)
+        #expect(decoded.op == .issueAndBoard)
+        #expect(decoded.sessionId == nil)
+        #expect(decoded.title == "週次レビューの下書き")
+        #expect(decoded.estimatedSeconds == 1500)
+
+        let encoded = try WireJSON.encoder().encode(decoded)
+        let object = try JSONSerialization.jsonObject(with: encoded) as! [String: Any]
+        #expect(object["title"] as? String == "週次レビューの下書き")
+        #expect(object["estimatedSeconds"] as? Int == 1500)
+        #expect(object["sessionId"] is NSNull)
+        #expect(object.keys.sorted() == ["at", "estimatedSeconds", "id", "op", "sessionId", "title"])
+    }
+
+    @Test func cmdIssueAndBoardInterruptKeepsSession() throws {
+        let data = try ContractFixtures.data("fixtures/cmd-issueAndBoard-interrupt.json")
+        let decoded = try WireJSON.decoder().decode(CommandPlaintext.self, from: data)
+        #expect(decoded.op == .issueAndBoard)
+        #expect(decoded.sessionId == UUID(uuidString: "11111111-1111-4111-8111-111111111111"))
+        #expect(decoded.estimatedSeconds == 600)
+        #expect(decoded.title == "割り込みの下書き")
     }
 
     @Test func cmdStillRoundTrip() throws {
@@ -120,6 +199,61 @@ struct GoldenJSONTests {
         #expect((again["id"] as? String)?.contains("A") == false)
     }
 
+    @Test func oldSnapWithoutBuildDecodes() throws {
+        let data = try ContractFixtures.data("fixtures/snap.json")
+        let decoded = try WireJSON.decoder().decode(SnapPlaintext.self, from: data)
+        #expect(decoded.build == nil)
+        let encoded = try WireJSON.encoder().encode(decoded)
+        let object = try JSONSerialization.jsonObject(with: encoded) as! [String: Any]
+        #expect(object["build"] == nil)
+    }
+
+    @Test func partialBuildIsIgnoredAndSnapStillDecodes() throws {
+        let fixtures = [
+            "fixtures/snap.json",
+            "fixtures/ack-ok.json",
+            "fixtures/cmd-pause.json",
+        ]
+        for relative in fixtures {
+            let original = try ContractFixtures.data(relative)
+            var object = try #require(JSONSerialization.jsonObject(with: original) as? [String: Any])
+            object["build"] = ["sha": "abc"]
+            let data = try JSONSerialization.data(withJSONObject: object)
+            switch relative {
+            case "fixtures/snap.json":
+                let snap = try WireJSON.decoder().decode(SnapPlaintext.self, from: data)
+                #expect(snap.build == nil)
+                #expect(snap.title == "週次レポート")
+            case "fixtures/ack-ok.json":
+                let ack = try WireJSON.decoder().decode(AckPlaintext.self, from: data)
+                #expect(ack.build == nil)
+                #expect(ack.ok)
+            default:
+                let command = try WireJSON.decoder().decode(CommandPlaintext.self, from: data)
+                #expect(command.build == nil)
+                #expect(command.op == .pause)
+            }
+        }
+    }
+
+    @Test func snapBuildRoundTripOmitsWhenNil() throws {
+        let build = WireBuildInfo(sha: "1047101", dirty: true, schema: "3.0.0", builtAt: "2026-10-12T16:20:00+09:00")
+        var snap = try WireJSON.decoder().decode(
+            SnapPlaintext.self,
+            from: ContractFixtures.data("fixtures/snap-idle.json")
+        )
+        #expect(snap.build == nil)
+        snap.build = build
+        let encoded = try WireJSON.encoder().encode(snap)
+        let again = try WireJSON.decoder().decode(SnapPlaintext.self, from: encoded)
+        #expect(again.build == build)
+        let object = try JSONSerialization.jsonObject(with: encoded) as! [String: Any]
+        let nested = try #require(object["build"] as? [String: Any])
+        #expect(nested["sha"] as? String == "1047101")
+        #expect(nested["dirty"] as? Bool == true)
+        #expect(nested["schema"] as? String == "3.0.0")
+    }
+
     @Test func ackOkOmitsErrorKey() throws {
         let data = try ContractFixtures.data("fixtures/ack-ok.json")
         let decoded = try WireJSON.decoder().decode(AckPlaintext.self, from: data)
@@ -131,6 +265,56 @@ struct GoldenJSONTests {
         #expect(object["ok"] as? Bool == true)
         #expect(object["error"] == nil)
         #expect(object.keys.sorted() == ["cmdId", "ok"])
+    }
+
+    @Test func ackWithoutBuildStaysCompatibleAndWithBuildRoundTrips() throws {
+        let old = try WireJSON.decoder().decode(
+            AckPlaintext.self,
+            from: ContractFixtures.data("fixtures/ack-ok.json")
+        )
+        #expect(old.build == nil)
+        let build = WireBuildInfo(sha: "abcdef1", dirty: false, schema: "3.0.0", builtAt: "2026-10-12T16:20:00+09:00")
+        let ack = AckPlaintext(cmdId: old.cmdId, ok: true, build: build)
+        let encoded = try WireJSON.encoder().encode(ack)
+        let object = try JSONSerialization.jsonObject(with: encoded) as! [String: Any]
+        #expect(object["error"] == nil)
+        #expect((object["build"] as? [String: Any])?["sha"] as? String == "abcdef1")
+        let again = try WireJSON.decoder().decode(AckPlaintext.self, from: encoded)
+        #expect(again == ack)
+    }
+
+    @Test func commandWithoutBuildOmitsKeyAndWithBuildRoundTrips() throws {
+        let old = try WireJSON.decoder().decode(
+            CommandPlaintext.self,
+            from: ContractFixtures.data("fixtures/cmd-pause.json")
+        )
+        #expect(old.build == nil)
+        let encodedOld = try WireJSON.encoder().encode(old)
+        let oldObject = try JSONSerialization.jsonObject(with: encodedOld) as! [String: Any]
+        #expect(oldObject["build"] == nil)
+
+        let build = WireBuildInfo(sha: "abcdef1", dirty: false, schema: "3.0.0", builtAt: "2026-10-12T16:20:00+09:00")
+        let command = CommandPlaintext(
+            id: old.id,
+            op: old.op,
+            sessionId: old.sessionId,
+            at: old.at,
+            build: build
+        )
+        let encoded = try WireJSON.encoder().encode(command)
+        let again = try WireJSON.decoder().decode(CommandPlaintext.self, from: encoded)
+        #expect(again.build == build)
+        #expect(again.title == nil)
+    }
+
+    @Test func ackUnsupportedOpRoundTrip() throws {
+        let data = try ContractFixtures.data("fixtures/ack-unsupportedOp.json")
+        let decoded = try WireJSON.decoder().decode(AckPlaintext.self, from: data)
+        #expect(!decoded.ok)
+        #expect(decoded.error == .unsupportedOp)
+        let encoded = try WireJSON.encoder().encode(decoded)
+        let again = try WireJSON.decoder().decode(AckPlaintext.self, from: encoded)
+        #expect(again == decoded)
     }
 
     @Test func ackPauseLimitRoundTrip() throws {
@@ -166,10 +350,152 @@ struct GoldenJSONTests {
         let json = try JSONSerialization.jsonObject(with: data) as! [String: Any]
         #expect(json["phase"] as? [String] == ["idle", "running", "paused", "overtime"])
         #expect(json["kind"] as? [String] == ["snap", "cmd", "ack"])
-        #expect(json["op"] as? [String] == ["pause", "resume", "still"])
-        #expect(json["pendingCabin"] as? [String] == ["progress", "away", "idle"])
+        #expect(json["op"] as? [String] == [
+            "pause", "resume", "still", "issueAndBoard", "answer", "boardReserved", "presence",
+            "pauseInputReport", "reestimate", "undoReestimate",
+        ])
+        #expect(json["pendingCabin"] as? [String] == ["progress", "away", "idle", "overrun", "gap"])
+        #expect(json["nudgeKind"] as? [String] == NudgeKind.knownRawValues)
+        #expect(json["nudgeStage"] as? [String] == NudgeStageWire.knownRawValues)
+        #expect(json["ringSurface"] as? [String] == NudgeRingSurface.knownRawValues)
+        #expect(json["notifyOn"] as? [String] == ["iphone", "mac", "none"])
+        #expect(json["choice"] as? [String] == NudgeChoice.knownRawValues)
+        #expect(json["answeredOn"] as? [String] == NudgeAnsweredOn.knownRawValues)
+        #expect(json["extendPresetSeconds"] as? [Int] == [300, 600, 900])
+        #expect(json["heldBy"] as? [String] == PauseHeldBy.knownRawValues)
+        #expect(json["pauseCommandHeldBy"] as? [String] == PauseHeldBy.pauseCommandRawValues)
+        #expect(json["promptAnswer"] as? [String] == PausePromptAnswer.knownRawValues)
+        #expect(json["reestimateMode"] as? [String] == WireReestimateMode.knownRawValues)
+        #expect(json["reestimateTrigger"] as? [String] == WireReestimateTrigger.knownRawValues)
+        #expect(json["reestimateSurface"] as? [String] == WireReestimateSurface.knownRawValues)
+        #expect(json["reestimateInput"] as? [String] == WireReestimateInput.knownRawValues)
+        #expect(json["homeSignal"] as? [String] == WireHomeSignal.knownRawValues)
+        #expect(json["judgedEstimateKind"] as? [String] == WireJudgedEstimateKind.knownRawValues)
+        let introduced = try #require(json["opIntroduced"] as? [String: Int])
+        for op in ["pause", "resume", "still", "issueAndBoard", "answer", "boardReserved", "presence", "pauseInputReport", "reestimate", "undoReestimate"] {
+            #expect(introduced[op] == WireOp(rawValue: op).introducedIn)
+        }
+        #expect(WireOp.reestimate.introducedIn == 15)
+        #expect(WireOp.undoReestimate.introducedIn == 15)
         #expect(json["error"] as? [String] == [
             "pauseLimitReached", "noActiveService", "sessionMismatch", "decryptFailed", "notPaused",
+            "invalidPayload", "unsupportedOp", "nudgeStale", "noReservation", "reservationChanged",
         ])
+    }
+
+    @Test func ridingSnapCarriesHomeAndIdleOmitsIt() throws {
+        let running = try WireJSON.decoder().decode(
+            SnapPlaintext.self,
+            from: ContractFixtures.data("fixtures/snap.json")
+        )
+        let judgment = PunctualityJudgment.judge(
+            PunctualityJudgment.RideInput(
+                arrived: false,
+                activeSeconds: 120,
+                estimatedSecondsAtStart: 1500
+            )
+        )
+        let home = try #require(running.home)
+        #expect(home.startSeconds == judgment.lowerBound)
+        #expect(home.endSeconds == judgment.upperBound)
+        #expect(home.signal == .green)
+        #expect(home.judgedEstimate.kind == .original)
+        #expect(home.judgedEstimate.reestimateIndex == nil)
+        #expect(home.sealLuxury == PunctualityJudgment.sealLuxury(source: .original, reestimates: []))
+        let runningObject = try JSONSerialization.jsonObject(with: try WireJSON.encoder().encode(running)) as! [String: Any]
+        let homeObject = try #require(runningObject["home"] as? [String: Any])
+        #expect(homeObject["signal"] as? String == "green")
+        let judged = try #require(homeObject["judgedEstimate"] as? [String: Any])
+        #expect(judged["kind"] as? String == "original")
+        #expect(judged["reestimateIndex"] == nil)
+
+        let idle = try WireJSON.decoder().decode(
+            SnapPlaintext.self,
+            from: ContractFixtures.data("fixtures/snap-idle.json")
+        )
+        #expect(idle.home == nil)
+        let idleObject = try JSONSerialization.jsonObject(with: try WireJSON.encoder().encode(idle)) as! [String: Any]
+        #expect(idleObject["home"] == nil)
+
+        let frozen = try WireJSON.decoder().decode(
+            SnapPlaintext.self,
+            from: ContractFixtures.data("fixtures/v14/snap.json")
+        )
+        #expect(frozen.home == nil)
+        #expect(frozen.title == "週次レポート")
+    }
+
+    @Test func brokenHomeDoesNotFailTheSnap() throws {
+        let data = try ContractFixtures.data("fixtures/snap.json")
+        var object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        object["home"] = ["signal": "green"]
+        let decoded = try WireJSON.decoder().decode(
+            SnapPlaintext.self,
+            from: try JSONSerialization.data(withJSONObject: object)
+        )
+        #expect(decoded.home == nil)
+        #expect(decoded.title == "週次レポート")
+
+        object["home"] = [
+            "startSeconds": 1275,
+            "endSeconds": 1725,
+            "signal": "blue",
+            "judgedEstimate": ["kind": "original"],
+        ]
+        let unknownSignal = try WireJSON.decoder().decode(
+            SnapPlaintext.self,
+            from: try JSONSerialization.data(withJSONObject: object)
+        )
+        #expect(unknownSignal.home?.signal == .unknown("blue"))
+        #expect(unknownSignal.title == "週次レポート")
+    }
+
+    @Test func cmdReestimateAndUndoRoundTrip() throws {
+        let reestimate = try WireJSON.decoder().decode(
+            CommandPlaintext.self,
+            from: ContractFixtures.data("fixtures/cmd-reestimate.json")
+        )
+        #expect(reestimate.op == .reestimate)
+        #expect(reestimate.progressAnswer == 0.5)
+        #expect(reestimate.committedRemainingSeconds == 1200)
+        #expect(reestimate.mode == .progress)
+        #expect(reestimate.trigger == .manual)
+        #expect(reestimate.promptId == "reestimate.progress.v1")
+        #expect(reestimate.surface == .macPip)
+        #expect(reestimate.input == .click)
+        let reestimateObject = try JSONSerialization.jsonObject(with: try WireJSON.encoder().encode(reestimate)) as! [String: Any]
+        #expect(reestimateObject["surface"] as? String == "macPip")
+        #expect(reestimateObject["input"] as? String == "click")
+        #expect(reestimateObject["heldBy"] == nil)
+
+        var withoutProgress = reestimate
+        withoutProgress.progressAnswer = nil
+        let omitted = try JSONSerialization.jsonObject(with: try WireJSON.encoder().encode(withoutProgress)) as! [String: Any]
+        #expect(omitted["progressAnswer"] == nil)
+        #expect(omitted["committedRemainingSeconds"] as? Int == 1200)
+
+        let undo = try WireJSON.decoder().decode(
+            CommandPlaintext.self,
+            from: ContractFixtures.data("fixtures/cmd-undoReestimate.json")
+        )
+        #expect(undo.op == .undoReestimate)
+        #expect(undo.sessionId == UUID(uuidString: "11111111-1111-4111-8111-111111111111"))
+        #expect(undo.mode == nil)
+        let undoObject = try JSONSerialization.jsonObject(with: try WireJSON.encoder().encode(undo)) as! [String: Any]
+        #expect(undoObject.keys.sorted() == ["at", "id", "op", "sessionId"])
+
+        let unknown = Data(#"{"id":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","op":"reestimate","sessionId":"11111111-1111-4111-8111-111111111111","at":1,"mode":"later","trigger":"manual","promptId":"reestimate.progress.v1","surface":"macPip","input":"click","committedRemainingSeconds":60}"#.utf8)
+        let decodedUnknown = try WireJSON.decoder().decode(CommandPlaintext.self, from: unknown)
+        #expect(decodedUnknown.mode == .unknown("later"))
+    }
+
+    @Test func latestFixturesDropAnswerExtend() throws {
+        let latest = ContractFixtures.directory.appendingPathComponent("fixtures")
+        let names = try FileManager.default.contentsOfDirectory(atPath: latest.path)
+        #expect(!names.contains("cmd-answer-extend.json"))
+        #expect(names.contains("cmd-reestimate.json"))
+        #expect(names.contains("cmd-undoReestimate.json"))
+        #expect(FileManager.default.fileExists(atPath: latest.appendingPathComponent("v14/cmd-answer-extend.json").path))
+        #expect(FileManager.default.fileExists(atPath: latest.appendingPathComponent("v12/cmd-answer-extend.json").path))
     }
 }

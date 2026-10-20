@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import TodoTrainSync
 
 @MainActor
 enum CompanionSettingsOpener {
@@ -33,22 +34,81 @@ enum CompanionSettingsOpener {
 
 @MainActor
 enum CompanionStatusItemRightClick {
-    private static var monitor: Any?
+    private static var mouseMonitor: Any?
+    static var contractPresentation: () -> ContractPresentation = { .quiet }
 
     static func install() {
-        guard monitor == nil else { return }
-        monitor = NSEvent.addLocalMonitorForEvents(matching: [.rightMouseDown, .rightMouseUp, .leftMouseDown]) { event in
+        guard mouseMonitor == nil else { return }
+        mouseMonitor = NSEvent.addLocalMonitorForEvents(matching: [
+            .rightMouseDown, .rightMouseUp, .leftMouseDown, .leftMouseUp,
+        ]) { event in
             guard isStatusItemEvent(event) else { return event }
-            let controlClick = event.type == .leftMouseDown && event.modifierFlags.contains(.control)
-            if event.type == .rightMouseDown || controlClick {
-                CompanionSettingsOpener.open()
+            let controlClick = event.modifierFlags.contains(.control)
+                && (event.type == .leftMouseDown || event.type == .leftMouseUp)
+            if event.type == .rightMouseDown || (event.type == .leftMouseDown && controlClick) {
+                let captured = event
+                DispatchQueue.main.async {
+                    popMenu(with: captured)
+                }
                 return nil
             }
-            if event.type == .rightMouseUp {
+            if event.type == .rightMouseUp || (event.type == .leftMouseUp && controlClick) {
                 return nil
             }
             return event
         }
+    }
+
+    private static func popMenu(with event: NSEvent) {
+        CompanionSettingsOpener.dismissPopover?()
+        guard let window = event.window, let view = window.contentView else { return }
+        NSMenu.popUpContextMenu(makeMenu(), with: event, for: view)
+    }
+
+    private static func makeMenu() -> NSMenu {
+        let menu = NSMenu()
+        menu.autoenablesItems = false
+        let target = CompanionStatusItemMenuActions.shared
+
+        let build = NSMenuItem(title: LocalWireBuild.line, action: nil, keyEquivalent: "")
+        build.isEnabled = false
+        menu.addItem(build)
+        let notice = contractPresentation()
+        if let diagnostic = notice.diagnostic {
+            let line = NSMenuItem(title: diagnostic, action: nil, keyEquivalent: "")
+            line.isEnabled = false
+            menu.addItem(line)
+        }
+        if !notice.guidance.isEmpty {
+            let heading = NSMenuItem(title: ContractCopy.heading, action: nil, keyEquivalent: "")
+            heading.isEnabled = false
+            menu.addItem(heading)
+            for line in notice.guidance {
+                let item = NSMenuItem(title: line, action: nil, keyEquivalent: "")
+                item.isEnabled = false
+                menu.addItem(item)
+            }
+        }
+        menu.addItem(.separator())
+
+        let settings = NSMenuItem(
+            title: "設定…",
+            action: #selector(CompanionStatusItemMenuActions.openSettings(_:)),
+            keyEquivalent: ","
+        )
+        settings.target = target
+        menu.addItem(settings)
+
+        menu.addItem(.separator())
+
+        let quit = NSMenuItem(
+            title: "Todo train を終了",
+            action: #selector(CompanionStatusItemMenuActions.quit(_:)),
+            keyEquivalent: "q"
+        )
+        quit.target = target
+        menu.addItem(quit)
+        return menu
     }
 
     private static func isStatusItemEvent(_ event: NSEvent) -> Bool {
@@ -61,6 +121,19 @@ enum CompanionStatusItemRightClick {
     }
 }
 
+@MainActor
+private final class CompanionStatusItemMenuActions: NSObject {
+    static let shared = CompanionStatusItemMenuActions()
+
+    @objc func openSettings(_ sender: Any?) {
+        CompanionSettingsOpener.open()
+    }
+
+    @objc func quit(_ sender: Any?) {
+        NSApp.terminate(nil)
+    }
+}
+
 struct CompanionSettingsGear: View {
     @Environment(\.openSettings) private var openSettings
     @Environment(\.dismiss) private var dismiss
@@ -70,6 +143,7 @@ struct CompanionSettingsGear: View {
             Image(systemName: "gearshape")
         }
         .buttonStyle(.borderless)
+        .keyboardShortcut(",")
         .help("設定")
         .accessibilityLabel("設定")
         .onAppear {

@@ -9,6 +9,10 @@ final class CompanionRideOverlayModel {
     var isTucked = false
     var hovering = false
     var edge = OverlayEdge.trailing
+    /// Second step of 延長. Local to the PiP. Nothing is sent until a preset.
+    var extendPicker = false
+    /// Edge lamp while the card is tucked. The card stays out.
+    var edgeLamp = false
 }
 
 struct CompanionRideOverlayView: View {
@@ -17,12 +21,22 @@ struct CompanionRideOverlayView: View {
     var onResume: () -> Void
     var onStill: () -> Void
     var onRestore: () -> Void
+    var onNudgeChoice: (NudgeChoice) -> Void
+    var onExtendPreset: (Int) -> Void
+    var onCancelExtend: () -> Void
+    var onBoardReserved: () -> Void
+    var onCloseGap: () -> Void
+    var onPausePrompt: (PausePromptAnswer) -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var presentation: RideOverlayPresentation { model.presentation }
 
     var body: some View {
+        pauseAccess(cabinAccess(framed))
+    }
+
+    private var framed: some View {
         Group {
             if model.isTucked {
                 peek
@@ -34,62 +48,341 @@ struct CompanionRideOverlayView: View {
             width: CGFloat(RideOverlayGeometry.cardSize.width),
             height: CGFloat(RideOverlayGeometry.cardSize.height)
         )
+        .clipped()
         .accessibilityElement(children: .contain)
-        .accessibilityLabel(presentation.title)
+        .accessibilityLabel(
+            presentation.showsArrivalGap
+                ? (presentation.nudgePrompt ?? CabinCopy.idle)
+                : presentation.title
+        )
         .accessibilityValue(accessibilityRemaining)
-        .accessibilityAction(named: "戻す") {
-            if model.isTucked { onRestore() }
-        }
-        .accessibilityAction(named: presentation.canResume ? "再乗車" : "停車") {
-            primaryAction()
-        }
-        .accessibilityAction(named: CabinCopy.still) {
-            if presentation.cabinPrompt != nil { onStill() }
-        }
+    }
+
+    private func cabinAccess<Content: View>(_ content: Content) -> some View {
+        content
+            .accessibilityAction(named: "出す") {
+                if model.isTucked { onRestore() }
+            }
+            .accessibilityAction(named: presentation.canResume ? "再乗車" : CabinCopy.pause) {
+                if showsNudgeActions && !model.extendPicker {
+                    onNudgeChoice(.paused)
+                } else if !showsNudgeActions {
+                    primaryAction()
+                }
+            }
+            .accessibilityAction(named: CabinCopy.still) {
+                if presentation.cabinPrompt != nil { onStill() }
+                if showsNudgeActions && !model.extendPicker { onNudgeChoice(.stillOnIt) }
+            }
+            .accessibilityAction(named: CabinCopy.extend) {
+                if showsNudgeActions && !model.extendPicker { onNudgeChoice(.willExtend) }
+            }
+            .accessibilityAction(named: CabinCopy.arrived) {
+                if showsNudgeActions && !model.extendPicker { onNudgeChoice(.alreadyDone) }
+            }
+    }
+
+    private func pauseAccess<Content: View>(_ content: Content) -> some View {
+        content
+            .accessibilityAction(named: CabinCopy.extendFive) {
+                if model.extendPicker { onExtendPreset(300) }
+            }
+            .accessibilityAction(named: CabinCopy.extendTen) {
+                if model.extendPicker { onExtendPreset(600) }
+            }
+            .accessibilityAction(named: CabinCopy.extendFifteen) {
+                if model.extendPicker { onExtendPreset(900) }
+            }
+            .accessibilityAction(named: CabinCopy.back) {
+                if model.extendPicker { onCancelExtend() }
+            }
+            .accessibilityAction(named: CabinCopy.board) {
+                if presentation.showsArrivalGap && presentation.canBoardReserved { onBoardReserved() }
+            }
+            .accessibilityAction(named: CabinCopy.close) {
+                if presentation.showsArrivalGap { onCloseGap() }
+            }
+            .accessibilityAction(named: PauseInputCopy.resume) {
+                if presentation.pausePrompt != nil { onPausePrompt(.resume) }
+            }
+            .accessibilityAction(named: PauseInputCopy.keepPaused) {
+                if presentation.pausePrompt != nil { onPausePrompt(.keepPaused) }
+            }
+    }
+
+    private var showsNudgeActions: Bool {
+        presentation.showsNudgeChoices && !model.isTucked
     }
 
     private var card: some View {
         HStack(spacing: 0) {
             handle
-            VStack(alignment: .leading, spacing: 4) {
-                Text(presentation.title)
-                    .font(.system(size: 28, weight: .medium, design: .rounded))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.45)
-                    .padding(.horizontal, 12)
-                    .padding(.top, 10)
-
-                if let line = presentation.failureLine {
-                    Text(line)
-                        .font(.caption)
-                        .foregroundStyle(RideOverlayPalette.overtime)
-                        .lineLimit(1)
-                        .padding(.horizontal, 12)
-                } else if let prompt = presentation.cabinPrompt {
-                    Text(prompt)
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                        .padding(.horizontal, 12)
-                } else if let status = presentation.statusLine {
-                    Text(status)
-                        .font(.caption)
-                        .foregroundStyle(.white.opacity(0.7))
-                        .lineLimit(1)
-                        .padding(.horizontal, 12)
-                }
-
-                Spacer(minLength: 0)
-                bottomRow
+            VStack(alignment: .leading, spacing: 0) {
+            if presentation.showsArrivalGap {
+                gapColumn
+            } else if presentation.pausePrompt != nil {
+                pausePromptColumn
+            } else if showsNudgeActions || model.extendPicker {
+                nudgeColumn
+            } else {
+                classicColumn
             }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.black)
         .clipShape(cardShape)
         .overlay {
             cardShape
                 .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
         }
+    }
+
+    private var classicColumn: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(presentation.title)
+                .font(.system(size: 28, weight: .medium, design: .rounded))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.45)
+                .padding(.horizontal, 12)
+                .padding(.top, 10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            if let line = presentation.failureLine {
+                Text(line)
+                    .font(.caption)
+                    .foregroundStyle(RideOverlayPalette.overtime)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.8)
+                    .padding(.horizontal, 12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            } else if let prompt = presentation.cabinPrompt {
+                Text(prompt)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                    .padding(.horizontal, 12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                scheduleSlot
+            }
+
+            Spacer(minLength: 0)
+            bottomRow
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    /// One line, always the same height, so a schedule appearing does not move the title or the bar.
+    private var scheduleSlot: some View {
+        scheduleReadout
+            .padding(.horizontal, 12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(height: 24, alignment: .leading)
+            .clipped()
+    }
+
+    @ViewBuilder
+    private var scheduleReadout: some View {
+        if let occupancy = presentation.occupancy {
+            occupancyStrip(occupancy)
+        } else if let line = presentation.nextBlockLine {
+            Text(line)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.85))
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+        } else if let status = presentation.statusLine {
+            Text(status)
+                .font(.caption)
+                .foregroundStyle(.white.opacity(0.7))
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        } else {
+            Color.clear
+                .accessibilityHidden(true)
+        }
+    }
+
+    /// Reserved face, or the idle line. No timetable preview.
+    private var gapColumn: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(presentation.holdLamp ? RideOverlayPalette.approach : Color.white.opacity(0.22))
+                    .frame(width: 8, height: 8)
+                    .accessibilityHidden(true)
+                Text(presentation.nudgePrompt ?? CabinCopy.idle)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.6)
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 8)
+            .frame(height: 36, alignment: .center)
+
+            if presentation.canBoardReserved, !presentation.title.isEmpty {
+                Text(presentation.title)
+                    .font(.system(size: 22, weight: .medium, design: .rounded))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.45)
+                    .padding(.horizontal, 12)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            } else {
+                Spacer(minLength: 0)
+            }
+
+            if let line = presentation.failureLine ?? (presentation.isSending ? presentation.statusLine : nil) {
+                Text(line)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.72))
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.8)
+                    .padding(.horizontal, 8)
+            }
+
+            gapChoices
+                .frame(height: 40)
+        }
+    }
+
+    private var gapChoices: some View {
+        let titles = presentation.canBoardReserved
+            ? [CabinCopy.board, CabinCopy.close]
+            : [CabinCopy.close]
+        return equalChoiceRow(titles)
+            .opacity(presentation.isSending ? 0.35 : 1)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(titles.joined(separator: " "))
+            .accessibilityHint(
+                presentation.canBoardReserved ? CabinCopy.boardHint : CabinCopy.closeGapHint
+            )
+    }
+
+    /// Same question row as the nudge, then two answers.
+    private var pausePromptColumn: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(presentation.holdLamp ? RideOverlayPalette.approach : Color.white.opacity(0.22))
+                    .frame(width: 8, height: 8)
+                    .accessibilityHidden(true)
+                Text(presentation.pausePrompt ?? PauseInputCopy.questionBare)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.55)
+                    .accessibilityHint(PauseInputCopy.questionHint)
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 8)
+            .frame(height: 36, alignment: .center)
+
+            nudgeInstrument
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            equalChoiceRow([PauseInputCopy.resume, PauseInputCopy.keepPaused])
+                .frame(height: 40)
+                .opacity(presentation.isSending ? 0.35 : 1)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("\(PauseInputCopy.resume) \(PauseInputCopy.keepPaused)")
+                .accessibilityHint("\(PauseInputCopy.resumeHint) \(PauseInputCopy.keepPausedHint)")
+        }
+    }
+
+    /// Question, instruments, then four equal answers.
+    private var nudgeColumn: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(presentation.holdLamp ? RideOverlayPalette.approach : Color.white.opacity(0.22))
+                    .frame(width: 8, height: 8)
+                    .accessibilityHidden(true)
+                Text(presentation.nudgePrompt ?? CabinCopy.question(title: presentation.title))
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.55)
+                    .accessibilityHint(CabinCopy.questionHint)
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 8)
+            .frame(height: 28, alignment: .center)
+
+            nudgeInstrument
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            if let line = presentation.failureLine ?? (presentation.isSending ? presentation.statusLine : nil) {
+                Text(line)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.72))
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.8)
+                    .padding(.horizontal, 8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            nudgeChoices
+                .frame(height: 40)
+        }
+    }
+
+    private var nudgeInstrument: some View {
+        ZStack {
+            if let caption = presentation.instrumentCaption {
+                Text(caption)
+                    .font(.system(size: 18, weight: .semibold, design: .rounded).monospacedDigit())
+                    .foregroundStyle(RideOverlayPalette.fill(for: presentation))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                    .padding(.horizontal, 8)
+            } else {
+                progressRow
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(presentation.instrumentCaption ?? "残り \(presentation.remainingLabel)")
+    }
+
+    private var nudgeChoices: some View {
+        equalChoiceRow(
+            model.extendPicker
+                ? [CabinCopy.extendFive, CabinCopy.extendTen, CabinCopy.extendFifteen, CabinCopy.back]
+                : [CabinCopy.still, CabinCopy.extend, CabinCopy.arrived, CabinCopy.pause]
+        )
+        .opacity(presentation.isSending ? 0.35 : 1)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(
+            model.extendPicker
+                ? "\(CabinCopy.extendFive) \(CabinCopy.extendTen) \(CabinCopy.extendFifteen) \(CabinCopy.back)"
+                : "\(CabinCopy.still) \(CabinCopy.extend) \(CabinCopy.arrived) \(CabinCopy.pause)"
+        )
+        .accessibilityHint(model.extendPicker ? CabinCopy.extendPickerHint : CabinCopy.questionHint)
+    }
+
+    private func equalChoiceRow(_ titles: [String]) -> some View {
+        HStack(spacing: 0) {
+            ForEach(Array(titles.enumerated()), id: \.offset) { index, title in
+                if index > 0 {
+                    Rectangle()
+                        .fill(Color.white.opacity(0.18))
+                        .frame(width: 1)
+                        .padding(.vertical, 8)
+                }
+                Text(title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .background(Color.black)
     }
 
     private var cardShape: RoundedRectangle {
@@ -104,6 +397,33 @@ struct CompanionRideOverlayView: View {
             .padding(.trailing, 4)
             .frame(maxHeight: .infinity)
             .accessibilityHidden(true)
+    }
+
+    private func occupancyStrip(_ occupancy: RideOccupancyInstrument) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(occupancy.prefix == "次" ? "次" : "いま")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.7))
+                .frame(width: 28, alignment: .leading)
+            Text(occupancy.title)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(occupancy.clock)
+                if let minutes = occupancy.minutes {
+                    Text("\(minutes)分")
+                }
+            }
+            .font(.system(size: 13, weight: .semibold, design: .rounded).monospacedDigit())
+            .foregroundStyle(.white.opacity(0.7))
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(occupancy.spokenLine)
     }
 
     private var bottomRow: some View {
@@ -132,6 +452,7 @@ struct CompanionRideOverlayView: View {
         model.hovering
             && !model.isTucked
             && presentation.cabinPrompt == nil
+            && presentation.pausePrompt == nil
             && (presentation.canPause || presentation.canResume)
     }
 
@@ -143,13 +464,14 @@ struct CompanionRideOverlayView: View {
                     total: geo.size.width
                 )
             )
-            ZStack {
+            ZStack(alignment: .leading) {
                 Color.black
                 HStack(spacing: 0) {
                     RideOverlayPalette.fill(for: presentation)
                         .frame(width: fillWidth)
                     Spacer(minLength: 0)
                 }
+                occupancyProgressMarks(width: geo.size.width, height: geo.size.height)
                 remainingDigits(RideOverlayPalette.onTrack)
                 remainingDigits(RideOverlayPalette.onFill(for: presentation))
                     .mask {
@@ -162,6 +484,28 @@ struct CompanionRideOverlayView: View {
             .frame(width: geo.size.width, height: geo.size.height)
         }
         .clipped()
+    }
+
+    @ViewBuilder
+    private func occupancyProgressMarks(width: CGFloat, height: CGFloat) -> some View {
+        if let occupancy = presentation.occupancy {
+            if let start = occupancy.spanStart, let end = occupancy.spanEnd, end > start,
+               let span = RideOverlayGeometry.containedSpan(start: start, end: end, length: width) {
+                let bandHeight = min(CGFloat(4), height)
+                Rectangle()
+                    .fill(Color.white.opacity(0.55))
+                    .frame(width: span.length, height: bandHeight)
+                    .frame(height: height, alignment: .top)
+                    .offset(x: span.origin)
+            }
+            if let mark = occupancy.markPosition,
+               let tick = RideOverlayGeometry.containedTick(position: mark, length: width, thickness: 2) {
+                Rectangle()
+                    .fill(Color.white.opacity(0.92))
+                    .frame(width: tick.length, height: height)
+                    .offset(x: tick.origin)
+            }
+        }
     }
 
     private func remainingDigits(_ color: Color) -> some View {
@@ -250,6 +594,15 @@ struct CompanionRideOverlayView: View {
         .frame(maxHeight: .infinity)
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.16), value: model.hovering)
+        .overlay(alignment: .top) {
+            if model.edgeLamp {
+                Circle()
+                    .fill(RideOverlayPalette.approach)
+                    .frame(width: 8, height: 8)
+                    .padding(.top, 8)
+                    .accessibilityHidden(true)
+            }
+        }
         .accessibilityHidden(true)
     }
 
@@ -270,6 +623,31 @@ struct CompanionRideOverlayView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
             .background(Color.black)
+            .overlay {
+                occupancyPeekMarks(height: geo.size.height)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func occupancyPeekMarks(height: CGFloat) -> some View {
+        if let occupancy = presentation.occupancy {
+            ZStack(alignment: .bottom) {
+                if let start = occupancy.spanStart, let end = occupancy.spanEnd, end > start,
+                   let span = RideOverlayGeometry.containedSpan(start: start, end: end, length: height) {
+                    Rectangle()
+                        .fill(Color.white.opacity(0.28))
+                        .frame(height: span.length)
+                        .padding(.bottom, span.origin)
+                }
+                if let mark = occupancy.markPosition,
+                   let tick = RideOverlayGeometry.containedTick(position: mark, length: height, thickness: 2) {
+                    Rectangle()
+                        .fill(Color.white.opacity(0.92))
+                        .frame(height: tick.length)
+                        .padding(.bottom, tick.origin)
+                }
+            }
         }
     }
 
@@ -312,3 +690,95 @@ enum RideOverlayPalette {
         presentation.timerPhase == .overtime ? .white : .black
     }
 }
+
+#if DEBUG
+@MainActor
+func ridePreview(_ presentation: RideOverlayPresentation) -> some View {
+    let model = CompanionRideOverlayModel()
+    model.presentation = presentation
+    return CompanionRideOverlayView(
+        model: model,
+        onPause: {},
+        onResume: {},
+        onStill: {},
+        onRestore: {},
+        onNudgeChoice: { _ in },
+        onExtendPreset: { _ in },
+        onCancelExtend: {},
+        onBoardReserved: {},
+        onCloseGap: {},
+        onPausePrompt: { _ in }
+    )
+}
+
+func rideSnap(
+    title: String,
+    nextTitle: String? = nil,
+    startsAt: Int? = nil,
+    endsAt: Int? = nil
+) -> RideOverlayPresentation {
+    let snap = SnapPlaintext(
+        rev: 1,
+        sessionId: UUID(uuidString: "00000000-0000-0000-0000-000000000001"),
+        ticketId: UUID(uuidString: "00000000-0000-0000-0000-000000000002"),
+        title: title,
+        phase: .running,
+        startedAt: 1_768_000_000,
+        estimatedSeconds: 1_500,
+        pausedAccumulated: 0,
+        pausedAt: nil,
+        boardedDeviceID: nil,
+        serviceActive: true,
+        cabinEnabled: false,
+        nextBlockTitle: nextTitle,
+        nextBlockStartsAt: startsAt,
+        nextBlockEndsAt: endsAt
+    )
+    return RideOverlayPresentation.make(
+        MenuBarInput(
+            pairing: .paired,
+            snap: snap,
+            now: 1_768_000_120,
+            cabinEnabledLocal: false
+        )
+    )
+}
+
+@MainActor
+func ridePreviewCanvas(_ presentation: RideOverlayPresentation) -> some View {
+    ridePreview(presentation)
+        .padding(24)
+        .background(Color(white: 0.32))
+}
+
+#Preview("予定なし") {
+    ridePreviewCanvas(rideSnap(title: "週次レポート"))
+}
+
+#Preview("短い予定") {
+    ridePreviewCanvas(
+        rideSnap(title: "週次レポート", nextTitle: "定例", startsAt: 1_768_000_400)
+    )
+}
+
+#Preview("長い予定") {
+    ridePreviewCanvas(
+        rideSnap(
+            title: "週次レポートの準備を終えてからレビューに入る",
+            nextTitle: "四半期の振り返りと次のスプリントの計画を書く",
+            startsAt: 1_768_003_780
+        )
+    )
+}
+
+#Preview("いまの占有") {
+    ridePreviewCanvas(
+        rideSnap(
+            title: "原稿",
+            nextTitle: "デザインレビュー",
+            startsAt: 1_768_000_000,
+            endsAt: 1_768_001_320
+        )
+    )
+}
+#endif

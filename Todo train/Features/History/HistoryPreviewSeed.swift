@@ -25,7 +25,7 @@ enum HistoryPreviewSeed {
         context.insert(
             SessionExtension(
                 addedSeconds: 10 * 60,
-                reason: "割り込みが入った",
+                reason: "割り込み",
                 createdAt: base.addingTimeInterval(40 * 60),
                 session: first
             )

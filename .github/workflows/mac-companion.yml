@@ -1,0 +1,140 @@
+# TodoTrainCompanion の署名なし Release。
+#
+# プロジェクトは Xcode 27 形式（objectVersion 110）。正式版だけの macos-26 では開けない。
+# 開発に使っているのは Xcode 27.2。イメージの既定が別の 27.x でも、最も近い版を選んでログに出す。
+# Apple Developer Program に入っていないので、Developer ID 署名と公証はしない。
+# CODE_SIGNING_ALLOWED=NO でもリンカの ad-hoc 印は残る。外すと Apple silicon で起動できない。
+# コンパニオンが直接コンパイルする共有ソースも含める。iOS の画面だけの変更では動かない。
+#
+# パスフィルタはタグの push には効かない。タグは常に動き、zip を GitHub Release に添付する。
+
+name: mac-companion
+
+on:
+  pull_request:
+    paths:
+      - "TodoTrainCompanion/**"
+      - "TodoTrainCompanionTests/**"
+      - "Packages/**"
+      - "Todo train.xcodeproj/**"
+      - "Todo train/Models/**"
+      - "Todo train/App/AppModelContainer.swift"
+      - "Todo train/App/AppSchema.swift"
+      - "Todo train/App/AppStoreSnapshot.swift"
+      - "Todo train/App/CloudKitSync.swift"
+      - "Todo train/Core/Diagnostics/LocalWireBuild.swift"
+      - "Todo train/Core/Diagnostics/StoreSchemaVersion.swift"
+      - "Todo train/Core/Passenger/**"
+      - "Todo train/Core/Session/CheckInScheduling.swift"
+      - "tools/build-info/**"
+      - "tools/ci/**"
+      - ".github/workflows/mac-companion.yml"
+  push:
+    branches: [develop]
+    tags: ["*"]
+    paths:
+      - "TodoTrainCompanion/**"
+      - "TodoTrainCompanionTests/**"
+      - "Packages/**"
+      - "Todo train.xcodeproj/**"
+      - "Todo train/Models/**"
+      - "Todo train/App/AppModelContainer.swift"
+      - "Todo train/App/AppSchema.swift"
+      - "Todo train/App/AppStoreSnapshot.swift"
+      - "Todo train/App/CloudKitSync.swift"
+      - "Todo train/Core/Diagnostics/LocalWireBuild.swift"
+      - "Todo train/Core/Diagnostics/StoreSchemaVersion.swift"
+      - "Todo train/Core/Passenger/**"
+      - "Todo train/Core/Session/CheckInScheduling.swift"
+      - "tools/build-info/**"
+      - "tools/ci/**"
+      - ".github/workflows/mac-companion.yml"
+
+concurrency:
+  group: mac-companion-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref_type != 'tag' }}
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: unsigned release
+    runs-on: xcode-27
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          repository: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
+
+      - name: ブランチ名を手元ビルドと同じにする
+        env:
+          BUILD_REF_NAME: ${{ github.event_name == 'pull_request' && github.head_ref || github.ref_name }}
+        run: |
+          set -eu
+          name="$BUILD_REF_NAME"
+          case "$name" in
+            ""|*..*|/*|*/|*[[:space:]]*)
+              echo "ref name が使えない: ${name}" >&2
+              exit 1
+              ;;
+          esac
+          # 同名の tag が残っていると abbrev-ref が heads/名前 になり、手元のブランチ名とずれる。
+          if git show-ref --verify --quiet "refs/tags/${name}"; then
+            git update-ref -d "refs/tags/${name}"
+          fi
+          git update-ref "refs/heads/${name}" HEAD
+          git symbolic-ref HEAD "refs/heads/${name}"
+          echo "branch=$(git rev-parse --abbrev-ref HEAD) sha=$(git rev-parse --short=7 HEAD)"
+
+      - name: Xcode を選ぶ
+        run: |
+          set -eu
+          dev=$(python3 tools/ci/select-xcode.py)
+          sudo xcode-select -s "$dev"
+          xcode-select -p
+          xcodebuild -version
+
+      - name: 署名なし Release を zip にする
+        run: tools/ci/package-mac-companion.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TodoTrainCompanion
+          path: ${{ runner.temp }}/TodoTrainCompanion.zip
+          if-no-files-found: error
+
+  release:
+    name: attach to GitHub Release
+    needs: package
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: TodoTrainCompanion
+          path: dist
+
+      - name: Release に zip を添付する
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          tag="$GITHUB_REF_NAME"
+          zip="dist/TodoTrainCompanion.zip"
+          test -f "$zip"
+          notes="署名なしの Release です。初回は右クリックの「開く」、または quarantine を外して起動します。手順は docs/22-mac-build.md です。"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" "$zip" --clobber
+          else
+            gh release create "$tag" "$zip" --title "$tag" --notes "$notes"
+          fi

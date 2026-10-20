@@ -9,7 +9,7 @@ struct ServiceSummaryBar: View {
     @Environment(SessionManager.self) private var sessionManager
     @Environment(\.verticalSizeClass) private var verticalSizeClass
 
-    let onError: (String) -> Void
+    let onRequestStartService: () -> Void
     let onRequestEndService: () -> Void
 
     private var canEndOpenService: Bool {
@@ -44,11 +44,7 @@ struct ServiceSummaryBar: View {
                 .frame(maxWidth: .infinity)
             } else {
                 Button("運行開始") {
-                    do {
-                        try sessionManager.startService()
-                    } catch {
-                        onError(error.localizedDescription)
-                    }
+                    onRequestStartService()
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(TrainTheme.rail)
@@ -77,6 +73,25 @@ struct ServiceSummaryBar: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
+
+                TimelineView(.periodic(from: .now, by: 15)) { context in
+                    let fit = sessionManager.timetableFit(at: context.date)
+                    TimetableOccupancyMeter(
+                        rows: TimetableFit.occupancyRows(
+                            fit: fit,
+                            now: context.date,
+                            calendar: sessionManager.calendar
+                        ),
+                        marks: TimetableFit.occupancyMarks(fit: fit, now: context.date),
+                        chrome: .grouped
+                    )
+                    .opacity(
+                        sessionManager.isInService || sessionManager.needsServiceDayEndPrompt
+                            ? 1
+                            : 0.32
+                    )
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
 
             Spacer(minLength: 8)
@@ -85,14 +100,14 @@ struct ServiceSummaryBar: View {
                 Text("停車")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
-                Text("\(sessionManager.pausedTicketCount)/\(sessionManager.pauseLimit)")
+                Text("\(sessionManager.pausedCountTowardLimit)/\(sessionManager.pauseLimit)")
                     .font(
                         usesTightVerticalLayout
                             ? .body.weight(.semibold).monospacedDigit()
                             : .title3.weight(.semibold).monospacedDigit()
                     )
                     .foregroundStyle(
-                        sessionManager.pausedTicketCount >= sessionManager.pauseLimit
+                        sessionManager.pausedCountTowardLimit >= sessionManager.pauseLimit
                             ? TrainTheme.signalAmber
                             : .primary
                     )
