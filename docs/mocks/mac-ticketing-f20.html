@@ -1,0 +1,1515 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,minimum-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Mac ステージ #192（f20 発車のガイドレール：発券機に付いて動き、退場で引っ込む）</title>
+<style>
+*{box-sizing:border-box;transition:none!important;animation:none!important}
+html,body{margin:0;height:100%;overflow:hidden;background:#000;color:#bbb;font-family:-apple-system,"Hiragino Sans",sans-serif;overscroll-behavior:none;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%}
+:root{--amb:rgba(255,176,0,.85);--ambdim:rgba(255,176,0,.5);--leg:rgba(242,230,200,.55)}
+#app{position:fixed;inset:0;display:flex;flex-direction:column;background:#2a2c2e;padding-top:env(safe-area-inset-top);padding-bottom:max(env(safe-area-inset-bottom),6px)}
+
+/* ───── 上半分：Mac のデスクトップ ───── */
+#desk{flex:0 0 46%;position:relative;overflow:hidden;background:#26303b;border-bottom:2px solid #151617}
+#stage{position:absolute;left:0;top:0;transform-origin:0 0;overflow:hidden;font:13px/1.3 -apple-system,"Hiragino Sans",sans-serif;color:#e8e8ea}
+#cursor{position:absolute;left:0;top:0;pointer-events:none;z-index:99;will-change:transform}
+#cursor svg{display:block;overflow:visible}
+#cursor.dn svg path{fill:#d8d8d8}
+
+/* メニューバー */
+#menubar{position:absolute;left:0;top:0;right:0;height:24px;background:#1c1d1f;display:flex;align-items:center;padding:0 8px;font-size:13px;z-index:60;border-bottom:1px solid #111}
+#menubar .mi{padding:0 8px;height:20px;line-height:20px;border-radius:4px;white-space:nowrap}
+#menubar .mi.b{font-weight:700}
+#menubar .mi.hv{background:rgba(255,255,255,.12)}
+#menubar .sp{flex:1}
+#sicon{display:flex;align-items:center;gap:5px;padding:0 7px;height:20px;border-radius:4px;color:#f2f2f4}
+#sicon.hv{background:rgba(255,255,255,.12)}#sicon.on{background:rgba(255,255,255,.24)}
+#sicon svg{width:15px;height:15px;display:block}
+#sicon .bt{font-variant-numeric:tabular-nums;font-size:12px}
+#menubar .ic{width:16px;height:16px;margin:0 6px;display:block;color:#d6d6d8}
+#menubar .clk{padding:0 8px;font-size:13px;white-space:nowrap}
+
+/* ダミーの作業アプリ（エディタ） */
+#win{position:absolute;left:46px;top:52px;width:520px;height:400px;background:#1e1f22;border-radius:10px;border:1px solid #3a3b3f;overflow:hidden;z-index:10;display:flex;flex-direction:column}
+#wtitle{flex:none;height:28px;background:#2b2c30;display:flex;align-items:center;padding:0 10px;gap:8px;border-bottom:1px solid #141517}
+#wtitle .dot{width:12px;height:12px;border-radius:50%;flex:none}
+#wtitle .t{flex:1;text-align:center;font-size:12px;color:#a8a9ad;margin-right:52px;white-space:nowrap;overflow:hidden}
+#wbody{position:relative;flex:1;min-height:0}
+#code{position:absolute;inset:0;overflow:auto;font:12px/18px ui-monospace,"SF Mono",Menlo,monospace;scrollbar-width:none;cursor:default}
+#code::-webkit-scrollbar{display:none}
+#code .ln{display:flex;height:18px;white-space:pre}
+#code .ln i{flex:none;width:40px;text-align:right;padding-right:10px;color:#5a5c62;font-style:normal;background:#1e1f22}
+#code .ln.cur{background:#2a2c31}#code .ln.cur i{color:#a8a9ad}
+#code .ln b{font-weight:400;position:relative}
+#code .k{color:#c586c0}#code .s{color:#c9a26d}#code .c{color:#6a9955}#code .n{color:#7fbfd6}
+#caret{position:absolute;width:2px;height:16px;background:#e8e8ea;pointer-events:none;display:none}
+#thumb{position:absolute;right:2px;width:5px;border-radius:3px;background:rgba(255,255,255,.35);pointer-events:none}
+
+/* PiP カード 320×128 */
+#pip{position:absolute;left:0;top:0;width:320px;height:128px;background:#000;border-radius:16px;border:1px solid rgba(255,255,255,.12);z-index:20;color:#fff;overflow:hidden;display:none}
+#pip .pt{position:absolute;left:12px;right:12px;top:10px;font:500 28px/34px ui-rounded,-apple-system,"Hiragino Sans",sans-serif;white-space:nowrap;overflow:hidden;text-overflow:clip}
+#pip .ps{position:absolute;left:12px;right:12px;top:48px;height:24px;font-size:15px;font-weight:600;line-height:24px;color:rgba(255,255,255,.85);white-space:nowrap;overflow:hidden}
+#pip .ps.over{color:rgba(210,96,84,.95);font-size:13px;font-weight:500}
+#pip .bar{position:absolute;left:12px;right:12px;top:84px;height:6px;border-radius:3px;background:rgba(255,255,255,.14);overflow:hidden}
+#pip .bar i{display:block;height:100%;background:rgba(255,255,255,.88);width:0}
+#pip .bar.over i{background:rgba(210,96,84,.9)}
+#pip .rem{position:absolute;left:12px;bottom:10px;font-size:15px;font-variant-numeric:tabular-nums;color:rgba(255,255,255,.9)}
+#pip .rem.over{color:rgba(210,96,84,.95)}
+#pip .pbtn{position:absolute;right:10px;bottom:8px;height:26px;padding:0 12px;border-radius:13px;background:rgba(255,255,255,.16);color:#fff;font-size:13px;font-weight:600;display:flex;align-items:center;gap:5px;border:0;font-family:inherit}
+#pip .pbtn.hv{background:rgba(255,255,255,.28)}#pip .pbtn.pd{background:rgba(255,255,255,.4)}
+#pip.drag{border-color:rgba(255,255,255,.3)}
+
+/* ポップオーバー */
+#pop{position:absolute;width:280px;background:#2b2c2f;border:1px solid #46474b;border-radius:10px;z-index:70;padding:12px;display:none}
+#pop::before{content:'';position:absolute;top:-6px;right:14px;width:10px;height:10px;background:#2b2c2f;border-left:1px solid #46474b;border-top:1px solid #46474b;transform:rotate(45deg)}
+#pop .h{display:flex;align-items:baseline;gap:8px}
+#pop .h b{font-size:13px}#pop .h span,#pop .cap{font-size:11px;color:#9a9ba0}
+#pop .st{margin:10px 0 8px;font-size:13px;line-height:1.35}
+#pop .st small{display:block;font-size:11px;color:#9a9ba0;font-variant-numeric:tabular-nums}
+.btn{display:block;width:100%;height:24px;margin:5px 0 0;border-radius:6px;border:1px solid #55565a;background:#3a3b3f;color:#f0f0f2;font:13px -apple-system,"Hiragino Sans",sans-serif;text-align:center;line-height:22px;padding:0}
+.btn.hv{background:#46474c}.btn.pd{background:#303135}
+.btn.pri{background:#0a6cf0;border-color:#0a6cf0;color:#fff}.btn.pri.hv{background:#2a80f5}.btn.pri.pd{background:#085bcc}
+.btn.dis{opacity:.4}
+#pop hr{border:0;border-top:1px solid #46474b;margin:10px 0 4px}
+#pop .row{height:22px;line-height:22px;padding:0 6px;border-radius:4px;font-size:13px}#pop .row.hv{background:#0a6cf0;color:#fff}
+
+/* いまやる パネル（ダミー） */
+#panel{position:absolute;left:0;top:0;width:400px;background:#2b2c2f;border:1px solid #46474b;border-radius:12px;z-index:65;display:none;overflow:hidden}
+#panel .pth{height:28px;background:#333438;display:flex;align-items:center;padding:0 10px;gap:8px;border-bottom:1px solid #141517;font-size:13px;font-weight:600}
+#panel .pth .x{width:12px;height:12px;border-radius:50%;background:#ff5f57}
+#panel .pth span{flex:1;text-align:center;margin-right:20px}
+#panel .pbd{padding:20px;display:flex;flex-direction:column;gap:14px}
+#panel .fld{height:28px;border-radius:6px;background:#1c1d1f;border:1px solid #55565a;padding:0 8px;line-height:26px;font-size:13px}
+#panel .lab{font-size:12px;color:#9a9ba0;margin-bottom:6px}
+#panel .seg{display:flex;border:1px solid #55565a;border-radius:6px;overflow:hidden}
+#panel .seg div{flex:1;height:24px;line-height:22px;text-align:center;font-size:13px;border-left:1px solid #55565a;background:#3a3b3f}
+#panel .seg div:first-child{border-left:0}#panel .seg div.hv{background:#46474c}#panel .seg div.on{background:#0a6cf0;color:#fff}
+#panel .btns{display:flex;gap:8px;justify-content:flex-end}#panel .btns .btn{width:auto;min-width:76px;padding:0 14px;margin:0}
+
+/* 右クリックメニュー */
+#ctx{position:absolute;min-width:150px;background:#2b2c2f;border:1px solid #46474b;border-radius:8px;padding:4px;z-index:80;display:none}
+#ctx div{height:22px;line-height:22px;padding:0 10px;border-radius:4px;font-size:13px}#ctx div.hv{background:#0a6cf0;color:#fff}#ctx hr{border:0;border-top:1px solid #46474b;margin:4px 0}
+
+/* ───── 下半分：トラックパッドとキー ───── */
+#strip{flex:none;height:28px;display:flex;align-items:center;gap:8px;padding:0 10px;font-size:11px;color:var(--leg);letter-spacing:.08em;background:#2a2c2e}
+#strip .nm{color:rgba(242,230,200,.7)}
+#chip{flex:1;text-align:right;color:var(--amb);white-space:nowrap;overflow:hidden;font-variant-numeric:tabular-nums;min-height:14px}
+#gear{flex:none;height:22px;padding:0 10px;border-radius:2px;background:#2e3033;box-shadow:0 2px 0 #1d1e20;color:rgba(242,230,200,.7);font-size:11px;letter-spacing:.12em;line-height:22px}
+#gear.on{box-shadow:none;transform:translateY(1px);color:var(--amb)}
+#padwrap{flex:1;min-height:0;padding:0 8px 8px}
+#pad{position:relative;width:100%;height:100%;background:#3F4245;border-radius:14px;box-shadow:inset 1px 1px 0 #4c5054,inset 0 0 0 2px #2e3033;overflow:hidden}
+#pad .hint{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);text-align:center;font-size:10px;letter-spacing:.3em;color:rgba(242,230,200,.22);pointer-events:none}
+#pz{position:absolute;left:0;right:0;bottom:0;height:34px;border-top:1px dashed rgba(242,230,200,.22);display:flex;align-items:center;justify-content:center;font-size:9px;letter-spacing:.3em;color:rgba(242,230,200,.3);pointer-events:none}
+#pz.off{display:none}
+#pz.on{background:rgba(255,176,0,.14);color:var(--amb)}
+.fdot{position:absolute;width:30px;height:30px;margin:-15px 0 0 -15px;border-radius:50%;border:1px solid rgba(242,230,200,.55);pointer-events:none;display:none}
+#keys{flex:none;padding:0 8px;display:flex;flex-direction:column;gap:4px;margin-bottom:6px}
+.kr{display:flex;gap:4px}
+.kk{flex:1;height:34px;min-width:0;background:#2e3033;border-radius:3px;box-shadow:0 2px 0 #1d1e20;display:flex;align-items:center;justify-content:center;font-size:14px;color:rgba(242,230,200,.75);position:relative}
+.kk.sm{font-size:11px;letter-spacing:.04em}
+.kk.sep{margin-left:6px}
+.kk.wide{flex:2.4;font-size:11px;letter-spacing:.06em}
+.kk.on{box-shadow:none;transform:translateY(2px);background:#5a4210;color:var(--amb)}
+.kk.dn{box-shadow:none;transform:translateY(2px);background:#3a3d40}
+
+/* ───── 調整（設定画面）───── */
+#settings{position:fixed;inset:0;background:#0d0d0d;z-index:200;display:none;overflow-y:auto;overflow-x:hidden;touch-action:pan-y;-webkit-overflow-scrolling:touch;padding:max(env(safe-area-inset-top),14px) 16px max(env(safe-area-inset-bottom),24px);font-size:14px;-webkit-user-select:auto;user-select:auto}
+#settings h2{font-size:15px;margin:6px 0 4px;color:#ddd;display:flex;align-items:center;justify-content:space-between}
+#settings h3{font-size:12px;letter-spacing:.1em;color:var(--ambdim);margin:20px 0 4px;font-weight:600}
+#settings label{display:block;margin:12px 0}
+#settings label>span.v{color:var(--amb);float:right;font-variant-numeric:tabular-nums}
+#settings input[type=range]{width:100%;margin:6px 0 0}
+#settings input[type=checkbox]{margin-right:8px;transform:scale(1.2)}
+#settings select,#settings button{background:#222;color:#ddd;border:1px solid #444;padding:8px 10px;border-radius:6px;font-size:14px;max-width:100%}
+#settings select{width:100%;margin-top:6px}
+#settings p.note{color:#777;font-size:11px;margin:4px 0}
+
+/* ───── #192 切符だけ発行（v9.1：枠なしのパイ）───── */
+.otl{color:#fff;font-weight:700;text-shadow:-1px -1px 0 #111,1px -1px 0 #111,-1px 1px 0 #111,1px 1px 0 #111,0 -1px 0 #111,0 1px 0 #111,-1px 0 0 #111,1px 0 0 #111;white-space:nowrap;pointer-events:none}
+#pieCatch{position:absolute;inset:0;z-index:88;display:none}
+#pie{position:absolute;left:0;top:0;width:0;height:0;z-index:89;display:none;pointer-events:none}
+#pie svg{position:absolute;overflow:visible}
+#pie .pl{position:absolute;font-size:17px;transform:translate(-50%,-50%)}
+#mt{position:absolute;left:0;top:0;width:425px;height:288px;z-index:90;display:none;pointer-events:none;transform-origin:50% 50%;will-change:transform;backface-visibility:hidden}
+#mt.fly{z-index:91}
+.mtf{position:relative;width:425px;height:288px;border-radius:2.5px;overflow:hidden;background:#D5E6EA;border:.5px solid rgba(26,26,26,.18);color:#1a1a1a;font-family:-apple-system,"Hiragino Sans",sans-serif}
+.mtf .pat{position:absolute;inset:0;opacity:.08}
+.mtf .band{position:absolute;left:0;right:0;top:28%;height:34%;background:#E7F1F3}
+.mtf .trk{position:absolute;left:10px;top:10px;width:391px;height:6.5px;display:flex;gap:1.5px}
+.mtf .trk i{flex:1;border:.5px solid rgba(26,26,26,.22);border-radius:.7px;position:relative;overflow:hidden}
+.mtf .trk i b{position:absolute;left:0;top:0;bottom:0;background:#1a1a1a}
+.mtf .prt{position:absolute;inset:0;clip-path:inset(0 0 100% 0)}
+.mtf .ttl{position:absolute;left:10px;top:28px;width:300px;font-size:22px;font-weight:700;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.mtf .fare{position:absolute;right:28px;top:26px;display:flex;align-items:baseline;gap:1px}
+.mtf .fare b{font-size:28px;font-weight:700;letter-spacing:-.6px;font-variant-numeric:tabular-nums}.mtf .fare span{font-size:11px;font-weight:600}
+.mtf .val{position:absolute;left:10px;top:100px;font-size:11px;white-space:nowrap}.mtf .val b{font-size:15px;font-weight:700;font-variant-numeric:tabular-nums}
+.mtf .ft{position:absolute;left:10px;bottom:10px;font-size:9px;opacity:.85;font-variant-numeric:tabular-nums;white-space:nowrap}
+.mtf .ser{position:absolute;right:-30px;top:50%;font-size:9px;color:#7A3D8A;white-space:nowrap;transform:translateY(-50%) rotate(90deg);font-variant-numeric:tabular-nums}
+#ptext{position:absolute;z-index:92;font-size:17px;transform:translate(-50%,-100%);display:none;text-align:center;line-height:1.35}
+#ptext .tt{max-width:300px;overflow:hidden;text-overflow:clip;display:inline-block;vertical-align:bottom}
+#ptext .ph{opacity:.6}#ptext small{display:block;font-size:11px;font-weight:600;opacity:.8}
+#toast{position:absolute;z-index:93;font-size:15px;display:none;transform:translateX(-100%)}
+#sicon.pend::after{content:'';width:5px;height:5px;border-radius:50%;background:#fff;margin-left:-2px;margin-top:-9px;display:block}
+#tbar{position:absolute;left:0;height:28px;right:72px;padding:0 8px;display:none;z-index:50;background:#2a2c2e;align-items:center}
+#tbar input{width:100%;height:26px;border-radius:4px;border:1px solid #55565a;background:#151617;color:#f0e6c8;font-size:16px;padding:0 8px;font-family:inherit;-webkit-user-select:text;user-select:text;outline:none}
+#tbar input:focus{border-color:var(--ambdim)}
+#settings .rd{background:#151617;border:1px solid #2a2c2e;border-radius:6px;padding:8px 10px;font-size:12px;color:#aaa;line-height:1.6;margin:8px 0}
+
+/* ───── f1：縦なでで所要、横に流して離して確定。押せそうな部品は置かない ───── */
+#card{position:absolute;left:0;top:0;z-index:87;display:none;pointer-events:none;font-family:-apple-system,"Hiragino Sans",sans-serif}
+#scrim{position:absolute;inset:0;background:#000;opacity:.35;z-index:85;display:none;pointer-events:none}
+#mouth{position:absolute;left:0;right:0;bottom:0;height:3px;background:#fff;opacity:.45;z-index:92;display:none;pointer-events:none}
+#pz{display:none!important}
+.dc{width:393px;position:relative}
+.dc .led{display:block;margin:0 0 10px;transition:opacity .12s}
+.dc .cap{position:absolute;left:0;right:0;top:0;height:80px;display:flex;align-items:center;padding-left:26px;font:600 26px/1 -apple-system,"Hiragino Sans",sans-serif;letter-spacing:.28em;color:#fff;opacity:0;transition:opacity .12s;white-space:nowrap;background:#0a0e0d;border:1px solid #2c2c2e;border-radius:10px;box-sizing:border-box}
+.dc.svarm .cap{opacity:1}
+.dc .sh{background:#000;border:1px solid #2c2c2e;border-radius:22px;overflow:hidden;color:#fff;will-change:transform}
+.dc .nv{height:44px;line-height:44px;text-align:center;font-size:17px;font-weight:600}
+.dc .tz{margin:22px 20px 0;background:#1c1c1e;border-radius:10px;padding:20px 12px;font-size:17px;line-height:22px;white-space:nowrap;overflow:hidden}
+.dc .rl{margin-top:20px;background:#1c1c1e;padding:12px 20px 14px;display:grid;grid-template-columns:1fr auto;align-items:center}
+.dc .num{display:flex;align-items:baseline;gap:4px}
+.dc .num b{display:inline-block;font:500 56px/64px ui-rounded,-apple-system,"Hiragino Sans",sans-serif;font-variant-numeric:tabular-nums;min-width:68px}
+.dc .num span{font-size:20px;font-weight:600;color:#8e8e93}
+.dc .vg{position:relative;width:10px;height:72px;border-radius:5px;background:rgba(255,255,255,.2);overflow:hidden}
+.dc .vf{position:absolute;left:0;right:0;bottom:0;height:10px;border-radius:5px;background:#0a6cf0}
+.dc .fn{grid-column:1/3;margin-top:10px;min-height:32px;font-size:12px;color:#8e8e93}
+.dc.svarm .fn,.dc.dparm .fn{color:#fff}
+
+/* ───── f2：離す前なら取り消せる。横の溜まり・待機・引き返しを、看板とシートの動きで見せる（部品は置かない） ───── */
+.dc .led,.dc .cap{transition:none}
+.dc .cap{gap:.12em}
+.dc .cap .chv{display:inline-flex;gap:0;margin-right:.35em}
+.dc .cap .chv i{font-style:normal;opacity:.5}
+.dc.svarm .cap .chv i{animation:chv .9s infinite}
+.dc.svarm .cap .chv i:nth-child(2){animation-delay:.15s}
+.dc.svarm .cap .chv i:nth-child(3){animation-delay:.3s}
+@keyframes chv{0%,65%{opacity:1}80%,100%{opacity:.2}}
+
+/* ───── f4：操作の前から左右の行き先が読める静的な手がかり。押せそうな部品・光・質感は置かない ───── */
+.dc .sl{position:absolute;pointer-events:none}
+.dc .sl{top:0;width:14px;height:0;box-sizing:border-box;background:#000;border:1.5px solid #636366}
+.dc .sl-r{right:1px;border-right:none;border-radius:4px 0 0 4px;border-color:rgba(115,158,199,.8)}
+.dc .sl-l{left:1px;border-left:none;border-radius:0 4px 4px 0;border-color:rgba(255,184,71,.7)}
+.dc.rc .sl-r{border-right:1.5px solid #636366;border-radius:3px;background:repeating-linear-gradient(0deg,#636366 0 2px,#000 2px 5px)}
+.stub{position:absolute;left:0;top:0;width:425px;height:288px;pointer-events:none;transform-origin:50% 50%}
+
+/* ───── f6：スリットの中だけで左右の性格を分ける。シートの外には何も描かない ───── */
+.dc .sl svg{position:absolute;top:50%;margin-top:-12px;pointer-events:none;overflow:visible}
+.dc .sl-r svg{left:0}.dc .sl-l svg{right:0}
+.dc .sl-r svg line{stroke:#739EC7;stroke-width:1.4;stroke-linecap:butt;opacity:.85}
+.dc .sl-l svg line{stroke:#FFB847;stroke-width:1.4;opacity:.8}
+.dc .sl-l svg rect{fill:#FFB847;opacity:.85}
+.dc.rc .sl-r svg .out{display:none}
+.dc.rc .sl-r svg line{stroke:#8E8E93;opacity:.6}
+
+/* ───── f8：口の形は固定。ふちに LED のドットを 1 列。点く／消えるの 2 値（にじみ・ぼかし・グローなし） ───── */
+.dc .sl .tr,.dc .sl .br{position:absolute;width:3px;pointer-events:none}
+.dc .sl-r .tr,.dc .sl-r .br{right:1px}.dc .sl-l .tr,.dc .sl-l .br{left:1px}
+.dc .sl-r .tr,.dc .sl-r .br{background:#739EC7}.dc .sl-l .tr,.dc .sl-l .br{background:#FFB847}
+.dc .sl .tr{top:4px;bottom:4px;opacity:.14}
+.dc .sl .br{top:50%;height:0;opacity:1}.dc .sl .br.off{opacity:.2}
+.dc.rc .sl-r .tr,.dc.rc .sl-r .br{display:none}
+/* 空中のシェブロン（電光掲示板と同じ ドット 5×7）。押せない・文字なし */
+#chev{position:absolute;left:0;top:0;z-index:89;pointer-events:none;display:none;will-change:transform}
+#chev i{position:absolute;background:#59C785;pointer-events:none}
+/* コンパクト：分数の横の余白をなくし、ゲージを数字のすぐ隣に寄せて中央にまとめる。幅 393→300、縦も詰める */
+.dc{width:300px}
+.dc .sh{border-radius:20px}
+.dc .tz{margin:14px 16px 0;padding:14px 12px}
+.dc .rl{margin-top:12px;padding:8px 16px 10px;display:flex;justify-content:center;align-items:center;gap:16px}
+.dc .num b{min-width:0}
+.dc .vg{height:56px}
+</style></head><body>
+<div id="app">
+ <div id="desk">
+  <div id="stage">
+   <div id="menubar">
+    <div class="mi b">Editor</div><div class="mi">File</div><div class="mi">Edit</div><div class="mi">View</div><div class="mi">Window</div><div class="mi">Help</div>
+    <div class="sp"></div>
+    <div id="sicon"><svg viewBox="0 0 16 16" fill="currentColor"><rect x="3" y="2" width="10" height="9.5" rx="2.2"/><rect x="4.6" y="4" width="6.8" height="3" rx=".8" fill="#1c1d1f"/><rect x="7.2" y=".3" width="1.6" height="2"/><circle cx="5.6" cy="9" r=".9" fill="#1c1d1f"/><circle cx="10.4" cy="9" r=".9" fill="#1c1d1f"/><path d="M4.5 13.6h7M5 11.5l-1.2 2.3M11 11.5l1.2 2.3" stroke="currentColor" stroke-width="1.2" fill="none"/></svg><span class="bt" id="bartitle"></span></div>
+    <svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1.5 6a9 9 0 0113 0M3.7 8.5a6 6 0 018.6 0M6 11a3 3 0 014 0"/><circle cx="8" cy="13" r=".8" fill="currentColor"/></svg>
+    <svg class="ic" viewBox="0 0 20 16" fill="none" stroke="currentColor" stroke-width="1.3" style="width:20px"><rect x="1" y="4" width="15" height="8" rx="2"/><rect x="2.6" y="5.6" width="9" height="4.8" fill="currentColor" stroke="none"/><path d="M17.5 7v2" stroke-width="1.6"/></svg>
+    <div class="clk" id="mclk">Fri 30 Oct 23:04</div>
+   </div>
+   <div id="win">
+    <div id="wtitle" data-dragwin><i class="dot" style="background:#ff5f57"></i><i class="dot" style="background:#febc2e"></i><i class="dot" style="background:#28c840"></i><div class="t">ImaYaruPanel.swift — Todo-Train</div></div>
+    <div id="wbody"><div id="code"></div><div id="caret"></div><div id="thumb"></div></div>
+   </div>
+   <div id="pip"><div class="pt"></div><div class="ps"></div><div class="bar"><i></i></div><div class="rem"></div><button class="pbtn" type="button"></button></div>
+   <div id="panel">
+    <div class="pth"><i class="x"></i><span>いまやる</span></div>
+    <div class="pbd">
+     <div class="fld" id="pfld">資料の下書き</div>
+     <div><div class="lab">所要（分）</div><div class="seg" id="pseg"></div></div>
+     <div class="btns"><button class="btn" id="pcancel" type="button">キャンセル</button><button class="btn pri" id="pgo" type="button">発車</button></div>
+    </div>
+   </div>
+   <div id="pop">
+    <div class="h"><b>Todo列車</b><span>この Mac · ペア済み</span></div>
+    <div class="st" id="popst"></div>
+    <button class="btn" id="popima" type="button">いまやる</button>
+    <button class="btn pri" id="poppause" type="button">停車</button>
+    <hr>
+    <div class="row">設定…</div><div class="row">Todo列車を終了</div>
+   </div>
+   <div id="ctx"></div>
+   <div id="pieCatch"></div><div id="scrim"></div><div id="card"></div><div id="pie"></div><div id="mt"></div><div id="mouth"></div><div id="toast" class="otl"></div>
+  </div>
+  <div id="cursor"><svg width="12" height="19" viewBox="0 0 12 19"><path d="M1 1v14.2l3.3-3.1 2.3 5.3 2.4-1.1-2.3-5.2h4.7z" fill="#000" stroke="#fff" stroke-width="1.1" stroke-linejoin="round"/></svg></div>
+ </div>
+ <div id="strip"><span class="nm">MAC STAGE</span><span id="chip"></span><div id="gear" data-act="gear">調整</div></div>
+ <div id="padwrap"><div id="pad"><div class="hint">TRACKPAD</div><div id="pz">押し込み</div></div></div>
+ <div id="keys">
+  <div class="kr" id="kr1"></div>
+  <div class="kr" id="kr2"></div>
+ </div>
+</div>
+
+<div id="settings">
+ <h2><span>調整</span><button id="sclose" type="button">閉じる</button></h2>
+ <div id="sbody"></div>
+ <p class="note">値はこの端末に保存されます。</p>
+ <button id="sreset" type="button">初期値に</button>
+</div>
+
+<script>
+/* ═════ 設定（土台のつまみ）═════ */
+const DEF={barPow:1.6,pullW:10,pullZ:1.15,relResp:1,blinkStart:.85,blinkMin:3,blinkMax:14,chSnd:35,blinkMs:70,feedStep:16,tempo:1,machineMs:520,machDrift:.15,feedMs:300,presentEase:2,presentDwell:100,exitMs:280,exitPow:3,machPow:3,machineInMs:300,pipInMs:260,pipOutMs:200,chevPitch:9,chevLead:24,speed:1,curve:'mac',accel:100,curPx:20,
+ tap:true,tapMs:220,tapSlop:8,rtap:true,press:true,dbl:350,
+ drag:'hold',holdMs:350,
+ scrollSpeed:2,natural:true,momentum:true,friction:0.95,
+ deskW:820,mod:'once',hud:true,fingers:false,
+ snd:true,vol:60,sndStr:'mid',
+ scene:'s192',tkSize:100,hap:true,ackMs:700};
+const SCHEMA=[
+ ['カーソル'],
+ {k:'speed',t:'r',l:'速さ（1.0 = パッドを端から端へゆっくり動かすと画面の半分）',min:.3,max:3,step:.05,f:v=>v.toFixed(2)},
+ {k:'curve',t:'s',l:'加速のカーブ',o:[['mac','macOS 風（ゆっくり→速く）'],['strong','強め（速く振ると大きく飛ぶ）'],['none','なし（一定の比率）']]},
+ {k:'accel',t:'r',l:'加速の強さ',min:0,max:200,step:5,f:v=>v+'%'},
+ {k:'curPx',t:'r',l:'矢印の大きさ（画面上の高さ）',min:12,max:36,step:1,f:v=>v+'px'},
+ ['クリック'],
+ {k:'tap',t:'c',l:'タップでクリック'},
+ {k:'tapMs',t:'r',l:'タップとみなす長さ（これより長く触れていたらクリックにしない）',min:100,max:400,step:10,f:v=>v+'ms'},
+ {k:'tapSlop',t:'r',l:'タップとみなす指のずれ',min:2,max:20,step:1,f:v=>v+'px'},
+ {k:'rtap',t:'c',l:'2本指タップで右クリック'},
+ {k:'press',t:'c',l:'パッド下端の「押し込み帯」を物理クリックにする（押している間ボタンを押した状態。もう1本の指で動かすとドラッグ）'},
+ {k:'dbl',t:'r',l:'ダブルクリックの間隔',min:200,max:600,step:10,f:v=>v+'ms'},
+ ['ドラッグ'],
+ {k:'drag',t:'s',l:'ドラッグのしかた',o:[['hold','1本指で止めて待ってから動かす（ホールド）'],['three','3本指で動かす'],['off','なし（押し込み帯だけ）']]},
+ {k:'holdMs',t:'r',l:'ホールドの待ち',min:150,max:800,step:10,f:v=>v+'ms'},
+ ['スクロール（2本指）'],
+ {k:'scrollSpeed',t:'r',l:'速さ（指1px あたり Mac の何px 動くか）',min:.5,max:6,step:.1,f:v=>v.toFixed(1)},
+ {k:'natural',t:'c',l:'ナチュラル（指の向きに内容がついてくる）'},
+ {k:'momentum',t:'c',l:'慣性（離したあとも流れる）'},
+ {k:'friction',t:'r',l:'慣性の長さ（右ほど長く流れる）',min:.85,max:.99,step:.005,f:v=>Math.round((v-.85)/.14*100)+'%'},
+ ['クリック音（触覚の代わり）'],
+ {k:'snd',t:'c',l:'クリック音（押した瞬間と離した瞬間に鳴る。Force Touch のトラックパッド風）'},
+ {k:'vol',t:'r',l:'音量',min:0,max:100,step:5,f:v=>v+'%'},
+ {k:'sndStr',t:'s',l:'強さ（macOS の「クリックの強さ」）',o:[['light','Light（軽く、高め）'],['mid','Medium'],['firm','Firm（深く、低め）']]},
+ ['発券機のバーと送り出し（#192 f9）'],
+ {k:'barPow',t:'r',l:'バーの伸び方（大きいほど終盤で重い）',min:1,max:3.5,step:.1,f:v=>v.toFixed(1)},
+ {k:'pullW',t:'r',l:'引くときの追従（大きいほど軽い）',min:4,max:24,step:1,f:v=>v+' /s'},
+ {k:'pullZ',t:'r',l:'引くときの減衰（1以上で行き過ぎなし、大きいほど重い）',min:1,max:2.5,step:.05,f:v=>v.toFixed(2)},
+ {k:'relResp',t:'r',l:'戻すときの追従（100%で指に即座に合う）',min:.1,max:1,step:.05,f:v=>Math.round(v*100)+'%'},
+ {k:'blinkStart',t:'r',l:'点滅が始まる位置（閾値に対する割合）',min:.7,max:.95,step:.01,f:v=>Math.round(v*100)+'%'},
+ {k:'blinkMin',t:'r',l:'点滅の最初の速さ',min:1,max:8,step:.5,f:v=>v.toFixed(1)+' Hz'},
+ {k:'blinkMax',t:'r',l:'点滅の最速（armed）',min:6,max:24,step:1,f:v=>v+' Hz'},
+ {k:'chSnd',t:'r',l:'バーの機械音の大きさ（0 で無音）',min:0,max:100,step:5,f:v=>v+'%'},
+ {k:'blinkMs',t:'r',l:'離したときの明滅 1 回（消灯と点灯、それぞれの長さ）',min:40,max:160,step:5,f:v=>v+' ms'},
+ {k:'feedStep',t:'r',l:'ローラー音の間隔（音だけ。動きは連続）',min:0,max:60,step:2,f:v=>v+' px'},
+ {k:'tempo',t:'r',l:'全体のテンポ（離してから発券・退場・手渡しまで、まとめて速く／遅く）',min:.6,max:1.6,step:.05,f:v=>v.toFixed(2)+' ×'},
+ {k:'machineMs',t:'r',l:'発券機の退場：きっぷが着地したところから動き出し、重く加速して画面外へ出きるまで',min:300,max:1000,step:20,f:v=>v+' ms'},
+ {k:'machDrift',t:'r',l:'発券機の重いずれ（きっぷが出るあいだ、逆へほんの少しだけ。きっぷの出る距離に対する割合）',min:0,max:.4,step:.01,f:v=>Math.round(v*100)+' %'},
+ {k:'machPow',t:'r',l:'発券機の加速の強さ（3＝やわらかい、5＝鋭い。ずっと滑らか）',min:3,max:5,step:.5,f:v=>v.toFixed(1)},
+ {k:'feedMs',t:'r',l:'きっぷが現れて、やわらかく止まるまで',min:200,max:700,step:10,f:v=>v+' ms'},
+ {k:'presentEase',t:'r',l:'止まり方のやわらかさ（大きいほど出だしが速く、ゆっくり止まる）',min:1.5,max:4,step:.25,f:v=>v.toFixed(2)},
+ {k:'presentDwell',t:'r',l:'きっぷを見せる一瞬（完全に止まっている時間。0＝止めない）',min:0,max:500,step:10,f:v=>v+' ms'},
+ {k:'exitMs',t:'r',l:'きっぷが出ていく（止まった状態から一気に加速して画面外へ）',min:200,max:700,step:10,f:v=>v+' ms'},
+ {k:'exitPow',t:'r',l:'出ていく加速の強さ（3＝やわらかい、5＝鋭い）',min:3,max:5,step:.5,f:v=>v.toFixed(1)},
+ {k:'machineInMs',t:'r',l:'保存のあと、次の発券機が戻る（減速）',min:150,max:700,step:10,f:v=>v+' ms'},
+ {k:'pipInMs',t:'r',l:'発車のあと、PiP が横から滑り込む時間',min:80,max:600,step:20,f:v=>v+' ms'},
+ {k:'pipOutMs',t:'r',l:'発車のとき、いまの PiP が横へ出ていく時間',min:80,max:600,step:20,f:v=>v+' ms'},
+ {k:'chevPitch',t:'r',l:'シェブロンのドットの間隔（大きさ）',min:4,max:9,step:.5,f:v=>v+' px'},
+ {k:'chevLead',t:'r',l:'シェブロンがきっぷの先へ離れていく量',min:0,max:80,step:2,f:v=>v+' px'},
+ ['表示'],
+ {k:'deskW',t:'r',l:'Mac 画面の幅（小さいほど大きく映る）',min:600,max:1512,step:10,f:v=>v+' pt'},
+ {k:'mod',t:'s',l:'⌘⌥⌃⇧ キーのしかた',o:[['once','タップで入れる（次のキー・クリック1回だけ効く）'],['hold','押している間だけ（もう1本の指でパッドを使う）']]},
+ {k:'hud',t:'c',l:'操作の表示（上の「MAC STAGE」の横に出す）'},
+ {k:'fingers',t:'c',l:'パッド上の指の位置を輪で表示'},
+];
+let S=Object.assign({},DEF);
+try{Object.assign(S,JSON.parse(localStorage.getItem('macStage.v1')||'{}'))}catch(e){}
+const save=()=>{try{localStorage.setItem('macStage.v1',JSON.stringify(S))}catch(e){}};
+const $=(s,r=document)=>r.querySelector(s);
+const EL=Object.fromEntries(['desk','stage','cursor','menubar','sicon','bartitle','mclk','win','wtitle','code','caret','thumb','pip','panel','pfld','pseg','pcancel','pgo','pop','popst','popima','poppause','ctx','strip','chip','gear','pad','pz','kr1','kr2','settings','sbody','sclose','sreset','pieCatch','pie','mt','card','toast'].map(i=>[i,document.getElementById(i)]));
+
+/* ═════ 座標とレイアウト ═════ */
+let scale=1,LW=820,LH=600,deskRect=null;
+function layout(){
+ deskRect=EL.desk.getBoundingClientRect();
+ LW=S.deskW;scale=deskRect.width/LW;LH=deskRect.height/scale;
+ Object.assign(EL.stage.style,{width:LW+'px',height:LH+'px',transform:`scale(${scale})`});
+ const k=S.curPx/19/1; EL.cursor.firstElementChild.style.transform=`scale(${k})`;EL.cursor.firstElementChild.style.transformOrigin='0 0';
+ EL.win.style.left=Math.min(Math.max(0,winX),LW-120)+'px';
+ clampWin();parkPip(false);placePop();placePanel();setCursor(cx,cy,true);
+}
+let winX=46,winY=52;
+function clampWin(){const w=EL.win;winX=Math.min(Math.max(-w.offsetWidth+120,winX),LW-120);winY=Math.min(Math.max(24,winY),LH-40);w.style.left=winX+'px';w.style.top=winY+'px'}
+/* 窓の大きさは画面に合わせて決める */
+function fitWin(){const w=Math.min(520,LW-70),h=Math.min(400,LH-110);EL.win.style.width=w+'px';EL.win.style.height=h+'px'}
+
+/* ═════ クリック音（WebAudio で合成。ファイルなし）═════
+   押した瞬間＝締まった「カチッ」、離した瞬間＝やわらかい「コッ」。
+   iPhone の Safari は振動できないので、音で触覚の代わりにする。マナーモードでは鳴らない（Web からは避けられない）。 */
+let AC=null,NB=null;
+function unlockAudio(){
+ try{
+  if(!AC){AC=new (window.AudioContext||window.webkitAudioContext)();
+   const n=AC.sampleRate*.05,b=AC.createBuffer(1,n,AC.sampleRate),d=b.getChannelData(0);for(let i=0;i<n;i++)d[i]=Math.random()*2-1;NB=b;}
+  if(AC.state!=='running')AC.resume();
+  const o=AC.createBufferSource();o.buffer=AC.createBuffer(1,1,AC.sampleRate);o.connect(AC.destination);o.start(0);   // iOS 用の無音の一拍
+ }catch(e){}
+}
+const STR={light:{g:.7,f:1.2,th:.55,dec:.8},mid:{g:.9,f:1,th:.85,dec:1},firm:{g:1.1,f:.82,th:1.2,dec:1.25}};
+const sndLog={press:0,release:0};
+function clickSound(kind,delay){
+ sndLog[kind]++;
+ if(!S.snd||!AC||AC.state==='suspended'||S.vol<=0)return;
+ const st=STR[S.sndStr]||STR.mid,t=AC.currentTime+(delay||0),press=kind==='press';
+ const vol=Math.pow(S.vol/100,1.6)*st.g*(press?1:.5);
+ const out=AC.createGain();out.gain.value=vol;out.connect(AC.destination);
+ // 高い側：短いノイズ
+ const ns=AC.createBufferSource();ns.buffer=NB;
+ const bp=AC.createBiquadFilter();bp.type='bandpass';bp.frequency.value=(press?2400:3400)*st.f;bp.Q.value=press?.9:.7;
+ const ng=AC.createGain(),nd=(press?.010:.006)*st.dec;
+ ng.gain.setValueAtTime(press?1:.8,t);ng.gain.exponentialRampToValueAtTime(.001,t+nd);
+ ns.connect(bp).connect(ng).connect(out);ns.start(t);ns.stop(t+nd+.01);
+ // 低い側：胴鳴りの小さな一拍
+ const o=AC.createOscillator(),og=AC.createGain(),od=(press?.030:.020)*st.dec;
+ o.type='sine';o.frequency.setValueAtTime((press?190:260)*st.f,t);o.frequency.exponentialRampToValueAtTime((press?85:150)*st.f,t+od);
+ og.gain.setValueAtTime((press?.9:.45)*st.th,t);og.gain.exponentialRampToValueAtTime(.001,t+od);
+ o.connect(og).connect(out);o.start(t);o.stop(t+od+.01);
+}
+function previewClick(){unlockAudio();clickSound('press',0);clickSound('release',.09)}
+document.addEventListener('touchstart',unlockAudio,{passive:true,capture:true});
+document.addEventListener('touchend',unlockAudio,{passive:true,capture:true});
+document.addEventListener('mousedown',e=>{if(e.isTrusted)unlockAudio()},true);
+
+
+/* ═════ カーソルと合成イベント ═════ */
+let cx=300,cy=200,mods={meta:false,alt:false,ctrl:false,shift:false},down=null,lastClick={t:0,x:0,y:0,n:0},hoverChain=[],pressChain=[];
+const clamp=(v,a,b)=>Math.min(Math.max(v,a),b);
+function setCursor(x,y,quiet){
+ cx=clamp(x,0,LW-1);cy=clamp(y,0,LH-1);
+ EL.cursor.style.transform=`translate(${cx*scale}px,${cy*scale}px)`;
+ if(!quiet)moveEvents();
+}
+const clientPt=()=>[deskRect.left+cx*scale,deskRect.top+cy*scale];
+function under(){const [x,y]=clientPt();return document.elementFromPoint(x,y)||EL.stage}
+function mEvt(type,target,btn,extra){
+ const [x,y]=clientPt();
+ const o=Object.assign({bubbles:true,cancelable:true,view:window,clientX:x,clientY:y,screenX:x,screenY:y,button:btn||0,buttons:down?(down.btn===2?2:1):0,
+  metaKey:mods.meta,altKey:mods.alt,ctrlKey:mods.ctrl,shiftKey:mods.shift,detail:1},extra||{});
+ const ev=new MouseEvent(type,o);target.dispatchEvent(ev);return ev;
+}
+function pEvt(type,target,btn){
+ const [x,y]=clientPt();
+ target.dispatchEvent(new PointerEvent(type,{bubbles:true,cancelable:true,view:window,clientX:x,clientY:y,pointerId:1,pointerType:'mouse',isPrimary:true,button:btn||0,buttons:down?1:0,metaKey:mods.meta,altKey:mods.alt,ctrlKey:mods.ctrl,shiftKey:mods.shift}));
+}
+function setHover(t){
+ const chain=[];for(let e=t;e&&e!==EL.stage;e=e.parentElement)chain.push(e);
+ hoverChain.forEach(e=>{if(!chain.includes(e))e.classList.remove('hv')});
+ chain.forEach(e=>e.classList.add('hv'));hoverChain=chain;
+}
+function moveEvents(){
+ const t=under();
+ if(!down)setHover(t);
+ pEvt('pointermove',t);mEvt('mousemove',t);
+}
+function mouseDown(btn=0){
+ if(down)return;const t=under();
+ down={btn,target:t,x:cx,y:cy,t:performance.now()};clickSound('press');
+ pressChain=[];for(let e=t;e&&e!==EL.stage;e=e.parentElement){e.classList.add('pd');pressChain.push(e)}
+ EL.cursor.classList.add('dn');
+ pEvt('pointerdown',t,btn);mEvt('mousedown',t,btn);
+ const f=t.closest('input,textarea,[tabindex]');if(f)f.focus();
+}
+function mouseUp(){
+ if(!down)return;const d=down,t=under();
+ pEvt('pointerup',t,d.btn);mEvt('mouseup',t,d.btn);
+ clickSound('release');down=null;pressChain.forEach(e=>e.classList.remove('pd'));pressChain=[];EL.cursor.classList.remove('dn');
+ if(d.btn===0){
+  const same=d.target===t||d.target.contains(t)||t.contains(d.target);
+  if(same){
+   const tgt=d.target.contains(t)?d.target:t,now=performance.now();
+   const near=Math.hypot(cx-lastClick.x,cy-lastClick.y)<8&&now-lastClick.t<S.dbl;
+   lastClick={t:now,x:cx,y:cy,n:near?lastClick.n+1:1};
+   mEvt('click',tgt,0,{detail:lastClick.n});
+   if(lastClick.n===2){mEvt('dblclick',tgt,0,{detail:2});chip('ダブルクリック')}
+  }
+ }
+ setHover(under());
+ if(S.mod==='once')clearMods();
+}
+function click(){mouseDown(0);setTimeout(mouseUp,45);chip('クリック')}
+function rightClick(){
+ const t=under();const was=down;down={btn:2,target:t};
+ clickSound('press');clickSound('release',.045);
+ mEvt('mousedown',t,2);mEvt('contextmenu',t,2,{buttons:2});mEvt('mouseup',t,2);
+ down=was;chip('右クリック');if(S.mod==='once')clearMods();
+}
+
+/* ═════ スクロール（wheel を作ってカーソル下に送る）═════ */
+function scrollable(el,dx,dy){
+ for(let e=el;e&&e!==EL.stage;e=e.parentElement){
+  if(!e.classList.contains('scr'))continue;
+  if(dy&&e.scrollHeight>e.clientHeight+1)return e;
+  if(dx&&e.scrollWidth>e.clientWidth+1)return e;
+ }return null;
+}
+function wheel(dx,dy,phase){
+ const t=under(),[x,y]=clientPt();
+ const ev=new WheelEvent('wheel',{bubbles:true,cancelable:true,view:window,clientX:x,clientY:y,deltaX:dx,deltaY:dy,deltaMode:0,metaKey:mods.meta,altKey:mods.alt,ctrlKey:mods.ctrl,shiftKey:mods.shift});
+ ev.ttPhase=phase;           // 'begin' | 'change' | 'end' | 'momentum'
+ t.dispatchEvent(ev);
+ if(ev.defaultPrevented)return;
+ const sc=scrollable(t,dx,dy);if(sc){sc.scrollLeft+=dx;sc.scrollTop+=dy}
+}
+let mom=null;
+function stopMomentum(){if(mom){cancelAnimationFrame(mom.raf);mom=null}}
+function startMomentum(vx,vy){
+ stopMomentum();if(!S.momentum)return;
+ if(Math.hypot(vx,vy)<0.06)return;
+ mom={vx,vy,last:performance.now()};
+ const step=now=>{
+  if(!mom)return;const dt=Math.min(now-mom.last,50);mom.last=now;
+  wheel(mom.vx*dt,mom.vy*dt,'momentum');
+  const f=Math.pow(S.friction,dt/16.667);mom.vx*=f;mom.vy*=f;
+  if(Math.hypot(mom.vx,mom.vy)<0.01){mom=null;return}
+  mom.raf=requestAnimationFrame(step);
+ };
+ mom.raf=requestAnimationFrame(step);
+}
+
+/* ═════ トラックパッド ═════ */
+const CURVES={
+ mac:[[0,.8],[.15,1],[.4,1.7],[.9,3],[1.8,4.8],[3,6.5]],
+ strong:[[0,.8],[.1,1.1],[.3,2.2],[.7,4.2],[1.4,6.5],[2.5,9]],
+ none:[[0,1],[9,1]]};
+function gainAt(v){
+ const c=CURVES[S.curve]||CURVES.mac;let g=c[c.length-1][1];
+ for(let i=1;i<c.length;i++)if(v<=c[i][0]){const [v0,g0]=c[i-1],[v1,g1]=c[i];g=g0+(g1-g0)*(v-v0)/(v1-v0);break}
+ return Math.max(.2,1+(g-1)*S.accel/100);
+}
+const ZONE_H=34;
+const sess={on:false};
+const T=new Map();   // id → {x,y,sx,sy,t0,lt,region,dist,lastT}
+const fdots=new Map();
+function padRect(){return EL.pad.getBoundingClientRect()}
+function newSession(){Object.assign(sess,{on:true,t0:performance.now(),maxN:0,moved:false,mode:'idle',hold:null,heldDown:false,v:0,pressId:null,sv:[],lastScrollT:0,scrolled:false})}
+function nFing(){let n=0;T.forEach(t=>{if(t.region==='pad')n++});return n}
+function padStart(id,x,y,t){
+ const r=padRect();
+ if(!sess.on)newSession();
+ stopMomentum();
+ if(S.press&&y>r.bottom-ZONE_H&&sess.pressId==null){
+  sess.pressId=id;T.set(id,{x,y,sx:x,sy:y,t0:t,region:'zone',dist:0});
+  mouseDown(0);EL.pz.classList.add('on');chip('押し込み');return;
+ }
+ T.set(id,{x,y,sx:x,sy:y,t0:t,lt:t,region:'pad',dist:0});
+ const n=nFing();sess.maxN=Math.max(sess.maxN,n);
+ if(n===1){
+  sess.mode='move';sess.v=0;
+  if(S.drag==='hold'&&!down){
+   sess.hold=setTimeout(()=>{sess.hold=null;const f=T.get(id);if(f&&nFing()===1&&f.dist<=S.tapSlop&&sess.mode==='move'){sess.mode='holddrag';mouseDown(0);chip('ドラッグ中')}},S.holdMs);
+  }
+ }else if(n===2){
+  clearTimeout(sess.hold);sess.hold=null;
+  if(sess.mode==='holddrag')return;
+  if(sess.mode==='drag3'){return}
+  sess.mode='scroll';sess.sv=[];sess.scrolled=false;
+ }else if(n===3&&S.drag==='three'){
+  clearTimeout(sess.hold);if(sess.mode==='scroll'&&sess.scrolled)wheel(0,0,'end');
+  sess.mode='drag3';mouseDown(0);chip('ドラッグ中（3本指）');
+ }
+}
+function accelMove(dx,dy,t,f){
+ const dt=Math.max(t-f.lt,6);f.lt=t;
+ const inst=Math.hypot(dx,dy)/dt;sess.v=sess.v?sess.v*.5+inst*.5:inst;
+ const base=.5*LW/padRect().width*S.speed,g=gainAt(sess.v);
+ setCursor(cx+dx*base*g,cy+dy*base*g);
+}
+function padMove(id,x,y,t){
+ const f=T.get(id);if(!f)return;
+ const dx=x-f.x,dy=y-f.y;f.x=x;f.y=y;f.dist=Math.hypot(x-f.sx,y-f.sy);
+ if(f.region==='zone')return;
+ if(f.dist>S.tapSlop){sess.moved=true;if(sess.hold&&sess.mode==='move'){clearTimeout(sess.hold);sess.hold=null}}
+ const n=nFing();
+ switch(sess.mode){
+  case 'move':if(n===1)accelMove(dx,dy,t,f);break;
+  case 'holddrag':accelMove(dx,dy,t,f);break;
+  case 'scroll':{
+   if(n<2)break;
+   if(!sess.scrolled){sess.scrolled=true;wheel(0,0,'begin')}
+   const k=S.scrollSpeed*(S.natural?-1:1)/n,wx=dx*k,wy=dy*k;
+   wheel(wx,wy,'change');
+   sess.sv.push([t,wx,wy]);while(sess.sv.length&&t-sess.sv[0][0]>100)sess.sv.shift();
+   sess.lastScrollT=t;break}
+  case 'drag3':accelMove(dx/n,dy/n,t,f);break;
+ }
+}
+function padEnd(id,t){
+ const f=T.get(id);if(!f)return;T.delete(id);
+ if(f.region==='zone'){sess.pressId=null;mouseUp();EL.pz.classList.remove('on')}
+ else{
+  const n=nFing()+1;   // 離す直前の本数
+  const dur=t-f.t0;
+  if(sess.mode==='move'&&n===1&&sess.maxN===1&&!sess.moved&&dur<S.tapMs&&S.tap&&!down){clearTimeout(sess.hold);click()}
+  else if(sess.mode==='scroll'&&n===2){
+   if(sess.maxN===2&&!sess.moved&&!sess.scrolled&&dur<260&&S.rtap)rightClick();
+   else if(sess.scrolled){
+    wheel(0,0,'end');
+    // 離す直前 100ms の速さ（Mac 側の px/ms）
+    let vx=0,vy=0;if(sess.sv.length&&t-sess.lastScrollT<80){const t0=sess.sv[0][0],span=Math.max(t-t0,16);sess.sv.forEach(s=>{vx+=s[1];vy+=s[2]});vx/=span;vy/=span}
+    startMomentum(vx,vy);
+   }
+   sess.mode='ignore';
+  }
+  else if(sess.mode==='holddrag'){mouseUp();sess.mode='ignore'}
+  else if(sess.mode==='drag3'){mouseUp();sess.mode='ignore'}
+  clearTimeout(sess.hold);sess.hold=null;
+ }
+ if(nFing()===0&&sess.pressId==null){clearTimeout(sess.hold);if(down)mouseUp();sess.on=false;sess.mode='idle';EL.pz.classList.remove('on')}
+}
+function padCancelAll(){[...T.keys()].forEach(id=>padEnd(id,performance.now()));}
+
+/* ═════ キー列 ═════ */
+const KEYS1=[['⌘','Meta','MetaLeft','meta'],['⌥','Alt','AltLeft','alt'],['⌃','Control','ControlLeft','ctrl'],['⇧','Shift','ShiftLeft','shift'],
+ ['Esc','Escape','Escape',0,'sm sep'],['⏎','Enter','Enter',0,''],['←','ArrowLeft','ArrowLeft',0,'sep'],['↓','ArrowDown','ArrowDown'],['↑','ArrowUp','ArrowUp'],['→','ArrowRight','ArrowRight']];
+const KEYS2=[...'123456789'].map(d=>[d,d,'Digit'+d]).concat([['M','m','KeyM',0,'sep'],['I','i','KeyI'],['P','p','KeyP']]);
+function mkKeys(row,defs){defs.forEach(d=>{const b=document.createElement('div');b.className='kk '+(d[4]||'')+(d[3]?'':'');b.textContent=d[0];b.dataset.key=d[1];b.dataset.code=d[2];if(d[3])b.dataset.mod=d[3];row.appendChild(b)})}
+mkKeys(EL.kr1,KEYS1);mkKeys(EL.kr2,KEYS2);
+const gk=document.createElement('div');gk.className='kk wide';gk.dataset.act='global';gk.textContent='⌥⌘I いまやる';gk.style.whiteSpace='nowrap';gk.style.fontSize='10px';gk.style.letterSpacing='0';EL.kr1.appendChild(gk);
+EL.kr1.querySelectorAll('.kk').forEach(k=>{if(k.dataset.act==='global')k.style.flex='2.6'});
+const kEl=Object.fromEntries([...document.querySelectorAll('[data-mod]')].map(e=>[e.dataset.mod,e]));
+function setMod(m,v){mods[m]=v;kEl[m].classList.toggle('on',v)}
+function clearMods(){let any=false;for(const m in mods){if(mods[m]){any=true;setMod(m,false)}}}
+function keyEvt(type,key,code,m){
+ const tgt=document.activeElement&&document.activeElement!==document.body?document.activeElement:EL.stage;
+ const mm=m||mods;
+ const ev=new KeyboardEvent(type,{key,code,bubbles:true,cancelable:true,metaKey:mm.meta,altKey:mm.alt,ctrlKey:mm.ctrl,shiftKey:mm.shift});
+ tgt.dispatchEvent(ev);return ev;
+}
+function modLabel(m){return (m.ctrl?'⌃':'')+(m.alt?'⌥':'')+(m.shift?'⇧':'')+(m.meta?'⌘':'')}
+function keyDown(el){
+ if(el.dataset.act==='global'){
+  const m={meta:true,alt:true,ctrl:false,shift:false};
+  el.classList.add('dn');keyEvt('keydown','i','KeyI',m);keyEvt('keyup','i','KeyI',m);chip('⌥⌘I');return;
+ }
+ el.classList.add('dn');
+ if(el.dataset.mod){
+  const m=el.dataset.mod;
+  if(S.mod==='hold')setMod(m,true);else setMod(m,!mods[m]);
+  el.classList.remove('dn');return;
+ }
+ const lab=modLabel(mods)+el.textContent;
+ keyEvt('keydown',el.dataset.key,el.dataset.code);chip(lab);
+}
+function keyUp(el){
+ el.classList.remove('dn');
+ if(el.dataset.act==='global')return;
+ if(el.dataset.mod){if(S.mod==='hold')setMod(el.dataset.mod,false);return}
+ keyEvt('keyup',el.dataset.key,el.dataset.code);
+ if(S.mod==='once')clearMods();
+}
+
+/* ═════ タッチの振り分け ═════ */
+let chipT=null;
+function chip(s){if(!S.hud)return;EL.chip.textContent=s;clearTimeout(chipT);chipT=setTimeout(()=>EL.chip.textContent='',900)}
+const owner=new Map(); // touch id → 'pad' | key element | 'gear'
+function onTS(e){
+ if(e.target.closest('#settings,#tbar'))return;
+ e.preventDefault();
+ const t=performance.now();
+ for(const c of e.changedTouches){
+  const k=c.target.closest&&c.target.closest('[data-key],[data-act]');
+  if(k){owner.set(c.identifier,k);if(k.dataset.act==='gear')toggleSettings(true);else keyDown(k);continue}
+  if(c.target.closest&&c.target.closest('#pad')){if(P.open){owner.set(c.identifier,'g2');g2Add(c.identifier,c.clientX,c.clientY,t);fdot(c.identifier,c.clientX,c.clientY)}else{owner.set(c.identifier,'pad');padStart(c.identifier,c.clientX,c.clientY,t);fdot(c.identifier,c.clientX,c.clientY)}}
+ }
+}
+function onTM(e){
+ if(e.target.closest('#settings,#tbar'))return;e.preventDefault();
+ const t=performance.now();
+ for(const c of e.changedTouches)if(owner.get(c.identifier)==='pad'){padMove(c.identifier,c.clientX,c.clientY,t);fdot(c.identifier,c.clientX,c.clientY)}
+ {let any=false;for(const c of e.changedTouches)if(owner.get(c.identifier)==='g2'){g2Set(c.identifier,c.clientX,c.clientY);fdot(c.identifier,c.clientX,c.clientY);any=true}if(any)g2Move(t)}
+}
+function onTE(e){
+ if(e.target.closest('#settings,#tbar'))return;if(e.cancelable)e.preventDefault();
+ const t=performance.now();
+ for(const c of e.changedTouches){
+  const o=owner.get(c.identifier);owner.delete(c.identifier);
+  if(o==='pad'){padEnd(c.identifier,t);fdot(c.identifier)}
+  else if(o==='g2'){g2Del(c.identifier,t);fdot(c.identifier)}
+  else if(o&&o.dataset){if(o.dataset.act==='gear')continue;keyUp(o)}
+ }
+}
+document.addEventListener('touchstart',onTS,{passive:false});
+document.addEventListener('touchmove',onTM,{passive:false});
+document.addEventListener('touchend',onTE,{passive:false});
+document.addEventListener('touchcancel',onTE,{passive:false});
+['gesturestart','gesturechange','gestureend'].forEach(n=>document.addEventListener(n,e=>e.preventDefault()));
+document.addEventListener('contextmenu',e=>{if(!e.isTrusted)return;e.preventDefault()});
+/* 机の上でのデバッグ用：マウスは1本指として扱う */
+let mouseOn=false;
+EL.pad.addEventListener('mousedown',e=>{if(!e.isTrusted)return;mouseOn=true;owner.set('m','pad');padStart('m',e.clientX,e.clientY,performance.now())});
+window.addEventListener('mousemove',e=>{if(!e.isTrusted||!mouseOn)return;padMove('m',e.clientX,e.clientY,performance.now())});
+window.addEventListener('mouseup',e=>{if(!e.isTrusted||!mouseOn)return;mouseOn=false;owner.delete('m');padEnd('m',performance.now())});
+function fdot(id,x,y){
+ let d=fdots.get(id);
+ if(x===undefined){if(d){d.remove();fdots.delete(id)}return}
+ if(!S.fingers)return;
+ if(!d){d=document.createElement('i');d.className='fdot';EL.pad.appendChild(d);fdots.set(id,d)}
+ const r=padRect();d.style.display='block';d.style.left=(x-r.left)+'px';d.style.top=(y-r.top)+'px';
+}
+
+/* ═════ デスクトップ上のもの ═════ */
+/* エディタ */
+const SRC=`import SwiftUI
+import TodoTrainSync
+
+/// Mac panel: title, duration, and a button.
+struct ImaYaruFormView: View {
+    @Environment(CompanionMacRuntime.self) private var runtime
+    var seededTitle: String = ""
+    var seededMinutes: Int = 30
+    @State private var title = ""
+    @State private var minutes = 30
+    @State private var phase: FormPhase = .editing
+
+    private enum FormPhase {
+        case editing
+        case sending
+    }
+
+    private var canIssue: Bool {
+        IssueAndBoardEvaluating.isValid(title: trimmedTitle, estimatedSeconds: minutes * 60)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            TextField("題名", text: $title)
+                .textFieldStyle(.roundedBorder)
+                .onSubmit(commit)
+            Picker("所要", selection: $minutes) {
+                ForEach(EstimateSnapMapping.stops, id: \\.self) { stop in
+                    Text("\\(stop)").tag(stop)
+                }
+            }
+            .pickerStyle(.segmented)
+            HStack {
+                Spacer()
+                Button("キャンセル", action: onClose)
+                Button("発車") { commit() }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(!canIssue)
+            }
+        }
+        .padding(20)
+        .frame(width: 400)
+    }
+
+    private func commit() {
+        guard canIssue else { return }
+        phase = .sending
+        onDispense(trimmedTitle, minutes, seededPrior)
+    }
+}
+`;
+const KW=/\b(import|struct|var|let|private|static|func|case|guard|return|some|enum|if|else|in|true|false)\b/g;
+function hl(l){
+ const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;');
+ let m=l.match(/^(\s*)(\/\/.*)$/);if(m)return esc(m[1])+'<span class="c">'+esc(m[2])+'</span>';
+ let out=esc(l).replace(/("[^"]*")/g,'<span class="s">$1</span>').replace(KW,'<span class="k">$1</span>').replace(/(@\w+)/g,'<span class="n">$1</span>');
+ return out;
+}
+const LINES=[];for(let r=0;r<4;r++)SRC.split('\n').slice(0,-1).forEach(l=>LINES.push(l));
+let curLine=7;
+EL.code.classList.add('scr');
+EL.code.innerHTML=LINES.map((l,i)=>`<div class="ln" data-i="${i}"><i>${i+1}</i><b>${hl(l)||' '}</b></div>`).join('');
+function setCaretLine(i,col){
+ curLine=clamp(i,0,LINES.length-1);
+ EL.code.querySelectorAll('.ln.cur').forEach(e=>e.classList.remove('cur'));
+ const ln=EL.code.children[curLine];ln.classList.add('cur');
+ const c=EL.caret;c.style.display='block';
+ col=clamp(col==null?(LINES[curLine].length):col,0,LINES[curLine].length);
+ c.style.left=(40+col*7.2)+'px';c.dataset.top=curLine*18+1;placeCaret();
+}
+function placeCaret(){EL.caret.style.top=(+EL.caret.dataset.top-EL.code.scrollTop)+'px'}
+function thumb(){
+ const c=EL.code,h=c.clientHeight,sh=c.scrollHeight;if(sh<=h){EL.thumb.style.display='none';return}
+ const th=Math.max(24,h*h/sh);EL.thumb.style.display='block';EL.thumb.style.height=th+'px';EL.thumb.style.top=(c.scrollTop/(sh-h)*(h-th))+'px';
+}
+EL.code.addEventListener('scroll',()=>{thumb();placeCaret()});
+EL.code.addEventListener('mousedown',e=>{
+ const ln=e.target.closest('.ln');if(!ln)return;
+ const r=EL.code.getBoundingClientRect(),xl=(e.clientX-r.left)/scale-40;
+ setCaretLine(+ln.dataset.i,Math.round(xl/7.2));
+});
+EL.code.addEventListener('wheel',()=>{},{passive:true});
+
+/* 窓のドラッグ */
+let drag=null;
+EL.wtitle.addEventListener('mousedown',e=>{drag={kind:'win',sx:cx,sy:cy,wx:winX,wy:winY}});
+document.addEventListener('mousemove',e=>{
+ if(!drag)return;
+ if(drag.kind==='win'){winX=drag.wx+cx-drag.sx;winY=drag.wy+cy-drag.sy;clampWin()}
+ else if(drag.kind==='pip'){pipX=drag.px+cx-drag.sx;pipY=drag.py+cy-drag.sy;placePip()}
+});
+document.addEventListener('mouseup',()=>{
+ if(!drag)return;const d=drag;drag=null;
+ if(d.kind==='pip')dropPip();
+});
+
+/* ── PiP ── */
+const RIDE={title:'資料の下書き',total:1800,el:720,run:true};
+let pipSuppress=false,pipMode='ride',pipCorner='bottomTrailing',pipX=0,pipY=0,pipAnim=null,pipSamples=[];
+const INSET=12,MENU=24;
+const fmt=s=>{s=Math.max(0,Math.round(s));return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')};
+function renderPip(){
+ const p=EL.pip,show=pipMode!=='none'&&!pipSuppress;p.style.display=show?'block':'none';
+ EL.bartitle.textContent=(pipMode==='ride'||pipMode==='paused')?fmt(Math.max(0,RIDE.total-RIDE.el)):'';
+ renderPop();
+ if(!show)return;
+ const t=$('.pt',p),ps=$('.ps',p),bar=$('.bar',p),rem=$('.rem',p),btn=$('.pbtn',p);
+ if(pipMode==='blank'){
+  t.textContent='運行は続いてる';ps.textContent='次の切符を選ぶときは iPhone で';ps.className='ps';bar.style.display='none';rem.textContent='';btn.style.display='none';return;
+ }
+ bar.style.display='block';btn.style.display='flex';
+ const over=RIDE.el>RIDE.total;
+ t.textContent=RIDE.title;
+ ps.className='ps'+(over?' over':'');
+ ps.textContent=over?'見積もりを過ぎました':'次 14:30 定例  30分';
+ bar.className='bar'+(over?' over':'');$('i',bar).style.width=Math.min(100,Math.max(RIDE.el>0?1.2:0,RIDE.el/RIDE.total*100))+'%';
+ rem.className='rem'+(over?' over':'');
+ rem.textContent=over?'+'+fmt(RIDE.el-RIDE.total)+' 超過':'あと '+fmt(RIDE.total-RIDE.el);
+ btn.textContent=pipMode==='paused'?'▶ 再乗車':'❚❚ 停車';
+}
+function setPipMode(m){
+ pipMode=m;
+ if(m==='ride'){RIDE.run=true;if(RIDE.el>=RIDE.total)RIDE.el=720}
+ if(m==='paused'){RIDE.run=false}
+ if(m==='over'){pipMode='ride';RIDE.run=true;RIDE.el=RIDE.total+192}
+ renderPip();syncPipSel();
+}
+setInterval(()=>{if((pipMode==='ride')&&RIDE.run){RIDE.el++;renderPip()}},1000);
+function pipSize(){return[320,128]}
+function parkedFrame(c){
+ const [w,h]=pipSize(),L=INSET,R=LW-w-INSET,Tp=MENU+INSET,B=LH-h-INSET;
+ return {topLeading:[L,Tp],topTrailing:[R,Tp],bottomLeading:[L,B],bottomTrailing:[R,B]}[c];
+}
+let pipOff=0;
+function placePip(){EL.pip.style.transform=`translate3d(${pipX+pipOff}px,${pipY}px,0)`;EL.pip.style.left='0';EL.pip.style.top='0'}
+function parkPip(animate){
+ const f=parkedFrame(pipCorner);
+ if(pipAnim){cancelAnimationFrame(pipAnim.raf);pipAnim=null}
+ if(!animate||!S_snapMs){[pipX,pipY]=f;placePip();return}
+ const x0=pipX,y0=pipY,t0=performance.now();pipAnim={};
+ const step=n=>{const k=Math.min(1,(n-t0)/S_snapMs),e=1-Math.pow(1-k,3);pipX=x0+(f[0]-x0)*e;pipY=y0+(f[1]-y0)*e;placePip();if(k<1)pipAnim.raf=requestAnimationFrame(step);else pipAnim=null};
+ pipAnim.raf=requestAnimationFrame(step);
+}
+const S_snapMs=160;
+/* 離したあとの行き先を決める。フリックの試作はここを差し替える。 */
+function nearestCorner(frame){
+ const mx=frame.x+frame.w/2,my=frame.y+frame.h/2;
+ const left=mx<LW/2,top=my<(MENU+LH)/2;
+ return left?(top?'topLeading':'bottomLeading'):(top?'topTrailing':'bottomTrailing');
+}
+const DROP={
+ nearest:({frame})=>nearestCorner(frame),     // 今の挙動（NSPanel は最寄りの隅へ）
+ // flick:({frame,velocity,samples})=>…        // 次の試作：投げた向きと速さで隅を選ぶ
+};
+function dropPip(){
+ const [w,h]=pipSize(),vel=pipVelocity();
+ const corner=(DROP[S_drop]||DROP.nearest)({frame:{x:pipX,y:pipY,w,h},velocity:vel,samples:pipSamples,screen:{w:LW,h:LH}});
+ pipSamples=[];pipCorner=corner;EL.pip.classList.remove('drag');parkPip(true);chip('PiP → '+({topLeading:'左上',topTrailing:'右上',bottomLeading:'左下',bottomTrailing:'右下'})[corner]);
+}
+let S_drop='nearest';
+function pipVelocity(){
+ const s=pipSamples;if(s.length<2)return{x:0,y:0};
+ const a=s[Math.max(0,s.length-4)],b=s[s.length-1],dt=Math.max(b.t-a.t,1);
+ return{x:(b.x-a.x)/dt,y:(b.y-a.y)/dt};   // 論理 pt / ms
+}
+EL.pip.addEventListener('mousedown',e=>{
+ if(e.target.closest('.pbtn')||e.button!==0)return;
+ if(pipAnim){cancelAnimationFrame(pipAnim.raf);pipAnim=null}
+ drag={kind:'pip',sx:cx,sy:cy,px:pipX,py:pipY};pipSamples=[];EL.pip.classList.add('drag');
+});
+document.addEventListener('mousemove',()=>{if(drag&&drag.kind==='pip'){pipSamples.push({x:pipX,y:pipY,t:performance.now()});if(pipSamples.length>12)pipSamples.shift()}});
+$('.pbtn',EL.pip).addEventListener('click',()=>{
+ if(pipMode==='paused'){RIDE.run=true;pipMode='ride'}else{RIDE.run=false;pipMode='paused'}
+ renderPip();syncPipSel();chip(pipMode==='paused'?'停車':'再乗車');
+});
+
+/* ── メニューバーのポップオーバー ── */
+let popOpen=false,panelOpen=false,panelMin=30;
+function renderPop(){
+ const riding=pipMode==='ride'||pipMode==='paused';
+ EL.popst.innerHTML=riding?`${pipMode==='paused'?'停車中':'乗務中'}・${RIDE.title}<small>${RIDE.el>RIDE.total?'+'+fmt(RIDE.el-RIDE.total)+' 超過':'あと '+fmt(RIDE.total-RIDE.el)}</small>`:'乗務していません<small>運行は続いています</small>';
+ if(typeof IP!=='undefined'&&IP.queue.length){EL.popst.innerHTML+=`<small style="color:#e8c26a">iPhone で開くと発券されます（${IP.queue.length} 件）</small>`}
+ EL.sicon.classList.toggle('pend',typeof IP!=='undefined'&&IP.queue.length>0);
+ EL.poppause.style.display=riding?'block':'none';
+ EL.poppause.textContent=pipMode==='paused'?'再乗車':'停車';
+}
+function placePop(){
+ const r=EL.sicon.getBoundingClientRect(),sr=EL.stage.getBoundingClientRect();
+ const cxm=(r.left+r.width/2-sr.left)/scale;
+ EL.pop.style.left=clamp(cxm-280+22,6,LW-286)+'px';EL.pop.style.top=(24+8)+'px';
+}
+function setPop(v){popOpen=v;if(v&&typeof EL.toast!=='undefined')EL.toast.style.display='none';EL.pop.style.display=v?'block':'none';EL.sicon.classList.toggle('on',v);if(v){setPanel(false);renderPop();placePop()}}
+function placePanel(){EL.panel.style.left=Math.round((LW-400)/2)+'px';EL.panel.style.top=Math.max(MENU+14,Math.round(LH*.18))+'px'}
+function setPanel(v){panelOpen=v;EL.panel.style.display=v?'block':'none';if(v){setPop(false);placePanel();renderSeg()}}
+function renderSeg(){EL.pseg.innerHTML=[5,10,15,20,30,45,60].map(m=>`<div data-m="${m}" class="${m===panelMin?'on':''}">${m}</div>`).join('')}
+EL.pseg.addEventListener('click',e=>{const d=e.target.closest('[data-m]');if(d){panelMin=+d.dataset.m;renderSeg()}});
+EL.sicon.addEventListener('click',()=>setPop(!popOpen));
+EL.popima.addEventListener('click',()=>{if(S.scene==='s192'){setPop(false);openPie()}else setPanel(true)});
+EL.poppause.addEventListener('click',()=>{if(pipMode==='paused'){RIDE.run=true;pipMode='ride'}else{RIDE.run=false;pipMode='paused'}renderPip();syncPipSel();setPop(false)});
+EL.pcancel.addEventListener('click',()=>setPanel(false));
+EL.pgo.addEventListener('click',()=>depart());
+function depart(){RIDE.total=panelMin*60;RIDE.el=0;RIDE.run=true;pipMode='ride';setPanel(false);renderPip();syncPipSel();chip('発車（ダミー）')}
+$('.pth .x',EL.panel).addEventListener('click',()=>setPanel(false));
+
+/* 右クリックメニュー（ダミー） */
+function ctxOpen(){
+ const items=['Copy','Paste','Look Up','—','Services'];
+ EL.ctx.innerHTML=items.map(t=>t==='—'?'<hr>':`<div>${t}</div>`).join('');
+ EL.ctx.style.display='block';
+ EL.ctx.style.left=clamp(cx,0,LW-160)+'px';EL.ctx.style.top=clamp(cy,0,LH-130)+'px';
+}
+const ctxClose=()=>{EL.ctx.style.display='none'};
+EL.stage.addEventListener('contextmenu',e=>{e.preventDefault();ctxOpen()});
+
+/* 外クリックで閉じる */
+document.addEventListener('mousedown',e=>{
+ const t=e.target;
+ if(!t.closest||!t.closest('#ctx'))ctxClose();
+ if(popOpen&&!t.closest('#pop')&&!t.closest('#sicon'))setPop(false);
+},true);
+document.addEventListener('click',e=>{if(e.target.closest&&e.target.closest('#ctx'))ctxClose()});
+
+/* キー（Mac 側の受け） */
+document.addEventListener('keydown',e=>{
+ if(e.isTrusted)return;
+ const k=e.key;
+ if(e.altKey&&e.metaKey&&k.toLowerCase()==='i'){if(S.scene==='s192'){P.open?closePie():openPie()}else setPanel(!panelOpen);return}   // グローバルショートカット
+ if(k==='Escape'){if(EL.ctx.style.display==='block')ctxClose();else if(panelOpen)setPanel(false);else if(popOpen)setPop(false)}
+ else if(k==='Enter'){if(panelOpen)depart()}
+ else if(k==='ArrowDown'||k==='ArrowUp'){if(!panelOpen&&!popOpen&&!P.open){setCaretLine(curLine+(k==='ArrowDown'?1:-1));const y=curLine*18,c=EL.code;if(y<c.scrollTop)c.scrollTop=y;else if(y+18>c.scrollTop+c.clientHeight)c.scrollTop=y+18-c.clientHeight}}
+ else if(k==='ArrowLeft'||k==='ArrowRight'){}
+});
+
+
+/* ═════ 場面 #192：切符だけ発行（Issue 本文＋v9.1 の確定仕様）═════
+   Mac の「いまやる」＝ポインタの位置に枠なしのパイ。右の扇＝発券して発車、左の扇＝発券だけ（保存）。 */
+const STOPS=[5,10,15,20,30,45,60];
+const IP={front:true,svc:'on',hub:[],delivered:new Set(),dupes:0,queue:[],recv:0};   // iPhone の模擬
+
+const VARIANT='f20';
+const TITLES=['資料の下書き','経費精算を出す','週報をまとめる','レビューに返信','請求書の確認','企画書の見直し'];   // 題名はダミー（キーボード入力はなし）
+let titleN=0;const nextTitle=()=>TITLES[titleN++%TITLES.length];
+const P={open:false,title:'',idx:STOPS.indexOf(30),sel:'sv',lock:false,printing:false,sig:'',axis:null,shake:0,tapT:0};
+const G={};   // いまの 1 ストローク（指を置いてから離すまで）
+const TAP_MS=280,TAP_PX=10,NR=STOPS.length;
+S.gStep=S.gStep||40;S.gV=S.gV||26;
+const tkS=()=>S.tkSize/100;
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+function tween(ms,fn,ease){ease=ease||(t=>1-Math.pow(1-t,3));return new Promise(res=>{const t0=performance.now();const st=n=>{const k=Math.min(1,(n-t0)/ms);fn(ease(k));k<1?requestAnimationFrame(st):res()};requestAnimationFrame(st)})}
+const SV='http://www.w3.org/2000/svg';
+function haptic(kind){   // .alignment＝軽い一拍、.levelChange＝はっきりした一拍。音は押し心地のクリックだけを流用
+ if(!S.hap)return;if(kind==='level')clickSound('press');else clickSound('release');
+}
+
+/* きっぷ（MarsTicketView の写し。425×288pt = 85×57.5mm） */
+function ticketHTML(){
+ let cells='',pat='';
+ for(let i=0;i<12;i++)cells+='<i><b></b></i>';
+ let rows='';const step=14;let row=0;
+ for(let y=step*.5;y<288+step;y+=step*.85,row++){for(let x=(row%2===0?step*.5:step);x<425+step;x+=step)rows+=`<circle cx="${x}" cy="${y.toFixed(1)}" r="3.2"/>`}
+ return `<div class="mtf"><svg class="pat" width="425" height="288" fill="none" stroke="#1a1a1a" stroke-width=".6">${rows}</svg><div class="band"></div><div class="trk">${cells}</div>
+ <div class="prt"><div class="trk" style="top:10px">${cells}</div><div class="ttl"></div><div class="fare"><b></b><span>分</span></div><div class="val"></div><div class="ft"></div><div class="ser"></div></div></div>`;
+}
+function fillTicket(el,title,min){
+ const d=new Date(),f=(o)=>new Intl.DateTimeFormat('ja-JP',Object.assign({timeZone:'Asia/Tokyo'},o)).format(d);
+ const mo=+f({month:'numeric'}).replace('月',''),da=+f({day:'numeric'}).replace('日','');
+ const sec=(d.getHours()*3600+d.getMinutes()*60+d.getSeconds())%100000,serial=String(sec).padStart(5,'0');
+ const prt=$('.prt',el);
+ $('.ttl',prt).textContent=title;$('.fare b',prt).textContent=min;
+ $('.val',prt).innerHTML=`${mo}月<b>${da}</b>日から ${min}分間有効`;
+ $('.ft',prt).textContent=`Todo train発行  ${d.getFullYear()}.-${mo}.${da}  ${serial}`;
+ $('.ser',prt).textContent=`${serial} ${mo}.${da}`;
+ const units=min/5;[...$$('.trk i b',prt)].forEach((b,i)=>{b.style.width=Math.max(0,Math.min(1,units-i))*100+'%'});
+}
+const $$=(s,r=document)=>r.querySelectorAll(s);
+function setPrint(el,t){$('.prt',el).style.clipPath=`inset(0 0 ${(1-t)*100}% 0)`}
+/* きっぷは硬い紙：transform は translate だけ（scale・rotate なし）。大きさは sizeTk で一度だけ静的に決める（.mtf の zoom、アニメーション中は一定）。 */
+function sizeTk(el,sp){const w=425*sp,h=288*sp;if(el.dataset.sp===String(sp))return;el.dataset.sp=String(sp);el.style.width=w+'px';el.style.height=h+'px';$('.mtf',el).style.zoom=sp}
+function placeTk(el,x,y){const w=parseFloat(el.style.width)||425,h=parseFloat(el.style.height)||288;el.style.transform=`translate3d(${(x-w/2).toFixed(3)}px,${(y-h/2).toFixed(3)}px,0)`;el.style.opacity=1;el.style.left='0';el.style.top='0'}
+/* 3 次ベジェ（CSS の cubic-bezier と同じ）。発券機の退場は加速（ease-in）、戻りは減速（ease-out） */
+function bez(x1,y1,x2,y2){const cx=3*x1,bx=3*(x2-x1)-cx,ax=1-cx-bx,cy=3*y1,by=3*(y2-y1)-cy,ay=1-cy-by;
+ const X=t=>((ax*t+bx)*t+cx)*t,Y=t=>((ay*t+by)*t+cy)*t;
+ return x=>{if(x<=0)return 0;if(x>=1)return 1;let t=x;for(let i=0;i<8;i++){const d=(3*ax*t+2*bx)*t+cx,e=X(t)-x;if(Math.abs(e)<1e-5)break;if(Math.abs(d)<1e-6)break;t-=e/d}return Y(t)}}
+const EASE_EXIT=bez(.5,0,.9,.4),EASE_ENTER=u=>u<=0?0:u>=1?1:1-(1-u)*(1-u),EASE_HAND=bez(.5,0,.9,.5);
+const smooth3=t=>t*t*(3-2*t);
+EL.mt.innerHTML=ticketHTML();
+
+/* ═════ 入力：位置は関係ない。パッドのどこに触れても、指の「動いた量」と「向き」と「タップ」だけで決まる ═════
+   左右になでる＝所要の段（一定の量ごとにカチッ）／上になでる＝発車／下になでる＝保存／タップ＝発券。
+   カーソルは使わない（開いているあいだ隠す）。1 本指だけ。押したまま動かす操作は要らない。 */
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+const svcName=()=>IP.svc==='before'?'運行前':IP.svc==='sched'?'予定に乗車中':'運行中';
+const rName=()=>IP.svc==='before'?'運行前':IP.svc==='sched'?'乗車中':'発車';
+function fixSel(){if(IP.svc!=='on')P.sel='sv'}      // 運行前・予定に乗車中は発車を選べない
+
+/* 音：段ごと・選択の切り替えごとに、はっきり違う音 */
+function tone(f0,f1,dur,vol,type,delay){
+ if(!S.snd||!AC||AC.state==='suspended'||S.vol<=0)return;
+ const t=AC.currentTime+(delay||0),o=AC.createOscillator(),g=AC.createGain();
+ o.type=type||'sine';o.frequency.setValueAtTime(f0,t);if(f1)o.frequency.exponentialRampToValueAtTime(f1,t+dur);
+ const v=Math.pow(S.vol/100,1.4)*vol;g.gain.setValueAtTime(v,t);g.gain.exponentialRampToValueAtTime(.001,t+dur);
+ o.connect(g).connect(AC.destination);o.start(t);o.stop(t+dur+.02);
+}
+function sndStep(i){clickSound('release');tone(440*Math.pow(2,i*2/12),0,.07,.5,'sine')}   // 段が上がるほど高い音
+function sndEnd(){tone(120,70,.12,.9,'sine');clickSound('press')}                          // 端：低い「ゴツ」
+function sndSel(sel){                                                                       // 発車＝上がる 2 音、保存＝下がる 1 音
+ if(sel==='dp'){tone(660,0,.07,.55,'triangle');tone(990,0,.1,.55,'triangle',.07)}
+ else tone(330,220,.14,.6,'triangle');
+}
+function sndNo(){tone(150,0,.1,.5,'square');tone(150,0,.1,.5,'square',.13)}              // 使えない：低い「ブッブッ」
+function sndOpen(){tone(520,0,.05,.4,'sine');tone(780,0,.07,.4,'sine',.05)}
+
+
+/* ═════ 入力中の表示：iOS の QuickAddSheet（発券画面）と HubDepartLEDSign をそのまま写す。部品は「見せるだけ」で、押せるものは置かない ═════
+   iOS 参照：Features/Hub/QuickAddSheet.swift（新しい切符・題名の欄・56pt の丸ゴの数字・分）、
+   Features/Hub/HubStationChevronSign.swift（HubDepartLEDSign：発車の LED 看板、点けば発車できる）、
+   Packages/TodoTrainTicketUI の EstimateSnapMapping（5・10・15・20・30・45・60 の粘る刻み）、TicketIssueEject（発券の排出）。
+   docs/12：量の「表示」は細い進捗ゲージ（つまみ・止まりの点は使わない）。 */
+S.gScale=S.gScale||1.6;
+const U={df:0,dv:0,dt:0,numDir:0,led:{lit:false,dirty:true},leave:null};
+const LIFT=VARIANT==='d2';           // d2：iOS のゲージと同じ「指を離したら発券」
+const RAIL='#0a6cf0';               // 仮：iOS の AccentColor（値は未確認）
+function renderCard(){updateCard()}
+const frac=m=>m/60;
+function rubber(f,limit=.18){if(f>=0&&f<=1)return f;const o=f<0?-f:f-1,d=o*limit/(1+limit*o);return f<0?-d:1+d}
+function stickyScrub(finger,anchor){                                  // EstimateSnapMapping.stickyScrub の写し
+ const fg=rubber(finger),i=STOPS.indexOf(anchor),aF=frac(anchor),ESC=.62,STR=.38;
+ if(fg>aF&&i+1<STOPS.length){const n=STOPS[i+1],nF=frac(n),gap=nF-aF,pr=(fg-aF)/gap;
+  if(pr>=ESC)return{disp:nF,anchor:n,esc:true};return{disp:aF+gap*pr*STR,anchor,esc:false}}
+ if(fg<aF&&i>0){const n=STOPS[i-1],nF=frac(n),gap=aF-nF,pr=(aF-fg)/gap;
+  if(pr>=ESC)return{disp:nF,anchor:n,esc:true};return{disp:aF-gap*pr*STR,anchor,esc:false}}
+ if(fg<0||fg>1)return{disp:fg,anchor,esc:false};
+ return{disp:aF+(fg-aF)*STR,anchor,esc:false};
+}
+function blankTicket(){                                                    // 入力中のきっぷは白紙。印字の中身は空にして、クリップで隠す
+ const prt=$('.prt',EL.mt);['.ttl','.fare b','.val','.ft','.ser'].forEach(q=>{const e=$(q,prt);if(e)e.textContent=''});setPrint(EL.mt,0);
+}
+const REST_PX=0;                                                           // 静止時にスリットから覗くきっぷの長さ
+const C_RAIL='#739EC7',C_AMB='#FFB847',C_DIM='#8E8E93';   // iOS TrainTheme の暗い外観の値（rail / signalAmber）と、閉じた側の無彩色
+function stubsOff(){chevOff()}
+function mkStubs(){}
+function buildCard(){
+ EL.card.innerHTML=`<div class="dc">
+  <div class="sh"><div class="tz"><span class="tt"></span></div>
+   <div class="rl"><div class="num"><b></b><span>分</span></div><div class="vg"><i class="vf"></i></div></div>
+  </div><i class="sl sl-r"><svg viewBox="0 0 12 24" width="12" height="24" aria-hidden="true"><g class="in"><line x1="0" y1="9" x2="6" y2="9"/><line x1="0" y1="15" x2="6" y2="15"/><line class="t" x1="1.5" y1="6" x2="1.5" y2="18"/></g><g class="out"><line x1="6" y1="9" x2="12" y2="9"/><line x1="6" y1="15" x2="12" y2="15"/><line class="t" x1="5.5" y1="6" x2="5.5" y2="18"/><line class="t" x1="11" y1="6" x2="11" y2="18"/></g></svg><b class="tr"></b><b class="br"></b></i><i class="sl sl-l"><svg viewBox="0 0 12 24" width="12" height="24" aria-hidden="true"><line x1="0" y1="12" x2="8.5" y2="12"/><rect x="8.5" y="6" width="3" height="12" stroke="none"/></svg><b class="tr"></b><b class="br"></b></i></div>`;
+ U.df=frac(STOPS[P.idx]);U.dv=0;U.dt=U.df;U.shk=0;
+ barReset();U.p=0;U.pT=0;U.sd=1;U.rv=0;U.rvT=0;U.pop=0;U.log=U.log||[];U.pk=null;
+ P.arm=null;P.chg=0;P.wasArmed=false;P.msg='';
+ blankTicket();EL.mt.style.display='none';mkStubs();
+}
+function updateCard(){
+ const dc=$('.dc',EL.card);if(!dc)return;
+ const m=STOPS[P.idx];
+ $('.tt',dc).textContent=P.title;
+ const b=$('.num b',dc);if(b.textContent!==String(m)){const dir=b.textContent?(m>+b.textContent?1:-1):0;b.textContent=m;if(dir){U.numT0=performance.now();U.numDir=dir}}
+ if(P.shake){U.shk=1}
+}
+function sheetGeom(){const c=EL.card;return{cx:parseFloat(c.style.left)+c.offsetWidth/2,cy:parseFloat(c.style.top)+c.offsetHeight/2,hw:c.offsetWidth/2,H:c.offsetHeight}}
+/* 入力中のきっぷ：シートの下（奥）に隠れた白紙のきっぷが、横流しの進み具合だけ、右（乗車中）／左（在庫）の側へ顔を出す。シートは動かない */
+function peekGeom(sd=U.sd,rv=U.rv,live=true){
+ const g=sheetGeom(),sp=Math.min(tkS(),.8*g.H/288,.9*(2*g.hw)/425),tw=425*sp;
+ const sk=live&&U.shk>.02?Math.sin(performance.now()/20)*U.shk*3:0;
+ const x=g.cx+sd*(g.hw-tw/2+rv*tw+(live?U.pop*6:0))+sk;
+ return{x,y:g.cy,sc:sp,tilt:0,op:rv>.0005?1:0};
+}
+
+/* バー：口の中央から両端へ対称に伸びる。目標 c=1-(1-r)^barPow（終盤ほど重い）に、一定速度 barSlew でスルー（機械的）。
+   r は閾値までの進み（armed なら 1 以上）。r が blinkStart を越えると点滅（Hz は blinkMin→blinkMax）。 */
+/* 過減衰の 2 次系の厳密解（目標一定のあいだ、フレームレートに依存しない）。e＝位置−目標、v＝速度 */
+function springStep(e,v,w,z,dt){z=Math.max(z,1.001);const s=Math.sqrt(z*z-1),l1=-w*(z-s),l2=-w*(z+s);const A=(v-l2*e)/(l1-l2),B=e-A,e1=Math.exp(l1*dt),e2=Math.exp(l2*dt);return[A*e1+B*e2,l1*A*e1+l2*B*e2]}
+function barClick(i,up,lv){if(S.chSnd>0)tone((up?1300:900)+lv*55,0,.018,S.chSnd/100*.5,'square')}
+function closedNow(){return IP.svc!=='on'}
+function barReset(){U.rT=[0,0];U.bar=[0,0];U.bph=[0,0];U.bOn=[true,true];U.bBl=[false,false];U.barForce=[null,null];U.bLv=[0,0];U.bv=[0,0];U.chev=null;chevOff()}
+
+const DSP={ph:0,act:false};
+const DISP_KIND='d';
+const CG='#59C785',CB='#739EC7',RN=64,RGAP=5,WSP=110,NBD=16;           // RN：1 本のレールの分割数、RGAP：きっぷの縁からレール芯までの余白、WSP：波の間隔(px)
+function omega(c){const u=Math.max(0,Math.min(1,(c-.1)/.75));return .9+3.1*u*u*(3-2*u)}   // 溜まるほど波が速く流れる（Hz）。dt で進めるのでフレームレートによらない
+function cl01(v){return v<0?0:v>1?1:v}
+function mkChev(){
+ if(EL.chev)EL.chev.remove();
+ const d=document.createElement('div');d.id='chev';d.dataset.kind=DISP_KIND;
+ const add=sp=>{const i=document.createElement('i');i._sp=sp;d.appendChild(i)};
+ for(let s=0;s<2;s++)for(let i=0;i<RN;i++){add({g:'rail',s,i});add({g:'scan',s,i})}
+ for(let k=0;k<NBD;k++)add({g:'chev',k});
+ EL.stage.appendChild(d);EL.chev=d;
+}
+function chevOff(){if(EL.chev)EL.chev.style.display='none'}
+function fade0(){return U.chev&&U.chev.fd>=1&&(EL.chev.style.display='none',true)}
+function railLv(sp,s){const r=railLv0(sp,s),dn=sp.g==='chev'?sp._xc:(sp.i+.5)/RN;r.a*=Math.max(0,1-dn*.97)*cl01((1-s.ret-dn)*RN/4+.05);return r}   // 出口から遠いほど薄く（ほぼ線形で端が 0）。退場中は先端から引っ込む
+function railLv0(sp,s){
+ if(sp.g==='chev'){                                                                              // トラテープの形の斜め帯：うっすら。波・溜め・発艦はレールと同じ時計で動く
+  if(!sp._in)return{a:0,col:'b'};
+  const dn=sp._xc,col=(s.armed||s.st>=1)?'g':'b',u=(((s.ph-dn*s.L/WSP)%1)+1)%1,wv=Math.pow(1-u,2.4);
+  if(s.st>=3){const dd=s.hp-dn;return{a:dd<0?.2:.26*cl01(1-dd/.45),col}}
+  if(s.st>=1){const k=s.k;return{a:Math.min(.24,.12+.1*k+(1-k)*.1*wv),col}}
+  const gc=cl01((s.c-.04)/.2),ext=s.bl?1:cl01((s.c-.04)/.7),vis=cl01((ext-dn)*RN/4+.05);
+  if(vis<=0)return{a:0,col};
+  if(s.armed)return{a:(.14+.12*wv)*vis,col};
+  if(s.bl)return{a:(.12+.12*wv)*vis,col};
+  return{a:(.07+.17*wv*gc)*vis,col}}
+ const dn=(sp.i+.5)/RN,x=dn*s.L,sc=sp.g==='scan'?(sp.i%2?.4:.16):1;
+ let a;const col=(s.armed||s.st>=1)?'g':'b';
+ if(s.st>=3){const dd=s.hp-dn;a=dd<0?.62:.95*cl01(1-dd/.45);if(Math.abs(dd)<.03)a=1;}                     // 発艦：きっぷの先端に光が付いて走り、通ったレールは消える
+ else{
+  const u=(((s.ph-x/WSP)%1)+1)%1,wv=Math.pow(1-u,2.4);                                                          // 明るさの波：先端が鋭く、尾が出口側へ伸びる。外へ流れる
+  if(s.st>=1){const k=s.k;a=Math.min(.95,.6+.35*k+(1-k)*.4*wv)}                       // 離した：波は流れながら全灯に落ち着く（休止の一拍は静止）
+  else{
+   const gc=cl01((s.c-.04)/.2),ext=s.bl?1:cl01((s.c-.04)/.7),vis=cl01((ext-dn)*RN/4+.05);
+   if(vis<=0)return{a:0,col};
+   if(s.armed)a=Math.min(.9,.5+.42*wv)*vis;
+   else if(s.bl)a=Math.min(.9,.42+.5*wv)*vis;
+   else a=Math.min(.9,.2+.62*wv*gc)*vis;
+  }}
+ return{a:a*sc,col}}
+function updateChev(dt,g,th,closed){
+ if(!EL.chev||EL.chev.dataset.kind!==DISP_KIND)mkChev();
+ const d=EL.chev,rel=U.chev&&U.chev.rel;
+ const c=U.bar[0];
+ if(closed||(!rel&&(c<.04||P.lock))){d.style.display='none';DSP.act=false;return}
+ if(rel&&fade0())return;
+ const pitch=S.chevPitch;
+ if(!rel){if(!DSP.act){DSP.act=true;DSP.ph=0}DSP.ph+=omega(c)*dt}
+ const sr0=g.cx+g.hw,mxm=rel?(U.chev.mx||0):0,sr=sr0+mxm,L=Math.max(80,(LW-sr0-8)*1.4);   // 発券機の動き（mx）にそのまま付く。長さは画面端より少し先まで
+ const blinkOff=U.barForce[0]?U.barForce[0]==='off':(U.bBl[0]&&!U.bOn[0]);
+ const st=rel?(U.chev.st||1):0;
+ const s={ret:rel?(U.chev.ret||0):0,st,c,bl:!rel&&!!U.bBl[0],blinkOff,armed:rel||P.arm==='dp',pitch,L,k:rel?(U.chev.k===undefined?1:U.chev.k):0,
+  ph:DSP.ph+(rel&&st<3?(U.chev.tau||0)*.004:0),hp:rel&&st>=3?((U.chev.tkx||0)+(U.chev.tw||0)/2-sr)/L:0};
+ const fade=rel?Math.max(0,1-(U.chev.fd||0)):1;
+ d.style.display='block';d.style.transform=`translate3d(${sr.toFixed(3)}px,${(g.cy-th/2-RGAP).toFixed(3)}px,0)`;   // 原点＝出口の上端のレール芯
+ const gk=[L.toFixed(1),th.toFixed(1)].join('|'),geoNew=d._gk!==gk;if(geoNew)d._gk=gk;
+ const sw=L/RN;
+ for(const e of d.children){
+  const sp=e._sp;
+  if(geoNew){
+   const st_=e.style;
+   if(sp.g==='rail'||sp.g==='scan'){const top=sp.s===0?(sp.g==='rail'?-1:-5):(sp.g==='rail'?th+2*RGAP-1:th+2*RGAP+3);st_.left=(sp.i*sw).toFixed(2)+'px';st_.width=(sw+.6).toFixed(2)+'px';st_.height=(sp.g==='rail'?2:1)+'px';st_.top=top.toFixed(2)+'px';st_.borderRadius='0'}
+   else{const H=th*.8,t=H*.2,ad=H*.3,p=t*1.8,lf=14+sp.k*p;sp._xc=(lf+(t+ad)/2)/L;sp._in=lf+t+ad<=L-4;
+    st_.left=lf.toFixed(2)+'px';st_.top=(th/2+RGAP-H/2).toFixed(2)+'px';st_.width=(t+ad).toFixed(2)+'px';st_.height=H.toFixed(2)+'px';st_.borderRadius='0';
+    st_.clipPath=`polygon(0 0,${t.toFixed(2)}px 0,${(t+ad).toFixed(2)}px ${(H/2).toFixed(2)}px,${t.toFixed(2)}px ${H.toFixed(2)}px,0 ${H.toFixed(2)}px,${ad.toFixed(2)}px ${(H/2).toFixed(2)}px)`}
+  }
+  const lv=railLv(sp,s),a=Math.max(0,Math.min(1,lv.a*fade));
+  if(e._a===undefined||Math.abs(e._a-a)>.004){e._a=a;e.style.opacity=a.toFixed(3)}
+  const col=lv.col==='b'?CB:CG;if(e._col!==col){e._col=col;e.style.background=col}
+ }
+}
+function tickBar(dt,dc){
+ if(!U.bar)barReset();
+ const g=sheetGeom(),sp=Math.min(tkS(),.8*g.H/288,.9*(2*g.hw)/425),th=288*sp,closed=IP.svc!=='on';
+ for(let i=0;i<2;i++){
+  const armedSide=(P.arm==='dp'&&i===0)||(P.arm==='sv'&&i===1);
+  const forced=U.barForce[i];
+  let r=U.rT[i];if(armedSide)r=Math.max(r,1);
+  const tgt=forced?1:1-Math.pow(1-Math.min(r,1),S.barPow);
+  U.bv=U.bv||[0,0];
+  if(forced){U.bar[i]+=(1-U.bar[i])*(1-Math.exp(-60*dt));if(U.bar[i]>.9995)U.bar[i]=1;U.bv[i]=0}
+  else if(tgt>=U.bar[i]){                                                     // 引く（増える）：少し遅れて、行き過ぎなしで近づく（過減衰の 2 次系）→ 重い
+   {const[e,v]=springStep(U.bar[i]-tgt,U.bv[i],S.pullW,S.pullZ,dt);U.bar[i]=tgt+e;U.bv[i]=v}
+   if(U.bar[i]>tgt){U.bar[i]=tgt;U.bv[i]=Math.min(U.bv[i],0)}
+  }else{                                                                      // 戻す（減る）：指にそのまま即座に合わせる
+   const rate=S.relResp>=1?1e9:S.relResp*40;U.bar[i]+=(tgt-U.bar[i])*(1-Math.exp(-rate*dt));U.bv[i]=0;
+  }
+  let on=true,bl=false;
+  if(forced){on=forced==='on'}
+  else if(r>=S.blinkStart){
+   bl=true;const t=armedSide?1:Math.min(1,(r-S.blinkStart)/(1-S.blinkStart)),f=S.blinkMin+(S.blinkMax-S.blinkMin)*t;
+   const was=(U.bph[i]%1)<.5;U.bph[i]+=f*dt;on=(U.bph[i]%1)<.5;
+   if(on&&!was)barClick(i,true,9);
+  }else{U.bph[i]=0}
+  U.bOn[i]=on;U.bBl[i]=bl;
+  const lv=Math.floor(U.bar[i]*10+1e-6);if(lv!==U.bLv[i]){const up=lv>U.bLv[i];for(let c=U.bLv[i];c!==lv;){c+=up?1:-1;U.log.push((up?'bar+':'bar-')+c)}barClick(i,up,lv);U.bLv[i]=lv}
+  const sl=$(i?'.sl-l':'.sl-r',dc),br=$('.br',sl),inner=th-3,len=U.bar[i]*(inner-6);
+  br.style.height=len.toFixed(1)+'px';br.style.marginTop=(-len/2).toFixed(1)+'px';br.classList.toggle('off',!on);
+ }
+ if(!(U.chev&&U.chev.rel))updateChev(dt,g,th,closed);       // 離したあとのシェブロンは commit の 1 本のタイムラインが動かす
+}
+function tickCard(dt){
+ const dc=$('.dc',EL.card);if(!dc)return;
+ tickBar(dt,dc);
+ if(P.lock)return;
+ // ゲージ：粘って、抜けるときに「ビュン」とばねで追いつく。縦のカプセルを下から満たす
+ {const n=Math.max(1,Math.ceil(dt/.004)),h=dt/n;for(let i=0;i<n;i++){U.dv+=(320*(U.dt-U.df)-21*U.dv)*h;U.df+=U.dv*h}}
+ const f=Math.max(0,Math.min(1,U.df));$('.vf',dc).style.height=Math.max(10,f*56).toFixed(1)+'px';
+ const b=$('.num b',dc);
+ if(U.numT0!=null){const t=Math.min(1,(performance.now()-U.numT0)/140),e=1-Math.pow(1-t,3);b.style.transform=`translateY(${((1-e)*U.numDir*9).toFixed(1)}px)`;b.style.opacity=.35+.65*e;if(t>=1)U.numT0=null}
+ {const a=1-Math.exp(-dt*24);U.rv+=(U.rvT-U.rv)*a;U.p+=(U.pT-U.p)*a}
+ U.pop=(U.pop||0)*Math.exp(-dt*9);U.shk=(U.shk||0)*Math.exp(-dt*6);
+ const pk=peekGeom();U.pk=pk;
+ const liveOn=!!pk.op;
+ if(liveOn){EL.mt.style.zIndex=86;sizeTk(EL.mt,pk.sc);EL.mt.style.display='block';placeTk(EL.mt,pk.x,pk.y)}else if(EL.mt.style.display!=='none'){EL.mt.style.display='none'}
+ const closed=IP.svc!=='on';dc.classList.toggle('rc',closed);
+ const th=288*pk.sc,gH=sheetGeom().H;                                      // スリットの長さ＝きっぷの高さ。きっぷの出口と一致
+ for(const q of['.sl-r','.sl-l']){const e=$(q,dc);e.style.top=((gH-th)/2).toFixed(1)+'px';e.style.height=th.toFixed(1)+'px'}
+ $('.sl-r',dc).style.transform=closed&&U.shk>.02?`translateX(${(Math.sin(performance.now()/20)*U.shk*2).toFixed(1)}px)`:'';   // 閉じた口の小さな揺れ（シートは動かない）
+}
+function placeCard(){
+ const c=EL.card,W=c.offsetWidth,H=c.offsetHeight;
+ c.style.left=Math.round((LW-W)/2)+'px';c.style.top=Math.max(MENU+8,Math.round((LH-H)/2)+8)+'px';
+}
+function placePie(){fixSel();renderCard();placeCard()}
+function openPie(){
+ if(P.open||P.lock)return;
+ setPop(false);setPanel(false);
+ Object.assign(P,{open:true,sel:'sv',idx:STOPS.indexOf(30),lock:false,printing:false,axis:null,shake:0,touched:false,arm:null});
+ if(typeof stopMomentum==='function')stopMomentum();
+ P.title=nextTitle();fixSel();
+ EL.card.style.display='block';EL.mt.style.display='none';EL.cursor.style.visibility='hidden';
+ buildCard();renderCard();placeCard();sndOpen();
+ cancelAnimationFrame(P.raf);P.last=performance.now();P.raf=requestAnimationFrame(animLoop);
+ chip('いまやる');
+}
+function animLoop(now){if(!P.open)return;const dt=Math.min((now-P.last)/1000,.05);P.last=now;tickCard(dt);P.raf=requestAnimationFrame(animLoop)}
+function hidePieGfx(){cancelAnimationFrame(P.raf);EL.card.style.display='none';EL.mt.style.display='none';stubsOff();$('#scrim').style.display='none';EL.card.style.transform='';$('#mouth').style.display='none';EL.cursor.style.visibility=''}
+function closePie(){if(!P.open)return;P.open=false;P.lock=false;hidePieGfx();chip('閉じた')}
+
+/* 確定の分け方 f3：2 本指の縦なで＝所要／2 本指を横に流して離す＝確定（右＝発車、左＝保存）。離す前なら引き返して取り消せる。
+   判定は離した瞬間の指（重心）の位置と待機の状態だけ。速さ・慣性は見ない。待機に入る＝横が閾値以上かつ縦の 2 倍以上。
+   待機を解く＝閾値の 85% 未満へ引き返す、または斜めになる（ヒステリシス）。1 本指は無視。 */
+const HYS=.85,RATIO_ON=2,RATIO_OFF=1.6,RV_MAX=.40;
+U.log=[];
+S.vScale=S.vScale||1.6;S.gH=S.gH||70;
+function softTap(){tone(700,520,.045,.2,'triangle')}
+function denyDepart(){sndNo();P.shake=1;updateCard();setTimeout(()=>{P.shake=0},260)}   // 発車できない：低いブッブッと小さな揺れ。何も発券しない
+function sndUnarm(){tone(540,340,.1,.5,'sine')}                             // 待機解除：下がる 1 音（待機に入る音と対）
+function setArm(want){                                                      // 'dp' 発車 / 'sv' 保存 / null。発車できない状況の 'dp' は 'x'
+ const a=want==='dp'&&IP.svc!=='on'?'x':want;
+ if(a===G.arm)return;
+ const prev=G.arm;G.arm=a;P.arm=a;
+ if(prev&&prev!=='x'&&a!=='dp'&&a!=='sv'){sndUnarm();haptic('align');U.log.push('unarm')}
+ if(a==='dp'){sndSel('dp');haptic('align');U.pop=1;P.wasArmed=true;U.log.push('arm-dp')}
+ else if(a==='sv'){sndSel('sv');haptic('align');U.pop=1;P.wasArmed=true;U.log.push('arm-sv')}
+ else if(a==='x'){denyDepart();U.log.push('deny')}
+ updateCard();
+}
+/* ── 2 本指の取り込み：パッドの上の指をまとめ、ちょうど 2 本のあいだだけ重心で追う。1 本・3 本以上は入力として扱わない ── */
+const T2=new Map();let T2on=false;
+function cen(){let x=0,y=0;for(const p of T2.values()){x+=p.x;y+=p.y}return[x/T2.size,y/T2.size]}
+function g2Add(id,x,y,t){
+ T2.set(id,{x,y});
+ if(T2.size===2&&!T2on){T2on=true;const c=cen();gStart('c2',c[0],c[1],t)}
+ else if(T2.size>2&&T2on){T2on=false;if(G.id==='c2'){setArm(null);gEnd('c2',t)}}   // 3 本目：確定せずに終える
+}
+function g2Set(id,x,y){const p=T2.get(id);if(p){p.x=x;p.y=y}}
+function g2Move(t){if(T2on&&T2.size===2){const c=cen();gMove('c2',c[0],c[1],t)}}
+function g2Del(id,t){T2.delete(id);if(T2on&&T2.size<2){T2on=false;gEnd('c2',t)}}   // 指が 1 本離れた瞬間に、そのときの重心で終える
+function gStart(id,x,y,t){
+ if(!P.open||P.lock||G.id!=null)return;
+ const r=$('#pad').getBoundingClientRect();
+ Object.assign(G,{id,x0:x,y0:y,t0:t,axis:null,over:false,arm:null,padH:Math.max(120,r.height),f0:frac(STOPS[P.idx])});
+ P.arm=null;P.wasArmed=false;P.msg='';P.chg=0;U.pT=0;U.rvT=0;clearTimeout(P.msgT);
+ U.rT=[0,0];
+}
+function gMove(id,x,y,t){
+ if(G.id!==id||!P.open||P.lock)return;
+ const dx=x-G.x0,dy=y-G.y0;                                                   // 重心の位置だけを見る（慣性・モメンタム・速さは入らない）
+ if(!G.axis){
+  if(Math.hypot(dx,dy)<TAP_PX)return;
+  G.axis=Math.abs(dy)>=Math.abs(dx)?'v':'h';P.axis=G.axis;P.touched=true;updateCard();   // 1 ストロークで軸を固定。縦が主
+ }
+ if(G.axis==='v'){
+  const finger=G.f0-dy/G.padH*S.vScale,r=stickyScrub(finger,STOPS[P.idx]);    // 上＝増える
+  U.dt=r.disp;
+  if(r.esc){P.idx=STOPS.indexOf(r.anchor);sndStep(P.idx);updateCard()}
+  const over=finger<0||finger>1;
+  if(over&&!G.over){sndEnd()}G.over=over;
+ }else{
+  const ax=Math.abs(dx),ay=Math.abs(dy),dir=dx>0?1:-1;
+  const cur=G.arm,curDir=(cur==='dp'||cur==='x')?1:cur==='sv'?-1:0;
+  let want=cur==='x'?'dp':cur;
+  if(cur&&(dir!==curDir||ax<S.gH*HYS||ax<RATIO_OFF*ay))want=null;
+  if(!want&&ax>=S.gH&&ax>=RATIO_ON*ay)want=dir>0?'dp':'sv';
+  setArm(want);
+  const heading=ax>=RATIO_OFF*ay||G.arm;
+  U.sd=dir;U.pT=heading?Math.min(1.4,ax/S.gH):0;
+  U.rvT=0;                                                                   // 流している最中はきっぷを出さない
+  const blocked=G.arm==='x'||(dir>0&&IP.svc!=='on');
+  const rr=(!heading||blocked)?0:ax/S.gH;                                    // 閾値 1 までの進み
+  U.rT=dir>0?[rr,0]:[0,rr];                                                 // 閾値までの進み（バーと点滅の元）
+  const chg=U.pT>.25?dir:0;if(chg!==P.chg){P.chg=chg;updateCard()}
+ }
+}
+function gEnd(id,t){
+ if(G.id!==id)return;
+ const arm=G.arm,was=P.wasArmed,axis=G.axis;G.id=null;P.axis=null;
+ if(!P.open||P.lock)return;
+ U.pT=0;U.rvT=0;if(!(arm==='dp'||arm==='sv'))U.rT=[0,0];U.dt=frac(STOPS[P.idx]);P.chg=0;                              // 離すと、いまの刻みに落ち着く。きっぷは奥へ引っ込む
+ if(arm==='dp'||arm==='sv'){commit(arm==='dp'?'depart':'save');return}
+ P.arm=null;P.wasArmed=false;
+ P.msg='';
+ updateCard();
+ 
+}
+/* 慣性（モメンタム）は入力中は一切受けない：背景へ流れる wheel も止める */
+window.addEventListener('wheel',e=>{if(P.open){e.stopImmediatePropagation();e.preventDefault()}},{capture:true,passive:false});
+document.addEventListener('keydown',e=>{
+ if(!P.open)return;const k=e.key;
+ if(k==='Escape'){e.preventDefault();closePie();return}
+ if(k==='Enter'){e.preventDefault();if(e.metaKey){if(IP.svc!=='on')denyDepart();else commit('depart')}else commit('save')}
+},true);
+
+/* 確定：離した瞬間に、顔を出していたきっぷが横へ出きって、上から印字される（中身が見えるのはここから）。
+   発車＝右へ出て PiP の乗車中へ、保存＝左へ出てメニューバーの列（在庫）へ。 */
+const smoother=u=>{u=u<0?0:u>1?1:u;return u*u*u*(u*(u*6-15)+10)};   // C2
+function commit(kind,quiet){
+ if(!P.open||P.lock)return Promise.resolve();
+ if(kind==='depart'&&IP.svc!=='on')kind='save';
+ const title=P.title,min=STOPS[P.idx],dir=kind==='depart'?1:-1;
+ const cmd=sendCmd(kind,title,min);
+ if(!cmd){P.lock=true;EL.card.style.transform='';buildCard();updateCard();placeCard();P.lock=false;return Promise.resolve()}   // 待ちがいっぱい：ブッブッと鳴って、シートは元に戻る
+ P.lock=true;
+ const g=sheetGeom();U.sd=dir;const a0=peekGeom(dir,0,false),sp=a0.sc,tw=425*sp,th=288*sp;   // 大きさは最初から最後まで同じ（scale しない）
+ const side=dir>0?0:1,D=tw+20,x0=a0.x,y0=a0.y;
+ const card=EL.card,setM=M=>{card.style.transform=`translate3d(${(-dir*M).toFixed(3)}px,0,0)`};   // 発券機（全体）は、きっぷの出る向きと逆へ
+ const B=S.blinkMs,tm=Math.max(.3,S.tempo);
+ const T1=S.feedMs,pe=S.presentEase,Td=S.presentDwell,Te=S.exitMs,pw=S.exitPow,pm=S.machPow,Tin=S.machineInMs,tR=T1+Td,Tt=tR+Te,Tm=T1+S.machineMs,drf=clamp(S.machDrift,0,.5);
+ let Mtot=Math.max(D+40,dir>0?g.cx+g.hw+16:LW-(g.cx-g.hw)+16);
+ const toSlot=kind==='depart'&&IP.front;cmd.slot=toSlot;cmd.gone=false;
+ let dest;if(kind==='depart')dest=[LW+tw/2+16,y0];else{const ic=iconPos();dest=[ic[0],-th/2-6]}
+ // ひとつの曲線の族：x(τ)=(τ/T)^p。始まりは速度も加速度も 0（C2）。単調に加速するだけで、止まる・待つ区間はない
+ // ひとつの式：F(τ)=h·a(τ)+(1−h)·b(τ)。a＝すばやく出て、やわらかく止まる（φ=1−(1−u)^e を smoother に通す）。b＝止まった状態から ease-in で出ていく
+ const dX=dest[0]-x0,dY=dest[1]-y0,Lp=Math.hypot(dX,dY),kT=1,Dr=drf*D,Hx=D*(1-drf)+4,xr=x0+dir*Hx;   // Hx＝きっぷが機械から出る距離（ほぼ 1 枚ぶん）
+ const Afn=t=>{const u=clamp(t/T1,0,1);return smoother(1-Math.pow(1-u,pe))};
+ const Bfn=t=>Math.pow(clamp((t-tR)/Te,0,1),pw);
+ const Bx=t=>kind==='depart'?Bfn(t):Math.pow(clamp((t-tR)/Te,0,1),pw+2);          // 保存：まず上へ、あとから横（機械の上をかすめない）
+ const tkX=t=>t<=0?x0:x0+dir*Hx*Afn(t)+(dest[0]-xr)*Bx(t),tkY=t=>t<=0?y0:y0+dY*Bfn(t),Sp=t=>Math.max(0,dir*(tkX(t)-x0));
+ const Mfn=t=>t<=0?0:t>=Tm?Mtot:Dr*smoother(t/tR)+(Mtot-Dr)*Math.pow(clamp((t-T1)/(Tm-T1),0,1),pm);   // 発券機：重い（きっぷが出るあいだはほぼ動かず、ごく小さく逆へ。着地から重く加速して退場）
+ let tU=0;for(;tU<Tm*3;tU+=.5)if(Mfn(tU)+Sp(tU)>=D)break;                      // きっぷが（シートが動いて）出きる時刻
+ const tAt=f=>tR+Te*Math.pow(clamp(f,0,1),1/pw);                                          // きっぷが行き先までの f の位置に来る時刻
+ const tpo0=tR,tpi0=Math.max(tAt(.7),tpo0+S.pipOutMs);
+ // 保存：次の発券機は、きっぷとぶつからない最も早い時刻から戻る（同じ側から、減速）
+ let te0=Tm;
+ if(kind!=='depart'){const cl=g.cx-g.hw,cr=g.cx+g.hw,ct=g.cy-g.H/2,cb=g.cy+g.H/2,mg=6,hit=t0=>{for(let t=t0;t<=Math.max(t0+Tin,tR+Te);t+=6){const u=Math.min(1,(t-t0)/Tin),off=-dir*Mtot*Math.pow(1-u,3),kx=tkX(t),ky=tkY(t);
+   if(kx+tw/2>cl+off-mg&&kx-tw/2<cr+off+mg&&ky+th/2>ct-mg&&ky-th/2<cb+mg)return true}return false};
+  for(te0=Tm;te0<Tt+Tin&&hit(te0);te0+=6);}
+ const endTau=Math.max(Tt,Tm,kind==='depart'?0:te0+Tin);
+ const ev=U.ev={D,t:performance.now(),tw,th,LW,x0,y0,dest,Tm,Tt,pm,pt:pw,tm,Mtot,tU,te0,Tin,kT,T1,pe,Td,tR,Te,pw,Hx,Dr,Lp,dir,kind,tpo0,tpi0,endTau,pipTo:toSlot,chevLead:S.chevLead};
+ U.trace=[];
+ fillTicket(EL.mt,title,min);setPrint(EL.mt,0);EL.mt.dataset.sp='';sizeTk(EL.mt,sp);
+ EL.mt.style.zIndex=86;EL.mt.style.display='none';
+ if(dir>0&&!closedNow())U.chev={rel:true,ex:0,fd:0,now:performance.now()};
+ const sdp=pipX+160>LW/2?1:-1,pipVis=toSlot&&kind==='depart'&&EL.pip.style.display!=='none';
+ let tk=EL.mt,T0=null,lastStep=-1,flightRes;const f={};
+ cmd.flightDone=new Promise(r=>flightRes=r);
+ return new Promise(done=>{
+ const frame=now=>{
+  if(T0===null)T0=now;
+  const t=now-T0,tau=t*tm;
+  // 光は実時間でくっきり（点灯 → 消灯 → 点灯）。動きは明滅の下でもう始まっている
+  if(!f.b0){f.b0=1;U.rT[side]=1;U.barForce[side]='on';setM(0);ev.feedStart=T0;placeTk(EL.mt,x0,y0);EL.mt.style.display='block';if(!quiet)haptic('level');tone(82,82,tU/tm/1000,.3,'sawtooth')}
+  if(t>=30&&!f.b1){f.b1=1;U.barForce[side]='off';barClick(side,false,9)}
+  if(t>=30+B&&!f.b2){f.b2=1;U.barForce[side]='on';barClick(side,true,9)}
+  const M=Mfn(tau),sp_=Sp(tau);
+  if(!f.me){                                                                  // 発券機：ひとつの曲線
+   setM(M);setPrint(EL.mt,clamp((M+sp_)/D,0,1));
+   if(tau<tU&&S.feedStep>0){const st=Math.floor((M+sp_)/S.feedStep);if(st!==lastStep){lastStep=st;if(S.chSnd>0)tone(2400,0,.006,S.chSnd/100*.22,'square')}}   // ローラー音（音だけ）
+  }
+  if(tau>=tU&&!f.fe){f.fe=1;ev.feedEnd=T0+tU/tm;EL.mt.style.zIndex=90;setPrint(EL.mt,1)}
+  if(tau>=T1*.82&&!f.pr){f.pr=1;ev.presentStart=T0+T1/tm;tone(150,90,.05,.26,'triangle');haptic('align')}   // 見せる一瞬のはじまり（音と触感はここ）
+  if(tau>=tR&&!f.px){f.px=1;ev.presentEnd=T0+tR/tm}
+  if(tau>=tR&&!f.sw){                                                          // きっぷが出ていくところから、複製に持ち替える（見た目は同じ。メニューバーの下を通る）
+   f.sw=1;const fl=EL.mt.cloneNode(true);fl.removeAttribute('id');fl.classList.add('fly');EL.stage.appendChild(fl);
+   setPrint(fl,1);fl.style.zIndex=kind==='depart'?91:59;EL.mt.style.display='none';tk=fl;
+  }
+  if(tau>=Tm&&!f.me){                                                          // 発券機が画面の外へ出きった
+   f.me=1;ev.machineEnd=T0+Tm/tm;setM(Mtot);
+   if(kind==='depart'){closePieKeep();fadeCursorIn()}
+  }
+  placeTk(tk,tkX(tau),tkY(tau));
+  if(kind!=='depart'&&f.me){                                                   // 保存：次の発券機が戻る
+   if(tau>=te0&&!f.e0){f.e0=1;ev.enterStart=T0+te0/tm;P.title=nextTitle();P.sel='sv';P.idx=STOPS.indexOf(30);P.touched=true;buildCard();updateCard();placeCard();setM(Mtot)}
+   if(f.e0){const u=clamp((tau-te0)/Tin,0,1);setM(Mtot*Math.pow(1-u,3));if(u>=1&&!f.en){f.en=1;ev.enterEnd=T0+(te0+Tin)/tm;card.style.transform='';P.lock=false}}
+  }
+  if(U.chev){U.chev.ex=0;U.chev.tau=tau;U.chev.st=tau<T1?1:tau<tR?2:3;U.chev.k=clamp(tau/T1,0,1);U.chev.mx=-dir*M;U.chev.ret=smoother(clamp((tau-T1)/((Tm-T1)*.9),0,1));U.chev.tkx=tkX(tau);U.chev.tw=tw;U.chev.front=Math.pow(Bfn(tau),.45);U.chev.fd=0;U.chev.now=now;updateChev(0,g,th,false)}
+  if(pipVis&&!f.pd){const uo=clamp((tau-tpo0)/S.pipOutMs,0,1);if(uo>0){pipOff=sdp*56*uo*uo*uo;EL.pip.style.opacity=(1-uo).toFixed(3);placePip();if(uo>=1){f.pd=1;pipSuppress=true;renderPip();pipOff=0;EL.pip.style.opacity='';placePip()}}}
+  if(toSlot&&tau>=tpi0&&!f.pi){f.pi=1;cmd.gone=true;if(cmd.state==='done')finishDepart(cmd,true)}
+  U.trace.push({ts:now,w:performance.now(),tau,tx:tkX(tau),ty:tkY(tau),mx:f.e0?-dir*Mtot*Math.pow(1-clamp((tau-te0)/Tin,0,1),3):-dir*M,cx:U.chev?g.cx+g.hw+16+U.chev.ex:null,op:U.chev?Math.max(0,1-U.chev.fd):null,fr:U.chev?U.chev.front:null,st:U.chev?U.chev.st:null});
+  if(tau>=Tt&&!f.te){f.te=1;ev.handEnd=T0+Tt/tm;if(tk!==EL.mt)tk.remove();flightRes()}
+  if(tau>=Tm&&U.chev){U.chev=null;chevOff()}
+  if(tau>=endTau){if(kind!=='depart'&&!f.en){f.en=1;card.style.transform='';P.lock=false}done();return}
+  requestAnimationFrame(frame);
+ };
+ requestAnimationFrame(frame);
+ });
+}
+function fadeCursorIn(){const c=EL.cursor;c.style.opacity=0;const t0=performance.now();const st=n=>{const k=Math.min(1,(n-t0)/160);c.style.opacity=k.toFixed(3);if(k<1)requestAnimationFrame(st);else c.style.opacity=''};requestAnimationFrame(st)}
+
+function closePieKeep(){P.open=false;P.press=null;P.lock=false;hidePieGfx()}
+function iconPos(){const r=EL.sicon.getBoundingClientRect(),sr=EL.stage.getBoundingClientRect();return[(r.left+r.width/2-sr.left)/scale,(r.top+r.height/2-sr.top)/scale]}
+
+/* iPhone へ送る／ack */
+function sendCmd(kind,title,min){
+ if(IP.queue.length>=8){sndNo();return null}
+ const cmd={id:'cmd-'+String(++sendCmd.n).padStart(3,'0'),kind,title,min,state:'queued',sent:0};
+ IP.queue.push(cmd);
+ renderPop();pump();refreshReadout();return cmd;
+}
+sendCmd.n=0;
+function pump(){
+ let i=0;
+ IP.queue.forEach(cmd=>{
+  if(cmd.state!=='queued'||!IP.front)return;
+  cmd.state='inflight';cmd.sent++;
+  setTimeout(()=>ack(cmd),S.ackMs+(i++)*350);
+ });
+}
+function ack(cmd){
+ if(!IP.front){cmd.state='queued';return}                     // 途中で閉じたら列で待つ（再送はしない）
+ if(IP.delivered.has(cmd.id)){IP.dupes++;refreshReadout();return}   // cmd の ID で重複を除く
+ IP.delivered.add(cmd.id);IP.recv++;
+ IP.queue=IP.queue.filter(c=>c!==cmd);cmd.state='done';
+ IP.hub.push({id:cmd.id,title:cmd.title,min:cmd.min,st:cmd.kind==='depart'?'乗車中':'在庫'});
+ renderPop();refreshReadout();
+ if(cmd.kind==='depart'){ if(cmd.slot){if(cmd.gone)finishDepart(cmd,true)} else enterDepart(cmd) }
+}
+/* 発車の ack：きっぷは PiP の位置でひと息おいてから、乗務の PiP に替わる */
+function pipOutAnim(){                                                        // いまの PiP は、きっぷが出ていくのに合わせて横へ出てから消える（急に消えない）
+ if(EL.pip.style.display==='none'){pipSuppress=true;return}
+ const sd=pipX+160>LW/2?1:-1,t0=performance.now(),ms=Math.max(60,S.pipInMs*.55);
+ const st=n=>{const k=Math.min(1,(n-t0)/ms);pipOff=sd*56*k*k;EL.pip.style.opacity=(1-k).toFixed(3);placePip();if(k<1)requestAnimationFrame(st);else{pipSuppress=true;renderPip();pipOff=0;EL.pip.style.opacity='';placePip()}};
+ requestAnimationFrame(st)}
+async function finishDepart(cmd,anim){
+ if(cmd.finishing)return;cmd.finishing=true;
+ if(!anim)await wait(60);
+ RIDE.title=cmd.title;RIDE.total=cmd.min*60;RIDE.el=0;RIDE.run=true;pipMode='ride';
+ pipSuppress=false;
+ if(anim){const sd=pipX+160>LW/2?1:-1,o0=sd*56;pipOff=o0;EL.pip.style.opacity=0;renderPip();placePip();   // きっぷが出ていくのと重なって、横から入る（減速。きっぷの曲線と同じ族の 3 乗）
+  const t0=performance.now(),ms=Math.max(60,S.pipInMs/Math.max(.3,S.tempo));
+  const st=n=>{const k=Math.min(1,(n-t0)/ms),e=1-Math.pow(1-k,3);pipOff=o0*(1-e);EL.pip.style.opacity=Math.min(1,k*2.2).toFixed(3);placePip();if(k<1)requestAnimationFrame(st);else{pipOff=0;EL.pip.style.opacity='';placePip()}};
+  requestAnimationFrame(st)}
+ else renderPip();
+ syncPipSel();
+ if(cmd.ticketEl){cmd.ticketEl.remove();cmd.ticketEl=null}
+ chip('発車');
+}
+async function enterDepart(cmd){          // 閉じていたあいだに送った発車：ack が来てからきっぷが横から滑り込む
+ if(cmd.finishing)return;
+ if(cmd.flightDone)await cmd.flightDone;
+ if(cmd.ticketEl){finishDepart(cmd);return}
+ pipSuppress=true;renderPip();
+ const fl=EL.mt.cloneNode(true);fl.removeAttribute('id');fl.classList.add('fly');EL.stage.appendChild(fl);
+ fillTicket(fl,cmd.title,cmd.min);setPrint(fl,1);const sc=320/425;fl.dataset.sp='';sizeTk(fl,sc);fl.style.display='block';
+ const pc=[pipX+160,pipY+64],left=pc[0]<LW/2,x0=left?-(212.5*sc)-12:LW+212.5*sc+12;
+ await tween(420,t=>placeTk(fl,x0+(pc[0]-x0)*t,pc[1]));
+ cmd.ticketEl=fl;finishDepart(cmd);
+}
+let toastT=null;
+function toast(msg,ms){
+ const [ix,iy]=iconPos();
+ EL.toast.textContent=msg;EL.toast.style.display='block';EL.toast.style.left=(ix+12)+'px';EL.toast.style.top=(MENU+8)+'px';
+ clearTimeout(toastT);toastT=setTimeout(()=>EL.toast.style.display='none',ms||1800);
+}
+function setFront(v){
+ IP.front=v;
+ if(v){pump()}
+ renderPop();refreshReadout();
+}
+function refreshReadout(){
+ const el=document.getElementById('xRead');if(!el)return;
+ const hub=IP.hub.length?IP.hub.map(h=>`・${h.title.replace(/</g,'&lt;')}　${h.min}分　${h.st}`).join('<br>'):'（なし）';
+ el.innerHTML=`Mac から iPhone への待ち：<b>${IP.queue.length}</b> 件（上限 8）<br>iPhone が受けた cmd：<b>${IP.recv}</b> 件　重複を除いた：<b>${IP.dupes}</b> 件<br>iPhone の Hub の列：<br>${hub}`;
+}
+
+/* ═════ 調整画面 ═════ */
+function toggleSettings(v){EL.settings.style.display=v?'block':'none';EL.gear.classList.toggle('on',v);if(v){padCancelAll();stopMomentum()}else{layout()}}
+EL.sclose.addEventListener('click',()=>toggleSettings(false));
+EL.sreset.addEventListener('click',()=>{S=Object.assign({},DEF);save();buildSettings();layout()});
+let pipSel=null;
+function buildSettings(){
+ const b=EL.sbody;b.innerHTML='';
+ const vals=[];
+ SCHEMA.forEach(d=>{
+  if(Array.isArray(d)){const h=document.createElement('h3');h.textContent=d[0];b.appendChild(h);return}
+  const lab=document.createElement('label');
+  if(d.t==='r'){
+   lab.innerHTML=`<span class="v"></span>${d.l}<input type="range" min="${d.min}" max="${d.max}" step="${d.step}">`;
+   const inp=$('input',lab),v=$('.v',lab);inp.value=S[d.k];v.textContent=d.f(+S[d.k]);
+   inp.oninput=()=>{S[d.k]=+inp.value;v.textContent=d.f(S[d.k]);save();if(d.k==='vol')previewClick();if(d.k==='deskW'||d.k==='curPx')layout()};
+  }else if(d.t==='c'){
+   lab.innerHTML=`<input type="checkbox">${d.l}`;const inp=$('input',lab);inp.checked=!!S[d.k];
+   inp.onchange=()=>{S[d.k]=inp.checked;save();if(d.k==='snd'&&S.snd)previewClick();if(d.k==='fingers'&&!S.fingers)fdots.forEach(x=>x.style.display='none');if(d.k==='press')EL.pz.classList.toggle('off',!S.press)};
+  }else{
+   lab.innerHTML=`${d.l}<select>${d.o.map(o=>`<option value="${o[0]}">${o[1]}</option>`).join('')}</select>`;
+   const sel=$('select',lab);sel.value=S[d.k];sel.onchange=()=>{S[d.k]=sel.value;save();if(d.k==='sndStr')previewClick()};
+  }
+  b.appendChild(lab);
+ });
+ /* 試作の切替（URL パラメータは使わない） */
+ const h=document.createElement('h3');h.textContent='試作の切替';b.appendChild(h);
+ const l1=document.createElement('label');
+ l1.innerHTML=`PiP の状態（ダミー）<select id="xPip"><option value="ride">乗務中（時間が進む）</option><option value="paused">停車中</option><option value="over">見積もりを過ぎた</option><option value="blank">空白（運行は続いてる）</option><option value="none">出さない</option></select>`;
+ b.appendChild(l1);pipSel=$('select',l1);pipSel.value=pipMode;pipSel.onchange=()=>setPipMode(pipSel.value);
+ const l2=document.createElement('label');
+ l2.innerHTML=`PiP を離したとき<select id="xDrop"><option value="nearest">いちばん近い隅へ（今の挙動）</option><option disabled>フリックで隅へ（次の試作）</option></select>`;
+ b.appendChild(l2);$('select',l2).onchange=e=>{S_drop=e.target.value};
+ const l0=document.createElement('label');
+ l0.innerHTML=`場面<select><option value="base">土台（ダミーの状態だけ）</option><option value="s192">#192 切符だけ発行</option></select>`;
+ b.insertBefore(l0,l1);const ss=$('select',l0);ss.value=S.scene;ss.onchange=()=>{S.scene=ss.value;save();if(P.open)closePie();buildScene()};
+ const sc=document.createElement('div');sc.id='xScene';b.appendChild(sc);buildScene();
+ const p=document.createElement('p');p.className='note';p.textContent='このあとの Issue（#192・#159 など）の試作は、ここに「場面」として足していく。いまはダミーの状態だけ。';b.appendChild(p);
+ EL.pz.classList.toggle('off',!S.press);
+}
+function buildScene(){
+ const sc=document.getElementById('xScene');if(!sc)return;sc.innerHTML='';
+ if(S.scene!=='s192'){return}
+ const mk=(h)=>{const l=document.createElement('label');l.innerHTML=h;sc.appendChild(l);return l};
+ const h=document.createElement('h3');h.textContent='#192 iPhone の状態（模擬）';sc.appendChild(h);
+ let l=mk(`iPhone の画面<select><option value="1">前面（cmd を受け取る）</option><option value="0">閉じている（cmd は列で待つ）</option></select>`);
+ $('select',l).value=IP.front?'1':'0';$('select',l).onchange=e=>setFront(e.target.value==='1');
+ l=mk(`運行<select><option value="on">運行中</option><option value="before">運行前（右の扇は使えない）</option><option value="sched">予定に乗車中（発券だけ）</option></select>`);
+ $('select',l).value=IP.svc;$('select',l).onchange=e=>{IP.svc=e.target.value;if(P.open)placePie()};
+ l=mk(`ack が返るまで <span class="v"></span><input type="range" min="200" max="3000" step="100">`);
+ const r=$('input',l),v=$('.v',l);r.value=S.ackMs;v.textContent=S.ackMs+'ms';r.oninput=()=>{S.ackMs=+r.value;v.textContent=S.ackMs+'ms';save()};
+ l=mk(`縦になでる：所要の感度（大きいほど、少し動かすだけで段が進む） <span class="v"></span><input type="range" min="0.8" max="3" step="0.1">`);
+ const g1=$('input',l),gv1=$('.v',l);g1.value=S.vScale;gv1.textContent='×'+S.vScale;g1.oninput=()=>{S.vScale=+g1.value;gv1.textContent='×'+S.vScale;save()};
+ l=mk(`横に流す：確定の閾値の距離（長いほど、大きく流さないと確定しない） <span class="v"></span><input type="range" min="30" max="160" step="5">`);
+ const g2=$('input',l),gv2=$('.v',l);g2.value=S.gH;gv2.textContent=S.gH+'px';g2.oninput=()=>{S.gH=+g2.value;gv2.textContent=S.gH+'px';save()};
+ l=mk(`きっぷの大きさ（100% = 85×57.5mm を 425×288pt） <span class="v"></span><input type="range" min="40" max="120" step="5">`);
+ const r2=$('input',l),v2=$('.v',l);r2.value=S.tkSize;v2.textContent=S.tkSize+'%';r2.oninput=()=>{S.tkSize=+r2.value;v2.textContent=S.tkSize+'%';save()};
+ l=mk(`<input type="checkbox">手応えの音（段が変わる＝段ごとに高くなる音、閾値を越える＝発車は上がる 2 音・保存は下がる 1 音、確定＝はっきりした一拍。クリック音の設定に従う）`);
+ $('input',l).checked=S.hap;$('input',l).onchange=e=>{S.hap=e.target.checked;save()};
+ const rd=document.createElement('div');rd.className='rd';rd.id='xRead';sc.appendChild(rd);refreshReadout();
+ const bt=document.createElement('button');bt.type='button';bt.textContent='iPhone の列を空にする';bt.onclick=()=>{IP.hub=[];IP.recv=0;IP.dupes=0;IP.delivered.clear();refreshReadout()};sc.appendChild(bt);
+ const p=document.createElement('p');p.className='note';p.textContent='⌥⌘I で開く。2 本指：上下＝所要、右へ流して離す＝発車、左＝保存。';sc.appendChild(p);
+}
+function syncPipSel(){if(pipSel)pipSel.value=pipMode==='ride'&&RIDE.el>RIDE.total?'over':pipMode}
+
+/* ═════ 起動 ═════ */
+function clock(){const d=new Date();EL.mclk.textContent=d.toLocaleDateString('en-US',{weekday:'short',day:'numeric',month:'short',timeZone:'Asia/Tokyo'}).replace(',','').replace(/^(\w+) (\w+) (\d+)$/,'$1 $3 $2')+' '+d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Tokyo'})}
+clock();setInterval(clock,20000);
+buildSettings();
+layout();fitWin();layout();
+setCursor(LW*.55,LH*.5,true);cx=LW*.55;cy=LH*.5;setCursor(cx,cy,true);
+setCaretLine(7,20);renderPip();
+pipCorner='bottomTrailing';parkPip(false);
+addEventListener('resize',()=>{layout();fitWin()});
+if(window.visualViewport)visualViewport.addEventListener('resize',()=>{layout()});
+window.__macStage={get S(){return S},get cursor(){return{x:cx,y:cy}},get scale(){return scale},get pip(){return{mode:pipMode,corner:pipCorner,x:pipX,y:pipY}},get logical(){return{w:LW,h:LH}},get state(){return{pop:popOpen,panel:panelOpen}},get mods(){return mods},sndLog,RIDE,teleport(x,y){setCursor(x,y)}};   // teleport は動作確認用
+</script></body></html>
