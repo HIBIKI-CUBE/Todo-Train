@@ -259,6 +259,23 @@ enum OpeningPanelTokens {
         static let nowPrimary: CGFloat = 24
         static let nowSecondary: CGFloat = 17
         static let caption: CGFloat = 10
+        static let departLine: CGFloat = 10
+    }
+
+    /// 運転状況の塗り・参照帯の強調。赤は置かない。
+    enum RunStatusChrome {
+        static let nowChipSize = CGSize(width: 16, height: 22)
+        static let departChipSize = CGSize(width: 10, height: 8)
+        static let referenceBarWidth: CGFloat = 3
+        static let pastBandOpacity: CGFloat = 0.38
+        static let referencedBandFill = color(0xFFB000, opacity: 0.34)
+        static let referenceAccent = color(0xFFCF5A)
+        static let holdFace = color(0x121314)
+        static let holdEdge = color(0xF2E6C8, opacity: 0.4)
+        static let preEdge = color(0xF2E6C8, opacity: 0.35)
+        static let denseStripe = color(0xFFB000, opacity: 0.7)
+        static let denseStripeBackground = Color.clear
+        static let brightBandStroke = color(0xF2E6C8, opacity: 0.55)
     }
 
     /// 仕様「間」。テンポの付いた項目は `tempo` を一度だけ掛ける。

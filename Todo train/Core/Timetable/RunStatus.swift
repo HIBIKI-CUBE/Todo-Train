@@ -208,6 +208,12 @@ nonisolated enum RunStatusLogic {
     return "\(hours):\(String(format: "%02d", mins))"
   }
 
+  static func formatUntil(_ date: Date, calendar: Calendar) -> String {
+    let hours = calendar.component(.hour, from: date)
+    let minutes = calendar.component(.minute, from: date)
+    return "\(hours):\(String(format: "%02d", minutes))"
+  }
+
   private static func mergeAdopted(
     _ blocks: [TimetableOpeningInterval],
     lowerBound: Date,
