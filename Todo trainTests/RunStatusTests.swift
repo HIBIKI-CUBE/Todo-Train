@@ -9,7 +9,8 @@ import Testing
 
 @MainActor
 struct RunStatusTests {
-    private let dayStart = Date(timeIntervalSince1970: 1_700_000_000)
+    // 2023-11-14 00:00:00 UTC（utc の日の始まりに揃える）
+    private let dayStart = Date(timeIntervalSince1970: 1_699_920_000)
     private let utc: Calendar = {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0)!
@@ -110,14 +111,14 @@ struct RunStatusTests {
     #expect(range.endsAt == at(hour: 4))
   }
 
-  @Test func runStatusBands_stdDayMatchesSpec() {
+  @Test func runStatusBands_stdDayMatchesSpec() throws {
     let range = TimetableRangeLogic.compute(
       scheduledBlocks: stdScheduled,
       referenceDay: dayStart,
       calendar: utc
     )
     let bands = RunStatusLogic.bands(range: range, adoptedBlocks: stdAdopted)
-    #expect(bands.count == 5)
+    try #require(bands.count == 5)
     #expect(bands[0].kind == .dense)
     #expect(bands[0].startsAt == at(hour: 9) && bands[0].endsAt == at(hour: 10))
     #expect(bands[1].kind == .hold)
