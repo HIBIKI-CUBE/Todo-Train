@@ -1,0 +1,761 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>atmos-51 free · 平常運転で言う</title>
+<style>
+*{box-sizing:border-box;transition:none!important;animation:none!important}
+:root{--grn:rgba(132,196,128,.85);--grnbg:#1e3320;--cyn:rgba(120,190,200,.8);--red:rgba(210,96,84,.85);--gglow:0 0 3px rgba(132,196,128,.3);--cglow:0 0 3px rgba(120,190,200,.3);--amb:rgba(255,176,0,.85);--ambdim:rgba(255,176,0,.14);--leg:rgba(242,230,200,.72);--glow:0 0 3px rgba(255,176,0,.3)}
+body{margin:0;background:#000;color:#bbb;font-family:-apple-system,"Hiragino Sans",sans-serif;display:flex;gap:24px;justify-content:center;align-items:flex-start;padding:20px;flex-wrap:wrap}
+#phone{width:390px;height:844px;background:#2a2c2e;border:1px solid #222;border-radius:44px;position:relative;overflow:hidden;padding:44px 8px 16px}
+#grid{height:100%;display:grid;gap:2px;background:#222325;border:2px solid #222325;
+ grid-template-columns:118px 1fr 86px;
+ grid-template-columns:118px 1fr 86px;grid-template-rows:100px 24px 170px 80px 84px 108px 1fr 60px;
+ grid-template-areas:"unit clk clkb" "comm comm comm" "tt tt tt" "cs cs chk" "cs cs phn" "cs cs ride" "cs cs cap" "dep dep dep"}
+.mod{position:relative;background:#3F4245;box-shadow:inset 1px 1px 0 #4c5054;padding:6px;display:flex;gap:6px;min-width:0;min-height:0}
+.mod::before,.mod::after{content:'';position:absolute;top:3px;width:4px;height:4px;border-radius:50%;background:#26282a}.mod::before{left:3px}.mod::after{right:3px}
+.leg{font-size:8px;letter-spacing:.18em;color:var(--leg);white-space:nowrap;line-height:1}
+.leg.bl{color:rgba(242,230,200,.95);text-shadow:0 0 3px rgba(242,230,200,.25)}
+.strip{background:#34373a;padding:2px 4px;border-radius:1px}
+.win{background:#151617;border-radius:1px;box-shadow:inset 0 1px 0 #0b0b0c;padding:4px 6px;font-variant-numeric:tabular-nums;color:var(--amb);min-width:0}
+.win .c{visibility:hidden}.win.lit .c{visibility:visible}
+.small{font-size:10px;letter-spacing:.15em;color:rgba(255,176,0,.55)}
+.k{background:#2e3033;padding:3px;box-shadow:0 2px 0 #1d1e20;border-radius:2px;cursor:pointer;user-select:none;position:relative;flex:none}
+.k .lens{width:100%;height:100%;border-radius:1px;background:#5a5d60;display:flex;align-items:center;justify-content:center;font-size:8px;color:rgba(242,230,200,.55);letter-spacing:.08em}
+.k.on,#depBtn.on{box-shadow:none!important;transform:translateY(1px)}
+.k.on .lens{background:var(--grnbg);color:var(--grn);text-shadow:var(--gglow)}
+.dn{box-shadow:none!important;transform:translateY(2px)}
+.pre{outline:1px solid rgba(242,230,200,.3)}
+.bez{border:2px solid #2e3033;padding:2px;border-radius:2px}
+/* batt: guarded push-button with flip cover */
+#bat{width:40px;height:40px}
+.cov{position:absolute;left:-4px;top:-4px;width:48px;height:48px;border:2px solid #6a6e72;background:rgba(150,155,160,.35);border-radius:2px;pointer-events:none}
+#bat.on .cov{top:-14px;height:8px;background:#5b5f63;border-color:#5b5f63}
+.hinge{position:absolute;left:-4px;top:-6px;width:48px;height:2px;background:#26282a}
+.leds{display:flex;gap:2px;flex:1}.leds b{flex:1;height:9px;background:var(--ambdim)}.leds b.s{background:var(--amb);box-shadow:var(--glow)}
+.sl{width:7px;height:7px;border-radius:50%;background:#2a2b2c;display:inline-block}.sl.on{background:var(--grn);box-shadow:var(--gglow)}.sl.amb{background:var(--amb);box-shadow:var(--glow)}.sl.flt{background:var(--red);box-shadow:0 0 3px rgba(210,96,84,.3)}
+.lamp{flex:1;text-align:center;padding:0;font-size:12px;border-radius:1px;background:#232425;color:rgba(242,230,200,.25);display:flex;align-items:center;justify-content:center}
+.lamp.on{background:#5a4210;color:var(--amb);text-shadow:var(--glow)}
+/* 7seg big */
+.seg7{display:flex;gap:9px;align-items:center;justify-content:center;height:100%}
+.dg{position:relative;width:50px;height:100px}.dg i{position:absolute;background:var(--ambdim)}.dg i.s{background:var(--amb);box-shadow:var(--glow)}
+.dg .a,.dg .d,.dg .g{left:6px;width:38px;height:7px}.dg .a{top:0}.dg .g{top:46.5px}.dg .d{bottom:0}
+.dg .b,.dg .c2,.dg .e,.dg .f{width:7px;height:42px}.dg .f{left:0;top:5px}.dg .b{right:0;top:5px}.dg .e{left:0;bottom:5px}.dg .c2{right:0;bottom:5px}
+.colon{width:7px;height:38px;display:flex;flex-direction:column;justify-content:space-between}.colon b{height:7px;background:var(--ambdim)}.colon.s b{background:var(--amb)}
+.win .c#tapeBody{flex:1;display:flex;flex-direction:column}.tape{position:relative;height:40px;overflow:hidden;background:#222324}.blk{position:absolute;top:0;bottom:0;background:rgba(255,176,0,.6)}
+.tape>i{position:absolute;top:0;bottom:0;width:1px;background:rgba(255,176,0,.2)}
+.ptick{position:relative;height:9px}.ptick span{position:absolute;font-size:8px;letter-spacing:.1em;color:var(--leg);transform:translateX(-50%)}.ptick span:first-child{transform:none}.ptick span:last-child{transform:translateX(-100%)}
+.car{height:34px;overflow:hidden;white-space:nowrap;display:flex;align-items:center;justify-content:space-between;font-size:15px;padding:7px 2px;border-bottom:1px solid #222;line-height:1.25}
+#depBtn{flex:1;border-radius:3px;background:#2a2c2e;padding:4px;box-shadow:0 3px 0 #1a1b1c;cursor:pointer;position:relative}
+#depBtn .lens{height:100%;border-radius:2px;background:#55585b;display:flex;align-items:center;justify-content:center;font-size:20px;letter-spacing:.35em;color:rgba(242,230,200,.4)}
+#depBtn.on .lens{background:var(--grnbg);color:var(--grn);text-shadow:var(--gglow)}
+#depBtn.dn{transform:translateY(2px)}
+#hub{position:absolute;inset:0;background:#151617;display:none;align-items:center;justify-content:center;font-size:36px;color:var(--amb);z-index:6}
+#panel{width:320px;background:#0d0d0d;border:1px solid #222;border-radius:10px;padding:16px;font-size:13px}
+#panel label{display:block;margin:10px 0}#panel input[type=range]{width:100%}
+button,select{background:#222;color:#ddd;border:1px solid #444;padding:6px 10px;border-radius:6px}
+.ok{width:26px;text-align:right;flex:none}.cur{color:var(--amb)}.tmsg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:11px;letter-spacing:.2em;color:var(--amb)}#tapeBody,#formBody{height:100%}#w3{height:80px}.blk{cursor:pointer}.blk.hol{background:transparent;box-shadow:inset 0 0 0 1px rgba(255,176,0,.55)}
+#w3{position:relative}.mk{position:absolute;bottom:0;height:2px;background:var(--amb)}
+.sel{flex:none;width:112px;height:22px;display:flex;align-items:center;justify-content:space-between;gap:4px;cursor:pointer;user-select:none}
+.selk{width:34px;height:16px;background:#2e3033;border-radius:8px;position:relative;box-shadow:inset 0 1px 0 #1d1e20}
+.selk b{position:absolute;top:2px;left:3px;width:12px;height:12px;border-radius:50%;background:#7a7e82}
+.selk b::after{content:'';position:absolute;left:5px;top:1px;width:2px;height:5px;background:#26282a}
+.sel.r .selk b{left:19px}
+.sel .leg.act{color:var(--amb);text-shadow:var(--glow)}
+.lt{flex:none}.ltt{flex:1;overflow:hidden;text-overflow:clip}.lst{flex:none;width:28px;text-align:right}
+.blk{display:flex;align-items:center;overflow:hidden;white-space:nowrap;font-size:11px;color:#151617;padding-left:3px}.blk.hol{color:var(--amb)}
+.lane{position:relative;height:32px;margin-top:2px}
+.lab{position:absolute;height:15px;display:flex;align-items:center;gap:3px;font-size:11px;white-space:nowrap;color:var(--amb);cursor:pointer;line-height:1}
+.lead{position:absolute;width:1px;background:rgba(255,176,0,.6)}
+.mkA,.mkP{display:inline-flex;align-items:center;justify-content:center;width:12px;height:12px;font-size:9px;line-height:1;border-radius:1px;flex:none}
+.mkA{background:var(--amb);color:#151617}.mkP{box-shadow:inset 0 0 0 1px var(--amb);color:var(--amb)}
+.blk .mkA{background:#151617;color:var(--amb)}
+#ovw{position:relative;width:72px;height:10px;flex:none;border-bottom:1px solid var(--leg)}#ovw i{position:absolute;bottom:0;width:1px;height:4px;background:var(--leg)}
+#ovb{position:absolute;bottom:-1px;height:8px;border:1px solid var(--amb);border-top:none;visibility:hidden;box-shadow:var(--glow)}
+#span{width:58px;height:16px;padding:0 4px;font-size:10px;line-height:16px;letter-spacing:.06em;flex:none;white-space:nowrap;overflow:hidden}
+#ptick{background:#151617;height:11px}#ptick span{top:1px;color:rgba(255,176,0,.6)}
+#ovw{width:84px!important}#ovm u{position:absolute;bottom:1px;height:5px;background:var(--amb);text-decoration:none}#ovm u.h{background:transparent;box-shadow:inset 0 0 0 1px rgba(255,176,0,.6)}.hit{position:absolute;top:0;bottom:0;z-index:2;cursor:pointer;background:transparent}.lab{background:#151617;z-index:1;padding-right:2px}.lead{z-index:0}.blk{border-right:1px solid #151617}.vfill{position:relative;height:100%;overflow:hidden}
+#grid.v{grid-template-rows:100px 84px 90px 100px 1fr 160px 60px;grid-template-areas:"unit clk clkb" "tt tt chk" "tt tt phn" "tt tt comm" "tt tt cap" "cs cs ride" "dep dep dep"}
+#grid.v [style*="grid-area:comm"]{flex-wrap:wrap;align-content:flex-start;row-gap:6px;column-gap:4px;padding:8px 6px 6px!important}#grid.v [style*="grid-area:comm"]>.leg:first-child{flex-basis:100%;background:#34373a;padding:2px 4px;flex-grow:0;align-self:flex-start;width:auto}#grid.v [style*="grid-area:comm"]>span[style*="display:flex"]{flex-basis:100%}#grid.v #commW{flex:1 1 100%!important;height:20px!important;line-height:20px!important}
+.v #ovw,.v #ptick,.v .asl{display:none}.v #w3{height:auto;flex:1;padding:5px 6px}.v #tapeBody{height:100%;position:relative;overflow:hidden}
+.vmm{position:absolute;left:0;top:0;bottom:0;width:8px;border-left:1px solid var(--leg)}.vmm i{position:absolute;left:0;width:4px;height:1px;background:var(--leg)}
+.vmm u{position:absolute;left:2px;width:4px;background:var(--amb);text-decoration:none}.vmm u.h{background:transparent;box-shadow:inset 0 0 0 1px rgba(255,176,0,.6)}
+.vmm b{position:absolute;left:-1px;width:7px;border:1px solid var(--amb);border-left:none;box-shadow:var(--glow)}
+.vhl{position:absolute;top:0;bottom:0;width:16px}.vhl span{position:absolute;left:0;font-size:8px;color:rgba(255,176,0,.6);letter-spacing:.02em}
+.vbar{position:absolute;top:0;bottom:0;background:#222324}.vbar>i{position:absolute;left:0;right:0;height:1px;background:rgba(255,176,0,.2)}
+.vbar .blk{border-right:none;border-bottom:1px solid #151617;padding:0}
+.vld{position:absolute;left:0;top:0;pointer-events:none}.vld polyline{fill:none;stroke:rgba(255,176,0,.6);stroke-width:1}
+.vrows{position:absolute;top:0;bottom:0}.vrow{position:absolute;left:0;right:0;display:flex;align-items:center;gap:5px;cursor:pointer;color:var(--amb);font-size:12px;border-bottom:1px solid #222}
+.vrow .vt{flex:none;width:34px;font-size:11px;opacity:.75}.vrow .vtt{flex:1;line-height:1.15;overflow-wrap:anywhere}.vrow.p .vtt{opacity:.8}
+.v #span{width:66px}
+.mom{cursor:pointer}
+.tg{display:flex;align-items:center;gap:3px;cursor:pointer;user-select:none;flex:none}
+.tgb{position:relative;width:12px;height:22px;background:#2e3033;border-radius:2px;box-shadow:inset 0 1px 0 #1d1e20}
+.tgb b{position:absolute;left:3px;top:2px;width:6px;height:9px;background:#8a8e92;border-radius:1px}
+.tg.d .tgb b{transform:translateY(9px)}
+#commT,#estT,#devT{display:block;width:100%}.v #span{width:60px!important}.stn{font-size:9px;margin-right:3px;letter-spacing:0}
+.lens.av{color:rgba(255,176,0,.5)!important;text-shadow:none!important}
+.aws.av{color:rgba(255,176,0,.5)}.aws.onx{color:var(--amb)}
+#grid:not(.pw) .leds b,#grid:not(.pw) .dg i,#grid:not(.pw) .colon b{background:#2a2b2c!important;box-shadow:none!important}
+.avl{position:absolute;right:2px;top:2px;width:5px;height:5px;border-radius:50%;background:#2a2b2c;z-index:3}.avl.on{background:var(--cyn);box-shadow:var(--cglow)}
+.avl.big{width:8px;height:8px;right:8px;top:8px}
+#lE0.on,#lE1.on,#lE2.on{background:var(--amb);box-shadow:var(--glow)}
+.ok.g{color:var(--grn);text-shadow:var(--gglow)}
+.lens.av{}
+.kor{flex-direction:column;padding:0;gap:0;overflow:hidden}
+.seg{flex:1;width:100%;display:flex;align-items:center;justify-content:center;color:rgba(242,230,200,.24);font-size:8px;letter-spacing:.08em}
+.seg.av{border-bottom:1px solid #45484b}
+.avx .seg.av{color:var(--cyn);background:#1d2f33;text-shadow:var(--cglow)}
+.k.on .lens.kor,#depBtn.on .lens.kor,#depBtn .lens.kor{background:#55585b;color:inherit;text-shadow:none}
+.on .seg.nm{background:var(--grnbg);color:var(--grn);text-shadow:var(--gglow)}
+.cap{width:20px!important;height:20px!important;border-radius:50%!important;padding:0!important;background:radial-gradient(circle at 50% 45%,#2b2c2e 0,#1b1c1d 70%)!important;box-shadow:0 2px 0 #111,0 0 0 2px #2e3033!important;flex:none}
+.cap.on,.cap.dn{box-shadow:0 0 0 2px #2e3033!important}
+.cn{font-size:8px;letter-spacing:.14em}
+#estBtn{width:14px!important;height:14px!important}.cap{width:18px!important;height:18px!important;border-radius:2px!important;padding:0!important;background:#1d1e1f!important;box-shadow:0 2px 0 #0e0f10,0 0 0 1px #4a4e52,0 0 0 3px #2e3033!important;flex:none}
+.cap.on,.cap.dn{box-shadow:0 0 0 1px #4a4e52,0 0 0 3px #2e3033!important}
+#estBtn{width:14px!important;height:14px!important}
+.seg{color:rgba(242,230,200,.4)!important;text-shadow:0 1px 0 rgba(0,0,0,.45)}
+.avx .seg.av{color:var(--cyn)!important;text-shadow:var(--cglow)}
+.on .seg.nm{color:var(--grn)!important;text-shadow:var(--gglow)}
+#bat.on .cov{top:-9px!important;height:5px!important}.hinge{top:-5px!important}
+#grid:not(.v) #w3{flex:none}.slots{width:34px;flex:none;display:flex;flex-direction:column;padding-top:2px}.slots span{height:21px;display:flex;align-items:center;font-size:8px;letter-spacing:.1em;color:var(--leg)}
+.pr{height:21px;display:flex;align-items:center;gap:6px;font-size:12px;white-space:nowrap;overflow:hidden;border-bottom:1px solid #222}
+.pr.sq{cursor:pointer}.pt{flex:1;overflow:hidden}.pd{flex:none;width:32px;text-align:right;font-size:11px;opacity:.8}
+.mini{position:relative;width:10px;height:18px;flex:none;overflow:hidden}.mini .dg{position:absolute;left:0;top:0;transform:scale(.2);transform-origin:0 0}
+.sq1 .lens{background:#2f3133!important;color:rgba(242,230,200,.4)!important;font-size:9px!important;letter-spacing:.15em!important;text-shadow:0 1px 0 rgba(0,0,0,.45)}.sq1.lt .lens{background:#4a3a14!important;color:var(--amb)!important;text-shadow:none!important}
+.mini .dg{transform:scale(.17)!important}.mini .dg i{background:rgba(255,176,0,.07)!important;box-shadow:none!important}.mini .dg i.s{background:var(--amb)!important}.mini{width:9px!important;height:17px!important}#clk{position:absolute;left:50%;top:50%;width:243px;height:100px;transform:translate(-50%,-50%) scale(var(--ck,.6));transform-origin:center}
+#bat{width:104px!important;height:60px!important;padding:0!important;background:none!important;box-shadow:none!important;display:flex;align-items:center;gap:6px}
+#bat.on,#bat.dn{transform:none!important}
+.ksh{position:relative;width:58px;height:60px;flex:none}
+.kof,.kon{position:absolute;top:0;font-size:7px;letter-spacing:.12em;color:var(--leg)}.kof{left:0}.kon{right:2px}
+.tk{position:absolute;width:1px;height:5px;background:var(--leg);top:11px}.tk.t0{left:12px;transform:rotate(-45deg)}.tk.t1{right:12px;transform:rotate(45deg)}
+.ksb{position:absolute;left:8px;top:14px;width:42px;height:42px;border-radius:50%;background:#1a1b1c;box-shadow:0 0 0 2px #5d6165,0 0 0 5px #232426,inset 0 2px 0 #0c0c0d}
+.key{position:absolute;left:50%;top:50%;width:12px;height:34px;margin:-17px 0 0 -6px;background:#8b8f93;border-radius:2px;transform:rotate(-45deg);box-shadow:inset -1px 0 0 #5f6367,0 1px 0 #0e0e0f}
+.key b{position:absolute;left:5px;top:3px;width:2px;height:8px;background:#3a3c3f}
+.ksl{width:40px!important;height:40px!important;flex:none;background:#55585b!important;padding:0;border:3px solid #2e3033;box-sizing:content-box}
+#bat .seg{font-size:7px!important;letter-spacing:.08em!important;font-weight:400!important}
+.tier{flex:none;width:11px;height:11px;font-size:8px;line-height:11px;text-align:center;color:var(--leg);box-shadow:inset 0 0 0 1px rgba(242,230,200,.45);border-radius:1px}.tier.M{background:rgba(242,230,200,.78);color:#151617;box-shadow:none}.tier.L{opacity:.55}.pr.tL .pt,.pr.tL .pd{opacity:.5}
+#gg{position:absolute;inset:2px}.gz{position:absolute;left:0;right:0}
+.gRes{background:repeating-linear-gradient(135deg,rgba(242,230,200,.28) 0 2px,transparent 2px 5px)}
+.gM{background:rgba(255,176,0,.8)}.gS{background:rgba(255,176,0,.38)}
+.gTolM{background:linear-gradient(to top,rgba(255,176,0,.8),rgba(255,176,0,0))}.gTolS{background:linear-gradient(to top,rgba(255,176,0,.38),rgba(255,176,0,0))}
+.gCap{height:2px;background:#e8dcc0;left:-3px;right:-3px}
+#ldT{font-size:20px;letter-spacing:.02em}
+.sl{flex:none}.sl.red{background:var(--red);box-shadow:0 0 3px rgba(210,96,84,.3)}
+#gg{position:absolute;inset:0}
+.gbox{position:absolute;left:6px;right:6px;top:36%;bottom:calc(4% - 2px);border:1px solid rgba(242,230,200,.5);border-top-width:2px;pointer-events:none}
+#grid:not(.pw) .gbox{border-color:rgba(242,230,200,.15)}
+#cutMkX{position:absolute;left:0;width:34px;height:8px;display:flex;align-items:center;gap:2px;visibility:hidden;pointer-events:none}#cutMk b{width:5px;height:3px;background:var(--amb)}#cutMk span{font-size:6px;letter-spacing:.08em;color:var(--amb);line-height:1}
+.slots{position:relative}.pr.cutl{border-bottom-color:var(--amb)}
+.gIn,.gOv{position:absolute;left:8px;right:8px;box-shadow:inset 0 1px 0 #151617}.gIn{background:rgba(242,230,200,.55)}.gOv{background:var(--amb)}.fl{background:rgba(242,230,200,.9)!important}
+.tdl{flex:none;width:8px;writing-mode:vertical-rl;font-size:7px;letter-spacing:.2em;color:var(--leg);line-height:8px;padding-top:4px}
+#rail{position:relative;flex:none;width:16px;background:#1c1d1f;border-radius:2px;box-shadow:inset 0 1px 0 #0d0d0e,inset 1px 0 0 #0d0d0e;cursor:ns-resize;touch-action:none;margin-left:-2px}
+#rail .dt{position:absolute;left:2px;right:2px;height:1px;background:rgba(242,230,200,.22)}
+#cutK{position:absolute;left:1px;width:14px;height:12px;background:#85898d;border-radius:2px;box-shadow:inset 0 -2px 0 #5c6064,0 1px 0 #0e0f10;pointer-events:none}
+#cutK b{position:absolute;right:2px;top:3px;width:6px;height:5px;background:#2a2b2d;border-radius:0 0 0 3px}
+#cutK::after{content:'';position:absolute;left:2px;top:5px;width:3px;height:2px;background:#3a3c3f}
+#cutK.lit::after{background:var(--amb);box-shadow:var(--glow)}
+.pr.lb .mini{opacity:.3}
+.locks{display:flex;gap:2px;flex:none}
+.lk{position:relative;width:30px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;background:#36393c;box-shadow:inset 0 1px 0 #2a2c2e}
+.lk .hl{width:12px;height:8px;border-radius:1px;background:#2a2b2c}.lk.in .hl{background:var(--amb);box-shadow:var(--glow)}
+.lk .leg{font-size:7px;letter-spacing:.1em}
+.lk .dog{z-index:2;position:absolute;left:12px;bottom:-9px;width:6px;height:5px;background:#5a5e62;transform:translateY(-5px)}.lk.in .dog{transform:none;background:#8a8e92}
+.rdy{flex:none;width:34px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px}
+.trk{position:absolute;left:8px;right:8px;bottom:3px;height:5px;background:#151617;box-shadow:inset 0 1px 0 #0b0b0c;overflow:hidden}
+#shut{position:absolute;left:0;top:1px;width:14px;height:3px;background:#6a6e72}#shut.run{background:var(--amb)}
+.mod.rp{box-shadow:inset 0 0 0 1px rgba(255,176,0,.55)}
+
+#depBtn{flex:1;display:flex;align-items:stretch;gap:6px;background:none!important;box-shadow:none!important;padding:0!important;transform:none!important}
+#depBtn .dav{flex:none!important;width:34px!important;align-self:center;height:16px;font-size:7px!important;letter-spacing:.12em!important;background:#3a3d40;border:2px solid #2a2c2e;border-radius:1px;box-sizing:content-box}
+.dstk{flex:1;display:flex;flex-direction:column;gap:2px;min-width:0}
+.dcol{flex:1;padding:4px 5px;background:#141516;border-radius:4px;box-shadow:0 0 0 1px #75797d,0 0 0 3px #4a4d51,0 0 0 4px #1f2022,inset 0 3px 2px rgba(0,0,0,.6)}
+.dbar{height:100%;border-radius:2px;background:#5b5e61;display:flex;align-items:center;justify-content:center;box-shadow:inset 0 1px 0 #75797c,inset 0 -4px 0 #3b3e41,0 2px 0 #0c0c0d}
+.dbar .seg{flex:none!important;width:auto!important;font-size:15px!important;letter-spacing:.6em!important;padding-left:.6em;font-weight:600}
+.dbar.p1{box-shadow:inset 0 1px 0 #6a6e71,inset 0 -2px 0 #3b3e41,0 1px 0 #0c0c0d}
+.dbar.p2{box-shadow:inset 0 1px 0 #2e3032,inset 0 -1px 0 #3b3e41}
+.dbar.p3{background:#1f3121;box-shadow:inset 0 3px 1px rgba(0,0,0,.55)}
+.dleg{font-size:6px;letter-spacing:.4em;color:var(--leg);text-align:center;line-height:6px}
+#depBtn.avx .dav{background:#1d2f33}
+.gd{position:absolute;top:2px;width:4px;height:1px;background:rgba(255,176,0,.08)}#shut{z-index:2}
+#depBtn{margin-bottom:-9px}.dcol::before{content:'';position:absolute}
+.dstk{position:relative}.dstk::after{content:'';position:absolute;left:-6px;bottom:3px;width:5px;height:5px;background:#151617;box-shadow:inset 0 1px 0 #0b0b0c}
+.dl{flex:1;display:flex;flex-direction:column;gap:3px;min-width:0}
+.lrow{display:flex;align-items:center;gap:3px;height:11px}
+.lrow .lk{width:auto!important;flex-direction:row!important;gap:3px!important;background:none!important;box-shadow:none!important;padding:0 3px 0 0}
+.lrow .lk .hl{width:9px;height:3px;background:#2a2b2c}.lrow .lk.in .hl{background:rgba(255,176,0,.6);box-shadow:none}
+.lrow .lk .leg{font-size:6px;letter-spacing:.1em;color:rgba(242,230,200,.5)}
+.lrow .sl{width:6px;height:6px}.lrow .leg[data-l="5"]{font-size:7px}
+.chv{flex:1;display:flex;gap:2px;align-items:stretch;padding:3px 3px;background:#1a1b1c;border-radius:2px;box-shadow:inset 0 1px 0 #0c0c0d}
+.chv i{flex:1;background:#2b2c2e;clip-path:polygon(0 0,52% 0,100% 50%,52% 100%,0 100%,48% 50%)}
+#depBtn{margin-bottom:0!important}
+.dstk::after{display:none!important}
+#depBtn{flex:none!important;width:128px}
+.dcol.dhit{box-shadow:0 0 0 1px #75797d,0 0 0 3px rgba(255,176,0,.55),0 0 0 4px #1f2022,inset 0 3px 2px rgba(0,0,0,.6)}
+#clkS{position:absolute;right:7px;bottom:4px;font-size:11px;line-height:11px;letter-spacing:.04em;color:var(--amb);opacity:.8;font-variant-numeric:tabular-nums;pointer-events:none}#clkS.flip{animation:nxf .26s steps(4) both;display:inline-block}.nxb{transition:none}/*nxt*/.nxg .nxw{font-size:8.5px;padding:0 2px;letter-spacing:0;text-align:center}.nxp{position:absolute;top:-3px;width:2px;height:6px;background:var(--amb);pointer-events:none}.nxp.h{left:-3px;top:auto;width:6px;height:2px}.nxt{position:absolute;right:3px;top:2px;font-size:8px;line-height:9px;color:rgba(255,176,0,.75);font-variant-numeric:tabular-nums;pointer-events:none}.nxk{position:absolute;top:-2px;height:4px;width:0;border-left:1px solid rgba(255,176,0,.35);pointer-events:none}.nxg{display:grid;grid-template-columns:6px auto 44px;column-gap:5px;row-gap:2px;align-items:center}.nxw{height:13px;padding:0 4px;font-size:10px;line-height:13px;text-align:right;color:var(--amb)}.nxw.d{color:rgba(255,176,0,.3)}.nxg .sl{width:6px;height:6px}.nxg .sl.amb{box-shadow:none}.nxg .leg{transition:opacity .15s}.nxg .leg.off{opacity:.42}.nxw{overflow:hidden}.nxw .c{display:block}.nxw.flip .c{animation:nxf .26s steps(4) both}@keyframes nxf{0%{transform:translateY(-100%)}50%{transform:translateY(-50%)}100%{transform:none}}#nxt{position:absolute;right:7px;bottom:4px;font-size:9px;line-height:10px;letter-spacing:.06em;color:var(--amb);opacity:.78;white-space:nowrap;pointer-events:none;visibility:hidden}#nxt em{font-style:normal;opacity:.6;margin-right:4px}#nxt span{opacity:.6;margin-left:4px}
+.nxb.busy{background:repeating-linear-gradient(135deg,rgba(255,176,0,.09) 0 3px,transparent 3px 6px)}
+.nxb.v{left:14px;right:0;top:0;bottom:auto;border-left:0;border-top:1px solid rgba(255,176,0,.45)}
+.nxb{font-style:normal;position:absolute;top:0;bottom:0;background:rgba(255,176,0,.07);border-left:1px solid rgba(255,176,0,.45);pointer-events:none}
+</style><style id="atmos">
+/* atmos-3b: 3 より一段明るく、上下の明暗の段差を 2 段に */
+:root{--glow:none;--gglow:none;--cglow:none}
+.leg.bl{text-shadow:none}
+#phone{background:#404245}
+#grid{background:#44474a;border-color:#44474a}
+.mod{background:#5f6265;box-shadow:inset 0 0 0 .5px #535659,0 0 0 .5px #36383a}
+#grid>.mod[style*="grid-area:unit"],#grid>.mod[style*="grid-area:clk"],#grid>.mod[style*="grid-area:clkb"]{background:#66696c}
+#grid>.mod[style*="grid-area:dep"],#grid>.mod[style*="grid-area:cs"],#grid>.mod[style*="grid-area:ride"]{background:#585b5e}
+.mod::before,.mod::after{display:none}
+.win{background:#1a1b1c;box-shadow:inset 0 0 0 1px rgba(0,0,0,.3)}
+.leg,.dleg,.cn,.kof,.kon,.slots span,.lrow .lk .leg{font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;letter-spacing:.05em;font-weight:500}
+.leg{color:rgba(240,235,218,.84)}
+.strip{background:#45484b;border-radius:1px;box-shadow:none}
+.k,.cap{filter:brightness(1.16)}
+</style>
+<style>#formBody .pr{position:relative}.gb{position:absolute;left:0;top:2px;bottom:2px;pointer-events:none;z-index:0}.gb i{position:absolute;top:0;bottom:0;left:0;background:rgba(255,176,0,.13)}.gb u{position:absolute;top:0;bottom:0;background:repeating-linear-gradient(135deg,rgba(255,176,0,.32) 0 2px,transparent 2px 5px)}#formBody .pr>*:not(.gb){position:relative;z-index:1}</style><style>#snC i,#snC b{position:absolute;display:block}.snG{border:1px dashed rgba(255,176,0,.45);box-sizing:border-box}.snF{background:var(--amb)}.snH{background:repeating-linear-gradient(135deg,var(--amb) 0 2px,transparent 2px 5px)}.snF,.snH{transition:none}</style><style>.trg{display:grid;grid-template-columns:auto 1fr;column-gap:4px;row-gap:3px;align-items:center}.trg .leg{font-size:7px;letter-spacing:.1em}.trv{overflow:hidden;padding:0 3px;text-align:right;height:13px;line-height:13px;font-size:10px;letter-spacing:0}.trv.trA{height:22px;line-height:22px;font-size:19px;font-weight:600;margin-top:-1px}.trv .c{display:block;white-space:nowrap}.trg .leg.off{opacity:.42}.trv .mk{display:inline-flex;gap:1.5px;vertical-align:middle}.trv .mk .mq{display:inline-block;position:static;width:3px;height:6px;background:#3a3c3e}.trv .mk .mq.s{background:var(--amb)}</style><style>.trv .c .f{display:inline-block;animation:nxf .26s steps(4) both}.trv.ttl{font-size:10px!important;font-weight:400!important;text-align:left;letter-spacing:.02em}.trv .c{overflow:hidden;text-overflow:ellipsis}.trv .msk{display:inline-flex;gap:2.5px;vertical-align:middle}.trv .msk i{position:static;display:block;width:3.5px;height:3.5px;border-radius:50%;background:var(--amb);opacity:.7}.trv.sm{font-size:8px}.trv .onf{display:inline-block;width:5px;height:5px;border:1px solid currentColor;vertical-align:middle;margin-right:4px;opacity:.8}</style><style id="layout">
+/* 運転状況：沈んだ窓の中の帯。平常＝淡い面、過密＝斜線、見合わせ＝暗い面に点線の縁。今の帯だけ明るく、過ぎた帯は落とす */
+#ukW{position:relative;min-width:0;min-height:0}
+#ukC{position:absolute;inset:0;overflow:hidden}
+#ukW .uk{position:absolute;display:flex;align-items:center;justify-content:center;overflow:hidden;border-radius:1px;font-size:10px;line-height:1;letter-spacing:.04em;white-space:nowrap;font-family:-apple-system,"Hiragino Sans",sans-serif}
+#ukW .uk span{padding:0 2px}
+#ukW .uk.ok{background:rgba(255,176,0,.16);color:var(--amb)}
+#ukW .uk.dense{background:repeating-linear-gradient(135deg,rgba(255,176,0,.34) 0 2px,rgba(255,176,0,.06) 2px 5px);color:#ffcf5a}
+#ukW .uk.dense span{background:#1a1b1c;border-radius:1px}
+#ukW .uk.stop{background:#121314;box-shadow:inset 0 0 0 1px rgba(242,230,200,.28);color:rgba(242,230,200,.6)}
+#ukW .uk.past{opacity:.38}
+#ukW .uk.now{box-shadow:inset 0 0 0 1px #ffcf5a}
+#ukW .uk.now.ok{background:rgba(255,176,0,.3)}
+#ukW .ukg{position:absolute;left:0;right:0;height:1px;background:rgba(255,176,0,.12)}
+#panel label:has(#xSpeed),#panel label:has(#xStat),#panel label:has(#xOver),#panel label:has(#xLogLay),#panel label:has(#xOnR),#panel label:has(#xStep),#panel label:has(#xSeal),#panel label:has(#xOnMk),#panel label:has(#xTrend){display:none}
+
+
+/* 50：大きさの予算と目線の流れ。上から 状態の帯 → MASTER・時計 → 1日（TIMETABLE＋運転状況）→ ただいま → TICKETS・LOAD → COMM → DEPART */
+#grid.v{grid-template-columns:118px 1fr 86px;grid-template-rows:22px 100px 1fr 50px 150px 22px 92px;
+ grid-template-areas:"sys sys sys" "unit clk clkb" "tt tt tt" "now now now" "cs cs cap" "comm comm comm" "dep dep dep"}
+#grid.v .ttRow{flex:1;display:flex;gap:4px;min-height:0}
+#grid.v .ttRow #w3{flex:1;min-width:0}
+#grid.v #ukW{flex:none;width:84px;padding:3px 4px!important}
+#grid.v #ukC{inset:3px 4px}
+#grid.v #ukW .uk{left:0;right:0}
+#grid.v .ukL{margin-right:20px;width:84px;text-align:center;box-sizing:border-box}
+/* 状態の帯：CHK・PHONE は一番上の細い帯に、COMM は DEPART の直前の細い帯に（分割）。どれも小さなランプ */
+#sysbar{grid-area:sys;display:flex;gap:2px;min-width:0}
+#grid.v [style*="grid-area:comm"],#grid.v #sysbar>.mod{flex-direction:row!important;flex-wrap:nowrap!important;align-items:center!important;gap:4px!important;padding:0 5px!important;flex:none;display:flex!important}
+#grid.v [style*="grid-area:comm"]>span[style*="display:flex"],#grid.v #sysbar>.mod>div[style*="display:flex"],#grid.v #sysbar>.mod>span[style*="display:flex"]{gap:2px!important;flex-basis:auto!important}
+#grid.v [style*="grid-area:comm"]>.leg:first-child,#grid.v #sysbar .strip{font-size:7px!important;padding:1px 3px!important;flex:none!important;width:auto!important;align-self:center!important}
+#grid.v [style*="grid-area:comm"] .leg,#grid.v #sysbar .leg{font-size:7px;letter-spacing:.02em}
+#grid.v [style*="grid-area:comm"] .sl,#grid.v #sysbar .sl{width:6px;height:6px}
+#grid.v #sysbar #devW{height:16px!important;line-height:16px!important;font-size:10px!important;width:36px;padding:0 3px!important}
+#grid.v [style*="grid-area:comm"]{padding:0 8px!important}
+#grid.v #sysbar>.mod{flex:1 1 auto}
+#grid.v #commW{flex:1 1 30px!important;height:16px!important;line-height:16px!important;font-size:9px!important;min-width:0}
+#grid.v #commBtn{width:16px!important;height:16px!important}
+.sl.flt{background:#f0c000!important;box-shadow:none!important}
+/* ただいま板 */
+#nowMod{flex-direction:row;align-items:stretch;gap:6px;padding:6px 8px!important}
+#nowMod>.strip{align-self:center}
+#nowW{flex:1;display:flex;align-items:center;padding:0 8px}
+#nowC{display:flex;align-items:center;gap:8px;width:100%;white-space:nowrap;overflow:hidden}
+#nowC i.uk{width:16px;height:22px;flex:none;border-radius:1px}
+#nowC b{font-size:20px;font-weight:600;color:var(--amb)}
+#nowC .nu{font-size:13px;opacity:.8}
+#nowC .nl{font-size:11px;opacity:.7}
+#nowC em{font-style:normal;font-size:26px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--amb)}
+/* 出発の横の2行 */
+#ukNow,#sfW{height:16px;padding:0 5px;flex:none;display:flex;align-items:center}
+#ukNowT,#sfT{display:flex;align-items:center;gap:6px;width:100%;font-size:10px;line-height:1;white-space:nowrap;overflow:hidden}
+#ukNowT i.uk{width:10px;height:8px;flex:none;border-radius:1px}
+#ukNowT b,#sfT b{font-weight:600;color:var(--amb)}
+#sfT b{overflow:hidden;text-overflow:ellipsis;min-width:0}
+#ukNowT span,#sfT .sfl{opacity:.75;flex:none}
+#ukNowT em,#sfT em{font-style:normal;margin-left:auto;font-variant-numeric:tabular-nums;flex:none}
+#nowC i.uk.ok,#ukNowT i.uk.ok{background:rgba(255,176,0,.45)}
+#nowC i.uk.dense,#ukNowT i.uk.dense{background:repeating-linear-gradient(135deg,rgba(255,176,0,.7) 0 2px,transparent 2px 4px)}
+#nowC i.uk.stop,#ukNowT i.uk.stop{background:#121314;box-shadow:inset 0 0 0 1px rgba(242,230,200,.4)}
+#grid #depBtn{width:132px!important}
+
+/* 51：言っている平常運転の帯を縁取り（ただいま板・出発の横と同じ帯） */
+#ukW .uk.tgt{background:rgba(255,176,0,.34)!important;box-shadow:inset 3px 0 0 #ffcf5a,inset 0 0 0 1px #ffcf5a!important;opacity:1!important}
+#nowC{gap:4px}
+#nowC b{font-size:17px}
+#nowC em{font-size:24px}
+#nowC em.sub{font-size:17px}
+#nowC .nl,#nowC .nu{font-size:10px;opacity:.75}
+#nowC i.uk.pre,#ukNowT i.uk.pre{background:transparent;box-shadow:inset 0 0 0 1px rgba(242,230,200,.35)}
+#ukNowT{gap:4px}
+#ukNowT em{margin-left:0}
+</style></head><body>
+<div id="phone"><div id="grid">
+ <div id="sysbar"><div class="mod" style="grid-area:chk;flex-direction:column;gap:5px;padding:8px 6px 6px">
+  <div class="leg strip" style="align-self:flex-start">CHK</div>
+   <div style="display:flex;align-items:center;gap:5px"><span class="sl" id="S0"></span><span class="leg">MSTR</span></div>
+   <div style="display:flex;align-items:center;gap:5px"><span class="sl" id="S2"></span><span class="leg">CLK</span></div>
+   <div style="display:flex;align-items:center;gap:5px"><span class="sl" id="S3"></span><span class="leg">TT</span></div>
+   <div style="display:flex;align-items:center;gap:5px"><span class="sl" id="S4"></span><span class="leg">TKT</span></div>
+ </div><div class="mod" style="grid-area:phn;flex-direction:column;gap:5px;padding:8px 6px 6px">
+  <div class="leg strip" style="align-self:flex-start">PHONE</div>
+  <div class="win aux" id="devW" style="height:20px;padding:0 5px;font-size:13px;line-height:20px;text-align:right"><span class="c" id="devT"></span></div>
+  <div style="display:flex;align-items:center;gap:4px"><span class="sl" id="lExt"></span><span class="leg">EXT</span></div>
+  <div style="display:flex;align-items:center;gap:4px"><span class="sl" id="lAwake"></span><span class="leg">AWAKE</span></div>
+ </div></div>
+ <div class="mod" id="pwrMod" style="grid-area:unit;flex-direction:column;align-items:center;justify-content:space-between;gap:4px;padding:8px 7px 6px">
+  <div class="leg strip" data-l="0" style="align-self:flex-start">MASTER</div>
+  <div class="k" id="bat" data-i="0"><div class="ksh"><span class="kof">OFF</span><span class="kon">ON</span><i class="tk t0"></i><i class="tk t1"></i><div class="ksb"><div class="key" id="key"><b></b></div></div></div><div class="lens kor ksl"><span class="seg av">STBY</span><span class="seg nm">ON</span></div></div>
+  <div style="display:flex;align-items:center;gap:5px;width:100%"><span class="leg" data-l="0b">PWR</span><div class="leds" id="leds"></div></div>
+ </div>
+ <div class="mod" style="grid-area:clk;padding:6px"><div class="win" id="w2" style="flex:1;position:relative;overflow:hidden"><div class="c seg7" id="clk"></div><span class="c" id="clkS"></span></div></div>
+ <div class="mod" style="grid-area:clkb;flex-direction:column;align-items:center;justify-content:space-between;padding:8px 6px 6px">
+  <div class="leg strip" data-l="2">CLOCK</div><div class="k" data-i="2" style="width:56px;height:40px"><div class="lens kor"><span class="seg av" style="font-size:7px">STBY</span><span class="seg nm" style="font-size:8px">OK</span></div></div><div style="display:flex;align-items:center;gap:4px"><div class="k cap mom" id="setBtn"></div><span class="leg cn" style="line-height:1.2">12/24</span></div>
+ </div>
+ 
+ <div class="mod" style="grid-area:tt;flex-direction:column;gap:3px;padding:6px 6px 5px 8px">
+  <div style="display:flex;align-items:center;gap:6px"><span class="leg strip" data-l="3">TIMETABLE</span><div class="tg" id="scaleTg"><div class="tgb"><b></b></div><span class="leg" style="line-height:1.25">AUTO<br>24H</span></div><div id="ovw"><i style="left:0"></i><i style="left:25%"></i><i style="left:50%"></i><i style="left:75%"></i><i style="left:100%"></i><span id="ovm"></span><b id="ovb"></b></div><span class="win" id="span"><span class="c" id="spanT"></span></span><span style="flex:1"></span><span class="leg strip ukL">運転状況</span></div>
+  <div class="ttRow"><div class="win" id="w3" style="padding:3px 0"><div class="c" id="tapeBody"></div></div><div class="win" id="ukW"><div class="c" id="ukC"></div></div></div>
+  <div class="ptick" id="ptick"></div>
+  <div style="display:flex;align-items:center;gap:4px;height:30px;flex:none"><div class="nxg"><span class="sl" id="nxLS"></span><span class="leg" id="nxGS">NEXT STOP IN</span><span class="win nxw" id="nxS"><span class="c"></span></span><span class="sl" id="nxLF"></span><span class="leg" id="nxGF">NEXT RIDE IN</span><span class="win nxw" id="nxF"><span class="c"></span></span></div><span style="flex:1"></span><div class="k" data-i="3" style="width:52px;height:30px"><div class="lens kor"><span class="seg av" style="font-size:7px">STBY</span><span class="seg nm" style="font-size:8px">OK</span></div></div></div>
+ </div>
+ <div style="display:none"><div class="k" data-i="1"><div class="lens kor"><span class="seg av"></span><span class="seg nm"></span></div></div><span class="leg" data-l="1"></span><div class="lamp" id="L0"></div><div class="lamp" id="L1"></div><div class="lamp" id="L2"></div><span class="sl" id="S1"></span></div>
+ 
+ 
+ <div style="display:none"><span id="lE0"></span><span id="lE1"></span><span id="lE2"></span><div id="estW"><span id="estT"></span></div><div id="estBtn"></div></div>
+ <div class="mod" style="grid-area:cap;flex-direction:column;gap:4px;padding:8px 6px 6px">
+  <div class="leg strip" style="align-self:flex-start">LOAD</div>
+  <div style="flex:1;display:flex;gap:5px;min-height:0;justify-content:center">
+   <div class="win" id="capW" style="width:40px;padding:0;position:relative;overflow:hidden"><div class="c" id="gg"></div><div class="gbox" id="gbox"></div></div>
+   <div style="position:relative;width:26px"><span id="freeT" style="position:absolute;left:-5px;top:36%;display:flex;align-items:center;gap:1px;transform:translateY(-50%)"><i style="width:4px;height:1px;background:var(--leg)"></i><span class="leg">FREE</span></span></div>
+  </div>
+ </div>
+ <div class="mod" id="nowMod" style="grid-area:now"><span class="leg strip">ただいま</span><div class="win" id="nowW"><div class="c" id="nowC"></div></div></div>
+ <div class="mod" style="grid-area:cs;flex-direction:column;gap:5px;padding:6px 6px 6px">
+  <div style="display:flex;align-items:center;gap:8px"><span class="leg strip" data-l="4">TICKETS</span><span style="flex:1"></span><div class="k sq1" id="seqBtn" style="width:36px;height:20px"><div class="lens">SEQ</div></div><div class="k" data-i="4" style="width:64px;height:30px"><div class="lens kor"><span class="seg av" style="font-size:7px">STBY</span><span class="seg nm" style="font-size:8px">OK</span></div></div></div>
+  <div style="flex:1;display:flex;gap:4px;min-height:0"><div class="slots"><span>先発</span><span>次発</span><span>次々発</span><span>4</span><span>5</span></div><span class="tdl">TODAY</span><div id="rail"><div id="cutK"><b></b></div></div><div class="win" id="w4" style="flex:1;padding:2px 6px"><div class="c" id="formBody"></div></div></div>
+ </div>
+ <div class="mod" style="grid-area:comm;align-items:center;gap:6px;padding:3px 8px">
+  <span class="leg">COMM</span><div class="k cap mom" id="commBtn"></div><span class="leg cn">TEST</span>
+  <div class="win aux" id="commW" style="flex:1;height:18px;padding:0 6px;font-size:11px;line-height:18px;letter-spacing:.08em;white-space:nowrap;overflow:hidden"><span class="c" id="commT"></span></div>
+  <span style="display:flex;align-items:center;gap:4px"><span class="sl" id="lRelay"></span><span class="leg">RELAY</span></span><span style="display:flex;align-items:center;gap:4px"><span class="sl" id="lMac"></span><span class="leg">MAC</span></span>
+ </div>
+ <div class="mod" id="depMod" style="grid-area:dep;align-items:stretch;gap:6px;padding:5px 8px 5px">
+  <div class="dl"><div class="lrow"><div class="lk" id="K0"><i class="hl"></i><span class="leg">MSTR</span></div><div class="lk" id="K2"><i class="hl"></i><span class="leg">CLK</span></div><div class="lk" id="K3"><i class="hl"></i><span class="leg">TT</span></div><div class="lk" id="K4"><i class="hl"></i><span class="leg">TKT</span></div><span style="flex:1"></span><span class="sl" id="lRdy"></span><span class="leg" data-l="5">READY</span></div>
+   <div class="win" id="ukNow"><span class="c" id="ukNowT"></span></div><div class="win" id="sfW"><span class="c" id="sfT"></span></div><div class="chv" id="chv"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
+  <div id="depBtn" data-i="5"><div class="dstk"><div class="dcol"><div class="dbar" id="dbar"><span class="seg nm">出 発</span></div></div><span class="dleg">DEPART</span></div></div>
+ </div>
+</div><div id="hub">Hub</div></div>
+<div id="panel">
+ <b>調整</b>
+ <label>全灯チェックの長さ <span id="v-check"></span>ms<input type="range" id="check" min="150" max="600" step="10" value="280"></label>
+ <label>自動のときの計器の間隔 <span id="v-gap"></span>ms<input type="range" id="gap" min="0" max="1500" step="10" value="120"></label>
+ <label>自動で進むまでの待ち <span id="v-idle"></span>ms<input type="range" id="idle" min="300" max="5000" step="50" value="800"></label>
+ <label>背面照明から中身までの間 <span id="v-bl"></span>ms<input type="range" id="bl" min="0" max="400" step="10" value="50"></label>
+  <label>電源表示の1段の間 <span id="v-led"></span>ms<input type="range" id="led" min="20" max="400" step="10" value="70"></label>
+ <label>システムのテンポ（自己診断・応答の速さ） <span id="v-isc"></span>%<input type="range" id="isc" min="50" max="300" step="5" value="170"></label>
+ <label>電源表示 <select id="pwrKind"><option value="led">LEDの列</option><option value="none">なし</option></select></label>
+ <label><input type="checkbox" id="pre" checked> 次に自動で始まるスイッチの縁をかすかに示す</label>
+ <label><input type="checkbox" id="snd" checked> 音</label>
+ <label>SEQ 入った直後の待ち（操作後は即点滅） <span id="v-seqq"></span>ms<input type="range" id="seqq" min="500" max="10000" step="100" value="1500"></label>
+ <label>SEQ 点滅から解除まで <span id="v-seqb"></span>ms<input type="range" id="seqb" min="500" max="8000" step="100" value="1500"></label>
+ <label>Mac通信の模擬 <select id="commSim"><option value="ok">正常</option><option value="mac">Mac応答なし</option><option value="relay">中継に届かない</option></select></label>
+ <label>端末の電源 <select id="devSrc"><option value="charging">充電中</option><option value="full">満充電</option><option value="unplugged">電源なし</option></select></label>
+ <label>電池残量 <span id="v-lvl"></span>%<input type="range" id="lvl" min="1" max="100" value="64"></label>
+ <label><input type="checkbox" id="awakeSet" checked> 設定: 充電中は画面を消さない</label>
+ <label>運転状況：平常運転とみなす空き <span id="v-ukF"></span>分以上<input type="range" id="ukF" min="20" max="120" step="5" value="60"></label>
+ <label>運転状況：見合わせとみなす予定 <span id="v-ukB"></span>分より長い<input type="range" id="ukB" min="10" max="90" step="5" value="30"></label>
+ <label>例の一日 <select id="day"><option value="std">いつもの4件</option><option value="packed">朝に詰まった日</option><option value="single">1件だけ</option></select></label>
+ <label><input type="checkbox" id="noTape"> 予定なし</label>
+ <label>例データ：現在時刻 <select id="capNow"><option value="rt" selected>盤の時計</option><option value="600">10:00</option><option value="750">12:30</option><option value="840">14:00</option><option value="960">16:00</option></select> 終業 <select id="capEnd"><option value="1080">18:00</option><option value="1110" selected>18:30</option><option value="1200">20:00</option></select></label>
+ <label>例データ：TODAY 線の初期位置 = 3 枚目の下（行をタップで移動）</label>
+ <label>RESERVE（割り込み・頭の中のタスク用の取り置き） <span id="v-rsv"></span>%<input type="range" id="rsv" min="0" max="50" step="5" value="25"></label>
+ <label><input type="checkbox" id="noForm"> 編成なし</label>
+ <label><input type="checkbox" id="rm"> 視差効果を減らす（各機器の起動動作・段・88:88を省く）</label>
+<b style="display:block;margin-top:8px">試作の切替</b>
+ <label style="display:none">>傾向の表し方 <select id="xSense"><option value="a">板で再生（縦）</option></select></label>
+ <label>再生の長さ <select id="xSpeed"><option value="2400">標準</option><option value="4000">ゆっくり</option><option value="1300">速い</option></select></label>
+
+ <label> 常時欄の2行目 <select id="xStat"><option value="on">定時の本数 ON TIME（推奨）</option><option value="spr">ばらつき SPRD ±</option><option value="p75">よく届く所 P75</option></select></label>
+ <label>超過の見せ方 <select id="xOver"><option value="calm">控えめ（同じ色の薄い面）</option><option value="hatch">今のまま（斜線）</option></select></label>
+ <label>LOG の窓の使い方 <select id="xLogLay"><option value="swap">入れ替え（AVE の窓にタイトル、累積は小窓）</option><option value="lean">絞る（タイトルなし、累積は大窓のまま）</option><option value="flap">反転フラップ（AVE の窓をタイトル⇄累積で時分割）</option><option value="ticker">流れる帯（下の段をタイトルの電光帯に）</option><option value="slip">切符が出る（画面の上から切符が下りる）</option></select></label>
+ <label>LOG の定時の出し方 <select id="xOnR"><option value="blank">出さない（到着の枠で分かる・推奨）</option><option value="mark">窓に小さな枠 □ を出す（定時のときだけ）</option></select></label>
+ <label>LOG の照らし方 <select id="xStep"><option value="auto">自動で1本ずつ（1.2s）</option><option value="btn">▸ ボタンで進める（ボタン2つ）</option></select></label>
+ <label>ハンコとの紐付け <select id="xSeal"><option value="frame">A 枠だけ（丸＝着いた・角＝定時）</option><option value="press">A＋一拍（定時は 70ms 遅れて外枠）</option></select></label>
+ <label>ON TIME の出し方 <select id="xOnMk"><option value="num">数字だけ</option><option value="mk">印だけ</option><option value="both">両方</option></select></label>
+ <label style="display:none">>着いてからの静止 <select id="xHold"><option value="2500">標準</option><option value="5000">長め</option><option value="1200">短め</option></select></label>
+ <label>データ <select id="xTrend"><option value="good">例（良）</option><option value="bad">例（悪）</option></select></label>
+ <label>きっぷの伸びの倍率 <span id="v-xPace"></span><input type="range" id="xPace" min="1" max="2" step="0.05" value="1.2"></label>
+ <label>TT の今の線 <select id="xTT"><option value="a">秒の指針</option><option value="b">時刻の刻印</option><option value="off">なし</option></select></label>
+ <label><input type="checkbox" id="xSec" checked> 時計の秒の小桁</label>
+ <label><input type="checkbox" id="xCd" checked> NEXT を秒まで刻む</label>
+ <label><input type="checkbox" id="xSlide" checked> 帯の今の位置を秒で送る</label>
+ <label><input type="checkbox" id="xBlink" checked> 時計のコロンの明滅</label>
+ <label>盤の時刻を合わせる <input id="xNow" placeholder="15:48:20" size="8"> <button id="xNowGo" type="button">合わせる</button> <button id="xNowRt" type="button">実時刻</button></label>
+ <button id="reset">最初から</button>
+ <p style="color:#666;font-size:11px">スイッチは一度押すと入ったまま（2回目は鈍い音だけ）。どのスイッチもいつでも、どの順でも押せる。確認は同時に別々に進む。蓄電池の前に押しても、鈍い音だけで何も点かない。触らなければ待ち時間のあと、まだの確認を順に自動で始める。発車用意は全部終わってから、押したときだけ。</p>
+</div>
+<script>
+const $=id=>document.getElementById(id);const P=k=>+$(k).value;const rm=()=>$('rm').checked;
+['check','gap','idle','bl','led','isc','lvl','seqq','seqb','rsv'].forEach(k=>{const f=()=>$('v-'+k).textContent=$(k).value;$(k).oninput=f;f()});
+let ac;function click(heavy){if(!$('snd').checked)return;try{ac=ac||new AudioContext()}catch(e){return}const t=ac.currentTime;
+ const len=heavy?0.18:0.025,b=ac.createBuffer(1,ac.sampleRate*len,ac.sampleRate),d=b.getChannelData(0);
+ for(let i=0;i<d.length;i++){const e=Math.exp(-i/(ac.sampleRate*(heavy?0.04:0.004)));d[i]=(Math.random()*2-1)*e*(heavy?0.6:1)}
+ const s=ac.createBufferSource();s.buffer=b;const f=ac.createBiquadFilter();f.type=heavy?'lowpass':'bandpass';f.frequency.value=heavy?400:3200;s.connect(f).connect(ac.destination);s.start(t);
+ if(heavy){const o=ac.createOscillator(),g=ac.createGain();o.frequency.setValueAtTime(90,t);o.frequency.setValueAtTime(55,t+0.05);g.gain.setValueAtTime(0.7,t);g.gain.setValueAtTime(0,t+0.14);o.connect(g).connect(ac.destination);o.start(t);o.stop(t+0.2)}}
+function dull(){if(!$('snd').checked)return;try{ac=ac||new AudioContext()}catch(e){return}const t=ac.currentTime,o=ac.createOscillator(),g=ac.createGain();o.frequency.value=140;g.gain.setValueAtTime(0.25,t);g.gain.setValueAtTime(0,t+0.03);o.connect(g).connect(ac.destination);o.start(t);o.stop(t+0.04)}
+function vib(n){navigator.vibrate&&navigator.vibrate(n)}
+const MAP={0:'abcdef',1:'bc',2:'abged',3:'abgcd',4:'fgbc',5:'afgcd',6:'afgedc',7:'abc',8:'abcdefg',9:'abcdfg',' ':''};
+function clkSeg(seg){$('clk').innerHTML=[0,1,2,3].map(i=>(i==2?`<div class="colon ${seg==='p'?'s':''}"><b></b><b></b></div>`:'')+`<div class="dg">${['a','b','c2','d','e','f','g'].map(x=>`<i class="${x} ${x[0]===seg?'s':''}"></i>`).join('')}</div>`).join('')}
+function clk(str,colon){$('clk').innerHTML=[...str].map((ch,i)=>(i==2?`<div class="colon ${colon?'s':''}"><b></b><b></b></div>`:'')+`<div class="dg">${['a','b','c2','d','e','f','g'].map(s=>`<i class="${s} ${MAP[ch].includes(s[0])?'s':''}"></i>`).join('')}</div>`).join('')}
+let OFF=0;const nowD=()=>new Date(Date.now()+OFF);
+function now(){const n=nowD();return String(typeof h12!=='undefined'&&h12?(n.getHours()%12||12):n.getHours()).padStart(2,'0')+String(n.getMinutes()).padStart(2,'0')}
+const ctl=i=>document.querySelector(`[data-i="${i}"]`),leg=i=>document.querySelector(`[data-l="${i}"]`);
+const L=[0,1,2].map(i=>$('L'+i));
+let st,timers=[],idleT,powered,departed;
+let ctx=null,gen=[0,0,0,0,0,0,0],pgen=0; // 計器ごとの世代。やり直しや MASTER オフで古い段を無効にする
+function T(f,ms){const c=ctx,pg=pgen;timers.push(setTimeout(()=>{if(pg!==pgen)return;if(c&&c.g!==gen[c.i])return;const p=ctx;ctx=c;try{f()}finally{ctx=p}},ms))}
+const I=ms=>ms*100/P('isc');
+function ledOne(k){$('leds').innerHTML=Array.from({length:6},(_,i)=>`<b class="${i===k?'s':''}"></b>`).join('')}
+function seq(fns,ms,done){let k=0;const s=()=>{if(k<fns.length){fns[k++]();T(s,ms)}else done()};s()}
+function leds(n){$('leds').innerHTML=Array.from({length:6},(_,i)=>`<b class="${i<n?'s':''}"></b>`).join('')}
+const VM=new URLSearchParams(location.search).get('tt')!=='h';
+const tapeX=inner=>VM?'<div class="vfill">'+inner+'</div>':'<div class="tape">'+inner+'</div>';
+const fillX=p=>VM?tapeX(`<div class="blk" style="left:0;right:0;top:0;height:${p}%"></div>`):tapeX(`<div class="blk" style="left:0;width:${p}%"></div>`);
+const DAYS={std:[['09:30','09:45','朝会',1],['10:00','11:00','定例ミーティング',1],['13:00','13:30','電話',0],['16:30','18:30','歯医者',1]],
+ packed:[['08:00','08:15','メール確認',1],['08:15','08:30','朝会',1],['08:45','09:00','電話',0],['09:00','10:00','定例ミーティング',1],['10:00','10:20','レビュー',1],['10:30','11:30','資料作成',0]],
+ single:[['14:00','15:00','歯医者',1]]};
+let EV=[];function loadDay(){EV=DAYS[$('day').value].map(([s,e,t,a])=>({s,e,t,a:!!a}))}
+let LO=6,HI=24;const hr=h=>{const [a,b]=h.split(':').map(Number);return a+b/60};
+function scale(){if(scale24){LO=0;HI=24;return}if($('noTape').checked||!EV.length){LO=6;HI=24;return}LO=Math.floor(Math.min(...EV.map(e=>hr(e.s))));HI=Math.ceil(Math.max(...EV.map(e=>hr(e.e))));if(HI-LO<4)HI=LO+4}
+const pct=h=>(hr(h)-LO)/(HI-LO)*100;
+const p2=n=>String(n).padStart(2,'0');
+function axis(){const sp=HI-LO,step=sp<=10?1:2;let t='',l='';for(let h=LO;h<=HI;h+=step){const x=(h-LO)/sp*100;t+=`<span style="left:${x}%">${p2(h)}</span>`;if(h>LO&&h<HI)l+=`<i style="left:${x}%"></i>`}
+ $('ptick').innerHTML=t;$('ovm').innerHTML=$('noTape').checked?'':EV.map(e=>`<u class="${e.a?'':'h'}" style="left:${hr(e.s)/24*100}%;width:${Math.max(1,(hr(e.e)-hr(e.s))/24*84)}px"></u>`).join('');$('ovb').style.left=LO/24*100+'%';$('ovb').style.width=sp/24*100+'%';$('ovb').style.visibility='visible';$('span').classList.add('lit');$('spanT').textContent=`${p2(LO)}–${p2(HI)} ${sp}H`;return l}
+const cv=document.createElement('canvas').getContext('2d');const tw=t=>{cv.font='11px -apple-system,"Hiragino Sans",sans-serif';return Math.ceil(cv.measureText(t).width)};
+const mk=e=>`<span class="${e.a?'mkA':'mkP'}">${e.a?'着':'通'}</span>`;
+function tapeHTML(){scale();const axisL=axis();if($('noTape').checked)return tapeX('<div class="tmsg">NO ENTRIES</div>')+'<div class="lane"></div>';
+ const W=$('w3').clientWidth;const px=h=>pct(h)*W/100;
+ let blocks='',labs='',ends=[-1e9,-1e9];
+ EV.forEach((e,k)=>{const x=px(e.s),w=px(e.e)-x,need=tw(e.t)+3+11+6;
+  const inside=w>=need;
+  blocks+=`<div class="blk ${e.a?'':'hol'}" data-ev="${k}" style="left:${x}px;width:${w}px">${inside?mk(e)+'&nbsp;'+e.t:''}</div>`;
+  if(!inside){const lw=tw(e.t)+14+4;let lx=Math.min(x,W-lw);let row=lx>=ends[0]+6?0:(lx>=ends[1]+6?1:(ends[0]<=ends[1]?0:1));if(lx<ends[row]+6)lx=ends[row]+6;const mw=Math.max(0,W-lx);ends[row]=lx+Math.min(lw,mw);
+   const cx=x+Math.max(1,Math.min(w-1,2));
+   labs+=`<div class="lead" style="left:${cx}px;top:0;height:${row?18:3}px"></div><div class="lab" data-ev="${k}" style="left:${lx}px;top:${row?17:2}px;max-width:${mw}px;overflow:hidden">${mk(e)}<span>${e.t}</span></div>`}});
+ const C=EV.map(e=>{const x=px(e.s),w=px(e.e)-x;return [Math.min(x,x+w/2-16),Math.max(x+w,x+w/2+16)]});
+ C.forEach((c,k)=>{if(k>0&&C[k-1][1]>c[0]){const m=(px(EV[k-1].e)+px(e_s(k)))/2;C[k-1][1]=Math.min(C[k-1][1],m);c[0]=Math.max(c[0],m)}});
+ const hits=C.map((c,k)=>`<div class="hit" data-ev="${k}" style="left:${Math.max(0,c[0])}px;width:${Math.min(W,c[1])-Math.max(0,c[0])}px"></div>`).join('');
+ return '<div class="tape">'+axisL+blocks+hits+'</div><div class="lane">'+labs+'</div>'}
+function ttline(){}
+function e_s(k){return EV[k].s}
+function ttRender(){$('tapeBody').innerHTML=VM?tapeV():tapeHTML();if(typeof capUpdate==='function')capUpdate()}
+function tapeV(){scale();axis();if($('noTape').checked)return tapeX('<div class="tmsg">NO ENTRIES</div>');
+ const B=$('tapeBody'),H=B.clientHeight,W=B.clientWidth,sp=HI-LO,y=h=>(hr(h)-LO)/sp*H;
+ const X0=12,XH=X0+2,XB=XH+18,BW=20,XL=XB+BW,XR=XL+14,RW=W-XR,RH=34;
+ // minimap 0-24
+ let mm=`<div class="vmm">`+[0,6,12,18,24].map(h=>`<i style="top:${h/24*100}%"></i>`).join('')+EV.map(e=>`<u class="${e.a?'':'h'}" style="top:${hr(e.s)/24*100}%;height:${Math.max(1,(hr(e.e)-hr(e.s))/24*H)}px"></u>`).join('')+`<b style="top:${LO/24*100}%;height:${sp/24*100}%"></b></div>`;
+ const step=H/sp<18?2:1;let hl='',gl='';for(let h=LO;h<=HI;h+=step){const yy=(h-LO)/sp*H;hl+=`<span style="top:${Math.min(H-9,Math.max(0,yy-4))}px">${p2(h)}</span>`;if(h>LO&&h<HI)gl+=`<i style="top:${yy}px"></i>`}
+ const tops=EV.map(e=>Math.max(0,Math.min(H-RH,(y(e.s)+y(e.e))/2-RH/2)));
+ for(let k=1;k<tops.length;k++)tops[k]=Math.max(tops[k],tops[k-1]+RH+2);
+ for(let k=tops.length-1;k>=0;k--){const lim=k===tops.length-1?H-RH:tops[k+1]-RH-2;tops[k]=Math.min(tops[k],lim)}
+ let bl='',hits='',rows='',ld='';
+ EV.forEach((e,k)=>{const t=y(e.s),h=Math.max(2,y(e.e)-t),cy=t+h/2,ry=tops[k]+RH/2;
+  bl+=`<div class="blk ${e.a?'':'hol'}" data-ev="${k}" style="left:0;right:0;top:${t}px;height:${h}px"></div>`;
+  hits+=`<div class="hit" data-ev="${k}" style="left:-6px;right:-6px;top:${Math.max(0,cy-16)}px;height:32px"></div>`;
+  ld+=`<polyline points="${XL},${cy} ${XL+4},${cy} ${XR-4},${ry} ${XR},${ry}"/>`;
+  rows+=`<div class="vrow ${e.a?'':'p'}" data-ev="${k}" style="top:${tops[k]}px;height:${RH}px">${mk(e)}<span class="vt">${e.s}</span><span class="vtt">${e.t}</span></div>`});
+ return `<div class="vfill">${mm}<div class="vhl" style="left:${XH}px">${hl}</div><div class="vbar" style="left:${XB}px;width:${BW}px">${gl}${bl}${hits}</div><svg class="vld" width="${W}" height="${H}">${ld}</svg><div class="vrows" style="left:${XR}px;width:${RW}px">${rows}</div></div>`}
+let PLAN=[{t:'資料まとめ',d:'0:45'},{t:'買い出し',d:'0:30'},{t:'メール返信',d:'0:15'},{t:'企画書レビュー',d:'1:00'},{t:'請求書処理',d:'0:20'}];let CUT=3;if(!VM)PLAN.push({t:'経費精算',d:'0:25'},{t:'週報下書き',d:'0:30'});const NP=PLAN.length;const PLAN0=PLAN.slice();const CARS=PLAN;
+let seqOn=false,seqList=[],seqT=[];
+const fm=m=>Math.floor(m/60)+':'+String(Math.round(m%60)).padStart(2,'0');const mn=s=>{const [a,b]=s.split(':').map(Number);return a*60+b};
+function nowMin(){const v=$('capNow').value;if(v==='rt'){const d=nowD();return d.getHours()*60+d.getMinutes()}return +v}
+function capBase(){const N=nowMin(),E=+$('capEnd').value;let free=Math.max(0,E-N);EV.forEach(e=>{if(!e.a)return;const o=Math.min(E,mn(e.e))-Math.max(N,mn(e.s));if(o>0)free-=o});return {span:Math.max(1,E-N),free}}
+let gFree=null,gCut=null,gAnim=[],gFlash=-1;
+function capDraw(free,cut,span){const T=36,BH=100-T-4,MINH=22,u=free>0?Math.max(BH/span,MINH/free):BH/span,top=4+free*u,MAX=98;
+ $('gbox').style.top=(100-top)+'%';$('freeT').style.top=(100-top)+'%';
+ let y=4,html='';for(let i=0;i<cut&&i<PLAN.length;i++){const d=mn(PLAN[i].d)*u,y1=y+d;
+  const inT=Math.min(y1,top),seg=(a,b,cl)=>{a=Math.min(a,MAX);b=Math.min(b,MAX);if(b>a)html+=`<i class="${cl}${i===gFlash?' fl':''}" style="bottom:${a}%;height:${b-a}%"></i>`};
+  seg(y,inT,'gIn');seg(Math.max(y,top),y1,'gOv');y=y1}
+ $('gg').innerHTML=html;return y-4>free*u}
+function capUpdate(){const on=!!powered&&st[3]===2&&st[4]===2&&!$('noForm').checked;$('capW').classList.toggle('lit',on);
+ const b=capBase();const tf=b.free,tc=CUT;gAnim.forEach(clearTimeout);gAnim=[];
+ const f0=gFree===null||!on?tf:gFree,c0=gCut===null||!on?tc:gCut;const N=4;
+ for(let s=1;s<=N;s++)gAnim.push(setTimeout(()=>{const f=f0+(tf-f0)*s/N,c=s<N?(tc>c0?Math.min(tc,c0+Math.ceil((tc-c0)*s/N)):Math.max(tc,c0-Math.ceil((c0-tc)*s/N))):tc;capDraw(f,c,b.span)},I(35)*(s-1)));
+ gFree=tf;gCut=tc;let dm=0;for(let i=0;i<tc;i++)dm+=mn(PLAN[i].d);window.__ld=Math.round(dm/Math.max(1,tf)*100)+'%c'+tc;
+ const mk=$('cutK');mk.style.top=(2+tc*21-6)+'px';mk.classList.toggle('lit',on);
+ document.querySelectorAll('#formBody .pr').forEach((row,i)=>{row.classList.toggle('cutl',on&&i===tc-1);row.classList.toggle('lb',on&&i>=tc)})}
+function seqClr(){seqT.forEach(clearTimeout);seqT=[]}
+function seqArm(entry){seqClr();if(!seqOn)return;$('seqBtn').classList.add('lt');const Q=entry?P('seqq'):0,D=P('seqb');
+ seqT.push(setTimeout(()=>{const t0=performance.now();let lit=true;const step=()=>{const e=performance.now()-t0;if(e>=D){seqOn=false;seqList=[];$('seqBtn').classList.remove('lt');dull();cars(NP);return}
+   const f=1+5*e/D;lit=!lit;window.__tg=(window.__tg||[]).concat(Math.round(e));$('seqBtn').classList.toggle('lt',lit);seqT.push(setTimeout(step,500/f))};step()},Q))}
+function mini(ch){return `<span class="mini"><span class="dg">${['a','b','c2','d','e','f','g'].map(x=>`<i class="${x} ${MAP[ch].includes(x[0])?'s':''}"></i>`).join('')}</span></span>`}
+function cars(n){setTimeout(()=>capUpdate(),0);if($('noForm').checked){$('formBody').innerHTML='<div class="pr" style="letter-spacing:.15em">NO PLAN</div>'+'<div class="pr"></div>'.repeat(4);return}
+ $('formBody').innerHTML=PLAN.map((e,i)=>{if(i>=n)return '<div class="pr"></div>';const d=seqOn?(seqList.includes(i)?String(seqList.indexOf(i)+1):' '):String(i+1);
+  return `<div class="pr${seqOn?' sq':''}" data-k="${i}">${mini(d)}<span class="pt">${e.t}</span><span class="pd">${e.d}</span></div>`}).join('')}
+function carsCursor(r){$('formBody').innerHTML=PLAN.map((t,i)=>`<div class="pr"><span class="cur">${r.includes(i)?'█'.repeat(16):''}</span></div>`).join('')}
+const LN={0:'',1:'',2:'',3:'',4:''};
+function avail(){const pw=!!powered;
+ ctl(0).classList.toggle('avx',!pw);[1,2,3,4].forEach(i=>ctl(i).classList.toggle('avx',pw&&st[i]===0));$('depBtn').classList.toggle('avx',st[5]===2&&!departed);
+ $('commBtn').classList.toggle('on',pw&&commBusy);
+ $('grid').classList.toggle('pw',pw);if(typeof lockUpdate==='function')lockUpdate()}
+function on(i){ctl(i).classList.add('on');leg(i).classList.add('bl')}
+// lamp ownership: lamp test (1) vs all-lamp check (0) may overlap; real state applied at end
+function lampsReal(){if(st[1]!==2)return L.forEach(l=>l.classList.remove('on'));L[0].classList.toggle('on',departed);L[1].classList.add('on');L[2].classList.remove('on')}
+const RUN={
+ 0:done=>{ // BATT: all-lamp check, then LED row builds to full
+  powered=true;st[1]=2;shown[1]=1;on(0);aux();avail();document.querySelectorAll('.leg').forEach(l=>l.classList.add('bl'));L.forEach(l=>l.classList.add('on'));leds(6);
+  T(()=>{document.querySelectorAll('.leg').forEach(l=>{const k=l.dataset.l;if(!(k==='0'||(k!=='0b'&&st[k]>=1)))l.classList.remove('bl')});lampsReal();leds(0);click(false);
+   if(st[1]===1)L.forEach(l=>l.classList.add('on'));
+   if($('pwrKind').value==='none'||rm()){leds(6);done();return}
+   seq([1,2,3,4,5,6].map(n=>()=>leds(n)),I(P('led')*0.6),()=>T(done,I(150)))},P('check'))},
+ 1:done=>{on(1);if(rm()){L.forEach(l=>l.classList.add('on'));T(()=>{lampsReal_after();done()},P('check'));return}
+  L.forEach(l=>l.classList.remove('on'));seq([0,1,2].map(k=>()=>{L[k].classList.add('on');click(false)}),I(120),()=>T(()=>{lampsReal_after();done()},I(250)))},
+ 2:done=>{on(2);T(()=>{$('w2').classList.add('lit');if(rm()){clk(now(),1);done();return}
+  seq(['8   ','88  ','888 ','8888'].map((x,k)=>()=>clk(x,k>=1)),I(110),()=>T(()=>{clk('    ',0);T(()=>{clk(now(),1);click(false);done()},16)},I(300)))},P('bl'))},
+ 3:done=>{on(3);$('tapeBody').innerHTML=tapeX('');T(()=>{$('w3').classList.add('lit');
+  const it=()=>{$('tapeBody').innerHTML=tapeX('<div class="tmsg">IN TEST</div>');T(()=>{ttRender();click(false);done()},300)};
+  if(rm())return it();
+  seq(Array.from({length:12},(_,k)=>()=>{$('tapeBody').innerHTML=fillX((k+1)*100/12)}),I(32),()=>T(it,I(150)))},P('bl'))},
+ 4:done=>{on(4);carsCursor([]);T(()=>{$('w4').classList.add('lit');const go=()=>{cars(0);if($('noForm').checked){done();return}let n=0;const s=()=>{n++;cars(n);click(false);vib(10);n<CARS.length?T(s,110):done()};T(s,110)};
+  if(rm())return go();seq([[0],[0,1],[0,1,2],[0,1,2,3],[0,1,2,3,4]].map(k=>()=>carsCursor(k)),I(70),()=>T(go,I(150)))},P('bl'))},
+};
+function lampsReal_after(){st[1]=2;lampsReal();click(false)}
+function start(i,auto){
+ if(departed)return;
+ if(i===5){if(seqOn){dull();return}if(st[5]===2)depart();else dull();return}
+ if(i===0&&powered){powerOff();return}
+ if(i!==0&&!powered){dull();return} // 電源がない: 何も起きない
+ click(false);vib(10);
+ panelReset(i);const g=++gen[i];st[i]=1;ctx={i,g};
+ try{RUN[i](()=>{if(gen[i]!==g)return;st[i]=2;checkAll()})}finally{ctx=null}}
+// 押し直し: そのパネルを未確認にして、起動の動きを最初からやり直す
+function panelReset(i){
+ if(st[5]===2){st[5]=0;leg(5).classList.remove('bl')}
+ shown[i]=0;$('S'+i)&&$('S'+i).classList.remove('on');ctl(i).classList.remove('on');
+ if(i===2){$('w2').classList.remove('lit');clk('    ',0)}
+ if(i===3){$('w3').classList.remove('lit');$('tapeBody').innerHTML=''}
+ if(i===4){if(seqOn){seqOn=false;seqList=[];seqClr();$('seqBtn').classList.remove('lt')}$('w4').classList.remove('lit')}
+ setTimeout(()=>{capUpdate();lockUpdate();avail()},0)}
+// MASTER オフ: 盤を落とす。起動画面は残し、各パネルは未確認に。予定や区切りは保つ
+function powerOff(){pgen++;gen=gen.map(x=>x+1);timers.forEach(clearTimeout);timers=[];clearTimeout(idleT);
+ if(waitT)waitStop();seqOn=false;seqList=[];seqClr();commBusy=false;$('commT').textContent='';['lRelay','lMac'].forEach(k=>$(k).classList.remove('on','amb','flt'));
+ st=[0,0,0,0,0,0];shown=[];powered=false;
+ document.querySelectorAll('#grid .on,#grid .lit,#grid .bl').forEach(e=>e.classList.remove('on','lit','bl'));L.forEach(l=>l.classList.remove('on'));
+ document.querySelectorAll('.lk').forEach(k=>k.classList.remove('in','out'));
+ leds(0);clk('    ',0);$('tapeBody').innerHTML='';$('ptick').innerHTML='';$('ovb').style.visibility='hidden';$('ovm').innerHTML='';$('spanT').textContent='';
+ cars(0);chk();capUpdate();aux();avail();click(false);vib(10)}
+let shown=[];function chk(){[0,1,2,3,4].forEach(i=>{const e=$('S'+i);if(st[i]===2&&!shown[i]){shown[i]=1;if(rm()){e.classList.add('on');return}seq([1,0,1,0,1].map(v=>()=>e.classList.toggle('on',!!v)),I(60),()=>{})}else if(st[i]!==2){e.classList.remove('on')}})}
+let scale24=false,estMode=0,commBusy=false;
+const EST=['×1.2','3:40','18%'];
+function aux(){document.querySelectorAll('.aux').forEach(w=>w.classList.toggle('lit',!!powered));
+ const src=$('devSrc').value,ext=src!=='unplugged';$('lExt').classList.toggle('on',!!powered&&ext);$('lAwake').classList.toggle('on',!!powered&&ext&&$('awakeSet').checked);
+ $('devT').textContent=ext?(src==='full'?'FULL':'CHG'):(+$('lvl').value<=20?'LO ':'')+$('lvl').value+'%';$('estT').textContent=EST[estMode];[0,1,2].forEach(k=>$('lE'+k).classList.toggle('on',!!powered&&k===estMode));if(!$('commT').textContent)$('commT').textContent='----'}
+function comm(){if(!powered){dull();return}const cg=++gen[6];ctx={i:6,g:cg};try{comm2()}finally{ctx=null}}
+function comm2(){commBusy=true;click(false);vib(10);['lRelay','lMac'].forEach(k=>$(k).classList.remove('on','amb','flt'));$('commT').textContent='MEAS…';avail();
+ const sim=$('commSim').value,rt=90+Math.round(Math.random()*70);
+ if(sim==='relay'){T(()=>{$('commT').textContent='NO RELAY';$('lRelay').classList.add('flt');dull();commBusy=false;avail()},I(900));return}
+ T(()=>{$('lRelay').classList.add('on');click(false)},40);
+ if(sim==='mac'){T(()=>{$('commT').textContent='NO MAC';$('lMac').classList.add('amb');dull();commBusy=false;avail()},I(1500));return}
+ T(()=>{$('lMac').classList.add('on');$('commT').textContent=`MAC ${String(rt).padStart(3,' ')}MS`;click(false);commBusy=false;avail()},rt)}
+function checkAll(){chk();setTimeout(lockUpdate,0);capUpdate();setTimeout(avail,0);if([0,1,2,3,4].every(i=>st[i]===2)&&st[5]===0){st[5]=2;leg(5).classList.add('bl');click(false)}pre()}
+function nextAuto(){return (document.getElementById('grid').classList.contains('v')?[0,2,3,4]:[0,1,2,3,4]).find(i=>st[i]===0)}
+function arm(){clearTimeout(idleT);pre();avail();const n=nextAuto();if(n===undefined||departed||!powered)return;idleT=setTimeout(()=>{T(()=>{start(n,true);arm()},n===0?0:P('gap'))},P('idle'))}
+function pre(){const n=nextAuto();document.querySelectorAll('[data-i]').forEach(e=>e.classList.toggle('pre',$('pre').checked&&!!powered&&+e.dataset.i===n))}
+let waitT=null;const RM=matchMedia('(prefers-reduced-motion: reduce)').matches;
+let GD=[];const CH=a=>a===0?'':`rgba(255,176,0,${a})`;
+const WSTEP=[110,90,75,62,52,44,38,33,29,26],WHIT=90,WREST=500,RSTEP=[50,40,32,26,22,19,17,15,14,14];let WA=[];
+function waitStop(){WA.forEach(clearTimeout);WA=[];waitT=null;GD.forEach(g=>g.style.background='');document.querySelector('.dcol').classList.remove('dhit')}
+function wDraw(hd){const tl=Math.min(3,1+Math.floor(hd/4));GD.forEach((g,i)=>{const j=hd-i;g.style.background=(j>=0&&j<=tl)?CH(+(.85*(1-j/(tl+1))).toFixed(2)):''})}
+function waitStart(){if(RM){GD.forEach(g=>g.style.background=CH(.3));return}if(waitT)return;waitT=1;const W=(f,ms)=>WA.push(setTimeout(()=>{if(!departed&&waitT)f()},ms));
+ const wave=()=>{let t=0;WSTEP.forEach((d,k)=>{W(()=>wDraw(k),t);t+=d});
+  W(()=>{GD.forEach((g,i)=>g.style.background=i===GD.length-1?CH(.85):i>=GD.length-3?CH(.3):'');document.querySelector('.dcol').classList.add('dhit')},t);
+  W(()=>{GD.forEach(g=>g.style.background='');document.querySelector('.dcol').classList.remove('dhit')},t+WHIT);
+  W(wave,t+WHIT+WREST)};wave()}
+function lockUpdate(){[0,2,3,4].forEach(i=>$('K'+i).classList.toggle('in',!!powered&&st[i]===2&&!departed));$('lRdy').classList.toggle('on',st[5]===2&&!departed);if(st[5]===2&&!departed)waitStart();else if(waitT)waitStop()}
+let frz=false;function R(f,ms){T(()=>{if(!frz)f()},ms)}
+function depart(){departed=true;waitStop();setTimeout(avail,0);clearTimeout(idleT);click(true);vib(30);L[0].classList.add('on');L[1].classList.add('on');
+ if(q.get('freeze'))setTimeout(()=>{frz=true},+q.get('freeze'));
+ $('lRdy').classList.remove('on');const DB=$('dbar');['p1','p2','p3'].forEach((c,k)=>setTimeout(()=>{DB.classList.remove('p1','p2');DB.classList.add(c)},k*22));setTimeout(()=>$('depBtn').classList.add('on'),66);
+ [0,2,3,4].forEach((i,k)=>R(()=>{$('K'+i).classList.remove('in');$('K'+i).classList.add('out')},k*28));
+ {let t=90;GD.forEach((g,i)=>{R(()=>{g.style.background=CH(.85)},t);t+=RSTEP[i]});R(()=>document.querySelector('.dcol').classList.add('dhit'),t);R(()=>document.querySelector('.dcol').classList.remove('dhit'),t+120)}
+ const mods=[...document.querySelectorAll('#grid .mod')].reverse();
+ mods.forEach((m,k)=>{R(()=>m.classList.add('rp'),150+k*22);R(()=>m.classList.remove('rp'),150+k*22+60)});
+ R(()=>{[...document.querySelectorAll('#leds b')].forEach(b=>b.classList.add('s'))},150);
+ R(()=>{$('hub').style.display='flex'},I(260)+mods.length*22+150)}
+function reset(){if(waitT)waitStop();$('dbar').classList.remove('p1','p2','p3');frz=false;document.querySelectorAll('.lk').forEach(k=>k.classList.remove('in','out'));$('key').style.transform='';seqOn=false;seqList=[];seqClr();$('seqBtn').classList.remove('lt');PLAN=PLAN0.slice();CUT=3;gFree=null;gCut=null;estMode=0;commBusy=false;$('commT').textContent='';['lRelay','lMac'].forEach(k=>$(k).classList.remove('on','amb','flt'));timers.forEach(clearTimeout);timers=[];clearTimeout(idleT);st=[0,0,0,0,0,0];shown=[];powered=false;departed=false;
+ document.querySelectorAll('.on,.lit,.bl,.dn').forEach(e=>e.classList.remove('on','lit','bl','dn'));L.forEach(l=>l.classList.remove('on'));
+ $('hub').style.display='none';leds(0);clk('    ',0);$('tapeBody').innerHTML='';loadDay();$('ptick').innerHTML='';$('ovb').style.visibility='hidden';$('ovm').innerHTML='';$('spanT').textContent='';cars(0);chk();$('pwrMod').style.visibility=$('pwrKind').value==='none'?'hidden':'visible';aux();arm()}
+document.querySelectorAll('[data-i]').forEach(b=>{const i=+b.dataset.i;b.onpointerdown=()=>b.classList.add('dn');b.onpointerup=b.onpointerleave=()=>b.classList.remove('dn');b.onclick=()=>{start(i,false);arm()}});
+$('w3').addEventListener('click',e=>{const t=e.target.closest('[data-ev]');if(st[3]!==2||$('noTape').checked){dull();return}if(!t)return;const k=+t.dataset.ev;EV[k].a=!EV[k].a;click(false);vib(10);ttRender()});
+$('commBtn').onclick=comm;
+$('estBtn').onclick=()=>{if(!powered){dull();return}estMode=(estMode+1)%EST.length;click(false);aux()};
+$('scaleTg').onclick=()=>{scale24=!scale24;$('scaleTg').classList.toggle('d',scale24);click(false);vib(10);if(st[3]===2)ttRender()};
+['devSrc','lvl','awakeSet'].forEach(k=>$(k).addEventListener('input',aux));
+let h12=false;$('setBtn').onclick=()=>{if(!powered){dull();return}h12=!h12;click(false);if(st[2]===2)clk(now(),1)};
+if($('loadBtn'))$('loadBtn').onclick=()=>{if(st[3]!==2){dull();return}click(false);$('tapeBody').innerHTML=tapeX('');setTimeout(ttRender,60)};
+$('seqBtn').onclick=()=>{if(st[4]!==2||$('noForm').checked||departed){dull();return}click(false);vib(10);
+ if(!seqOn){seqOn=true;seqList=[]}else{const rest=PLAN.map((_,i)=>i).filter(i=>!seqList.includes(i));PLAN=[...seqList,...rest].map(i=>PLAN[i]);seqOn=false;seqList=[]}
+ $('seqBtn').classList.toggle('lt',seqOn);seqArm(true);cars(NP)};
+$('w4').addEventListener('click',e=>{if(seqOn)return;const t=e.target.closest('[data-k]');if(!t)return;if(st[4]!==2||!powered||departed){dull();return}const i=[...t.parentNode.children].indexOf(t);setCut(i+1,i)});
+function setCut(n,fl){if(n===CUT){click(false);return}CUT=n;gFlash=fl===undefined?n-1:fl;click(false);vib(8);capUpdate();setTimeout(()=>{gFlash=-1},I(250))}
+let railDn=false;const railN=e=>{const r=$('rail').getBoundingClientRect();return Math.max(0,Math.min(NP,Math.round((e.clientY-r.top-2)/21)))};
+$('rail').addEventListener('pointerdown',e=>{if(seqOn||st[4]!==2||!powered||departed){dull();return}railDn=true;try{$('rail').setPointerCapture(e.pointerId)}catch(_){}setCut(railN(e))});
+$('rail').addEventListener('pointermove',e=>{if(!railDn)return;const n=railN(e);if(n!==CUT)setCut(n)});
+['pointerup','pointercancel'].forEach(t=>$('rail').addEventListener(t,()=>{railDn=false}));
+$('w4').addEventListener('click',e=>{if(!seqOn)return;const t=e.target.closest('[data-k]');if(!t)return;const k=+t.dataset.k;if(seqList.includes(k)){dull();seqArm();return}seqList.push(k);click(false);vib(10);seqArm();cars(NP)});
+$('reset').onclick=reset;$('pre').onchange=pre;$('pwrKind').onchange=()=>$('pwrMod').style.visibility=$('pwrKind').value==='none'?'hidden':'visible';
+$('noTape').onchange=()=>{if(st[3]===2)ttRender()};$('day').onchange=()=>{loadDay();if(st[3]===2)ttRender()};$('noForm').onchange=()=>{if(st[4]===2)cars(NP)};
+if(VM)$('grid').classList.add('v');{const w=$('w2');$('clk').style.setProperty('--ck',Math.min((w.clientWidth-14)/243,(w.clientHeight-12)/100).toFixed(3))}
+const q=new URLSearchParams(location.search);
+const seqDemo=k=>{$('seqBtn').click();[3,1].forEach(i=>{const e=document.querySelector(`#formBody [data-k="${i}"]`);e&&e.click()});if(k>1)$('seqBtn').click()};if(q.get('scale')==='24'){scale24=true;$('scaleTg').classList.add('d')}['commSim','devSrc','lvl'].forEach(k=>{if(q.get(k))$(k).value=q.get(k)});if(q.get('day'))$('day').value=q.get('day');if(q.get('idle'))$('idle').value=q.get('idle');
+reset();
+if(q.get('seqdemo'))setTimeout(()=>seqDemo(+q.get('seqdemo')),6000);
+$('bat').addEventListener('click',()=>{if(departed)return;const k=$('key');(powered?[[0,15],[35,-15],[70,-45]]:[[0,-15],[35,15],[70,45]]).forEach(([t,a])=>setTimeout(()=>{k.style.transform=`rotate(${a}deg)`},t))},true);
+['capNow','capEnd'].forEach(id=>$(id).addEventListener('change',capUpdate));$('rsv').addEventListener('input',capUpdate);if(q.get('capnow')){const v=q.get('capnow');if(![...$('capNow').options].some(o=>o.value===v))$('capNow').add(new Option(fm(+v),v));$('capNow').value=v}
+if(q.get('captest')){const log=[];const L=()=>log.push(window.__ld);const row=k=>document.querySelectorAll('#formBody .pr')[k];setTimeout(()=>{L();row(4).click();L();document.querySelector('#tapeBody .vrow[data-ev="3"]').click();L();row(1).click();L();$('seqBtn').click();[3,1,0,2,4].forEach(k=>document.querySelector('#formBody .pr[data-k="'+k+'"]').click());$('seqBtn').click();setTimeout(()=>{L();const o=document.createElement('pre');o.id='captest';o.textContent='cap='+log.join(' ')+' order='+PLAN.map(p=>p.t.slice(0,2)).join(',');document.body.appendChild(o)},300)},11000)}
+if(q.get('railtest'))setTimeout(()=>{const log=[];const R=$('rail').getBoundingClientRect(),ev=(t,y)=>$('rail').dispatchEvent(new PointerEvent(t,{bubbles:true,clientX:R.left+8,clientY:R.top+y,pointerId:1}));log.push('start'+CUT);document.querySelectorAll('#formBody .pr')[0].click();log.push('tapRow1>'+CUT);ev('pointerdown',4);log.push('railTop>'+CUT);[20,45,70,95,110].forEach(y=>{ev('pointermove',y);log.push('drag'+y+'>'+CUT)});ev('pointerup',110);setTimeout(()=>{log.push('load='+window.__ld+' lb='+document.querySelectorAll('#formBody .pr.lb').length);const o=document.createElement('pre');o.id='railtest';o.textContent=log.join(' ');document.body.appendChild(o)},300)},10800);
+if(q.get('busy')){$('capNow').value='960';}
+if(q.get('cut'))setTimeout(()=>{CUT=+q.get('cut');capUpdate()},10500);
+GD=[...document.querySelectorAll('#chv i')];
+for(let k=0;k<=NP;k++){const d=document.createElement('i');d.className='dt';d.style.top=(2+k*21)+'px';$('rail').prepend(d)}
+if(NP>5){const sl=document.querySelector('.slots');for(let k=6;k<=NP;k++){const s=document.createElement('span');s.textContent=k;sl.appendChild(s)}}
+if(q.get('barprobe')){const out=[];const snap=tag=>{const r=e=>{const b=document.querySelector(e).getBoundingClientRect();return e+':'+[b.x,b.y,b.width,b.height].map(v=>v.toFixed(1)).join(',')};out.push(tag+' '+['#depBtn','.dcol','#dbar','.dleg','#chv'].map(r).join(' ')+' cls='+$('depBtn').className+'|'+document.querySelector('.dcol').className)};
+ [3000,11000,11500,11700,11900,12100,12300,12500,12700,12900].forEach(t=>setTimeout(()=>snap('t'+t),t));setTimeout(()=>{const o=document.createElement('pre');o.id='bp';o.textContent=out.join('\n');document.body.appendChild(o)},13000)}
+if(q.get('forcehit'))setTimeout(()=>{waitStop();document.querySelector('.dcol').classList.add('dhit');GD[9].style.background=CH(.85)},11500);
+if(q.get('shot')){document.body.style.cssText='padding:0;margin:0;display:block';$('panel').style.display='none'}
+if(q.get('rects'))setTimeout(()=>{const o=document.createElement('pre');o.id='rects';o.textContent=JSON.stringify([...document.querySelectorAll('#grid .mod')].map(m=>{const b=m.getBoundingClientRect();return [(m.getAttribute('style')||'').match(/grid-area:(\w+)/)?.[1]||m.id,b.x,b.y,b.width,b.height]}).concat([['phone',...(()=>{const b=document.getElementById('phone').getBoundingClientRect();return [b.x,b.y,b.width,b.height]})()]]));document.body.appendChild(o)},+q.get('rects'));
+if(q.get('go'))setTimeout(()=>$('depBtn').click(),+q.get('go'));
+if(q.get('act'))q.get('act').split(',').forEach(s=>{const[t,x]=s.split(':');setTimeout(()=>{if(x==='c')comm();else if(x[0]==='b'){start(+x.slice(1),false);arm()}else if(x==='seq')$('seqBtn').click()},+t)});
+if(q.get('press')||q.get('measure'))setTimeout(()=>$('bat').click(),100);
+if(q.get('probe'))setTimeout(()=>{const o=document.createElement('pre');o.id='probe';o.textContent='powered='+!!powered+' st='+st.join('')+' litWins='+document.querySelectorAll('.win.lit').length+' onEls='+document.querySelectorAll('#grid .on').length+' avail='+document.querySelectorAll('.avx').length+' stn='+document.querySelectorAll('.stn').length;document.body.appendChild(o)},5000);
+if(q.get('measure')){const TO=!!q.get('seqto');const sel='.mod,.win,[data-i],.lamp,.sl,#leds,#clk,#tapeBody,#formBody,.pr,.slots span,#commT,#devT,#estT,.mom,.tgb';let labA;const labs=()=>[...document.querySelectorAll('.lab,.blk,.lead,.vrow')].map(e=>{const b=e.getBoundingClientRect();return [b.x,b.y,b.width,b.height].map(Math.round).join(',')}).join(';');setTimeout(()=>{$('commBtn').click();$('estBtn').click();$('scaleTg').click();$('setBtn').click();$('loadBtn').click()},4500);setTimeout(()=>{$('scaleTg').click();$('commBtn').click()},5500);setTimeout(()=>seqDemo(TO?1:2),6300);if(TO)setTimeout(()=>{window.__blink=$('seqBtn').classList.contains('lt')+'/'+seqOn},11500);setTimeout(()=>{labA=labs();document.querySelector('.vrow[data-ev="0"],.lab[data-ev="0"]').click();setTimeout(()=>{window.__lab=(labA===labs())?'labStable':'labMoved'},50)},6000);const snap=()=>[...document.querySelectorAll(sel)].map(e=>{const b=e.getBoundingClientRect();return [b.x,b.y,b.width,b.height].map(v=>Math.round(v*10)/10).join(',')});
+ const TL=TO?[0,600,1200,1800,2600,3600,5000,7000,9000,11000,13000,15500]:[0,600,1200,1800,2600,3600,5000,7000];const shots=[];TL.forEach(t=>setTimeout(()=>{shots.push(snap());if(t===TL[TL.length-1]){const base=shots[0];const diffs=[];shots.forEach((sh,k)=>sh.forEach((v,j)=>{if(v!==base[j])diffs.push(k+':'+j+':'+base[j]+'->'+v)}));const others=diffs.filter(d=>!document.querySelectorAll(sel)[+d.split(':')[1]].matches('[data-i],.k'));const o=document.createElement('pre');o.id='measure';o.textContent='toggles@'+(window.__tg||[]).join(',')+' '+(window.__blink?'midBlink(lit/seqOn)='+window.__blink+' ':'')+'plan='+PLAN.map(e=>e.t.slice(0,2)).join(',')+' seq='+seqOn+' NB['+others.map(d=>{const j=+d.split(':')[1];const e=document.querySelectorAll(sel)[j];return (e.id||e.className)+' '+d}).join(' ; ')+'] '+(window.__lab||'labNA')+' toggled='+(!EV[0].a)+' nonButtonDiffs='+others.length+' N='+base.length+' snaps='+shots.length+' diffs='+diffs.length+' '+diffs.slice(0,20).join(' | ');document.body.appendChild(o)}},t))}
+</script><script>
+/* 設定画面の試作切替。URL の値で初期化し、以後は設定画面が正。 */
+(function(){const q=new URLSearchParams(location.search),$=id=>document.getElementById(id);
+if(q.get('sense'))$('xSense').value=q.get('sense');if(q.get('trend'))$('xTrend').value=q.get('trend');if(q.get('speed'))$('xSpeed').value=q.get('speed');if(q.get('hold'))$('xHold').value=q.get('hold');if(q.get('mode'))window.__MODE=q.get('mode');if(q.get('tg'))window.__TG=+q.get('tg');if(q.get('stat'))$('xStat').value=q.get('stat');if(q.get('over'))$('xOver').value=q.get('over');if(q.get('jump'))window.__JUMP=+q.get('jump');if(q.get('onr'))$('xOnR').value=q.get('onr');if(q.get('loglay'))$('xLogLay').value=q.get('loglay');if(q.get('step'))$('xStep').value=q.get('step');if(q.get('seal'))$('xSeal').value=q.get('seal');if(q.get('onmk'))$('xOnMk').value=q.get('onmk');if(q.get('pace'))$('xPace').value=q.get('pace');if(q.get('ttlive'))$('xTT').value=q.get('ttlive');
+[['nosec','xSec'],['nocd','xCd'],['noslide','xSlide'],['noblink','xBlink']].forEach(([p,i])=>{if(q.get(p))$(i).checked=false});
+const pv=()=>$('v-xPace').textContent='×'+(+$('xPace').value).toFixed(2);$('xPace').addEventListener('input',pv);pv();
+window.XC={sec:()=>$('xSec').checked,cd:()=>$('xCd').checked,sl:()=>$('xSlide').checked,bl:()=>$('xBlink').checked,tt:()=>$('xTT').value,pace:()=>+$('xPace').value,sense:()=>$('xSense').value,trend:()=>$('xTrend').value,speed:()=>+$('xSpeed').value,hold:()=>+$('xHold').value,period:()=>'10R',onmk:()=>$('xOnMk').value,seal:()=>$('xSeal').value,over:()=>$('xOver').value,step:()=>$('xStep').value,loglay:()=>$('xLogLay').value,onr:()=>$('xOnR').value,stat:()=>$('xStat').value};
+})();
+</script>
+<script>
+/* atmos-6: 共通の「今」nowD()（?nxnow で時刻を合わせ、そこから秒が進む）。
+   オフ: ?nosec=1 秒桁 / ?nocd=1 秒カウントダウン / ?noslide=1 帯の秒送り / ?noblink=1 コロン明滅 */
+(function(){const Q=new URLSearchParams(location.search),$$=id=>document.getElementById(id);
+
+const p2=n=>String(n).padStart(2,'0');
+const fS=sec=>p2(Math.floor(sec/3600))+':'+p2(Math.floor(sec/60)%60)+':'+p2(sec%60),fH=sec=>{const m=Math.ceil(sec/60);return p2(Math.floor(m/60))+':'+p2(m%60)+':--'};
+const setNow=h=>{const [H,M,S]=h.split(':').map(Number);const d=new Date();d.setHours(H,M,S||0,0);OFF=d-Date.now();$$('capNow').value='rt'};
+const NX=Q.get('nxnow');if(NX)NX.split(',').forEach((x,i)=>{const [h,t]=x.split('@');if(!i&&!t)setNow(h);else setTimeout(()=>setNow(h),+t||0)});
+$$('xNowGo').onclick=()=>{const v=$$('xNow').value.trim();if(/^\d{1,2}:\d{2}(:\d{2})?$/.test(v))setNow(v)};$$('xNowRt').onclick=()=>{OFF=0};if(NX)$$('xNow').value=NX.split(',')[0];
+const put=(id,t,d)=>{const e=document.querySelector('#'+id+' .c');if(e.textContent!==t)e.textContent=t;$$(id).classList.toggle('d',d)};
+const flip=w=>{w.classList.remove('flip');void w.offsetWidth;w.classList.add('flip')};
+let last='',mode='',fmt='',lastHM='',lastS='';
+setInterval(()=>{const D=nowD(),Ns=D.getHours()*3600+D.getMinutes()*60+D.getSeconds(),Nf=Ns+D.getMilliseconds()/1000,N=Math.floor(Ns/60);
+ const live=!!powered&&st[2]===2;
+ /* 時計: 分が変わったら書き換え、コロンは秒の前半だけ点く、秒は小桁 */
+ if(live){const hm=now();if(hm!==lastHM){lastHM=hm;clk(hm,1)}
+  if(XC.bl()){const c=document.querySelector('#clk .colon');c&&c.classList.toggle('s',D.getMilliseconds()<500)}
+  const ss=XC.sec()?p2(D.getSeconds()):'';const e=$$('clkS');if(ss!==lastS){lastS=ss;e.textContent=ss}e.style.visibility=XC.sec()?'':'hidden'}
+ else{lastHM='';lastS='';$$('clkS').textContent=''}
+ const on=!!powered&&st[3]===2&&!$$('noTape').checked;
+ const cur=EV.filter(e=>mn(e.s)*60<=Ns&&mn(e.e)*60>Ns);let fr=N;if(cur.length){fr=Ns/60;let ch=true;while(ch){ch=false;EV.forEach(e=>{if(mn(e.s)<=fr&&mn(e.e)>fr){fr=mn(e.e);ch=true}})}}
+ const nx=EV.map(e=>mn(e.s)).filter(m=>m*60>Ns).sort((a,b)=>a-b)[0];
+ const m=!on?'':(cur.length?'F':'S');
+ $$('nxS').classList.toggle('lit',on);$$('nxF').classList.toggle('lit',on);
+ $$('nxLS').classList.toggle('amb',m==='S');$$('nxLF').classList.toggle('amb',m==='F');
+ $$('nxGS').classList.toggle('off',m!=='S');$$('nxGF').classList.toggle('off',m!=='F');
+ const rem=m==='F'?fr*60-Ns:(nx!==undefined?nx*60-Ns:null);const fm2=rem===null?'':(XC.cd()?'s':'h');
+ if(m&&mode&&m!==mode){flip($$('nxS'));flip($$('nxF'))}else if(m&&fmt&&fm2!==fmt)flip($$(m==='F'?'nxF':'nxS'));mode=m;fmt=fm2;
+ const txt=rem===null?'--:--:--':(fm2==='s'?fS(rem):fH(rem));
+ if(!on){put('nxS','',1);put('nxF','',1)}
+ else if(m==='F'){put('nxS','--:--:--',1);put('nxF',txt,0)}
+ else{put('nxS',txt,0);put('nxF','--:--:--',1)}
+ const k=N+'|'+EV.map(e=>e.s+e.e).join()+on;if(k!==last){last=k;if(typeof capUpdate==='function'&&powered)capUpdate()}
+ const B=$$('tapeBody');let b=B.querySelector('.nxb');
+ if(!on||!B.innerHTML){b&&b.remove();return}
+ if(!b){b=document.createElement('i');b.className='nxb';(VM?B:(B.querySelector('.tape')||B)).appendChild(b)}
+ const t0=(XC.sl()?Nf:N*60)/3600,t1=cur.length?fr/60:(nx!==undefined?nx/60:HI),c=v=>Math.max(LO,Math.min(HI,v));b.classList.toggle('busy',!!cur.length);
+ if(b.dataset.tl&&b.dataset.tl!==XC.tt()){b.dataset.tl='';b.innerHTML=''}if(XC.tt()!=='off'&&!b.dataset.tl){b.dataset.tl=XC.tt();b.innerHTML=XC.tt()==='b'?'<span class="nxt"></span>':Array.from({length:7},(_,i)=>`<i class="nxk" style="left:${i/6*100}%"></i>`).join('')+'<i class="nxp"></i>'}
+ if(XC.tt()==='a'){const pp=b.querySelector('.nxp');pp&&(pp.style.left=`calc(${D.getSeconds()/60*100}% - 1px)`)}
+ if(XC.tt()==='b'){const tt=b.querySelector('.nxt');const v=p2(D.getHours())+':'+p2(D.getMinutes())+':'+p2(D.getSeconds());tt&&tt.textContent!==v&&(tt.textContent=v)}
+ if(VM){const H=B.clientHeight,y=v=>(c(v)-LO)/(HI-LO)*H;b.classList.add('v');b.style.top=y(t0)+'px';b.style.height=Math.max(0,y(t1)-y(t0))+'px'}
+ else{const W=b.parentNode.clientWidth,x=v=>(c(v)-LO)/(HI-LO)*W;b.style.left=x(t0)+'px';b.style.width=Math.max(0,x(t1)-x(t0))+'px'}
+},50)})();
+</script>
+<script>
+/* atmos-11: きっぷは「実際にかかる長さ」で出る。PACE（直近の実際÷見積もり）を読ませず、長さそのものに溶かす。 */
+(function(){const PACE=()=>XC.pace();const BASE={};PLAN0.forEach(p=>BASE[p.t]=mn(p.d));
+const f=m=>Math.floor(m/60)+':'+String(m%60).padStart(2,'0');let k=1,grown=false,anim=0;const MX=120;
+const apply=()=>{PLAN.forEach(p=>p.d=f(Math.round(BASE[p.t]*k)));if(!seqOn){cars(NP)}};
+const bands=()=>document.querySelectorAll('#formBody .pr[data-k]').forEach(r=>{const p=PLAN[+r.dataset.k];if(!p)return;const b0=BASE[p.t],cur=mn(p.d);let g=r.querySelector('.gb');if(!g){g=document.createElement('span');g.className='gb';g.innerHTML='<i></i><u></u>';r.prepend(g)}const W=r.clientWidth;g.style.width=W+'px';g.firstChild.style.width=Math.min(W,b0/MX*W)+'px';g.lastChild.style.left=Math.min(W,b0/MX*W)+'px';g.lastChild.style.width=Math.max(0,Math.min(W,cur/MX*W)-b0/MX*W)+'px'});
+document.getElementById('xPace').addEventListener('change',()=>{if(grown){grown=false;clearTimeout(anim);k=1;PLAN.forEach(p=>p.d=f(BASE[p.t]));if(!seqOn)cars(NP)}});
+setInterval(()=>{const on=!!powered&&st[4]===2;
+ if(!on){if(grown||k!==1){grown=false;k=1;clearTimeout(anim);PLAN.forEach(p=>p.d=f(BASE[p.t]))}return}
+ if(!grown){grown=true;let n=0;const N=6;const step=()=>{n++;k=1+(PACE()-1)*n/N;apply();if(n<N)anim=setTimeout(step,70)};anim=setTimeout(step,700)}
+ bands()},60)})();
+</script><script>
+/* 運転状況：今日の時間帯ごとの事実だけ（TIMETABLE の予定と空きから）
+   ・空き（着の予定がない時間）が「平常の長さ」以上 ＝ 平常運転
+   ・空きがそれより短い ＝ ダイヤ過密
+   ・着の予定が「見合わせの長さ」より長い ＝ 見合わせ
+   ・それより短い予定は、隣に短い空きがあれば ダイヤ過密（細切れの一部）、なければ 見合わせ
+   ・同じ状況が続くところは1本にまとめる。通（寄らない予定）は数えない。範囲は TIMETABLE と同じ */
+(function(){const $=id=>document.getElementById(id);
+const M=s=>{const[a,b]=s.split(':').map(Number);return a*60+b};
+const LB={ok:['平常運転','平常'],dense:['ダイヤ過密','過密'],stop:['見合わせ','見合せ']};
+function bands(){const lo=LO*60,hi=HI*60;
+ if($('noTape').checked||!EV.length)return [{s:lo,e:hi,k:'ok'}];
+ const bs=EV.filter(e=>e.a).map(e=>[Math.max(lo,M(e.s)),Math.min(hi,M(e.e))]).filter(x=>x[1]>x[0]).sort((a,b)=>a[0]-b[0]);
+ const mg=[];bs.forEach(b=>{const l=mg[mg.length-1];if(l&&b[0]<=l[1])l[1]=Math.max(l[1],b[1]);else mg.push(b.slice())});
+ const pc=[];let t=lo;mg.forEach(([s,e])=>{if(s>t)pc.push({s:t,e:s,f:1});pc.push({s,e,f:0});t=e});if(t<hi)pc.push({s:t,e:hi,f:1});
+ const F=+$('ukF').value,B=+$('ukB').value;
+ pc.forEach(p=>{const d=p.e-p.s;p.k=p.f?(d>=F?'ok':'dense'):(d>B?'stop':null)});
+ pc.forEach((p,i)=>{if(p.k)return;p.k=[pc[i-1],pc[i+1]].some(q=>q&&q.f&&q.k==='dense')?'dense':'stop'});
+ const out=[];pc.forEach(p=>{const l=out[out.length-1];if(l&&l.k===p.k)l.e=p.e;else out.push({s:p.s,e:p.e,k:p.k})});return out}
+window.__uk=bands;
+const cls=(b,N)=>(b.e<=N?' past':'')+(b.s<=N&&N<b.e?' now':'');
+function draw(){const C=$('ukC');if(!C)return;const N=nowMin(),sp=HI-LO,bs=bands();
+ if(VM){const H=C.clientHeight,y=m=>(m/60-LO)/sp*H,step=H/sp<18?2:1;let g='';for(let h=LO+step;h<HI;h+=step)g+=`<i class="ukg" style="top:${(h-LO)/sp*H}px"></i>`;
+  C.innerHTML=g+bs.map(b=>{const t=y(b.s),h=Math.max(1,y(b.e)-t),lab=h>=24?LB[b.k][0]:h>=13?LB[b.k][1]:'';return `<div class="uk ${b.k}${cls(b,N)}" style="top:${t}px;height:${Math.max(1,h-1)}px"><span>${lab}</span></div>`}).join('')}
+ else{const W=C.clientWidth,x=m=>(m/60-LO)/sp*W;
+  C.innerHTML=bs.map(b=>{const l=x(b.s),w=Math.max(1,x(b.e)-l),lab=w>=LB[b.k][0].length*10+8?LB[b.k][0]:w>=LB[b.k][1].length*10+6?LB[b.k][1]:'';return `<div class="uk ${b.k}${cls(b,N)}" style="left:${l}px;width:${Math.max(1,w-1)}px"><span>${lab}</span></div>`}).join('')}}
+const _r=ttRender;ttRender=function(){_r();if(lit())draw()};
+const lit=()=>!!powered&&st&&st[3]===2;let k0='';
+setInterval(()=>{const on=lit(),W=$('ukW');if(!W)return;W.classList.toggle('lit',on);if(!on){k0='';return}
+ const C=$('ukC'),k=[LO,HI,$('day').value,$('noTape').checked,nowMin(),$('ukF').value,$('ukB').value,C.clientWidth,C.clientHeight,EV.map(e=>e.a?1:0).join('')].join('|');if(k!==k0){k0=k;draw()}},300);
+['ukF','ukB'].forEach(id=>{const v=$('v-'+id),u=()=>v.textContent=$(id).value;$(id).addEventListener('input',u);u()});
+})();
+</script>
+<script>
+/* atmos-51 ただいま板と出発の横の行：いつも「タスクを伸び伸びできる時間（平常運転）」で言う
+   ・今が平常運転      ＝ あと何分続くか（何時まで）
+   ・今が過密／見合わせ ＝ 次の平常運転まであと何分、そこから何分続くか
+   ・時間割の範囲の前   ＝ 始発前として同じ言い方
+   ・この先に平常運転がない ＝ 本日の平常運転は終了／範囲の後 ＝ 本日の運転終了
+   言っている平常運転の帯は、運転状況の欄でも縁取りして同じ帯だと分かるようにする。事実だけ */
+(function(){const $=id=>document.getElementById(id);
+const LB={ok:'平常運転',dense:'ダイヤ過密',stop:'見合わせ',pre:'始発前'},SH={ok:'平常',dense:'過密',stop:'見合せ',pre:'始発前'};
+const hm=m=>Math.floor(m/60)+':'+String(m%60).padStart(2,'0');
+function state(){const N=nowMin(),all=window.__uk?window.__uk():[];
+ if(!all.length)return {k:'end'};
+ const i=all.findIndex(b=>b.s<=N&&N<b.e),k=i>=0?all[i].k:(N<all[0].s?'pre':'end');
+ if(k==='end')return {k};
+ if(k==='ok'){const b=all[i];return {k,ti:i,left:b.e-N,until:hm(b.e)}}
+ const j=all.findIndex(b=>b.k==='ok'&&b.s>N);
+ if(j<0)return {k,none:true};
+ const f=all[j];return {k,ti:j,to:f.s-N,len:f.e-f.s,at:hm(f.s)}}
+window.__now51=()=>{const s=state();return [$('nowC').textContent,$('ukNowT').textContent]};
+function paint(){const s=state(),I=k=>`<i class="uk ${k==='pre'?'pre':k}"></i>`;let big,line;
+ if(s.k==='end'){big='<b>本日の運転終了</b>';line='<b>本日の運転終了</b>'}
+ else if(s.k==='ok'){big=`${I('ok')}<b>平常運転</b><span style="flex:1"></span><span class="nl">あと</span><em>${hm(s.left)}</em><span class="nu">${s.until}まで</span>`;
+  line=`${I('ok')}<b>平常運転</b><span>あと</span><em>${hm(s.left)}</em><span>${s.until}まで</span>`}
+ else if(s.none){big=`${I(s.k)}<b>${SH[s.k]}</b><span style="flex:1"></span><span class="nu">本日の平常運転は終了</span>`;
+  line=`${I(s.k)}<b>${SH[s.k]}</b><span>本日の平常運転は終了</span>`}
+ else{big=`${I(s.k)}<b>${SH[s.k]}</b><span style="flex:1"></span><span class="nl">平常運転まで</span><em>${hm(s.to)}</em><span class="nl">そこから</span><em class="sub">${hm(s.len)}</em>`;
+  line=`${I(s.k)}<b>${SH[s.k]}</b><span>平常運転まで</span><em>${hm(s.to)}</em><span>そこから</span><em>${hm(s.len)}</em>`}
+ $('nowC').innerHTML=big;$('ukNowT').innerHTML=line;return s}
+function mark(s){const C=$('ukC');if(!C)return;C.querySelectorAll('.uk').forEach((e,i)=>e.classList.toggle('tgt',!!s&&s.ti===i))}
+function first(){const p=PLAN[0];$('sfT').innerHTML=(p&&!$('noForm').checked)?`<span class="sfl">先発</span><b>${p.t}</b><em>${p.d}</em>`:''}
+let k0='',k1='',S=null;
+setInterval(()=>{const on=!!powered&&st&&st[3]===2,on4=!!powered&&st&&st[4]===2;
+ ['nowW','ukNow'].forEach(i=>$(i).classList.toggle('lit',on));$('sfW').classList.toggle('lit',on4);
+ if(on){const k=[nowMin(),LO,HI,$('day').value,$('noTape').checked,$('ukF').value,$('ukB').value,EV.map(e=>e.a?1:0).join('')].join('|');if(k!==k0){k0=k;S=paint()}mark(S)}else{k0='';mark(null)}
+ if(on4){const k=(PLAN[0]?PLAN[0].t+PLAN[0].d:'')+$('noForm').checked;if(k!==k1){k1=k;first()}}else k1=''},250);
+})();
+</script>
+</body></html>

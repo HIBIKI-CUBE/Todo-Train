@@ -18,6 +18,7 @@
 - カレンダーの体験摩擦 → [docs/17-calendar-experience.md](docs/17-calendar-experience.md)
 - Mac の配布ビルド（署名なし、Gatekeeper、セルフホストの予備） → [docs/22-mac-build.md](docs/22-mac-build.md)
 - Hub 接近クリアランス → [docs/approach-clear/](docs/approach-clear/) + Issue #61
+- 運行開始の盤 → [docs/opening-panel/](docs/opening-panel/) + Issue #197
 - スキーマや約束を変えたあとの実機確認 → [docs/21-device-overwrite.md](docs/21-device-overwrite.md)
 
 ## 作業時の原則
