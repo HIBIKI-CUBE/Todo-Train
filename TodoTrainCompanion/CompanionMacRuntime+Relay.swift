@@ -180,6 +180,7 @@ extension CompanionMacRuntime {
         let socket = BearerWebSocket(
             writeToken: pairing.writeToken,
             pairingId: pairing.pairingId,
+            role: .mac,
             connector: connector
         )
         let connection = try await socket.connect()
@@ -196,6 +197,8 @@ extension CompanionMacRuntime {
             switch incoming {
             case .hello(let announcement):
                 noteRelayContract(announcement)
+            case .ping, .pong, .echo:
+                break
             case .frame(let frame):
                 let keys = try SyncCrypto.deriveKeys(masterKey: pairing.masterKey, pairingId: pairing.pairingId)
                 do {
