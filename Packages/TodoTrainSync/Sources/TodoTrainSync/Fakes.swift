@@ -75,10 +75,18 @@ public actor ScriptedHTTPTransport: HTTPTransport {
 
 public actor ScriptedWebSocket: WebSocketConnecting, WebSocketConnection {
     private var frames: [WSFrame]
+    private var incoming: [WSIncoming]
     public private(set) var lastHeaders: [String: String] = [:]
 
     public init(frames: [WSFrame] = []) {
         self.frames = frames
+        self.incoming = []
+    }
+
+    /// Plays these in order from `receiveIncoming`, including hello and control frames.
+    public init(incoming: [WSIncoming]) {
+        self.frames = []
+        self.incoming = incoming
     }
 
     public func connect(path: String, headers: [String: String]) async throws -> any WebSocketConnection {
@@ -94,7 +102,10 @@ public actor ScriptedWebSocket: WebSocketConnecting, WebSocketConnection {
     }
 
     public func receiveIncoming() async throws -> WSIncoming {
-        .frame(try await receive())
+        if !incoming.isEmpty {
+            return incoming.removeFirst()
+        }
+        return .frame(try await receive())
     }
 
     public func send(_ text: String) async throws {

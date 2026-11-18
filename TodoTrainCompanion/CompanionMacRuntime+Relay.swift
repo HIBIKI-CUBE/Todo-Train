@@ -183,7 +183,7 @@ extension CompanionMacRuntime {
             role: .mac,
             connector: connector
         )
-        let connection = try await socket.connect()
+        let connection = EchoingWebSocketConnection(try await socket.connect())
         self.connection = .connected
         lastStatus = nil
         defer { Task { await connection.close() } }

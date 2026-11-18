@@ -176,3 +176,37 @@ extension WebSocketConnection {
         try await send(WSControl.echo(id: id))
     }
 }
+
+/// Mac: answers each relayed ping with an echo as soon as it arrives, before the caller sees it.
+/// The echo goes out from here, not from the caller's actor, so main-thread work never delays it.
+public final class EchoingWebSocketConnection: WebSocketConnection, @unchecked Sendable {
+    private let base: any WebSocketConnection
+
+    public init(_ base: any WebSocketConnection) {
+        self.base = base
+    }
+
+    public func receiveIncoming() async throws -> WSIncoming {
+        let incoming = try await base.receiveIncoming()
+        if case .ping(let id) = incoming {
+            try? await base.sendEcho(id: id)
+        }
+        return incoming
+    }
+
+    public func receive() async throws -> WSFrame {
+        while true {
+            if case .frame(let frame) = try await receiveIncoming() {
+                return frame
+            }
+        }
+    }
+
+    public func send(_ text: String) async throws {
+        try await base.send(text)
+    }
+
+    public func close() async {
+        await base.close()
+    }
+}
