@@ -136,6 +136,7 @@ final class CompanionSyncRuntime {
         let socket = BearerWebSocket(
             writeToken: pairing.writeToken,
             pairingId: pairing.pairingId,
+            role: .iphone,
             connector: connector
         )
         let connection: any WebSocketConnection
@@ -164,6 +165,8 @@ final class CompanionSyncRuntime {
             switch incoming {
             case .hello(let announcement):
                 noteRelayContract(announcement)
+            case .ping, .pong, .echo:
+                break
             case .frame(let frame):
                 do {
                     if frame.t == .cmd {

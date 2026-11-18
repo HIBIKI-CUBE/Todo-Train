@@ -106,7 +106,7 @@ final class URLSessionWebSocketConnection: WebSocketConnection, @unchecked Senda
             switch try await receiveIncoming() {
             case .frame(let frame):
                 return frame
-            case .hello:
+            case .hello, .ping, .pong, .echo:
                 continue
             }
         }
@@ -136,10 +136,17 @@ public struct BearerWebSocket {
     public var writeToken: Data
     public var pairingId: UUID?
     public var connector: any WebSocketConnecting
+    public var role: PairingRole?
 
-    public init(writeToken: Data, pairingId: UUID? = nil, connector: any WebSocketConnecting) {
+    public init(
+        writeToken: Data,
+        pairingId: UUID? = nil,
+        role: PairingRole? = nil,
+        connector: any WebSocketConnecting
+    ) {
         self.writeToken = writeToken
         self.pairingId = pairingId
+        self.role = role
         self.connector = connector
     }
 
@@ -153,7 +160,19 @@ public struct BearerWebSocket {
             path: "/v1/ws",
             headers: headers
         )
-        try await connection.send(ContractHello.text())
+        try await connection.send(ContractHello.text(role: role))
         return connection
+    }
+}
+
+extension WebSocketConnection {
+    /// iPhone: ask the relay and the Mac for a round trip.
+    public func sendPing(id: UUID) async throws {
+        try await send(WSControl.ping(id: id))
+    }
+
+    /// Mac: answer a ping the relay passed on.
+    public func sendEcho(id: UUID) async throws {
+        try await send(WSControl.echo(id: id))
     }
 }

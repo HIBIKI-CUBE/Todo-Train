@@ -125,23 +125,64 @@ enum ContractKeyDecoding {
 }
 
 public enum ContractHello {
-    public static func text(_ announcement: ContractAnnouncement = .current) -> String {
-        "{\"t\":\"hello\",\"contract\":\(announcement.contract),\"minReadable\":\(announcement.minReadable)}"
+    /// The relay remembers `role` on the socket and sends ping, pong, and echo only to sockets that sent one.
+    public static func text(_ announcement: ContractAnnouncement = .current, role: PairingRole? = nil) -> String {
+        let head = "{\"t\":\"hello\",\"contract\":\(announcement.contract),\"minReadable\":\(announcement.minReadable)"
+        guard let role else { return head + "}" }
+        return head + ",\"role\":\"\(role.rawValue)\"}"
+    }
+}
+
+/// WebSocket frames for measuring the round trip to the Mac. The relay does not store them.
+public enum WSControl {
+    public static let maxBytes = 256
+
+    public static func ping(id: UUID) -> String {
+        "{\"t\":\"ping\",\"id\":\"\(id.canonicalLowercase)\"}"
+    }
+
+    public static func echo(id: UUID) -> String {
+        "{\"t\":\"echo\",\"id\":\"\(id.canonicalLowercase)\"}"
+    }
+
+    static func id(_ value: Any?) -> UUID? {
+        guard let text = value as? String, text == text.lowercased(), let id = UUID(uuidString: text) else {
+            return nil
+        }
+        return id
     }
 }
 
 public enum WSIncoming: Equatable, Sendable {
     case frame(WSFrame)
     case hello(ContractAnnouncement)
+    /// The relay passed on an iPhone's ping. The Mac answers with `WSControl.echo`.
+    case ping(UUID)
+    /// The relay received this socket's ping.
+    case pong(UUID)
+    /// `mac` is true when the Mac answered, false when no Mac was connected.
+    case echo(id: UUID, mac: Bool)
 
     public static func decode(_ data: Data) throws -> WSIncoming {
         guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw SyncError.invalidJSON
         }
-        if object["t"] as? String == "hello" {
+        switch object["t"] as? String {
+        case "hello":
             let contract = object["contract"] as? Int
             let minReadable = object["minReadable"] as? Int
             return .hello(.resolved(contract: contract, minReadable: minReadable))
+        case "ping", "pong", "echo":
+            guard data.count <= WSControl.maxBytes, let id = WSControl.id(object["id"]) else {
+                throw SyncError.invalidJSON
+            }
+            switch object["t"] as? String {
+            case "ping": return .ping(id)
+            case "pong": return .pong(id)
+            default: return .echo(id: id, mac: object["mac"] as? Bool ?? false)
+            }
+        default:
+            break
         }
         return .frame(try WireJSON.decoder().decode(WSFrame.self, from: data))
     }

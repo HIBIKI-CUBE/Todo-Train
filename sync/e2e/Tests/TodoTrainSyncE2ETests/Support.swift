@@ -198,7 +198,7 @@ final class RawWebSocketConnection: WebSocketConnection, @unchecked Sendable {
             switch try await receiveIncoming() {
             case .frame(let frame):
                 return frame
-            case .hello:
+            case .hello, .ping, .pong, .echo:
                 continue
             }
         }
