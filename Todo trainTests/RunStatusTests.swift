@@ -77,6 +77,39 @@ struct RunStatusTests {
     #expect(range.endsAt == at(hour: 19))
   }
 
+  @Test func timetableRange_eveningThroughMidnight() {
+    let blocks = [
+      TimetableOpeningInterval(
+        startsAt: at(hour: 20),
+        endsAt: utc.date(byAdding: .day, value: 1, to: dayStart)!
+      ),
+    ]
+    let range = TimetableRangeLogic.compute(scheduledBlocks: blocks, referenceDay: dayStart, calendar: utc)
+    #expect(range.windowLabel == "20–24 4H")
+    #expect(range.startsAt == at(hour: 20))
+    #expect(range.endsAt == at(hour: 24))
+  }
+
+  @Test func timetableRange_lateNightShortEventExpandsToFourHours() {
+    let blocks = [interval(startHour: 23, startMinute: 0, endHour: 23, endMinute: 30)]
+    let range = TimetableRangeLogic.compute(scheduledBlocks: blocks, referenceDay: dayStart, calendar: utc)
+    #expect(range.windowLabel == "20–24 4H")
+    #expect(range.startsAt == at(hour: 20))
+    #expect(range.endsAt == at(hour: 24))
+  }
+
+  @Test func timetableRange_crossMidnightFromPreviousDay() {
+    let previousDay = utc.date(byAdding: .day, value: -1, to: dayStart)!
+    let start = utc.date(byAdding: .hour, value: 23, to: previousDay)!
+    let blocks = [
+      TimetableOpeningInterval(startsAt: start, endsAt: at(hour: 1, minute: 30)),
+    ]
+    let range = TimetableRangeLogic.compute(scheduledBlocks: blocks, referenceDay: dayStart, calendar: utc)
+    #expect(range.windowLabel == "00–04 4H")
+    #expect(range.startsAt == at(hour: 0))
+    #expect(range.endsAt == at(hour: 4))
+  }
+
   @Test func runStatusBands_stdDayMatchesSpec() {
     let range = TimetableRangeLogic.compute(
       scheduledBlocks: stdScheduled,

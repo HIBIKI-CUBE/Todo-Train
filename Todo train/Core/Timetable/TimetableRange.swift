@@ -61,10 +61,14 @@ nonisolated enum TimetableRangeLogic {
         let earliest = valid.map(\.startsAt).min()!
         let latest = valid.map(\.endsAt).max()!
 
-        let lowerHour = floorHour(earliest, calendar: calendar)
-        var upperHour = ceilHour(latest, calendar: calendar)
+        var lowerHour = floorHour(earliest, referenceDay: referenceDay, calendar: calendar)
+        var upperHour = ceilHour(latest, referenceDay: referenceDay, calendar: calendar)
         if upperHour - lowerHour < minimumSpanHours {
             upperHour = lowerHour + minimumSpanHours
+            if upperHour > fullDayUpperHour {
+                upperHour = fullDayUpperHour
+                lowerHour = max(fullDayLowerHour, upperHour - minimumSpanHours)
+            }
         }
 
         return makeRange(
@@ -75,17 +79,18 @@ nonisolated enum TimetableRangeLogic {
         )
     }
 
-    static func floorHour(_ date: Date, calendar: Calendar) -> Int {
-        let components = calendar.dateComponents([.hour, .minute], from: date)
-        return components.hour ?? 0
+    static func floorHour(_ date: Date, referenceDay: Date, calendar: Calendar) -> Int {
+        let dayStart = calendar.startOfDay(for: referenceDay)
+        let elapsed = date.timeIntervalSince(dayStart)
+        let hour = Int(floor(elapsed / 3600))
+        return min(fullDayUpperHour, max(fullDayLowerHour, hour))
     }
 
-    static func ceilHour(_ date: Date, calendar: Calendar) -> Int {
-        let components = calendar.dateComponents([.hour, .minute], from: date)
-        let hour = components.hour ?? 0
-        let minute = components.minute ?? 0
-        guard minute > 0 else { return hour }
-        return hour + 1
+    static func ceilHour(_ date: Date, referenceDay: Date, calendar: Calendar) -> Int {
+        let dayStart = calendar.startOfDay(for: referenceDay)
+        let elapsed = date.timeIntervalSince(dayStart)
+        let hour = Int(ceil(elapsed / 3600))
+        return min(fullDayUpperHour, max(fullDayLowerHour, hour))
     }
 
     private static func makeRange(
