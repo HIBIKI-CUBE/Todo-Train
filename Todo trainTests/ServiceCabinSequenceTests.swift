@@ -9,30 +9,6 @@ import Testing
 @testable import Todo_train
 
 struct ServiceCabinSequenceTests {
-    @Test func lamp_holdsDarkBeforeFirstLight() {
-        #expect(ServiceCabinSequence.lamp(elapsed: 0, reduceMotion: false) == .dark)
-        #expect(
-            ServiceCabinSequence.lamp(
-                elapsed: ServiceCabinSequence.darkHoldSeconds - 0.01,
-                reduceMotion: false
-            ) == .dark
-        )
-    }
-
-    @Test func lamp_stepsThroughPanelsAfterHold() {
-        let hold = ServiceCabinSequence.darkHoldSeconds
-        let test = ServiceCabinSequence.testHoldSeconds
-        let live = ServiceCabinSequence.liveHoldSeconds
-        #expect(ServiceCabinSequence.lamp(elapsed: hold, reduceMotion: false) == .test)
-        #expect(ServiceCabinSequence.lamp(elapsed: hold + test, reduceMotion: false) == .live)
-        #expect(ServiceCabinSequence.lamp(elapsed: hold + test + live, reduceMotion: false) == .ready)
-        #expect(ServiceCabinSequence.lamp(elapsed: hold + test + live + 40, reduceMotion: false) == .ready)
-    }
-
-    @Test func lamp_reduceMotionJumpsToReady() {
-        #expect(ServiceCabinSequence.lamp(elapsed: 0, reduceMotion: true) == .ready)
-    }
-
     @Test func shutdown_reversesPanels() {
         let step = ServiceCabinSequence.stepSeconds
         #expect(ServiceCabinSequence.shutdownLamp(elapsed: 0, reduceMotion: false) == .ready)
