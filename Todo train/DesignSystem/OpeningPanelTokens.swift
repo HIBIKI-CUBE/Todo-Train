@@ -1,0 +1,346 @@
+//
+//  OpeningPanelTokens.swift
+//  Todo train
+//
+//  運行開始の盤の格子・色・字の大きさ・間。
+//  赤は置かない。故障の黄は #f0c000。
+//
+
+import SwiftUI
+
+enum OpeningPanelTokens {
+    /// 格子 370×780。外枠 1 で 372×782。
+    ///
+    /// 仕様の座標表はモックの計測（間隔 2、左上に 2）で、比率の基準になる。
+    /// 外形は列 `118 / 1fr / 86`、行 `22 / 100 / 1fr / 50 / 150 / 22 / 92`、間隔 4。
+    /// 固定の列と行は座標表と同じ寸法で、可変の列と行は間隔を 4 にした分だけ短い。
+    enum Canvas {
+        static let width: CGFloat = 370
+        static let height: CGFloat = 780
+        static let outerInset: CGFloat = 1
+        static var outerWidth: CGFloat { width + outerInset * 2 }
+        static var outerHeight: CGFloat { height + outerInset * 2 }
+        static var outer: CGSize { CGSize(width: outerWidth, height: outerHeight) }
+    }
+
+    enum Track: Equatable {
+        case fixed(CGFloat)
+        case flexible
+    }
+
+    enum Grid {
+        static let columns: [Track] = [.fixed(118), .flexible, .fixed(86)]
+        static let rows: [Track] = [
+            .fixed(22), .fixed(100), .flexible,
+            .fixed(50), .fixed(150), .fixed(22), .fixed(92)
+        ]
+        static let gap: CGFloat = 4
+
+        static func lengths(_ tracks: [Track], span: CGFloat, gap: CGFloat = Grid.gap) -> [CGFloat] {
+            let gapTotal = gap * CGFloat(max(0, tracks.count - 1))
+            let fixed = tracks.reduce(CGFloat(0)) { sum, track in
+                if case .fixed(let length) = track { return sum + length }
+                return sum
+            }
+            let flexibleCount = tracks.reduce(0) { count, track in
+                if case .flexible = track { return count + 1 }
+                return count
+            }
+            let flexible = flexibleCount > 0
+                ? (span - gapTotal - fixed) / CGFloat(flexibleCount)
+                : 0
+            return tracks.map { track in
+                switch track {
+                case .fixed(let length):
+                    return length
+                case .flexible:
+                    return flexible
+                }
+            }
+        }
+
+        static func origins(_ lengths: [CGFloat], gap: CGFloat = Grid.gap) -> [CGFloat] {
+            var cursor: CGFloat = 0
+            return lengths.map { length in
+                let origin = cursor
+                cursor += length + gap
+                return origin
+            }
+        }
+    }
+
+    enum FaceTone {
+        /// 地のモジュール。
+        case standard
+        /// MASTER・時計・CLOCK。モックの一段明るい面。
+        case upper
+        /// TICKETS・DEPART。モックの一段暗い面。
+        case lower
+
+        var fill: Color {
+            switch self {
+            case .standard:
+                return Palette.module
+            case .upper:
+                return Palette.moduleUpper
+            case .lower:
+                return Palette.moduleLower
+            }
+        }
+    }
+
+    enum Module: String, CaseIterable {
+        case sysbar
+        case master
+        case clock
+        case clockKey
+        case timetable
+        case nowBoard
+        case tickets
+        case load
+        case comm
+        case depart
+
+        var columns: ClosedRange<Int> {
+            switch self {
+            case .master:
+                return 0...0
+            case .clock:
+                return 1...1
+            case .clockKey, .load:
+                return 2...2
+            case .tickets:
+                return 0...1
+            case .sysbar, .timetable, .nowBoard, .comm, .depart:
+                return 0...2
+            }
+        }
+
+        var row: Int {
+            switch self {
+            case .sysbar:
+                return 0
+            case .master, .clock, .clockKey:
+                return 1
+            case .timetable:
+                return 2
+            case .nowBoard:
+                return 3
+            case .tickets, .load:
+                return 4
+            case .comm:
+                return 5
+            case .depart:
+                return 6
+            }
+        }
+
+        var tone: FaceTone {
+            switch self {
+            case .master, .clock, .clockKey:
+                return .upper
+            case .tickets, .depart:
+                return .lower
+            case .sysbar, .timetable, .nowBoard, .load, .comm:
+                return .standard
+            }
+        }
+
+        /// 設計寸法の格子の中の外形。原点は格子の左上。
+        func frame() -> CGRect {
+            let columnLengths = Grid.lengths(Grid.columns, span: Canvas.width)
+            let rowLengths = Grid.lengths(Grid.rows, span: Canvas.height)
+            let columnOrigins = Grid.origins(columnLengths)
+            let rowOrigins = Grid.origins(rowLengths)
+            let start = columns.lowerBound
+            let end = columns.upperBound
+            let x = columnOrigins[start]
+            let y = rowOrigins[row]
+            let width = columnOrigins[end] + columnLengths[end] - x
+            let height = rowLengths[row]
+            return CGRect(x: x, y: y, width: width, height: height)
+        }
+    }
+
+    /// 運転状況の列と、時間割の窓の内側。上下は同じ 3。左右 4 は列だけ。
+    enum RunStatus {
+        static let width: CGFloat = 84
+        static let verticalInset: CGFloat = 3
+        static let horizontalInset: CGFloat = 4
+    }
+
+    struct TimetableSplit: Equatable {
+        var timetableWindow: CGRect
+        var runStatusWindow: CGRect
+        var timetableContent: CGRect
+        var runStatusContent: CGRect
+    }
+
+    /// 時間割の行の中で、二つの窓の内側の上端・下端をそろえる。
+    static func timetableSplit(in row: CGRect) -> TimetableSplit {
+        let statusWidth = min(RunStatus.width, max(0, row.width))
+        let timetableWidth = max(0, row.width - Grid.gap - statusWidth)
+        let timetableWindow = CGRect(
+            x: row.minX,
+            y: row.minY,
+            width: timetableWidth,
+            height: row.height
+        )
+        let runStatusWindow = CGRect(
+            x: row.minX + timetableWidth + Grid.gap,
+            y: row.minY,
+            width: statusWidth,
+            height: row.height
+        )
+        return TimetableSplit(
+            timetableWindow: timetableWindow,
+            runStatusWindow: runStatusWindow,
+            timetableContent: inset(
+                timetableWindow,
+                top: RunStatus.verticalInset,
+                leading: 0,
+                bottom: RunStatus.verticalInset,
+                trailing: 0
+            ),
+            runStatusContent: inset(
+                runStatusWindow,
+                top: RunStatus.verticalInset,
+                leading: RunStatus.horizontalInset,
+                bottom: RunStatus.verticalInset,
+                trailing: RunStatus.horizontalInset
+            )
+        )
+    }
+
+    /// 空の外枠に使う寸法。割り付けの表と、モックの操作面。
+    enum Chrome {
+        static let modulePadding: CGFloat = 6
+        static let windowRadius: CGFloat = 1
+        static let controlRadius: CGFloat = 2
+        static let controlPadding: CGFloat = 3
+        static let controlLip: CGFloat = 2
+        static let hairline: CGFloat = 0.5
+        /// CHK と PHONE の間。仕様は sysbar を一つの行にし、この分割はモックの帯。
+        static let stripSplit: CGFloat = 2
+        static let phoneWindowHeight: CGFloat = 16
+        static let commWindowHeight: CGFloat = 16
+        static let clockKeySize = CGSize(width: 56, height: 40)
+        static let hourModeSize = CGSize(width: 18, height: 18)
+        static let testSize = CGSize(width: 16, height: 16)
+        static let scaleToggleSize = CGSize(width: 12, height: 22)
+        static let timetableKeySize = CGSize(width: 52, height: 30)
+        static let sequenceKeySize = CGSize(width: 36, height: 20)
+        static let ticketsKeySize = CGSize(width: 64, height: 30)
+        static let rangeWindow = CGSize(width: 66, height: 16)
+        static let nextWindow = CGSize(width: 44, height: 13)
+        static let nowWindow = CGSize(width: 304, height: 38)
+        static let ticketsWindow = CGSize(width: 200, height: 103)
+        static let loadGauge = CGSize(width: 40, height: 120)
+        static let departReadoutWidth: CGFloat = 214
+        static let departBar = CGSize(width: 132, height: 82)
+        static let departGap: CGFloat = 6
+        static let departPaddingH: CGFloat = 9
+        static let departPaddingV: CGFloat = 5
+        static let departLineHeight: CGFloat = 16
+        static let chevronCount = 10
+        /// 次に自動で始まるキーの縁。
+        static let nextKeyEdge: CGFloat = 1
+    }
+
+    /// ただいま板と DEPART 横の行。仕様の字の大きさ。
+    enum TypeSize {
+        static let nowStatus: CGFloat = 17
+        static let nowPrimary: CGFloat = 24
+        static let nowSecondary: CGFloat = 17
+        static let caption: CGFloat = 10
+    }
+
+    /// 仕様「間」。テンポの付いた項目は `tempo` を一度だけ掛ける。
+    enum Interval {
+        static let lampCheck: TimeInterval = 0.280
+        static let autoWait: TimeInterval = 0.800
+        static let autoStep: TimeInterval = 0.120
+        static let backlightDelay: TimeInterval = 0.050
+        /// 70ms × 0.6。テンポは未適用。
+        static let powerLEDStep: TimeInterval = 0.070 * 0.6
+        static let powerConfirmed: TimeInterval = 0.150
+        static let clockDigit: TimeInterval = 0.110
+        static let clockBeforeLive: TimeInterval = 0.300
+        static let timetableFill: TimeInterval = 0.032
+        static let timetableBeforeTest: TimeInterval = 0.150
+        static let timetableDraw: TimeInterval = 0.300
+        static let ticketsCursor: TimeInterval = 0.070
+        static let ticketsAfterCursor: TimeInterval = 0.150
+        static let ticketsCard: TimeInterval = 0.110
+        static let checkBlink: TimeInterval = 0.060
+        static let tempoPercent: Double = 170
+
+        static func tempo(_ base: TimeInterval) -> TimeInterval {
+            base * 100 / tempoPercent
+        }
+    }
+
+    /// モックの atmos 面。金属や木目は使わず、平面の縁と影だけ。
+    enum Palette {
+        static let housing = color(0x404245)
+        static let grid = color(0x44474A)
+        static let module = color(0x5F6265)
+        static let moduleUpper = color(0x66696C)
+        static let moduleLower = color(0x585B5E)
+        static let moduleEdgeInner = color(0x535659)
+        static let moduleEdgeOuter = color(0x36383A)
+        static let window = color(0x1A1B1C)
+        static let windowEdge = Color.black.opacity(0.3)
+        static let strip = color(0x45484B)
+        static let legend = color(0xF0EBDA, opacity: 0.84)
+        /// `.k` に brightness(1.16) を掛けた面と、その下の唇。
+        static let raised = color(0x2E3033, brightness: 1.16)
+        static let raisedLip = color(0x1D1E20)
+        static let lens = color(0x5A5D60, brightness: 1.16)
+        static let cap = color(0x1D1E1F, brightness: 1.16)
+        static let capLip = color(0x0E0F10, brightness: 1.16)
+        static let capRing = color(0x4A4E52, brightness: 1.16)
+        static let capRingOuter = color(0x2E3033, brightness: 1.16)
+        static let barHousing = color(0x141516)
+        static let barRing = color(0x75797D)
+        static let barRingMid = color(0x4A4D51)
+        static let barRingInner = color(0x1F2022)
+        static let barFace = color(0x5B5E61)
+        static let barHighlight = color(0x75797C)
+        static let barShade = color(0x3B3E41)
+        static let barLip = color(0x0C0C0D)
+        static let chevron = color(0x2B2C2E)
+        static let amber = color(0xFFB000, opacity: 0.85)
+        static let amberDim = color(0xFFB000, opacity: 0.14)
+        /// 確認灯。盤の CHK は緑で点いてよい。
+        static let lampGreen = color(0x84C480, opacity: 0.85)
+        static let lampGreenWell = color(0x1E3320)
+        /// 故障の黄。`#f0c000`。
+        static let fault = color(0xF0C000)
+        /// 次に自動で始まるキーの縁。`rgba(242,230,200,.3)`。
+        static let nextKeyEdge = color(0xF2E6C8, opacity: 0.3)
+    }
+}
+
+private func color(_ hex: UInt32, brightness: Double = 1, opacity: Double = 1) -> Color {
+    func channel(_ shift: UInt32) -> Double {
+        let value = Double((hex >> shift) & 0xFF) / 255 * brightness
+        return min(max(value, 0), 1)
+    }
+    return Color(red: channel(16), green: channel(8), blue: channel(0), opacity: opacity)
+}
+
+private func inset(
+    _ rect: CGRect,
+    top: CGFloat,
+    leading: CGFloat,
+    bottom: CGFloat,
+    trailing: CGFloat
+) -> CGRect {
+    CGRect(
+        x: rect.minX + leading,
+        y: rect.minY + top,
+        width: max(0, rect.width - leading - trailing),
+        height: max(0, rect.height - top - bottom)
+    )
+}
