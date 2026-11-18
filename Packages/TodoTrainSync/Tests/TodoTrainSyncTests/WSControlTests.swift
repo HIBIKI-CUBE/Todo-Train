@@ -79,4 +79,37 @@ struct WSControlTests {
         #expect(sent == [ContractHello.text(role: .mac), WSControl.echo(id: id)])
         await connection.close()
     }
+
+    @Test func macConnectionAnswersPingWithEchoBeforeHandingItOn() async throws {
+        let envelope = Envelope(rev: 1, kind: .snap, n: "ha_Fwfr-03T8OAOV", ct: "abc")
+        let scripted = ScriptedWebSocket(incoming: [
+            .hello(ContractAnnouncement(contract: 16, minReadable: 3)),
+            .ping(id),
+            .frame(WSFrame(t: .snap, envelope: envelope)),
+        ])
+        let socket = BearerWebSocket(writeToken: Data(repeating: 9, count: 32), role: .mac, connector: scripted)
+        let connection = EchoingWebSocketConnection(try await socket.connect())
+
+        #expect(try await connection.receiveIncoming() == .hello(ContractAnnouncement(contract: 16, minReadable: 3)))
+        #expect(await scripted.sentText == [ContractHello.text(role: .mac)])
+
+        #expect(try await connection.receiveIncoming() == .ping(id))
+        #expect(await scripted.sentText == [ContractHello.text(role: .mac), WSControl.echo(id: id)])
+
+        guard case .frame(let frame) = try await connection.receiveIncoming() else {
+            Issue.record("expected frame")
+            return
+        }
+        #expect(frame.t == .snap)
+        #expect(await scripted.sentText.count == 2)
+        await connection.close()
+    }
+
+    @Test func macConnectionLeavesPongAndEchoAlone() async throws {
+        let scripted = ScriptedWebSocket(incoming: [.pong(id), .echo(id: id, mac: true)])
+        let connection = EchoingWebSocketConnection(scripted)
+        #expect(try await connection.receiveIncoming() == .pong(id))
+        #expect(try await connection.receiveIncoming() == .echo(id: id, mac: true))
+        #expect(await scripted.sentText.isEmpty)
+    }
 }
