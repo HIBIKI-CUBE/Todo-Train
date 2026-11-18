@@ -32,7 +32,16 @@
   ],
   "hello": {
     "client": { "t": "hello", "contract": 4, "minReadable": 3 },
-    "relay": { "t": "hello", "contract": 4, "minReadable": 3 }
+    "clientWithRole": { "t": "hello", "contract": 16, "minReadable": 3, "role": "iphone" },
+    "relay": { "t": "hello", "contract": 16, "minReadable": 3 },
+    "role": ["iphone", "mac"]
   },
-  "notes": "Bearer on the HTTP Upgrade request identifies the pairing. Optional X-Pairing-Id (canonical UUID) skips the tokenHash directory lookup; the pairing Durable Object still checks SHA-256(writeToken). Optional X-TT-Contract is `<contract>;min=<minReadable>`; absent means v3. The first client text frame is hello, and the relay answers with its own hello. A version outside the range does not close the socket and does not stop snap frames. Do not invent a query-token scheme. Do not poll snap/cmd/ack while the socket is up. Clients do not send JSON WSFrame for snap/cmd/ack. RFC 6455 ping/pong is keepalive only and must not wake the Durable Object."
+  "control": {
+    "ping": { "t": "ping", "id": "<lowercase uuid>" },
+    "pong": { "t": "pong", "id": "<lowercase uuid>" },
+    "echo": { "t": "echo", "id": "<lowercase uuid>", "mac": false },
+    "maxBytes": 256,
+    "pingMinIntervalMs": 1000
+  },
+  "notes": "Bearer on the HTTP Upgrade request identifies the pairing. Optional X-Pairing-Id (canonical UUID) skips the tokenHash directory lookup; the pairing Durable Object still checks SHA-256(writeToken). Optional X-TT-Contract is `<contract>;min=<minReadable>`; absent means v3. The first client text frame is hello, and the relay answers with its own hello (no role). role on hello is optional. The relay remembers role and contract on the WebSocket attachment. A version outside the range does not close the socket and does not stop snap frames. ping from a socket that announced contract >= 16 and role iphone or mac is answered with pong to that socket, then forwarded as ping to mac sockets that announced contract >= 16. If there is no such mac, the sender gets echo with mac false. echo from a mac socket is forwarded to iphone sockets as echo with mac true. Sockets that announced contract <= 15, or that omitted role, are not sent ping, pong, or echo. One accepted ping per socket per 1000ms; the rest are discarded. id must be a lowercase UUID. Control frames over 256 bytes are discarded. The relay does not store or log ping ids or echo results. snap, cmd, and ack are unchanged. Do not invent a query-token scheme. Do not poll snap/cmd/ack while the socket is up. Clients do not send JSON WSFrame for snap/cmd/ack. RFC 6455 ping/pong is keepalive only and must not wake the Durable Object."
 }

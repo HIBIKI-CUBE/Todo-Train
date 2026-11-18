@@ -1,7 +1,15 @@
 import { SELF } from "cloudflare:test";
 import type { WireEnvelope } from "../src/envelope.ts";
-import type { WsFrame } from "../src/ws-frame.ts";
 import { SNAP } from "./contract-bytes.ts";
+
+export type RelayMessage = {
+  t: string;
+  envelope?: WireEnvelope;
+  contract?: number;
+  minReadable?: number;
+  id?: string;
+  mac?: boolean;
+};
 
 export function envelope(kind: WireEnvelope["kind"], rev: number, ct = SNAP.ct, n = SNAP.n): WireEnvelope {
   return { rev, kind, n, ct };
@@ -10,7 +18,7 @@ export function envelope(kind: WireEnvelope["kind"], rev: number, ct = SNAP.ct, 
 export async function openWs(
   token: string,
   pairingId?: string,
-): Promise<{ ws: WebSocket; next: () => Promise<WsFrame> }> {
+): Promise<{ ws: WebSocket; next: () => Promise<RelayMessage> }> {
   const headers: Record<string, string> = {
     upgrade: "websocket",
     connection: "Upgrade",
@@ -23,10 +31,10 @@ export async function openWs(
   }
   const ws = upgrade.webSocket;
   ws.accept();
-  const queued: WsFrame[] = [];
-  const waiters: Array<(frame: WsFrame) => void> = [];
+  const queued: RelayMessage[] = [];
+  const waiters: Array<(frame: RelayMessage) => void> = [];
   ws.addEventListener("message", (event) => {
-    const frame = JSON.parse(String(event.data)) as WsFrame;
+    const frame = JSON.parse(String(event.data)) as RelayMessage;
     const waiter = waiters.shift();
     if (waiter) waiter(frame);
     else queued.push(frame);

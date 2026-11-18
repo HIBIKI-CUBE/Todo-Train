@@ -1,7 +1,7 @@
 {
-  "contract": 15,
+  "contract": 16,
   "minReadable": 3,
-  "fingerprint": "75610e65d61da21e1dcf5d00bf496e1391d69996c2e36cadcaad328b8085ef79",
+  "fingerprint": "99e83e1c256842d0a96fb3d3fe51508a4150a7d14e12a1f82f472918fd06de20",
   "history": [
     {
       "contract": 3,
@@ -67,6 +67,11 @@
       "contract": 15,
       "date": "2026-10-19",
       "note": "見積もり直しと取り消しのコマンド、乗車中の snap にホームを足す"
+    },
+    {
+      "contract": 16,
+      "date": "2026-11-19",
+      "note": "WebSocket の ping・pong・echo と hello の role を足す"
     }
   ]
 }

@@ -7,7 +7,20 @@ import { isPub32, isTokenHash32, isUuid } from "./ids.ts";
 import { jsonError, jsonOk, type HintBody, type RpcResult } from "./result.ts";
 import { confirmOverlapOk, isOfferExpired, offerExpiresAt } from "./time.ts";
 import { CONTRACT, MIN_READABLE } from "./contract-version.ts";
-import { encodeHello, encodeWsFrame, parseHello } from "./ws-frame.ts";
+import {
+  CONTROL_CONTRACT,
+  encodeEcho,
+  encodeHello,
+  encodePing,
+  encodePong,
+  encodeWsFrame,
+  parseControlFrame,
+  parseHello,
+  pingIntervalOpen,
+  type ControlFrame,
+  type HelloAnnouncement,
+  type HelloRole,
+} from "./ws-frame.ts";
 
 // 永続するのは ciphertext とメタだけ。ct / hmac / token をログに出さない。
 
@@ -62,6 +75,54 @@ function boundBody(pairingId: string, offer: OfferState) {
     x: offer.x,
     y: offer.iphone!.y,
   };
+}
+
+type SocketAttachment = {
+  contract: number;
+  minReadable: number;
+  role?: HelloRole;
+  lastPingAt?: number;
+};
+
+function readAttachment(ws: WebSocket): SocketAttachment | null {
+  const value: unknown = ws.deserializeAttachment();
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  const contract = record.contract;
+  const minReadable = record.minReadable;
+  if (!isPositiveInt(contract) || !isPositiveInt(minReadable)) return null;
+  const attachment: SocketAttachment = { contract, minReadable };
+  if (record.role === "iphone" || record.role === "mac") attachment.role = record.role;
+  if (typeof record.lastPingAt === "number" && Number.isFinite(record.lastPingAt) && record.lastPingAt >= 0) {
+    attachment.lastPingAt = record.lastPingAt;
+  }
+  return attachment;
+}
+
+function writeAttachment(ws: WebSocket, attachment: SocketAttachment): void {
+  const record: Record<string, number | HelloRole> = {
+    contract: attachment.contract,
+    minReadable: attachment.minReadable,
+  };
+  if (attachment.role) record.role = attachment.role;
+  if (attachment.lastPingAt !== undefined) record.lastPingAt = attachment.lastPingAt;
+  try {
+    ws.serializeAttachment(record);
+  } catch {
+    // The socket is already closed.
+  }
+}
+
+function acceptsControl(
+  attachment: SocketAttachment | null,
+): attachment is SocketAttachment & { role: HelloRole } {
+  return attachment !== null
+    && attachment.contract >= CONTROL_CONTRACT
+    && (attachment.role === "iphone" || attachment.role === "mac");
+}
+
+function isPositiveInt(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value > 0;
 }
 
 function hintFrom(state: PairingState): HintBody {
@@ -299,18 +360,17 @@ export class PairingDurableObject extends DurableObject<unknown> {
   }
 
   async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
-    // Snap/cmd/ack stay on HTTP. The first text frame is only the contract hello.
+    // Snap, cmd, and ack stay on HTTP. Text frames are hello, or ping / pong / echo.
     const text = typeof message === "string" ? message : new TextDecoder().decode(message);
-    if (!parseHello(text)) return;
-    const reply = encodeHello(CONTRACT, MIN_READABLE);
-    // Reply after this handler returns. A send on the same turn does not
-    // reach the peer in the test runtime, and production does not need it sooner.
-    await scheduler.wait(0);
-    try {
-      ws.send(reply);
-    } catch {
-      // The socket is already gone.
+    const hello = parseHello(text);
+    if (hello) {
+      this.rememberHello(ws, hello);
+      await this.sendFrames([[ws, encodeHello(CONTRACT, MIN_READABLE)]]);
+      return;
     }
+    const control = parseControlFrame(text);
+    if (!control) return;
+    await this.routeControl(ws, control);
   }
 
   async webSocketClose(ws: WebSocket, code: number, reason: string, _wasClean: boolean): Promise<void> {
@@ -327,6 +387,65 @@ export class PairingDurableObject extends DurableObject<unknown> {
     if (!state?.confirmed || !state.tokenHash) return jsonError(401, "unauthorized");
     if (state.tokenHash !== tokenHash) return jsonError(401, "unauthorized");
     return state;
+  }
+
+  private rememberHello(ws: WebSocket, hello: HelloAnnouncement): void {
+    const previous = readAttachment(ws);
+    const next: SocketAttachment = {
+      contract: hello.contract,
+      minReadable: hello.minReadable,
+    };
+    if (hello.role) next.role = hello.role;
+    if (previous?.lastPingAt !== undefined) next.lastPingAt = previous.lastPingAt;
+    writeAttachment(ws, next);
+  }
+
+  private async routeControl(ws: WebSocket, control: ControlFrame): Promise<void> {
+    const self = readAttachment(ws);
+    if (!acceptsControl(self)) return;
+    if (control.t === "pong") return;
+
+    if (control.t === "ping") {
+      const now = Date.now();
+      if (!pingIntervalOpen(self.lastPingAt, now)) return;
+      // lastPingAt is the rate-limit clock. The id and the echo result are not stored.
+      writeAttachment(ws, { ...self, lastPingAt: now });
+      const macs = this.controlPeers(ws, "mac");
+      const frames: Array<[WebSocket, string]> = [[ws, encodePong(control.id)]];
+      if (macs.length === 0) frames.push([ws, encodeEcho(control.id, false)]);
+      else for (const peer of macs) frames.push([peer, encodePing(control.id)]);
+      await this.sendFrames(frames);
+      return;
+    }
+
+    if (self.role !== "mac") return;
+    const echoed = encodeEcho(control.id, true);
+    await this.sendFrames(this.controlPeers(ws, "iphone").map((peer) => [peer, echoed]));
+  }
+
+  private controlPeers(except: WebSocket, role: HelloRole): WebSocket[] {
+    const peers: WebSocket[] = [];
+    for (const socket of this.ctx.getWebSockets()) {
+      if (socket === except) continue;
+      const attachment = readAttachment(socket);
+      if (!attachment || attachment.role !== role || attachment.contract < CONTROL_CONTRACT) continue;
+      peers.push(socket);
+    }
+    return peers;
+  }
+
+  // A send inside webSocketMessage does not reach the peer until this handler
+  // yields. Production does not need the frames any sooner.
+  private async sendFrames(frames: Array<[WebSocket, string]>): Promise<void> {
+    if (frames.length === 0) return;
+    await scheduler.wait(0);
+    for (const [socket, frame] of frames) {
+      try {
+        socket.send(frame);
+      } catch {
+        // The socket is already gone.
+      }
+    }
   }
 
   private broadcast(t: WireEnvelope["kind"], envelope: WireEnvelope): void {
