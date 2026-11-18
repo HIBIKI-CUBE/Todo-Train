@@ -11,9 +11,9 @@ import SwiftUI
 enum OpeningPanelTokens {
     /// 格子 370×780。外枠 1 で 372×782。
     ///
-    /// 仕様の座標表はモックの計測（間隔 2、左上に 2）で、比率の基準になる。
-    /// 外形は列 `118 / 1fr / 86`、行 `22 / 100 / 1fr / 50 / 150 / 22 / 92`、間隔 4。
-    /// 固定の列と行は座標表と同じ寸法で、可変の列と行は間隔を 4 にした分だけ短い。
+    /// 列 `118 / 1fr / 86`、行 `22 / 100 / 1fr / 50 / 150 / 22 / 92`、間隔 2。
+    /// モジュールは座標表の (2, 2) から始まり、右端と下端は格子の 370 と 780 に揃う。
+    /// 可変の列は 160、可変の行は 330。
     enum Canvas {
         static let width: CGFloat = 370
         static let height: CGFloat = 780
@@ -34,7 +34,9 @@ enum OpeningPanelTokens {
             .fixed(22), .fixed(100), .flexible,
             .fixed(50), .fixed(150), .fixed(22), .fixed(92)
         ]
-        static let gap: CGFloat = 4
+        static let gap: CGFloat = 2
+        /// 座標表の最初のモジュールの位置。トラックはここから右端・下端まで埋める。
+        static let origin: CGFloat = 2
 
         static func lengths(_ tracks: [Track], span: CGFloat, gap: CGFloat = Grid.gap) -> [CGFloat] {
             let gapTotal = gap * CGFloat(max(0, tracks.count - 1))
@@ -148,10 +150,10 @@ enum OpeningPanelTokens {
 
         /// 設計寸法の格子の中の外形。原点は格子の左上。
         func frame() -> CGRect {
-            let columnLengths = Grid.lengths(Grid.columns, span: Canvas.width)
-            let rowLengths = Grid.lengths(Grid.rows, span: Canvas.height)
-            let columnOrigins = Grid.origins(columnLengths)
-            let rowOrigins = Grid.origins(rowLengths)
+            let columnLengths = Grid.lengths(Grid.columns, span: Canvas.width - Grid.origin)
+            let rowLengths = Grid.lengths(Grid.rows, span: Canvas.height - Grid.origin)
+            let columnOrigins = Grid.origins(columnLengths).map { $0 + Grid.origin }
+            let rowOrigins = Grid.origins(rowLengths).map { $0 + Grid.origin }
             let start = columns.lowerBound
             let end = columns.upperBound
             let x = columnOrigins[start]
@@ -165,6 +167,8 @@ enum OpeningPanelTokens {
     /// 運転状況の列と、時間割の窓の内側。上下は同じ 3。左右 4 は列だけ。
     enum RunStatus {
         static let width: CGFloat = 84
+        /// 時間割の窓とこの列の間。モックの `.ttRow` は 4。格子の間隔とは別。
+        static let columnGap: CGFloat = 4
         static let verticalInset: CGFloat = 3
         static let horizontalInset: CGFloat = 4
     }
@@ -179,7 +183,7 @@ enum OpeningPanelTokens {
     /// 時間割の行の中で、二つの窓の内側の上端・下端をそろえる。
     static func timetableSplit(in row: CGRect) -> TimetableSplit {
         let statusWidth = min(RunStatus.width, max(0, row.width))
-        let timetableWidth = max(0, row.width - Grid.gap - statusWidth)
+        let timetableWidth = max(0, row.width - RunStatus.columnGap - statusWidth)
         let timetableWindow = CGRect(
             x: row.minX,
             y: row.minY,
@@ -187,7 +191,7 @@ enum OpeningPanelTokens {
             height: row.height
         )
         let runStatusWindow = CGRect(
-            x: row.minX + timetableWidth + Grid.gap,
+            x: row.minX + timetableWidth + RunStatus.columnGap,
             y: row.minY,
             width: statusWidth,
             height: row.height
@@ -224,6 +228,8 @@ enum OpeningPanelTokens {
         static let stripSplit: CGFloat = 2
         static let phoneWindowHeight: CGFloat = 16
         static let commWindowHeight: CGFloat = 16
+        /// COMM の押しボタンと窓の間。モックは 6。
+        static let commSpacing: CGFloat = 6
         static let clockKeySize = CGSize(width: 56, height: 40)
         static let hourModeSize = CGSize(width: 18, height: 18)
         static let testSize = CGSize(width: 16, height: 16)

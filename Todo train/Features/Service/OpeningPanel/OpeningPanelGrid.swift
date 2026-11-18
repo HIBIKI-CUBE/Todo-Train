@@ -226,7 +226,7 @@ struct OpeningPanelGrid: View {
     }
 
     private var timetableHeader: some View {
-        HStack(spacing: OpeningPanelTokens.Grid.gap) {
+        HStack(spacing: OpeningPanelTokens.RunStatus.columnGap) {
             HStack(spacing: 6) {
                 OpeningPanelRaisedControl { scaleToggle }
                     .frame(
@@ -267,7 +267,7 @@ struct OpeningPanelGrid: View {
     }
 
     private var timetableFooter: some View {
-        HStack(spacing: OpeningPanelTokens.Grid.gap) {
+        HStack(spacing: OpeningPanelTokens.RunStatus.columnGap) {
             OpeningPanelWindow { nextStop }
                 .frame(
                     width: OpeningPanelTokens.Chrome.nextWindow.width,
@@ -353,7 +353,7 @@ struct OpeningPanelGrid: View {
 
     private var commModule: some View {
         OpeningPanelModule(tone: .standard) {
-            HStack(spacing: OpeningPanelTokens.Grid.gap) {
+            HStack(spacing: OpeningPanelTokens.Chrome.commSpacing) {
                 OpeningPanelRaisedControl(style: .cap) { commTest }
                     .frame(
                         width: OpeningPanelTokens.Chrome.testSize.width,
