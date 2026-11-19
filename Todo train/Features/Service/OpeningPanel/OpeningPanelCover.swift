@@ -94,11 +94,18 @@ struct OpeningPanelCover: View {
                             growthStep: panelState.ticketGrowthStep
                         )
                     },
+                    departChevrons: {
+                        DepartChevronField(state: panelState)
+                    },
                     departBar: {
                         DepartModule(state: panelState) {
                             panelState.pressDepart()
                         }
                     },
+                    departLocks: OpeningPanelLockPicture(state: panelState),
+                    chevronsFlowing: panelState.chevronsFlowing,
+                    departColumnLit: panelState.departColumnLit,
+                    glowingModules: Set(panelState.glowingFaces.map(\.panelModule)),
                     lamps: lampField(state: panelState, phone: phone),
                     commTesting: commModel.testing && panelState.isPowered,
                     loadLit: loadDrawing.lit,

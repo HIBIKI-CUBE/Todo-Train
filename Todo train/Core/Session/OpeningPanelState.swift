@@ -66,6 +66,10 @@ enum OpeningPanelTiming {
     /// Hub へ切り替える式の末尾。走査の開始と同じ 150ms だが、別の項。
     static let hubTail: TimeInterval = 0.150
     static let departColumnFlash: TimeInterval = 0.120
+    /// 3 段目のあと、刻印が灯るまで。参照モックの `depBtn.on` は 66ms。
+    static var departMarkDelay: TimeInterval {
+        departBarStep * Double(departBarSteps)
+    }
     /// 矢羽根 1 本ごとの間。仕様は順番だけなので、参照モックの並び。
     static let chevronLead: TimeInterval = 0.090
     static let chevronSteps: [TimeInterval] = [
@@ -288,6 +292,8 @@ final class OpeningPanelState {
     private(set) var sequenceLampLit = false
 
     private(set) var departBarDepth = 0
+    /// 3 段沈んだあと、押し棒の字が灯る。
+    private(set) var departMarkLit = false
     private(set) var departColumnLit = false
     private(set) var chevronFill = 0
     private(set) var glowingFaces: Set<OpeningPanelFace> = []
@@ -582,6 +588,7 @@ final class OpeningPanelState {
         locks.removeAll()
         glowingFaces.removeAll()
         departBarDepth = 0
+        departMarkLit = false
         departColumnLit = false
         chevronFill = 0
     }
@@ -874,6 +881,7 @@ final class OpeningPanelState {
         }
 
         departBarDepth = 1
+        departMarkLit = false
         if OpeningPanelTiming.departBarSteps > 1 {
             for step in 2...OpeningPanelTiming.departBarSteps {
                 let delay = Double(step - 1) * OpeningPanelTiming.departBarStep
@@ -882,6 +890,9 @@ final class OpeningPanelState {
                 })
             }
         }
+        departTasks.append(scheduler.schedule(after: OpeningPanelTiming.departMarkDelay) { [weak self] in
+            self?.departMarkLit = true
+        })
 
         if !reducesMotion {
             scheduleChevrons()

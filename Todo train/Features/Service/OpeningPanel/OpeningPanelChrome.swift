@@ -373,8 +373,7 @@ struct OpeningPanelTodayMark: View {
 
 struct OpeningPanelChevronWell: View {
     var body: some View {
-        OpeningPanelChevronRow()
-            .padding(3)
+        Color.clear
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background {
                 RoundedRectangle(cornerRadius: 2, style: .continuous)
@@ -389,30 +388,85 @@ struct OpeningPanelChevronWell: View {
 }
 
 struct OpeningPanelDepartLabel: View {
-    var sunk = false
+    /// 0 は静止。1…3 が `.dbar.p1` … `.p3`。
+    var depth: Int = 0
+    /// `.on .seg.nm`。3 段のあと 22ms で字が灯る。
+    var markLit = false
+
+    private typealias Palette = OpeningPanelTokens.Palette
 
     var body: some View {
         Text("出 発")
             .font(.system(size: 15, weight: .semibold))
             .tracking(9)
             .padding(.leading, 9)
-            .foregroundStyle(sunk ? OpeningPanelTokens.Palette.keyGreenInk : OpeningPanelTokens.Palette.segInk)
-            .shadow(color: .black.opacity(0.45), radius: 0, y: 1)
+            .foregroundStyle(markLit ? Palette.departMark : Palette.segInk)
+            .shadow(color: markLit ? .clear : Color.black.opacity(0.45), radius: 0, y: 1)
             .lineLimit(1)
             .minimumScaleFactor(0.7)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(sunk ? OpeningPanelTokens.Palette.hex(0x1F3121) : OpeningPanelTokens.Palette.barFace)
-            .overlay(alignment: .top) {
-                Rectangle()
-                    .fill(OpeningPanelTokens.Palette.barHighlight)
-                    .frame(height: 1)
-            }
-            .overlay(alignment: .bottom) {
-                Rectangle()
-                    .fill(OpeningPanelTokens.Palette.barShade)
-                    .frame(height: 4)
-            }
+            .background(stage == 3 ? Palette.departSunk : Palette.barFace)
+            .overlay { stageShade }
             .clipShape(RoundedRectangle(cornerRadius: 2, style: .continuous))
+            .background(alignment: .bottom) {
+                if drop > 0 {
+                    Rectangle()
+                        .fill(Palette.barLip)
+                        .frame(height: drop)
+                        .offset(y: drop)
+                }
+            }
+    }
+
+    private var stage: Int {
+        min(max(depth, 0), 3)
+    }
+
+    /// 静止は 2px、1 段目は 1px。2 段目以降は唇が消える。
+    private var drop: CGFloat {
+        switch stage {
+        case 0: 2
+        case 1: 1
+        default: 0
+        }
+    }
+
+    @ViewBuilder
+    private var stageShade: some View {
+        switch stage {
+        case 1:
+            hardLip(top: Palette.barStageTop, topHeight: 1, bottomHeight: 2)
+        case 2:
+            hardLip(top: Palette.barStageTopSunk, topHeight: 1, bottomHeight: 1)
+        case 3:
+            LinearGradient(
+                stops: [
+                    .init(color: Color.black.opacity(0.55), location: 0),
+                    .init(color: Color.black.opacity(0.22), location: 0.55),
+                    .init(color: .clear, location: 1),
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: 6)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .offset(y: 2)
+        default:
+            hardLip(top: Palette.barHighlight, topHeight: 1, bottomHeight: 4)
+        }
+    }
+
+    private func hardLip(top: Color, topHeight: CGFloat, bottomHeight: CGFloat) -> some View {
+        ZStack {
+            Rectangle()
+                .fill(top)
+                .frame(height: topHeight)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            Rectangle()
+                .fill(Palette.barShade)
+                .frame(height: bottomHeight)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+        }
     }
 }
 
@@ -565,27 +619,35 @@ struct OpeningPanelMasterAssembly: View {
 }
 
 struct OpeningPanelLockRow: View {
+    var picture = OpeningPanelLockPicture()
+
     var body: some View {
         HStack(spacing: 3) {
-            lock("MSTR")
-            lock("CLK")
-            lock("TT")
-            lock("TKT")
+            lock("MSTR", lit: picture.master)
+            lock("CLK", lit: picture.clock)
+            lock("TT", lit: picture.timetable)
+            lock("TKT", lit: picture.tickets)
             Spacer(minLength: 0)
-            OpeningPanelLamp()
+            Circle()
+                .fill(picture.ready ? OpeningPanelTokens.Palette.lampGreen : OpeningPanelTokens.Palette.lampOff)
+                .frame(width: 6, height: 6)
             Text("READY")
                 .font(OpeningPanelFaceFont.legend(7))
                 .tracking(0.35)
-                .foregroundStyle(OpeningPanelTokens.Palette.legend)
+                .foregroundStyle(
+                    picture.ready
+                        ? OpeningPanelTokens.Palette.readyInk
+                        : OpeningPanelTokens.Palette.legend
+                )
                 .lineLimit(1)
         }
         .frame(height: 11)
     }
 
-    private func lock(_ name: String) -> some View {
+    private func lock(_ name: String, lit: Bool) -> some View {
         HStack(spacing: 3) {
             Rectangle()
-                .fill(OpeningPanelTokens.Palette.lampOff)
+                .fill(lit ? OpeningPanelTokens.Palette.lockLit : OpeningPanelTokens.Palette.lampOff)
                 .frame(width: 9, height: 3)
             Text(name)
                 .font(OpeningPanelFaceFont.legend(6))
