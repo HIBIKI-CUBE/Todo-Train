@@ -2,7 +2,7 @@
 //  OpeningPanelCover.swift
 //  Todo train
 //
-//  盤の最小画面。MASTER と DEPART の押し棒だけを載せる。
+//  盤の最小画面。MASTER、時計、DEPART の押し棒を載せる。
 //
 
 import SwiftUI
@@ -25,6 +25,19 @@ struct OpeningPanelCover: View {
                     master: {
                         MasterModule(state: panelState) {
                             panelState.pressMaster()
+                        }
+                    },
+                    clock: {
+                        ClockModule(state: panelState)
+                    },
+                    clockKey: {
+                        ClockConfirmKey(state: panelState) {
+                            panelState.pressConfirm(.clock)
+                        }
+                    },
+                    hourMode: {
+                        ClockHourModeKey(state: panelState) {
+                            panelState.pressHourMode()
                         }
                     },
                     departBar: {

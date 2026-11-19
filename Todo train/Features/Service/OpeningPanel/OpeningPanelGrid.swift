@@ -44,7 +44,7 @@ struct OpeningPanelGrid: View {
         @ViewBuilder phone: () -> some View = { EmptyView() },
         @ViewBuilder master: () -> some View = { OpeningPanelMasterAssembly() },
         @ViewBuilder clock: () -> some View = { EmptyView() },
-        @ViewBuilder clockKey: () -> some View = { EmptyView() },
+        @ViewBuilder clockKey: () -> some View = { OpeningPanelConfirmKey() },
         @ViewBuilder hourMode: () -> some View = { EmptyView() },
         @ViewBuilder scaleToggle: () -> some View = { EmptyView() },
         @ViewBuilder timetableTitle: () -> some View = { EmptyView() },
@@ -242,7 +242,7 @@ struct OpeningPanelGrid: View {
 
     private var clockModule: some View {
         OpeningPanelModule(tone: .upper) {
-            OpeningPanelWindow { clock }
+            OpeningPanelWindow(exposesContent: true) { clock }
                 .padding(6)
         }
         .accessibilityElement(children: .contain)
@@ -254,11 +254,11 @@ struct OpeningPanelGrid: View {
             VStack(spacing: 0) {
                 OpeningPanelLegend(text: "CLOCK")
                 Spacer(minLength: 4)
-                ZStack {
-                    OpeningPanelConfirmKey()
-                    clockKey
-                }
-                .frame(width: 56, height: 40)
+                clockKey
+                    .frame(
+                        width: OpeningPanelTokens.Chrome.clockKeySize.width,
+                        height: OpeningPanelTokens.Chrome.clockKeySize.height
+                    )
                 Spacer(minLength: 4)
                 HStack(spacing: 4) {
                     ZStack {
@@ -516,15 +516,18 @@ struct OpeningPanelModule<Content: View>: View {
 /// 凹んだ窓。表示だけで、中身を差し込める。
 struct OpeningPanelWindow<Content: View>: View {
     var label: String?
+    /// 中身が自分の読み上げを持つとき。時計の時刻に使う。
+    var exposesContent = false
     private var content: Content
 
-    init(label: String? = nil, @ViewBuilder content: () -> Content) {
+    init(label: String? = nil, exposesContent: Bool = false, @ViewBuilder content: () -> Content) {
         self.label = label
+        self.exposesContent = exposesContent
         self.content = content()
     }
 
     var body: some View {
-        ZStack {
+        let chrome = ZStack {
             RoundedRectangle(cornerRadius: OpeningPanelTokens.Chrome.windowRadius, style: .continuous)
                 .fill(OpeningPanelTokens.Palette.window)
             RoundedRectangle(cornerRadius: OpeningPanelTokens.Chrome.windowRadius, style: .continuous)
@@ -533,9 +536,15 @@ struct OpeningPanelWindow<Content: View>: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(label ?? "")
-        .accessibilityHidden(label == nil)
+
+        if exposesContent {
+            chrome.accessibilityElement(children: .contain)
+        } else {
+            chrome
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(label ?? "")
+                .accessibilityHidden(label == nil)
+        }
     }
 }
 

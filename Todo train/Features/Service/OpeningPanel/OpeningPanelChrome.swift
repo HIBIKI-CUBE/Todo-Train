@@ -51,6 +51,10 @@ struct OpeningPanelConfirmKey: View {
     var bottomSize: CGFloat = 8
     var topAvailable = false
     var bottomLit = false
+    /// `.k.on` は 1px 沈み、下の唇が消える。
+    var sunk = false
+    /// 次に自動で始まるキーの 1px の縁。
+    var showsNextEdge = false
 
     private typealias Palette = OpeningPanelTokens.Palette
 
@@ -61,11 +65,21 @@ struct OpeningPanelConfirmKey: View {
             .background(Palette.key(0x2E3033))
             .clipShape(RoundedRectangle(cornerRadius: 2, style: .continuous))
             .overlay(alignment: .bottom) {
-                Rectangle()
-                    .fill(Palette.key(0x1D1E20))
-                    .frame(height: 2)
-                    .offset(y: 2)
+                if !sunk {
+                    Rectangle()
+                        .fill(Palette.key(0x1D1E20))
+                        .frame(height: 2)
+                        .offset(y: 2)
+                }
             }
+            .overlay {
+                if showsNextEdge {
+                    RoundedRectangle(cornerRadius: 2, style: .continuous)
+                        .strokeBorder(Palette.keyNextEdge, lineWidth: 1)
+                        .padding(-1)
+                }
+            }
+            .offset(y: sunk ? 1 : 0)
     }
 
     private var lens: some View {
