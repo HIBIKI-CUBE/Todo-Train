@@ -108,14 +108,16 @@ struct OpeningPanelConfirmKey: View {
 }
 
 struct OpeningPanelSeqKey: View {
+    var lit = false
+
     var body: some View {
         Text("SEQ")
             .font(OpeningPanelFaceFont.legend(9))
             .tracking(9 * 0.15)
-            .foregroundStyle(OpeningPanelTokens.Palette.keySegInk)
-            .shadow(color: .black.opacity(0.45), radius: 0, y: 1)
+            .foregroundStyle(lit ? OpeningPanelTicketMetrics.sequenceLitInk : OpeningPanelTokens.Palette.keySegInk)
+            .shadow(color: .black.opacity(0.45), radius: 0, y: lit ? 0 : 1)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(OpeningPanelTokens.Palette.key(0x2F3133))
+            .background(lit ? OpeningPanelTokens.Palette.key(0x4A3A14) : OpeningPanelTokens.Palette.key(0x2F3133))
             .clipShape(RoundedRectangle(cornerRadius: 1, style: .continuous))
             .padding(3)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -195,6 +197,8 @@ struct OpeningPanelScaleToggle: View {
 struct OpeningPanelTodayRail: View {
     var rows = 5
     var cutAfter = 3
+    /// TKT が灯っているとき、つまみの小さな孔を琥珀にする。
+    var lit = false
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -240,7 +244,7 @@ struct OpeningPanelTodayRail: View {
                 .frame(width: 6, height: 5)
                 .offset(x: 6, y: 3)
             Rectangle()
-                .fill(OpeningPanelTokens.Palette.hex(0x3A3C3F))
+                .fill(lit ? OpeningPanelTokens.Palette.amber : OpeningPanelTokens.Palette.hex(0x3A3C3F))
                 .frame(width: 3, height: 2)
                 .offset(x: 2, y: 5)
         }
@@ -297,11 +301,16 @@ struct OpeningPanelLoadFace: View {
 }
 
 struct OpeningPanelSlotNames: View {
-    private let names = ["先発", "次発", "次々発", "4", "5"]
+    var count = 5
+
+    private var names: [String] {
+        let total = max(count, 5)
+        return (0..<total).map { OpeningPanelTickets.slotName(index: $0) }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ForEach(names, id: \.self) { name in
+            ForEach(Array(names.enumerated()), id: \.offset) { _, name in
                 Text(name)
                     .font(OpeningPanelFaceFont.legend(8))
                     .tracking(0.4)

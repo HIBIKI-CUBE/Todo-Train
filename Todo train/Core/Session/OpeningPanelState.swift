@@ -42,6 +42,13 @@ enum OpeningPanelTiming {
     static var ticketAfterCursor: TimeInterval { tempo(150) }
     /// 切符 1 枚の間隔にはテンポを掛けない。
     static let ticketStep: TimeInterval = 0.110
+    /// TKT が灯ってから、見積もりを実際の長さへ伸ばす。テンポは掛けない。
+    static let ticketGrowthDelay: TimeInterval = 0.700
+    static let ticketGrowthStep: TimeInterval = 0.070
+    static let ticketGrowthSteps = 6
+    /// SEQ の灯。入ってからの待ちと、点滅して抜けるまでの長さ。
+    static let sequenceQuiet: TimeInterval = 1.500
+    static let sequenceBlink: TimeInterval = 1.500
 
     static var checkBlink: TimeInterval { tempo(60) }
     /// 点・滅・点・滅・点。最後の段番号。
@@ -252,6 +259,7 @@ final class OpeningPanelState {
     private let feedback: any OpeningPanelFeedback
     private let onStartService: () -> Void
     private let onCommitSequence: () -> Void
+    private let onAbandonSequence: () -> Void
     private let onShowHub: () -> Void
 
     let reducesMotion: Bool
@@ -271,6 +279,10 @@ final class OpeningPanelState {
     private(set) var hourCycle: OpeningPanelHourCycle = .twentyFour
     private(set) var timetableStage: OpeningPanelTimetableStage = .dark
     private(set) var ticketsStage: OpeningPanelTicketsStage = .dark
+    /// 0 は見積もり。6 で予測の長さまで伸びきる。
+    private(set) var ticketGrowthStep = 0
+    /// SEQ のレンズ。点滅のあいだは段ごとに入れ替わる。
+    private(set) var sequenceLampLit = false
 
     private(set) var departBarDepth = 0
     private(set) var departColumnLit = false
@@ -287,6 +299,8 @@ final class OpeningPanelState {
     private var powerTasks: [OpeningPanelTask] = []
     private var autoTasks: [OpeningPanelTask] = []
     private var departTasks: [OpeningPanelTask] = []
+    private var sequenceTasks: [OpeningPanelTask] = []
+    private var sequenceGeneration = 0
 
     init(
         scheduler: any OpeningPanelScheduling,
@@ -295,6 +309,7 @@ final class OpeningPanelState {
         reduceMotion: Bool = false,
         onStartService: @escaping () -> Void = {},
         onCommitSequence: @escaping () -> Void = {},
+        onAbandonSequence: @escaping () -> Void = {},
         onShowHub: @escaping () -> Void = {}
     ) {
         self.scheduler = scheduler
@@ -303,6 +318,7 @@ final class OpeningPanelState {
         self.reducesMotion = reduceMotion
         self.onStartService = onStartService
         self.onCommitSequence = onCommitSequence
+        self.onAbandonSequence = onAbandonSequence
         self.onShowHub = onShowHub
     }
 
@@ -398,10 +414,47 @@ final class OpeningPanelState {
             commitSequence()
         } else {
             isSequencing = true
+            armSequenceLamp(fromEntry: true)
         }
         feedback.play(.light)
         feedback.play(.haptic(.operation))
         rearmAuto()
+    }
+
+    /// SEQ 中の行。受け付けた行は軽い音、同じ行は鈍い音。どちらも点滅をすぐ始め直す。
+    func noteSequenceRow(accepted: Bool) {
+        guard isSequencing, !hasDeparted else { return }
+        if accepted {
+            feedback.play(.light)
+            feedback.play(.haptic(.operation))
+        } else {
+            feedback.play(.dull)
+        }
+        armSequenceLamp(fromEntry: false)
+        rearmAuto()
+    }
+
+    /// TODAY の区切り。移したときだけ 8ms の振動。位置そのものは持たない。
+    func moveTodayCut(changed: Bool) {
+        guard !hasDeparted else { return }
+        guard isPowered else {
+            feedback.play(.dull)
+            return
+        }
+        feedback.play(.light)
+        if changed {
+            feedback.play(.haptic(.divider))
+        }
+        rearmAuto()
+    }
+
+    /// 電気が来る前、確認の前、SEQ 中のレールなど、受け付けない操作。
+    func rejectTouch() {
+        guard !hasDeparted else { return }
+        feedback.play(.dull)
+        if isPowered {
+            rearmAuto()
+        }
     }
 
     func pressDepart() {
@@ -420,8 +473,57 @@ final class OpeningPanelState {
 
     private func commitSequence() {
         guard isSequencing else { return }
+        cancelSequenceLamp()
         isSequencing = false
+        sequenceLampLit = false
         onCommitSequence()
+    }
+
+    private func abandonSequence() {
+        guard isSequencing else { return }
+        cancelSequenceLamp()
+        isSequencing = false
+        sequenceLampLit = false
+        feedback.play(.dull)
+        onAbandonSequence()
+    }
+
+    /// 入った直後は灯を点けたまま待つ。行を押したあとは待ちなしで点滅を始め直す。
+    private func armSequenceLamp(fromEntry: Bool) {
+        sequenceGeneration += 1
+        let generation = sequenceGeneration
+        sequenceTasks.forEach { $0.cancel() }
+        sequenceTasks = []
+        sequenceLampLit = true
+        guard isSequencing else { return }
+        let wait = fromEntry ? OpeningPanelTiming.sequenceQuiet : 0
+        let task = scheduler.schedule(after: wait) { [weak self] in
+            self?.blinkSequence(elapsed: 0, lit: true, generation: generation)
+        }
+        sequenceTasks.append(task)
+    }
+
+    /// 周期は 500ms から始まり、1500ms で 6 倍まで速まる。窓を超えた段で、並びを変えずに抜ける。
+    private func blinkSequence(elapsed: TimeInterval, lit: Bool, generation: Int) {
+        guard isSequencing, generation == sequenceGeneration else { return }
+        if elapsed >= OpeningPanelTiming.sequenceBlink {
+            abandonSequence()
+            return
+        }
+        let next = !lit
+        sequenceLampLit = next
+        let pace = 1 + 5 * elapsed / OpeningPanelTiming.sequenceBlink
+        let delay = 0.5 / pace
+        let task = scheduler.schedule(after: delay) { [weak self] in
+            self?.blinkSequence(elapsed: elapsed + delay, lit: next, generation: generation)
+        }
+        sequenceTasks.append(task)
+    }
+
+    private func cancelSequenceLamp() {
+        sequenceGeneration += 1
+        sequenceTasks.forEach { $0.cancel() }
+        sequenceTasks = []
     }
 
     private func powerOff() {
@@ -433,9 +535,12 @@ final class OpeningPanelState {
         for module in OpeningPanelModuleID.allCases {
             _ = bump(module)
         }
+        cancelSequenceLamp()
         isPowered = false
         isReady = false
         isSequencing = false
+        sequenceLampLit = false
+        ticketGrowthStep = 0
         lampCheck = .off
         powerLEDCount = 0
         powerSettled = false
@@ -585,6 +690,7 @@ final class OpeningPanelState {
     }
 
     private func beginTickets(_ generation: Int) {
+        ticketGrowthStep = 0
         ticketsStage = .backlight
         let count = max(0, ticketCount)
         after(OpeningPanelTiming.backlight, module: .tickets, generation: generation) { state in
@@ -635,9 +741,34 @@ final class OpeningPanelState {
         guard isPowered, !hasDeparted else { return }
         confirmation[module] = .confirmed
         locks.insert(module.meter)
+        if module == .tickets {
+            beginGrowth(generation: generation(of: module))
+        }
         showCheck(module.meter, step: 0, generation: generation(of: module), module: module)
         let ready = OpeningPanelModuleID.bootOrder.allSatisfy { confirmation(of: $0) == .confirmed }
         isReady = ready
+    }
+
+    private func beginGrowth(generation: Int) {
+        guard self.generation(of: .tickets) == generation else { return }
+        ticketGrowthStep = 0
+        if reducesMotion {
+            ticketGrowthStep = OpeningPanelTiming.ticketGrowthSteps
+            return
+        }
+        after(OpeningPanelTiming.ticketGrowthDelay, module: .tickets, generation: generation) { state in
+            state.advanceGrowth(to: 1, generation: generation)
+        }
+    }
+
+    private func advanceGrowth(to step: Int, generation: Int) {
+        guard self.generation(of: .tickets) == generation else { return }
+        guard confirmation(of: .tickets) == .confirmed else { return }
+        ticketGrowthStep = step
+        guard step < OpeningPanelTiming.ticketGrowthSteps else { return }
+        after(OpeningPanelTiming.ticketGrowthStep, module: .tickets, generation: generation) { state in
+            state.advanceGrowth(to: step + 1, generation: generation)
+        }
     }
 
     private func showCheck(

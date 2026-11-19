@@ -297,6 +297,7 @@ extension OpeningPanelState {
         reduceMotion: Bool = false,
         onStartService: @escaping () -> Void = {},
         onCommitSequence: @escaping () -> Void = {},
+        onAbandonSequence: @escaping () -> Void = {},
         onShowHub: @escaping () -> Void = {}
     ) -> OpeningPanelState {
         OpeningPanelState(
@@ -306,6 +307,7 @@ extension OpeningPanelState {
             reduceMotion: reduceMotion,
             onStartService: onStartService,
             onCommitSequence: onCommitSequence,
+            onAbandonSequence: onAbandonSequence,
             onShowHub: onShowHub
         )
     }
