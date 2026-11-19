@@ -2,7 +2,7 @@
 //  OpeningPanelCover.swift
 //  Todo train
 //
-//  盤の最小画面。いまは MASTER だけを載せる。
+//  盤の最小画面。MASTER と DEPART の押し棒だけを載せる。
 //
 
 import SwiftUI
@@ -25,6 +25,12 @@ struct OpeningPanelCover: View {
                     master: {
                         MasterModule(state: panelState) {
                             panelState.pressMaster()
+                        }
+                    },
+                    departChevrons: { EmptyView() },
+                    departBar: {
+                        DepartModule(state: panelState) {
+                            panelState.pressDepart()
                         }
                     }
                 )

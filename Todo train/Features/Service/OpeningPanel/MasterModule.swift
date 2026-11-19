@@ -252,7 +252,7 @@ private struct MasterModulePreviewPanel: View {
     return MasterModulePreviewPanel(state: state)
 }
 
-private final class OpeningPanelFeedbackSilent: OpeningPanelFeedback {
+final class OpeningPanelFeedbackSilent: OpeningPanelFeedback {
     func play(_ cue: OpeningPanelCue) {}
 }
 
