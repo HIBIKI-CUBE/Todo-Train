@@ -151,6 +151,7 @@ struct OpeningPanelGrid: View {
 
     private var latticeBody: some View {
         GeometryReader { proxy in
+            let _ = OpeningPanelRedrawProbe.bump("gridGeometry")
             let safe = CGRect(origin: .zero, size: proxy.size)
             let placed = TrainLayout.openingPanelPlacement(in: safe)
             let scale = placed.scale
@@ -790,6 +791,7 @@ private struct OpeningPanelLattice: Layout {
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let _ = OpeningPanelRedrawProbe.bump("latticeLayout")
         for (module, subview) in zip(OpeningPanelTokens.Module.allCases, subviews) {
             let frame = module.frame()
             subview.place(

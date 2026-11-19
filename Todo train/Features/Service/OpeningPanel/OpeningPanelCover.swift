@@ -218,6 +218,7 @@ struct OpeningPanelCover: View {
     }
 
     private func loadTarget(for state: OpeningPanelState, now: Date) -> OpeningPanelLoadTarget {
+        let _ = OpeningPanelRedrawProbe.bump("loadTarget")
         let lit = OpeningPanelLoadLogic.isLit(
             powered: state.isPowered,
             timetableConfirmed: state.confirmation(of: .timetable) == .confirmed,
@@ -265,6 +266,7 @@ struct OpeningPanelCover: View {
     }
 
     private var ticketSyncKey: String {
+        let _ = OpeningPanelRedrawProbe.bump("ticketSyncKey")
         let sessions = Array(allSessions)
         return allTickets.map { ticket in
             let refined: String

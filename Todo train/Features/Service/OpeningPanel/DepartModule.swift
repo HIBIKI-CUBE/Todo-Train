@@ -225,37 +225,6 @@ enum DepartChevronFrame: Equatable {
     }
 }
 
-/// 絵が変わる時刻だけ進む。30 分の 1 秒では描かない。
-struct DepartChevronFrameSchedule: TimelineSchedule {
-    func entries(from startDate: Date, mode: TimelineScheduleMode) -> [Date] {
-        edgeDates(from: startDate, mode: mode, next: DepartChevronWave.nextFrameEdge(after:))
-    }
-}
-
-/// 押し棒の輪が点いたり消えたりする時刻だけ進む。
-struct DepartColumnHitSchedule: TimelineSchedule {
-    func entries(from startDate: Date, mode: TimelineScheduleMode) -> [Date] {
-        edgeDates(from: startDate, mode: mode, next: DepartChevronWave.nextColumnEdge(after:))
-    }
-}
-
-private func edgeDates(
-    from startDate: Date,
-    mode: TimelineScheduleMode,
-    next: (Date) -> Date
-) -> [Date] {
-    let horizon = startDate.addingTimeInterval(mode == .lowFrequency ? 8 : 3)
-    var dates = [startDate]
-    var cursor = startDate
-    while dates.count < 40 {
-        let edge = next(cursor)
-        if edge <= cursor || edge > horizon { break }
-        dates.append(edge)
-        cursor = edge
-    }
-    return dates
-}
-
 /// 矢羽根 10 本。READY のあいだは段が変わるときだけ Canvas を描き、押したあとは手前から満ちる。
 struct DepartChevronField: View {
     var state: OpeningPanelState
@@ -270,11 +239,7 @@ struct DepartChevronField: View {
         let fill = state.chevronFill
         Group {
             if flowing, waveDate == nil {
-                TimelineView(DepartChevronFrameSchedule()) { context in
-                    let _ = OpeningPanelRedrawProbe.bump("DepartChevronTick")
-                    DepartChevronCanvas(frame: .wave(DepartChevronWave.sample(at: context.date).alphas))
-                        .equatable()
-                }
+                DepartChevronPlayer()
             } else {
                 DepartChevronCanvas(
                     frame: .make(
@@ -290,6 +255,39 @@ struct DepartChevronField: View {
         }
         .accessibilityHidden(true)
         .allowsHitTesting(false)
+    }
+}
+
+/// 段の境だけ起こす。有限の TimelineSchedule は取り切ると止まり、`.animation` は表示リンクに乗る。
+private struct DepartChevronPlayer: View {
+    @State private var date = Date()
+
+    var body: some View {
+        let _ = OpeningPanelRedrawProbe.bump("DepartChevronTick")
+        DepartChevronCanvas(frame: .wave(DepartChevronWave.sample(at: date).alphas))
+            .equatable()
+            .task {
+                await followWaveEdges(from: date, advance: DepartChevronWave.nextFrameEdge(after:)) {
+                    date = $0
+                }
+            }
+    }
+}
+
+/// 次の段まで寝てから日付を進める。表示リンクには載せず、予定を取り切っても止まらない。
+private func followWaveEdges(
+    from start: Date,
+    advance: (Date) -> Date,
+    apply: (Date) -> Void
+) async {
+    var cursor = start
+    while !Task.isCancelled {
+        let next = advance(cursor)
+        let delay = max(next.timeIntervalSinceNow, 0.001)
+        try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+        guard !Task.isCancelled else { return }
+        cursor = Date()
+        apply(cursor)
     }
 }
 
@@ -330,10 +328,7 @@ struct DepartColumnRing: View {
 
     var body: some View {
         if flowing, pinned == nil {
-            TimelineView(DepartColumnHitSchedule()) { context in
-                let _ = OpeningPanelRedrawProbe.bump("DepartColumnRing")
-                stroke(baseLit || DepartChevronWave.sample(at: context.date).columnHit)
-            }
+            DepartColumnHitPlayer(baseLit: baseLit)
         } else {
             let hit = flowing && (pinned.map { DepartChevronWave.sample(at: $0).columnHit } ?? false)
             stroke(baseLit || hit)
@@ -341,6 +336,29 @@ struct DepartColumnRing: View {
     }
 
     private func stroke(_ lit: Bool) -> some View {
+        DepartColumnStroke(lit: lit)
+    }
+}
+
+private struct DepartColumnHitPlayer: View {
+    var baseLit: Bool
+    @State private var date = Date()
+
+    var body: some View {
+        let _ = OpeningPanelRedrawProbe.bump("DepartColumnRing")
+        DepartColumnStroke(lit: baseLit || DepartChevronWave.sample(at: date).columnHit)
+            .task {
+                await followWaveEdges(from: date, advance: DepartChevronWave.nextColumnEdge(after:)) {
+                    date = $0
+                }
+            }
+    }
+}
+
+private struct DepartColumnStroke: View {
+    var lit: Bool
+
+    var body: some View {
         RoundedRectangle(cornerRadius: 4, style: .continuous)
             .strokeBorder(
                 lit

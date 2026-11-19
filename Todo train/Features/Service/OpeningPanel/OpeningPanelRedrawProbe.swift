@@ -7,27 +7,35 @@
 
 import Foundation
 
-@MainActor
 enum OpeningPanelRedrawProbe {
     static var enabled = false
     /// 点いているあいだ、`changes`（`Self._printChanges()`）を呼ぶ。
     static var trace = false
-    private(set) static var counts: [String: Int] = [:]
+    private static let lock = NSLock()
+    private static var storage: [String: Int] = [:]
 
     static func bump(_ name: String, _ changes: () -> Void = {}) {
         guard enabled else { return }
-        counts[name, default: 0] += 1
-        if trace {
+        lock.lock()
+        storage[name, default: 0] += 1
+        let tracing = trace
+        lock.unlock()
+        if tracing {
             print("TRACE \(name)")
             changes()
         }
     }
 
     static func reset() {
-        counts.removeAll(keepingCapacity: true)
+        lock.lock()
+        storage.removeAll(keepingCapacity: true)
+        lock.unlock()
     }
 
     static func snapshot() -> [String: Int] {
-        counts
+        lock.lock()
+        let copy = storage
+        lock.unlock()
+        return copy
     }
 }
