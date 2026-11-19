@@ -372,6 +372,8 @@ private struct TimetableScaleToggle: View {
             }
         }
         .buttonStyle(.plain)
+        .openingPanelAction(.scaleToggle, perform: action)
+        .contentShape(Rectangle())
         .accessibilityLabel(isTwentyFourHour ? "24時間" : "自動")
         .accessibilityHint("表示範囲を切り替えます")
     }
@@ -422,6 +424,7 @@ private struct TimetableNextWindow: View {
 }
 
 private struct TimetableTape: View {
+    @Environment(\.openingPanelHitMinimum) private var hitMinimum
     var entries: [OpeningTimetableEntry]
     var range: TimetableRange
     var next: RunStatusNext
@@ -435,6 +438,12 @@ private struct TimetableTape: View {
             let width = geo.size.width
             let frames = TimetableColumnLayout.rowFrames(entries: entries, range: range, height: height)
             let framesByID = Dictionary(uniqueKeysWithValues: frames.map { ($0.id, $0) })
+            let hits = OpeningPanelHitLayout.timetable(
+                entries: entries,
+                range: range,
+                bounds: CGRect(x: 0, y: 0, width: width, height: height),
+                minimum: hitMinimum
+            )
             ZStack(alignment: .topLeading) {
                 DayOverview(entries: entries, range: range, calendar: calendar)
                     .frame(width: TimetableColumnLayout.overviewWidth, height: height)
@@ -443,9 +452,26 @@ private struct TimetableTape: View {
                 nowBand(height: height, width: width)
                 leaders(frames: frames, width: width, height: height)
                 rows(framesByID: framesByID, width: width, height: height)
+                timetableHits(hits)
             }
             .frame(width: width, height: height)
             .clipped()
+        }
+    }
+
+    private func timetableHits(_ hits: [OpeningPanelHitLayout.Target]) -> some View {
+        ZStack(alignment: .topLeading) {
+            ForEach(hits) { hit in
+                Color.clear
+                    .frame(width: hit.hit.width, height: hit.hit.height)
+                    .contentShape(Rectangle())
+                    .position(x: hit.hit.midX, y: hit.hit.midY)
+                    .onTapGesture {
+                        guard let entry = entries.first(where: { $0.id == hit.id.entryID }) else { return }
+                        onToggleEntry(entry)
+                    }
+                    .accessibilityHidden(true)
+            }
         }
     }
 
@@ -485,6 +511,7 @@ private struct TimetableTape: View {
                         entryBand(entry)
                     }
                     .buttonStyle(.plain)
+                    .allowsHitTesting(false)
                     .frame(width: TimetableColumnLayout.barWidth, height: frame.bandHeight)
                     .position(
                         x: TimetableColumnLayout.barWidth / 2,
@@ -573,6 +600,8 @@ private struct TimetableTape: View {
                         rowContents(entry)
                     }
                     .buttonStyle(.plain)
+                    .allowsHitTesting(false)
+                    .contentShape(Rectangle())
                     .frame(width: rowWidth, height: TimetableColumnLayout.rowHeight)
                     .position(
                         x: TimetableColumnLayout.rowOrigin + rowWidth / 2,

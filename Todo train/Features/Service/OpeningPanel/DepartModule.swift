@@ -212,6 +212,7 @@ struct DepartModule: View {
             .animation(nil, value: state.departMarkLit)
         }
         .buttonStyle(.plain)
+        .openingPanelAction(.depart, perform: onPress)
         .accessibilityLabel("DEPART")
         .accessibilityHint("Hub へ出ます")
     }

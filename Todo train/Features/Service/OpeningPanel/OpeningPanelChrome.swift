@@ -493,6 +493,7 @@ struct OpeningPanelMasterAssembly: View {
                 }
             }
             .buttonStyle(.plain)
+            .openingPanelAction(.master, perform: onPress)
             .frame(maxWidth: .infinity)
             .accessibilityLabel(powered ? "MASTER ON" : "MASTER OFF")
             .accessibilityHint("運行の電源を入れます")

@@ -225,6 +225,7 @@ struct OpeningPanelCommButton: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .buttonStyle(.plain)
+        .openingPanelAction(.commTest, perform: action)
         .accessibilityLabel("TEST")
         .accessibilityValue(testing ? "測定中" : "待機")
         .accessibilityHint("中継と Mac までの往復を測ります")
