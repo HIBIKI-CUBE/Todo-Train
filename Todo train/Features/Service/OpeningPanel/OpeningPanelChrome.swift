@@ -395,14 +395,16 @@ struct OpeningPanelMasterAssembly: View {
     private var keyHead: some View {
         ZStack(alignment: .topLeading) {
             Text("OFF")
-                .font(OpeningPanelFaceFont.legend(7))
+                .font(.custom("HelveticaNeue-Medium", size: 7))
                 .tracking(0.35)
-                .foregroundStyle(Palette.keyLegend)
+                .foregroundStyle(Palette.keyLegendInk)
+                .opacity(0.72)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             Text("ON")
-                .font(OpeningPanelFaceFont.legend(7))
+                .font(.custom("HelveticaNeue-Medium", size: 7))
                 .tracking(0.35)
-                .foregroundStyle(Palette.keyLegend)
+                .foregroundStyle(Palette.keyLegendInk)
+                .opacity(0.72)
                 .padding(.trailing, 2)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
             tick(degrees: -45)
@@ -485,7 +487,7 @@ struct OpeningPanelMasterAssembly: View {
     private var powerRow: some View {
         HStack(spacing: 5) {
             Text("PWR")
-                .font(OpeningPanelFaceFont.legend(8))
+                .font(.custom("HelveticaNeue-Medium", size: 8))
                 .tracking(0.4)
                 .foregroundStyle(Palette.legend)
             HStack(spacing: 2) {

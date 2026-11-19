@@ -262,6 +262,8 @@ enum OpeningPanelTokens {
         static let departPaddingV: CGFloat = 5
         static let departLineHeight: CGFloat = 16
         static let chevronCount = 10
+        /// 出発モジュールの内側 82 から、錠の行と窓 2 本と間隔を引いた残り。
+        static let chevronWellHeight: CGFloat = 30
         /// 次に自動で始まるキーの縁。
         static let nextKeyEdge: CGFloat = 1
     }
@@ -353,6 +355,8 @@ enum OpeningPanelTokens {
         static let windowEdge = Color.black.opacity(0.3)
         static let strip = color(0x45484B)
         static let legend = color(0xF0EBDA, opacity: 0.84)
+        /// `--leg`。フィルタの外にある DEPART の刻印。
+        static let engraved = color(0xF2E6C8, opacity: 0.72)
         /// `.k` に brightness(1.16) を掛けた面と、その下の唇。
         static let raised = color(0x2E3033, brightness: 1.16)
         static let raisedLip = color(0x1D1E20)
@@ -397,8 +401,14 @@ enum OpeningPanelTokens {
             color(value, opacity: opacity)
         }
 
+        /// `--leg` を `brightness(1.16)` した面。文字はこれに 0.72 を掛ける。
+        static var keyLegendInk: Color {
+            color(0xF2E6C8, brightness: 1.16)
+        }
+
+        /// 目盛り。色の不透明度がそのまま乗る。
         static var keyLegend: Color {
-            Color(red: 1, green: 1, blue: min(1, 218 / 255 * 1.16), opacity: 0.84)
+            color(0xF2E6C8, brightness: 1.16, opacity: 0.72)
         }
 
         static var keySegInk: Color {

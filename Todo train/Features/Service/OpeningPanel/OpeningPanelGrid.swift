@@ -42,7 +42,7 @@ struct OpeningPanelGrid: View {
     init(
         @ViewBuilder check: () -> some View = { EmptyView() },
         @ViewBuilder phone: () -> some View = { EmptyView() },
-        @ViewBuilder master: () -> some View = { EmptyView() },
+        @ViewBuilder master: () -> some View = { OpeningPanelMasterAssembly() },
         @ViewBuilder clock: () -> some View = { EmptyView() },
         @ViewBuilder clockKey: () -> some View = { EmptyView() },
         @ViewBuilder hourMode: () -> some View = { EmptyView() },
@@ -172,48 +172,49 @@ struct OpeningPanelGrid: View {
     ) -> some View {
         let frame = module.frame()
         return content()
-            .ignoresSafeArea()
             .frame(width: frame.width, height: frame.height, alignment: .topLeading)
             .clipped()
     }
 
     private var sysbar: some View {
         HStack(spacing: OpeningPanelTokens.Chrome.stripSplit) {
-            OpeningPanelModule(tone: .standard) {
-                HStack(spacing: 4) {
-                    OpeningPanelLegend(
-                        text: "CHK",
-                        size: 7,
-                        tracking: 0.14,
-                        padding: EdgeInsets(top: 1, leading: 3, bottom: 1, trailing: 3)
-                    )
-                    lampPair("MSTR")
-                    lampPair("CLK")
-                    lampPair("TT")
-                    lampPair("TKT")
-                    check
-                    Spacer(minLength: 0)
+            OpeningPanelModule(tone: .standard, alignment: .center) {
+                OpeningPanelCenterRow {
+                    HStack(spacing: 4) {
+                        OpeningPanelLegend(
+                            text: "CHK",
+                            size: 7,
+                            tracking: 0.14,
+                            padding: EdgeInsets(top: 1, leading: 3, bottom: 1, trailing: 3)
+                        )
+                        lampPair("MSTR")
+                        lampPair("CLK")
+                        lampPair("TT")
+                        lampPair("TKT")
+                        check
+                    }
+                    .padding(.horizontal, 5)
                 }
-                .padding(.horizontal, 5)
             }
             .accessibilityElement(children: .contain)
             .accessibilityLabel("CHK")
 
-            OpeningPanelModule(tone: .standard) {
-                HStack(spacing: 4) {
-                    OpeningPanelLegend(
-                        text: "PHONE",
-                        size: 7,
-                        tracking: 0.14,
-                        padding: EdgeInsets(top: 1, leading: 3, bottom: 1, trailing: 3)
-                    )
-                    OpeningPanelWindow { phone }
-                        .frame(width: 36, height: OpeningPanelTokens.Chrome.phoneWindowHeight)
-                    lampPair("EXT")
-                    lampPair("AWAKE")
-                    Spacer(minLength: 0)
+            OpeningPanelModule(tone: .standard, alignment: .center) {
+                OpeningPanelCenterRow {
+                    HStack(spacing: 4) {
+                        OpeningPanelLegend(
+                            text: "PHONE",
+                            size: 7,
+                            tracking: 0.14,
+                            padding: EdgeInsets(top: 1, leading: 3, bottom: 1, trailing: 3)
+                        )
+                        OpeningPanelWindow { phone }
+                            .frame(width: 36, height: OpeningPanelTokens.Chrome.phoneWindowHeight)
+                        lampPair("EXT")
+                        lampPair("AWAKE")
+                    }
+                    .padding(.horizontal, 5)
                 }
-                .padding(.horizontal, 5)
             }
             .accessibilityElement(children: .contain)
             .accessibilityLabel("PHONE")
@@ -233,11 +234,7 @@ struct OpeningPanelGrid: View {
 
     private var masterModule: some View {
         OpeningPanelModule(tone: .upper) {
-            ZStack {
-                OpeningPanelMasterAssembly()
-                    .accessibilityHidden(true)
-                master
-            }
+            master
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("MASTER")
@@ -457,9 +454,10 @@ struct OpeningPanelGrid: View {
                     OpeningPanelWindow { departFirst }
                         .frame(height: OpeningPanelTokens.Chrome.departLineHeight)
                     OpeningPanelChevronWell()
+                        .frame(height: OpeningPanelTokens.Chrome.chevronWellHeight)
                         .overlay { departChevrons }
                 }
-                .frame(width: OpeningPanelTokens.Chrome.departReadoutWidth)
+                .frame(width: OpeningPanelTokens.Chrome.departReadoutWidth, alignment: .top)
                 OpeningPanelPushBar {
                     ZStack {
                         OpeningPanelDepartLabel()
@@ -467,10 +465,8 @@ struct OpeningPanelGrid: View {
                         departBar
                     }
                 }
-                    .frame(
-                        width: OpeningPanelTokens.Chrome.departBar.width,
-                        height: OpeningPanelTokens.Chrome.departBar.height
-                    )
+                    .frame(width: OpeningPanelTokens.Chrome.departBar.width)
+                    .frame(maxHeight: .infinity)
             }
             .padding(EdgeInsets(top: 5, leading: 8, bottom: 5, trailing: 8))
         }
@@ -482,16 +478,22 @@ struct OpeningPanelGrid: View {
 /// 盛り上がったモジュールの面。縁は平面の髪の毛。
 struct OpeningPanelModule<Content: View>: View {
     var tone: OpeningPanelTokens.FaceTone
+    var alignment: Alignment = .top
     private var content: Content
 
-    init(tone: OpeningPanelTokens.FaceTone, @ViewBuilder content: () -> Content) {
+    init(
+        tone: OpeningPanelTokens.FaceTone,
+        alignment: Alignment = .top,
+        @ViewBuilder content: () -> Content
+    ) {
         self.tone = tone
+        self.alignment = alignment
         self.content = content()
     }
 
     var body: some View {
         content
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: alignment)
             .background(tone.fill)
             .overlay {
                 Rectangle()
@@ -604,15 +606,16 @@ struct OpeningPanelPushBar<Content: View>: View {
     var body: some View {
         VStack(spacing: 2) {
             housing
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             Text("DEPART")
                 .font(OpeningPanelFaceFont.legend(6))
                 .tracking(0.3)
-                .foregroundStyle(OpeningPanelTokens.Palette.legend)
+                .foregroundStyle(OpeningPanelTokens.Palette.engraved)
                 .lineLimit(1)
+                .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity)
-                .frame(height: 6)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
         .accessibilityElement(children: .contain)
     }
 
@@ -638,6 +641,23 @@ struct OpeningPanelPushBar<Content: View>: View {
                     .strokeBorder(OpeningPanelTokens.Palette.barRing, lineWidth: 1)
                     .padding(-1)
             }
+    }
+}
+
+/// 22pt の帯では安全領域が中身を枠の外へ押し出す。理想サイズのまま縦の中央に置く。
+private struct OpeningPanelCenterRow: Layout {
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        proposal.replacingUnspecifiedDimensions()
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard let subview = subviews.first else { return }
+        let size = subview.sizeThatFits(.unspecified)
+        subview.place(
+            at: CGPoint(x: bounds.minX, y: bounds.midY),
+            anchor: .leading,
+            proposal: ProposedViewSize(width: bounds.width, height: size.height)
+        )
     }
 }
 
