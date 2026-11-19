@@ -38,6 +38,10 @@ struct OpeningPanelGrid: View {
     private let departFirst: AnyView
     private let departChevrons: AnyView
     private let departBar: AnyView
+    private let lamps: OpeningPanelLampField
+    private let commTesting: Bool
+    private let loadLit: Bool
+    private let loadFrameTop: CGFloat
     private let sequenceLit: Bool
     private let todayCut: Int
     private let todayRows: Int
@@ -76,6 +80,10 @@ struct OpeningPanelGrid: View {
         @ViewBuilder departFirst: () -> some View = { EmptyView() },
         @ViewBuilder departChevrons: () -> some View = { EmptyView() },
         @ViewBuilder departBar: () -> some View = { EmptyView() },
+        lamps: OpeningPanelLampField = OpeningPanelLampField(),
+        commTesting: Bool = false,
+        loadLit: Bool = false,
+        loadFrameTop: CGFloat = 0.36,
         sequenceLit: Bool = false,
         todayCut: Int = 3,
         todayRows: Int = 5,
@@ -111,6 +119,10 @@ struct OpeningPanelGrid: View {
         self.departFirst = AnyView(departFirst())
         self.departChevrons = AnyView(departChevrons())
         self.departBar = AnyView(departBar())
+        self.lamps = lamps
+        self.commTesting = commTesting
+        self.loadLit = loadLit
+        self.loadFrameTop = loadFrameTop
         self.sequenceLit = sequenceLit
         self.todayCut = todayCut
         self.todayRows = todayRows
@@ -204,10 +216,10 @@ struct OpeningPanelGrid: View {
                             tracking: 0.14,
                             padding: EdgeInsets(top: 1, leading: 3, bottom: 1, trailing: 3)
                         )
-                        lampPair("MSTR")
-                        lampPair("CLK")
-                        lampPair("TT")
-                        lampPair("TKT")
+                        lampPair("MSTR", style: lamps.master)
+                        lampPair("CLK", style: lamps.clock)
+                        lampPair("TT", style: lamps.timetable)
+                        lampPair("TKT", style: lamps.tickets)
                         check
                     }
                     .padding(.horizontal, 5)
@@ -225,10 +237,10 @@ struct OpeningPanelGrid: View {
                             tracking: 0.14,
                             padding: EdgeInsets(top: 1, leading: 3, bottom: 1, trailing: 3)
                         )
-                        OpeningPanelWindow { phone }
+                        OpeningPanelWindow(exposesContent: true) { phone }
                             .frame(width: 36, height: OpeningPanelTokens.Chrome.phoneWindowHeight)
-                        lampPair("EXT")
-                        lampPair("AWAKE")
+                        lampPair("EXT", style: lamps.ext)
+                        lampPair("AWAKE", style: lamps.awake)
                     }
                     .padding(.horizontal, 5)
                 }
@@ -238,15 +250,18 @@ struct OpeningPanelGrid: View {
         }
     }
 
-    private func lampPair(_ name: String) -> some View {
+    private func lampPair(_ name: String, style: OpeningPanelLampStyle) -> some View {
         HStack(spacing: 2) {
-            OpeningPanelLamp()
+            OpeningPanelLamp(style: style)
             Text(name)
                 .font(OpeningPanelFaceFont.legend(7))
                 .tracking(0.14)
                 .foregroundStyle(OpeningPanelTokens.Palette.legend)
                 .lineLimit(1)
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(name)
+        .accessibilityValue(style.spoken)
     }
 
     private var masterModule: some View {
@@ -439,8 +454,7 @@ struct OpeningPanelGrid: View {
         OpeningPanelModule(tone: .standard) {
             VStack(alignment: .leading, spacing: 4) {
                 OpeningPanelLegend(text: "LOAD")
-                ZStack {
-                    OpeningPanelLoadFace()
+                OpeningPanelLoadFace(lit: loadLit, frameTop: loadFrameTop) {
                     load
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -462,7 +476,7 @@ struct OpeningPanelGrid: View {
                     strip: OpeningPanelTokens.Palette.commStrip
                 )
                 ZStack {
-                    OpeningPanelCap(side: 16)
+                    OpeningPanelCap(side: 16, sunk: commTesting)
                     commTest
                 }
                 .frame(width: 16, height: 16)
@@ -471,10 +485,10 @@ struct OpeningPanelGrid: View {
                     .tracking(0.14)
                     .foregroundStyle(OpeningPanelTokens.Palette.legend)
                     .lineLimit(1)
-                OpeningPanelWindow { comm }
+                OpeningPanelWindow(exposesContent: true) { comm }
                     .frame(height: OpeningPanelTokens.Chrome.commWindowHeight)
-                lampPair("RELAY")
-                lampPair("MAC")
+                lampPair("RELAY", style: lamps.relay)
+                lampPair("MAC", style: lamps.mac)
             }
             .padding(.horizontal, 8)
         }
