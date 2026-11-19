@@ -324,20 +324,7 @@ struct TicketsModule: View {
         VStack(spacing: 0) {
             ForEach(Array(rowSlots.enumerated()), id: \.offset) { index, slot in
                 Button {
-                    OpeningPanelTickets.perform(
-                        OpeningPanelTickets.touchRow(
-                            index: index,
-                            ids: model.rows.map(\.id),
-                            cut: model.cut,
-                            picks: model.picks,
-                            sequencing: state.isSequencing,
-                            confirmed: ticketsConfirmed,
-                            powered: state.isPowered,
-                            departed: state.hasDeparted
-                        ),
-                        state: state,
-                        model: model
-                    )
+                    touchRow(index)
                 } label: {
                     OpeningPanelTicketRowView(
                         slot: slot,
@@ -349,6 +336,16 @@ struct TicketsModule: View {
                     )
                 }
                 .buttonStyle(.plain)
+                .contentShape(Rectangle())
+                .openingPanelAction(.ticketRow(index), perform: { touchRow(index) })
+            }
+        }
+        .background {
+            ForEach(model.rows.indices, id: \.self) { index in
+                Color.clear
+                    .frame(width: 0, height: 0)
+                    .openingPanelAction(.ticketRow(index), perform: { touchRow(index) })
+                    .accessibilityHidden(true)
             }
         }
         .padding(.top, OpeningPanelTicketMetrics.contentTop)
@@ -358,6 +355,23 @@ struct TicketsModule: View {
 
     private var ticketsConfirmed: Bool {
         state.confirmation(of: .tickets) == .confirmed
+    }
+
+    private func touchRow(_ index: Int) {
+        OpeningPanelTickets.perform(
+            OpeningPanelTickets.touchRow(
+                index: index,
+                ids: model.rows.map(\.id),
+                cut: model.cut,
+                picks: model.picks,
+                sequencing: state.isSequencing,
+                confirmed: ticketsConfirmed,
+                powered: state.isPowered,
+                departed: state.hasDeparted
+            ),
+            state: state,
+            model: model
+        )
     }
 
     private var rowSlots: [OpeningPanelTicketSlot] {
@@ -600,6 +614,8 @@ struct TicketsSequenceKey: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .buttonStyle(.plain)
+        .openingPanelAction(.sequence, perform: onPress)
+        .contentShape(Rectangle())
         .accessibilityLabel("SEQ")
         .accessibilityValue(state.isSequencing ? "並べ替え" : "待機")
         .accessibilityHint(hint)
@@ -648,6 +664,8 @@ struct TicketsConfirmKey: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .buttonStyle(.plain)
+        .openingPanelAction(.ticketsKey, perform: onPress)
+        .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("TKT")
         .accessibilityValue(okLit ? "OK" : (standbyAvailable ? "STBY" : "消灯"))

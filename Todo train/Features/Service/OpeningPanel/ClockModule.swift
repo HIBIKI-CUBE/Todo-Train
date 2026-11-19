@@ -348,6 +348,7 @@ struct ClockConfirmKey: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .buttonStyle(.plain)
+        .openingPanelAction(.clockKey, perform: onPress)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("CLOCK")
         .accessibilityValue(okLit ? "OK" : (standbyAvailable ? "STBY" : "消灯"))
@@ -376,6 +377,7 @@ struct ClockHourModeKey: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .buttonStyle(.plain)
+        .openingPanelAction(.hourMode, perform: onPress)
         .accessibilityLabel("12/24")
         .accessibilityValue(state.hourCycle == .twelve ? "12時間" : "24時間")
         .accessibilityHint(

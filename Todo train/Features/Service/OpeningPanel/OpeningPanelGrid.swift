@@ -7,7 +7,7 @@
 
 import SwiftUI
 
-/// 運行開始の盤。端末外形 390×844 を、入った領域へ縦横同じ倍率で収める。
+/// 運行開始の盤。格子 372×782 を、安全領域の内側へ縦横同じ倍率で収める。
 struct OpeningPanelGrid: View {
     private let check: AnyView
     private let phone: AnyView
@@ -53,8 +53,10 @@ struct OpeningPanelGrid: View {
     private let onTodayRail: ((CGFloat, Bool) -> Void)?
 
     @State private var todayRailDown = false
+    @State private var hitActions = OpeningPanelHitActions()
     /// 矢羽根の波を止めて見比べるときだけ、外から時刻を渡す。
     @Environment(\.departWaveDate) private var pinnedWaveDate
+    @Environment(\.openingPanelHitBounds) private var hitBoundsRequested
 
     init(
         @ViewBuilder check: () -> some View = { EmptyView() },
@@ -146,49 +148,39 @@ struct OpeningPanelGrid: View {
 
     var body: some View {
         GeometryReader { proxy in
-            let fitted = TrainLayout.openingPanelSize(fitting: proxy.size)
-            let scale = fitted.width / OpeningPanelTokens.Phone.width
-            designPhone
+            let safe = CGRect(origin: .zero, size: proxy.size)
+            let placed = TrainLayout.openingPanelPlacement(in: safe)
+            let scale = placed.scale
+            let minimum = OpeningPanelHitLayout.minimumScreen / max(scale, 0.01)
+            lattice(minimum: minimum)
+                .environment(\.openingPanelHitMinimum, minimum)
                 .frame(
-                    width: OpeningPanelTokens.Phone.width,
-                    height: OpeningPanelTokens.Phone.height
+                    width: OpeningPanelTokens.Canvas.width,
+                    height: OpeningPanelTokens.Canvas.height
                 )
                 .scaleEffect(scale, anchor: .topLeading)
-                .frame(width: fitted.width, height: fitted.height, alignment: .topLeading)
-                .clipped()
-                .frame(width: proxy.size.width, height: proxy.size.height)
+                .frame(width: placed.size.width, height: placed.size.height, alignment: .topLeading)
+                .position(
+                    x: placed.origin.x + placed.size.width / 2,
+                    y: placed.origin.y + placed.size.height / 2
+                )
         }
-        .ignoresSafeArea()
+        .environment(\.openingPanelRoutesHits, true)
+        .environment(\.openingPanelHitActions, hitActions)
+        .background {
+            OpeningPanelTokens.Palette.housing.ignoresSafeArea()
+        }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("運行開始の盤")
     }
 
-    private var designPhone: some View {
-        Color.clear
-            .frame(
-                width: OpeningPanelTokens.Phone.width,
-                height: OpeningPanelTokens.Phone.height
-            )
-            .overlay(alignment: .topLeading) {
-                lattice
-                    .padding(.top, OpeningPanelTokens.Phone.gridOrigin.y)
-                    .padding(.leading, OpeningPanelTokens.Phone.gridOrigin.x)
-            }
-            .background {
-                RoundedRectangle(cornerRadius: OpeningPanelTokens.Phone.radius, style: .continuous)
-                    .fill(OpeningPanelTokens.Palette.housing)
-            }
-        .clipShape(RoundedRectangle(cornerRadius: OpeningPanelTokens.Phone.radius, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: OpeningPanelTokens.Phone.radius, style: .continuous)
-                .strokeBorder(OpeningPanelTokens.Palette.phoneBorder, lineWidth: OpeningPanelTokens.Phone.border)
-        }
-        .background(Color.black)
-        .ignoresSafeArea()
+    private var showsHitBounds: Bool {
+        hitBoundsRequested || ProcessInfo.processInfo.arguments.contains("-OpeningPanelHitBounds")
     }
 
-    private var lattice: some View {
-        OpeningPanelLattice {
+    private func lattice(minimum: CGFloat) -> some View {
+        let targets = OpeningPanelHitLayout.board(minimum: minimum, ticketRows: todayRows)
+        return OpeningPanelLattice {
             cell(.sysbar) { sysbar }
             cell(.master) { masterModule }
             cell(.clock) { clockModule }
@@ -206,6 +198,27 @@ struct OpeningPanelGrid: View {
             alignment: .topLeading
         )
         .background(OpeningPanelTokens.Palette.grid)
+        .overlay {
+            OpeningPanelHitOverlay(
+                targets: targets,
+                actions: hitActions,
+                onRail: { y, began in
+                    guard onTodayRail != nil else { return }
+                    if !began {
+                        todayRailDown = false
+                        return
+                    }
+                    let beganNow = !todayRailDown
+                    todayRailDown = true
+                    onTodayRail?(y, beganNow)
+                }
+            )
+        }
+        .overlay {
+            if showsHitBounds {
+                OpeningPanelHitBounds(targets: targets)
+            }
+        }
         .clipped()
     }
 
@@ -455,21 +468,7 @@ struct OpeningPanelGrid: View {
             lit: todayRailLit
         )
         .padding(.leading, -2)
-        .contentShape(Rectangle())
-        .gesture(todayRailGesture)
-    }
-
-    private var todayRailGesture: some Gesture {
-        DragGesture(minimumDistance: 0, coordinateSpace: .local)
-            .onChanged { value in
-                guard onTodayRail != nil else { return }
-                let began = !todayRailDown
-                todayRailDown = true
-                onTodayRail?(value.location.y, began)
-            }
-            .onEnded { _ in
-                todayRailDown = false
-            }
+        .allowsHitTesting(false)
     }
 
     private var loadModule: some View {
@@ -832,6 +831,167 @@ struct OpeningPanelChevronRow: View {
                     .fill(OpeningPanelTokens.Palette.chevron)
             }
         }
+        .accessibilityHidden(true)
+    }
+}
+
+final class OpeningPanelHitActions {
+    var taps: [OpeningPanelHitLayout.ID: () -> Void] = [:]
+
+    func set(_ id: OpeningPanelHitLayout.ID, _ action: @escaping () -> Void) {
+        taps[id] = action
+    }
+
+    func perform(_ id: OpeningPanelHitLayout.ID) {
+        taps[id]?()
+    }
+}
+
+private struct OpeningPanelRoutesHitsKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+private struct OpeningPanelHitActionsKey: EnvironmentKey {
+    static let defaultValue = OpeningPanelHitActions()
+}
+
+private struct OpeningPanelHitBoundsKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+private struct OpeningPanelHitMinimumKey: EnvironmentKey {
+    static let defaultValue = OpeningPanelHitLayout.minimumScreen
+}
+
+extension EnvironmentValues {
+    var openingPanelRoutesHits: Bool {
+        get { self[OpeningPanelRoutesHitsKey.self] }
+        set { self[OpeningPanelRoutesHitsKey.self] = newValue }
+    }
+
+    var openingPanelHitActions: OpeningPanelHitActions {
+        get { self[OpeningPanelHitActionsKey.self] }
+        set { self[OpeningPanelHitActionsKey.self] = newValue }
+    }
+
+    /// 当たりの外形。既定はオフ。起動引数 `-OpeningPanelHitBounds` でも点く。
+    var openingPanelHitBounds: Bool {
+        get { self[OpeningPanelHitBoundsKey.self] }
+        set { self[OpeningPanelHitBoundsKey.self] = newValue }
+    }
+
+    /// 設計寸法での当たりの下限。画面上で 44pt になるよう、格子の倍率で割った値。
+    var openingPanelHitMinimum: CGFloat {
+        get { self[OpeningPanelHitMinimumKey.self] }
+        set { self[OpeningPanelHitMinimumKey.self] = newValue }
+    }
+}
+
+extension View {
+    func openingPanelAction(
+        _ id: OpeningPanelHitLayout.ID,
+        perform: @escaping () -> Void
+    ) -> some View {
+        modifier(OpeningPanelActionModifier(id: id, perform: perform))
+    }
+}
+
+private struct OpeningPanelActionModifier: ViewModifier {
+    @Environment(\.openingPanelRoutesHits) private var routed
+    var id: OpeningPanelHitLayout.ID
+    var perform: () -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .allowsHitTesting(!routed)
+            .background {
+                if routed {
+                    OpeningPanelActionSink(id: id, perform: perform)
+                }
+            }
+    }
+}
+
+private struct OpeningPanelActionSink: View {
+    @Environment(\.openingPanelHitActions) private var actions
+    var id: OpeningPanelHitLayout.ID
+    var perform: () -> Void
+
+    var body: some View {
+        let _ = actions.set(id, perform)
+        Color.clear
+            .frame(width: 0, height: 0)
+            .accessibilityHidden(true)
+            .onDisappear { actions.taps[id] = nil }
+    }
+}
+
+private struct OpeningPanelHitOverlay: View {
+    var targets: [OpeningPanelHitLayout.Target]
+    var actions: OpeningPanelHitActions
+    var onRail: (CGFloat, Bool) -> Void
+
+    var body: some View {
+        ZStack {
+            ForEach(targets) { target in
+                pad(target)
+            }
+        }
+        .frame(
+            width: OpeningPanelTokens.Canvas.width,
+            height: OpeningPanelTokens.Canvas.height,
+            alignment: .topLeading
+        )
+    }
+
+    @ViewBuilder
+    private func pad(_ target: OpeningPanelHitLayout.Target) -> some View {
+        let rect = target.hit
+        if target.id == .todayRail {
+            Color.clear
+                .frame(width: rect.width, height: rect.height)
+                .contentShape(Rectangle())
+                .gesture(railGesture(hit: rect, visual: target.visual))
+                .position(x: rect.midX, y: rect.midY)
+        } else {
+            Color.clear
+                .frame(width: rect.width, height: rect.height)
+                .contentShape(Rectangle())
+                .onTapGesture { actions.perform(target.id) }
+                .position(x: rect.midX, y: rect.midY)
+        }
+    }
+
+    private func railGesture(hit: CGRect, visual: CGRect) -> some Gesture {
+        DragGesture(minimumDistance: 0, coordinateSpace: .local)
+            .onChanged { value in
+                let local = value.location.y + hit.minY - visual.minY
+                onRail(local, true)
+            }
+            .onEnded { _ in
+                onRail(0, false)
+            }
+    }
+}
+
+private struct OpeningPanelHitBounds: View {
+    var targets: [OpeningPanelHitLayout.Target]
+
+    var body: some View {
+        ZStack {
+            ForEach(targets) { target in
+                Rectangle()
+                    .stroke(OpeningPanelTokens.Palette.engraved, lineWidth: 1)
+                    .frame(width: target.hit.width, height: target.hit.height)
+                    .position(x: target.hit.midX, y: target.hit.midY)
+            }
+        }
+        .frame(
+            width: OpeningPanelTokens.Canvas.width,
+            height: OpeningPanelTokens.Canvas.height,
+            alignment: .topLeading
+        )
+        .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
 }
