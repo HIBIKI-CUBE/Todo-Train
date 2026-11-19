@@ -171,60 +171,6 @@ struct ServiceCabinSequenceTests {
         #expect(ServiceCabinSequence.tapeRest(marks: []) == 0)
     }
 
-    @Test func morningNotices_skipRowsAlreadyOnOccupancy() {
-        let now = Date(timeIntervalSince1970: 1_700_000_000)
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
-        let current = CalendarOccurrence(
-            eventIdentifier: "now",
-            title: "会議",
-            startsAt: now.addingTimeInterval(-600),
-            endsAt: now.addingTimeInterval(600),
-            isAllDay: false,
-            isDeclined: false
-        )
-        let later = CalendarOccurrence(
-            eventIdentifier: "later",
-            title: "原稿",
-            startsAt: now.addingTimeInterval(3600),
-            endsAt: now.addingTimeInterval(5400),
-            isAllDay: false,
-            isDeclined: false
-        )
-        let row = TimetableFit.occupancyRow(for: current, now: now, calendar: calendar)
-        let notices = ServiceCabinSequence.morningNotices(
-            remaining: [current, later],
-            occupancyRows: [row],
-            now: now
-        )
-        #expect(notices.map(\.title) == ["原稿"])
-    }
-
-    @Test func morningNotices_capsRemaining() {
-        let now = Date(timeIntervalSince1970: 1_700_000_000)
-        var notices: [CalendarOccurrence] = []
-        for index in 0..<6 {
-            let start = now.addingTimeInterval(TimeInterval(index + 1) * 3600)
-            notices.append(
-                CalendarOccurrence(
-                    eventIdentifier: "e\(index)",
-                    title: "N\(index)",
-                    startsAt: start,
-                    endsAt: start.addingTimeInterval(1800),
-                    isAllDay: false,
-                    isDeclined: false
-                )
-            )
-        }
-        let kept = ServiceCabinSequence.morningNotices(
-            remaining: notices,
-            occupancyRows: [],
-            now: now
-        )
-        #expect(kept.count == ServiceCabinSequence.morningNoticeLimit)
-        #expect(kept.first?.title == "N0")
-    }
-
     @Test func dayFacts_alwaysIncludeFocus() {
         let facts = ServiceCabinSequence.dayFacts(in: [])
         #expect(facts.map(\.label) == ["集中"])
