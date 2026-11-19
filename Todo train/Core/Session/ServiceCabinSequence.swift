@@ -48,10 +48,7 @@ struct ServiceCabinDayFact: Equatable, Sendable, Identifiable {
 }
 
 enum ServiceCabinSequence {
-    static let darkHoldSeconds: TimeInterval = 0.88
-    static let testHoldSeconds: TimeInterval = 1.18
-    static let liveHoldSeconds: TimeInterval = 0.90
-    /// Shutdown steps. Boot uses the holds above.
+    /// Shutdown steps down one lamp at a time.
     static let stepSeconds: TimeInterval = 0.70
     static let powerOffHoldSeconds: TimeInterval = 0.58
     static let sweepOutSeconds: TimeInterval = 0.62
@@ -62,17 +59,7 @@ enum ServiceCabinSequence {
     static let lampTestStaggerSeconds: TimeInterval = 0.12
     static let lampSettleHoldSeconds: TimeInterval = 0.24
     static let lampSettleStaggerSeconds: TimeInterval = 0.15
-    static let morningNoticeLimit = 4
     static let extendReasons = ["作業増", "割り込み", "見積もり不足", "その他"]
-
-    static func lamp(elapsed: TimeInterval, reduceMotion: Bool) -> ServiceCabinLamp {
-        if reduceMotion { return .ready }
-        let t = max(0, elapsed)
-        if t < darkHoldSeconds { return .dark }
-        if t < darkHoldSeconds + testHoldSeconds { return .test }
-        if t < darkHoldSeconds + testHoldSeconds + liveHoldSeconds { return .live }
-        return .ready
-    }
 
     static func shutdownLamp(elapsed: TimeInterval, reduceMotion: Bool) -> ServiceCabinLamp {
         if reduceMotion { return .dark }
@@ -200,23 +187,6 @@ enum ServiceCabinSequence {
             .flatMap(\.extensions)
             .reduce(0) { $0 + max(0, $1.addedSeconds) }
         return Int((TimeInterval(seconds) / 60).rounded())
-    }
-
-    /// Remaining 掲示 that are not already いま／次. Cap so the boot face stays an instrument.
-    static func morningNotices(
-        remaining: [CalendarOccurrence],
-        occupancyRows: [TimetableOccupancyRow],
-        now: Date
-    ) -> [CalendarOccurrence] {
-        let shown = Set(occupancyRows.map(\.id))
-        return remaining
-            .filter { occurrence in
-                occurrence.endsAt > now
-                    && !shown.contains(TimetableFit.noticeBlockID(occurrence.id))
-            }
-            .sorted { $0.startsAt < $1.startsAt }
-            .prefix(morningNoticeLimit)
-            .map { $0 }
     }
 
     static func dayFacts(in sessions: [WorkSession]) -> [ServiceCabinDayFact] {
