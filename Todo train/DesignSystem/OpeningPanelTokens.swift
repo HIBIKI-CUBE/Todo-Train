@@ -391,6 +391,10 @@ enum OpeningPanelTokens {
         static let fault = color(0xF0C000)
         /// 次に自動で始まるキーの縁。`rgba(242,230,200,.3)`。
         static let nextKeyEdge = color(0xF2E6C8, opacity: 0.3)
+        /// `.pre` は `.k` の上にあり、最終的に `brightness(1.16)` が乗る。
+        static var keyNextEdge: Color {
+            color(0xF2E6C8, brightness: 1.16, opacity: 0.3)
+        }
 
         /// `.k` と `.cap` の `brightness(1.16)`。色を掛けてから描く。
         static func key(_ hex: UInt32, opacity: Double = 1) -> Color {

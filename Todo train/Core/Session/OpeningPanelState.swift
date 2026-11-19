@@ -112,6 +112,19 @@ enum OpeningPanelConfirmation: Equatable {
     case confirmed
 }
 
+/// 時計の 12 時間と 24 時間。盤を落としても残す。
+enum OpeningPanelHourCycle: Equatable {
+    case twentyFour
+    case twelve
+
+    var toggled: OpeningPanelHourCycle {
+        switch self {
+        case .twentyFour: .twelve
+        case .twelve: .twentyFour
+        }
+    }
+}
+
 enum OpeningPanelClockStage: Equatable {
     case dark
     case backlight
@@ -255,6 +268,7 @@ final class OpeningPanelState {
     private(set) var powerLEDCount = 0
     private(set) var powerSettled = false
     private(set) var clockStage: OpeningPanelClockStage = .dark
+    private(set) var hourCycle: OpeningPanelHourCycle = .twentyFour
     private(set) var timetableStage: OpeningPanelTimetableStage = .dark
     private(set) var ticketsStage: OpeningPanelTicketsStage = .dark
 
@@ -358,6 +372,19 @@ final class OpeningPanelState {
         feedback.play(.light)
         feedback.play(.haptic(.operation))
         begin(module)
+        rearmAuto()
+    }
+
+    /// 12/24。電気が来ていればいつでも切り替わり、来る前は鈍い音だけ。
+    func pressHourMode() {
+        guard !hasDeparted else { return }
+        guard isPowered else {
+            feedback.play(.dull)
+            return
+        }
+        hourCycle = hourCycle.toggled
+        feedback.play(.light)
+        feedback.play(.haptic(.operation))
         rearmAuto()
     }
 

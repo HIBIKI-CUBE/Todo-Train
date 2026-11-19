@@ -409,6 +409,92 @@ struct OpeningPanelStateTests {
         #expect(harness.log.hubs == 1)
     }
 
+    @Test func clockBoot_holdsBlankForTempoBeforeLive() {
+        #expect(abs(OpeningPanelTiming.clockDigit - OpeningPanelTiming.tempo(110)) < 1e-12)
+        #expect(abs(OpeningPanelTiming.clockToLive - OpeningPanelTiming.tempo(300)) < 1e-12)
+
+        let harness = OpeningPanelHarness()
+        harness.state.pressMaster()
+        harness.state.pressConfirm(.clock)
+        harness.advance(by: OpeningPanelTiming.backlight)
+        #expect(harness.state.clockStage == .digits("8"))
+        harness.advance(by: OpeningPanelTiming.clockDigit * 4)
+        #expect(harness.state.clockStage == .blank)
+        #expect(harness.state.clockStage.stageNumber == 5)
+        harness.advanceAlmost(OpeningPanelTiming.clockToLive)
+        #expect(harness.state.clockStage == .blank)
+        harness.advance(by: microsecond)
+        #expect(harness.state.clockStage == .live)
+        #expect(harness.state.confirmation(of: .clock) == .confirmed)
+    }
+
+    @Test func hourMode_switchesOnlyWhilePoweredAndRearmsAuto() {
+        let harness = OpeningPanelHarness()
+        #expect(harness.state.hourCycle == .twentyFour)
+        harness.state.pressHourMode()
+        #expect(harness.feedback.cues == [.dull])
+        #expect(harness.state.hourCycle == .twentyFour)
+        #expect(!harness.state.isPowered)
+        #expect(harness.state.clockStage == .dark)
+
+        harness.state.pressMaster()
+        harness.advance(by: 0.5)
+        #expect(harness.state.confirmation(of: .clock) == .unconfirmed)
+        let before = harness.feedback.cues.count
+        harness.state.pressHourMode()
+        #expect(harness.state.hourCycle == .twelve)
+        let added = Array(harness.feedback.cues.dropFirst(before))
+        #expect(added.contains(.light))
+        #expect(added.contains(.haptic(.operation)))
+        #expect(!added.contains(.dull))
+
+        harness.advance(by: 0.4)
+        #expect(harness.state.confirmation(of: .clock) == .unconfirmed)
+        harness.advance(by: 0.5)
+        #expect(harness.state.confirmation(of: .clock) == .confirming)
+
+        let generation = harness.state.generation(of: .clock)
+        harness.state.pressHourMode()
+        #expect(harness.state.hourCycle == .twentyFour)
+        harness.state.pressHourMode()
+        #expect(harness.state.hourCycle == .twelve)
+        #expect(harness.state.generation(of: .clock) == generation)
+        #expect(harness.state.confirmation(of: .clock) == .confirming)
+
+        harness.state.pressMaster()
+        #expect(!harness.state.isPowered)
+        #expect(harness.state.hourCycle == .twelve)
+        harness.state.pressHourMode()
+        #expect(harness.feedback.cues.last == .dull)
+        #expect(harness.state.hourCycle == .twelve)
+    }
+
+    @Test func hourMode_whileLiveDoesNotRestartClock() {
+        let harness = OpeningPanelHarness()
+        harness.state.pressMaster()
+        harness.state.pressConfirm(.clock)
+        harness.finishClock()
+        #expect(harness.state.clockStage == .live)
+        #expect(harness.state.confirmation(of: .clock) == .confirmed)
+        let generation = harness.state.generation(of: .clock)
+        harness.state.pressHourMode()
+        #expect(harness.state.hourCycle == .twelve)
+        #expect(harness.state.clockStage == .live)
+        #expect(harness.state.confirmation(of: .clock) == .confirmed)
+        #expect(harness.state.generation(of: .clock) == generation)
+        #expect(!harness.state.isReady)
+        harness.advance(by: 2)
+        #expect(harness.state.clockStage == .live)
+        #expect(harness.state.hourCycle == .twelve)
+
+        harness.state.pressConfirm(.clock)
+        #expect(harness.state.clockStage == .backlight)
+        #expect(harness.state.hourCycle == .twelve)
+        #expect(harness.state.confirmation(of: .clock) == .confirming)
+        harness.advance(by: OpeningPanelTiming.backlight)
+        #expect(harness.state.clockStage == .digits("8"))
+    }
+
     @Test func soundRecipesAndHapticsMatchTheTable() {
         #expect(OpeningPanelSoundRecipe.light.duration == 0.025)
         #expect(OpeningPanelSoundRecipe.light.filter == .bandpass(3_200))
