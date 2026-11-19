@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import Observation
 
 /// 仕様「間」の既定。テンポが付いた値は 100/170 を掛けた長さ。
 enum OpeningPanelTiming {
@@ -232,6 +233,7 @@ final class OpeningPanelDispatchScheduler: OpeningPanelScheduling {
 }
 
 /// MASTER・CLOCK・TT・TKT・DEPART の盤。切符の並びと TODAY の区切りは持たない。
+@Observable
 final class OpeningPanelState {
     private let scheduler: any OpeningPanelScheduling
     private let feedback: any OpeningPanelFeedback

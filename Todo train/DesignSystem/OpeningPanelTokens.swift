@@ -9,18 +9,31 @@
 import SwiftUI
 
 enum OpeningPanelTokens {
-    /// 格子 370×780。外枠 1 で 372×782。
+    /// 格子の外枠 372×782。枠線 2 の内側が 368×778。
     ///
     /// 列 `118 / 1fr / 86`、行 `22 / 100 / 1fr / 50 / 150 / 22 / 92`、間隔 2。
-    /// モジュールは座標表の (2, 2) から始まり、右端と下端は格子の 370 と 780 に揃う。
-    /// 可変の列は 160、可変の行は 330。
+    /// モジュールは枠の内側 (2, 2) から始まり、右端と下端は 370 と 780 に揃う。
+    /// 可変の列は 160、可変の行は 330。画面に合わせてこの箱ごと拡縮し、中の列は伸ばさない。
     enum Canvas {
-        static let width: CGFloat = 370
-        static let height: CGFloat = 780
-        static let outerInset: CGFloat = 1
-        static var outerWidth: CGFloat { width + outerInset * 2 }
-        static var outerHeight: CGFloat { height + outerInset * 2 }
-        static var outer: CGSize { CGSize(width: outerWidth, height: outerHeight) }
+        static let width: CGFloat = 372
+        static let height: CGFloat = 782
+        static let border: CGFloat = 2
+        static var outer: CGSize { CGSize(width: width, height: height) }
+    }
+
+    /// モックの端末外形。余白は上 44、左右 8、下 16。枠線 1 を含めて格子が (9, 45) に乗る。
+    enum Phone {
+        static let width: CGFloat = 390
+        static let height: CGFloat = 844
+        static let radius: CGFloat = 44
+        static let border: CGFloat = 1
+        static let paddingTop: CGFloat = 44
+        static let paddingSide: CGFloat = 8
+        static let paddingBottom: CGFloat = 16
+        static var gridOrigin: CGPoint {
+            CGPoint(x: border + paddingSide, y: border + paddingTop)
+        }
+        static var size: CGSize { CGSize(width: width, height: height) }
     }
 
     enum Track: Equatable {
@@ -148,12 +161,12 @@ enum OpeningPanelTokens {
             }
         }
 
-        /// 設計寸法の格子の中の外形。原点は格子の左上。
+        /// 設計寸法の格子の中の外形。原点は格子の外枠の左上。
         func frame() -> CGRect {
-            let columnLengths = Grid.lengths(Grid.columns, span: Canvas.width - Grid.origin)
-            let rowLengths = Grid.lengths(Grid.rows, span: Canvas.height - Grid.origin)
-            let columnOrigins = Grid.origins(columnLengths).map { $0 + Grid.origin }
-            let rowOrigins = Grid.origins(rowLengths).map { $0 + Grid.origin }
+            let columnLengths = Grid.lengths(Grid.columns, span: Canvas.width - Canvas.border * 2)
+            let rowLengths = Grid.lengths(Grid.rows, span: Canvas.height - Canvas.border * 2)
+            let columnOrigins = Grid.origins(columnLengths).map { $0 + Canvas.border }
+            let rowOrigins = Grid.origins(rowLengths).map { $0 + Canvas.border }
             let start = columns.lowerBound
             let end = columns.upperBound
             let x = columnOrigins[start]
@@ -237,7 +250,7 @@ enum OpeningPanelTokens {
         static let timetableKeySize = CGSize(width: 52, height: 30)
         static let sequenceKeySize = CGSize(width: 36, height: 20)
         static let ticketsKeySize = CGSize(width: 64, height: 30)
-        static let rangeWindow = CGSize(width: 66, height: 16)
+        static let rangeWindow = CGSize(width: 60, height: 16)
         static let nextWindow = CGSize(width: 44, height: 13)
         static let nowWindow = CGSize(width: 304, height: 38)
         static let ticketsWindow = CGSize(width: 200, height: 103)
@@ -249,6 +262,8 @@ enum OpeningPanelTokens {
         static let departPaddingV: CGFloat = 5
         static let departLineHeight: CGFloat = 16
         static let chevronCount = 10
+        /// 出発モジュールの内側 82 から、錠の行と窓 2 本と間隔を引いた残り。
+        static let chevronWellHeight: CGFloat = 30
         /// 次に自動で始まるキーの縁。
         static let nextKeyEdge: CGFloat = 1
     }
@@ -340,6 +355,8 @@ enum OpeningPanelTokens {
         static let windowEdge = Color.black.opacity(0.3)
         static let strip = color(0x45484B)
         static let legend = color(0xF0EBDA, opacity: 0.84)
+        /// `--leg`。フィルタの外にある DEPART の刻印。
+        static let engraved = color(0xF2E6C8, opacity: 0.72)
         /// `.k` に brightness(1.16) を掛けた面と、その下の唇。
         static let raised = color(0x2E3033, brightness: 1.16)
         static let raisedLip = color(0x1D1E20)
@@ -357,6 +374,14 @@ enum OpeningPanelTokens {
         static let barShade = color(0x3B3E41)
         static let barLip = color(0x0C0C0D)
         static let chevron = color(0x2B2C2E)
+        static let chevronWell = color(0x1A1B1C)
+        static let lampOff = color(0x2A2B2C)
+        static let commStrip = color(0x34373A)
+        static let phoneBorder = color(0x222222)
+        static let segInk = color(0xF2E6C8, opacity: 0.4)
+        static let lockInk = color(0xF2E6C8, opacity: 0.5)
+        static let gaugeHairline = color(0xF2E6C8, opacity: 0.15)
+        static let railTick = color(0xF2E6C8, opacity: 0.22)
         static let amber = color(0xFFB000, opacity: 0.85)
         static let amberDim = color(0xFFB000, opacity: 0.14)
         /// 確認灯。盤の CHK は緑で点いてよい。
@@ -366,6 +391,53 @@ enum OpeningPanelTokens {
         static let fault = color(0xF0C000)
         /// 次に自動で始まるキーの縁。`rgba(242,230,200,.3)`。
         static let nextKeyEdge = color(0xF2E6C8, opacity: 0.3)
+
+        /// `.k` と `.cap` の `brightness(1.16)`。色を掛けてから描く。
+        static func key(_ hex: UInt32, opacity: Double = 1) -> Color {
+            color(hex, brightness: 1.16, opacity: opacity)
+        }
+
+        static func hex(_ value: UInt32, opacity: Double = 1) -> Color {
+            color(value, opacity: opacity)
+        }
+
+        /// `--leg` を `brightness(1.16)` した面。文字はこれに 0.72 を掛ける。
+        static var keyLegendInk: Color {
+            color(0xF2E6C8, brightness: 1.16)
+        }
+
+        /// 目盛り。色の不透明度がそのまま乗る。
+        static var keyLegend: Color {
+            color(0xF2E6C8, brightness: 1.16, opacity: 0.72)
+        }
+
+        static var keySegInk: Color {
+            Color(red: 1, green: 1, blue: min(1, 200 / 255 * 1.16), opacity: 0.4)
+        }
+
+        static var keyCyan: Color {
+            Color(
+                red: min(1, 120 / 255 * 1.16),
+                green: min(1, 190 / 255 * 1.16),
+                blue: min(1, 200 / 255 * 1.16),
+                opacity: 0.8
+            )
+        }
+
+        static var keyGreenInk: Color {
+            Color(
+                red: min(1, 132 / 255 * 1.16),
+                green: min(1, 196 / 255 * 1.16),
+                blue: min(1, 128 / 255 * 1.16),
+                opacity: 0.85
+            )
+        }
+    }
+}
+
+enum OpeningPanelFaceFont {
+    static func legend(_ size: CGFloat) -> Font {
+        Font.custom("Helvetica Neue", size: size).weight(.medium)
     }
 }
 

@@ -18,7 +18,7 @@ struct HubView: View {
     @Query(sort: \Ticket.sortOrder) private var allTickets: [Ticket]
 
     @State private var showQuickAdd = false
-    @State private var showServiceBootCover = false
+    @State private var showOpeningPanel = false
     @State private var showServiceShutdownCover = false
     @State private var hubDestination: HubDestination?
     @State private var detailTicket: Ticket?
@@ -201,9 +201,12 @@ struct HubView: View {
                 }
             }
         }
-        .fullScreenCover(isPresented: $showServiceBootCover) {
-            ServiceBootCover()
-                .environment(sessionManager)
+        .fullScreenCover(isPresented: $showOpeningPanel) {
+            OpeningPanelCover(onServiceDayNeedsEnd: {
+                showOpeningPanel = false
+                showServiceShutdownCover = true
+            })
+            .environment(sessionManager)
         }
         .fullScreenCover(isPresented: $showServiceShutdownCover) {
             ServiceShutdownCover { message in
@@ -686,16 +689,14 @@ struct HubView: View {
     }
 
     private func requestStartService() {
-        do {
-            try sessionManager.startService()
-            showServiceBootCover = true
-        } catch {
-            if sessionManager.needsServiceDayEndPrompt {
-                showServiceShutdownCover = true
-            } else {
-                errorMessage = error.localizedDescription
-                showError = true
-            }
+        sessionManager.syncServiceDayForBoarding(at: sessionManager.clock.now)
+        switch OpeningPanelHubFlow.startIntent(
+            needsServiceDayEndPrompt: sessionManager.needsServiceDayEndPrompt
+        ) {
+        case .showPanel:
+            showOpeningPanel = true
+        case .promptEndPreviousDay:
+            showServiceShutdownCover = true
         }
     }
 

@@ -142,14 +142,14 @@ enum TrainLayout {
         return available >= plateHeight
     }
 
-    /// Opening panel, aspect-fit inside the safe area.
-    /// Never larger than the design size in `OpeningPanelTokens.Canvas`. Shrinks when the area is shorter.
+    /// Opening panel. The 390×844 phone (grid plus the mock's 44/8/16 margins) scales
+    /// uniformly into the available area, including above 1. Tracks stay at design length.
     /// An unmeasured side (non-finite, or 1pt or less) keeps the design size.
     static func openingPanelSize(fitting available: CGSize) -> CGSize {
-        let design = OpeningPanelTokens.Canvas.outer
+        let design = OpeningPanelTokens.Phone.size
         let width = available.width.isFinite && available.width > 1 ? available.width : design.width
         let height = available.height.isFinite && available.height > 1 ? available.height : design.height
-        let scale = min(1, min(width / design.width, height / design.height))
+        let scale = min(width / design.width, height / design.height)
         return CGSize(width: design.width * scale, height: design.height * scale)
     }
 }
