@@ -34,11 +34,13 @@ struct OpeningPanelLegend: View {
 
 struct OpeningPanelLamp: View {
     var diameter: CGFloat = 6
+    var style: OpeningPanelLampStyle = .off
 
     var body: some View {
         Circle()
-            .fill(OpeningPanelTokens.Palette.lampOff)
+            .fill(style.fill)
             .frame(width: diameter, height: diameter)
+            .shadow(color: style.glow, radius: style == .off || style == .yellow ? 0 : 3)
             .accessibilityHidden(true)
     }
 }
@@ -135,6 +137,8 @@ struct OpeningPanelSeqKey: View {
 /// 12/24 と TEST の角キャップ。輪は枠の外へ 3、唇は下へ 2。
 struct OpeningPanelCap: View {
     var side: CGFloat = 18
+    /// 測っているあいだ 1px 沈み、下の唇が消える。
+    var sunk = false
 
     private typealias Palette = OpeningPanelTokens.Palette
 
@@ -153,11 +157,14 @@ struct OpeningPanelCap: View {
                     .frame(width: side + 6, height: side + 6)
             }
             .overlay(alignment: .bottom) {
-                Rectangle()
-                    .fill(Palette.key(0x0E0F10))
-                    .frame(width: side, height: 2)
-                    .offset(y: 2)
+                if !sunk {
+                    Rectangle()
+                        .fill(Palette.key(0x0E0F10))
+                        .frame(width: side, height: 2)
+                        .offset(y: 2)
+                }
             }
+            .offset(y: sunk ? 1 : 0)
             .frame(width: side, height: side)
     }
 }
@@ -253,11 +260,26 @@ struct OpeningPanelTodayRail: View {
     }
 }
 
-struct OpeningPanelLoadFace: View {
+struct OpeningPanelLoadFace<Content: View>: View {
+    var lit = false
+    /// 窓の上端から、灯っている枠の上辺までの割合。消灯中は 36%。
+    var frameTop: CGFloat = 0.36
+    private var content: Content
+
+    init(
+        lit: Bool = false,
+        frameTop: CGFloat = 0.36,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.lit = lit
+        self.frameTop = frameTop
+        self.content = content()
+    }
+
     var body: some View {
         HStack(alignment: .center, spacing: 5) {
             OpeningPanelWindow {
-                Color.clear
+                content
             }
             .frame(width: 40)
             .overlay { gaugeBox }
@@ -267,15 +289,20 @@ struct OpeningPanelLoadFace: View {
         .accessibilityHidden(true)
     }
 
+    private var markTop: CGFloat {
+        lit ? frameTop : 0.36
+    }
+
     private var gaugeBox: some View {
         GeometryReader { geo in
-            let top = geo.size.height * 0.36
+            let top = geo.size.height * markTop
             let bottom = max(0, geo.size.height * 0.04 - 2)
+            let ink = lit ? OpeningPanelTokens.Palette.gaugeFrame : OpeningPanelTokens.Palette.gaugeHairline
             Rectangle()
-                .strokeBorder(OpeningPanelTokens.Palette.gaugeHairline, lineWidth: 1)
+                .strokeBorder(ink, lineWidth: 1)
                 .overlay(alignment: .top) {
                     Rectangle()
-                        .fill(OpeningPanelTokens.Palette.gaugeHairline)
+                        .fill(ink)
                         .frame(height: 2)
                 }
                 .padding(EdgeInsets(top: top, leading: 6, bottom: bottom, trailing: 6))
@@ -295,8 +322,14 @@ struct OpeningPanelLoadFace: View {
                     .foregroundStyle(OpeningPanelTokens.Palette.legend)
                     .fixedSize()
             }
-            .position(x: 18, y: geo.size.height * 0.36)
+            .position(x: 18, y: geo.size.height * markTop)
         }
+    }
+}
+
+extension OpeningPanelLoadFace where Content == EmptyView {
+    init(lit: Bool = false, frameTop: CGFloat = 0.36) {
+        self.init(lit: lit, frameTop: frameTop) { EmptyView() }
     }
 }
 

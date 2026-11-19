@@ -409,3 +409,206 @@ extension CompanionSyncRuntime {
         }
     }
 }
+
+extension CompanionSyncRuntime {
+    /// TEST の往復。`ping` から `echo` までを `ContinuousClock` で測る。結果は保存しない。
+    /// 中継の hello が 16 未満なら `GET /v1/hint/:pairingId` だけを測る。
+    func measureComm(
+        macPresenceKnown: Bool,
+        wait: Duration = .milliseconds(OpeningPanelCommLogic.waitMilliseconds),
+        id: UUID = UUID(),
+        connector: (any WebSocketConnecting)? = nil,
+        hint: (() async throws -> Void)? = nil,
+        onRelay: @MainActor () -> Void = {}
+    ) async -> OpeningPanelCommExchange? {
+        if Task.isCancelled { return nil }
+        refreshPaired()
+        guard isPaired else { return .unpaired }
+        guard let url = relayURL, let pairing = try? secrets.load() else { return .noRelay }
+
+        let socket = BearerWebSocket(
+            writeToken: pairing.writeToken,
+            pairingId: pairing.pairingId,
+            role: .iphone,
+            connector: connector ?? URLSessionWebSocketConnecting(baseURL: url)
+        )
+        let connection: any WebSocketConnection
+        do {
+            guard let opened = try await OpeningPanelCommMeasure.first(
+                wait: wait,
+                operation: { try await socket.connect() }
+            ) else {
+                return Task.isCancelled ? nil : .noRelay
+            }
+            connection = opened
+        } catch is CancellationError {
+            return nil
+        } catch {
+            return .noRelay
+        }
+
+        let helloDeadline = ContinuousClock.now.advanced(by: wait)
+        let announcement: ContractAnnouncement
+        do {
+            guard let hello = try await OpeningPanelCommMeasure.hello(
+                connection,
+                until: helloDeadline
+            ) else {
+                await connection.close()
+                return Task.isCancelled ? nil : .noRelay
+            }
+            announcement = hello
+        } catch is CancellationError {
+            await connection.close()
+            return nil
+        } catch {
+            await connection.close()
+            return .noRelay
+        }
+        noteRelayContract(announcement)
+
+        if !OpeningPanelCommLogic.usesControlFrames(relayContract: announcement.contract) {
+            await connection.close()
+            return await measureLegacyHint(
+                pairing: pairing,
+                url: url,
+                macPresenceKnown: macPresenceKnown,
+                hint: hint
+            )
+        }
+
+        let pingStart = ContinuousClock.now
+        do {
+            try await connection.sendPing(id: id)
+        } catch is CancellationError {
+            await connection.close()
+            return nil
+        } catch {
+            await connection.close()
+            return .noRelay
+        }
+
+        var pongAt: Int?
+        var echoAt: Int?
+        var echoMac: Bool?
+        var announcedRelay = false
+        let echoDeadline = pingStart.advanced(by: wait)
+        while ContinuousClock.now < echoDeadline {
+            let incoming: WSIncoming
+            do {
+                guard let next = try await OpeningPanelCommMeasure.next(
+                    connection,
+                    until: echoDeadline
+                ) else { break }
+                incoming = next
+            } catch is CancellationError {
+                await connection.close()
+                return nil
+            } catch {
+                break
+            }
+            let elapsed = OpeningPanelCommMeasure.milliseconds(ContinuousClock.now - pingStart)
+            switch incoming {
+            case .pong(let got) where got == id:
+                pongAt = elapsed
+                if !announcedRelay {
+                    announcedRelay = true
+                    onRelay()
+                }
+            case .echo(let got, let mac) where got == id:
+                echoAt = elapsed
+                echoMac = mac
+            default:
+                break
+            }
+            if pongAt != nil, echoAt != nil { break }
+        }
+        await connection.close()
+        if Task.isCancelled { return nil }
+        return OpeningPanelCommLogic.decide(
+            pongMilliseconds: pongAt,
+            echoMilliseconds: echoAt,
+            echoMac: echoMac,
+            waitMilliseconds: OpeningPanelCommMeasure.milliseconds(wait)
+        )
+    }
+
+    private func measureLegacyHint(
+        pairing: PairingSecrets,
+        url: URL,
+        macPresenceKnown: Bool,
+        hint: (() async throws -> Void)?
+    ) async -> OpeningPanelCommExchange? {
+        let start = ContinuousClock.now
+        do {
+            if let hint {
+                try await hint()
+            } else {
+                _ = try await authedClient(pairing).getHint(pairingId: pairing.pairingId)
+            }
+        } catch is CancellationError {
+            return nil
+        } catch {
+            return .noRelay
+        }
+        if Task.isCancelled { return nil }
+        let milliseconds = OpeningPanelCommMeasure.milliseconds(ContinuousClock.now - start)
+        return .legacyRelay(milliseconds: milliseconds, macPresent: macPresenceKnown)
+    }
+}
+
+private enum OpeningPanelCommMeasure {
+    static func milliseconds(_ duration: Duration) -> Int {
+        let parts = duration.components
+        let value = Double(parts.seconds) * 1_000 + Double(parts.attoseconds) / 1e15
+        return Int(value.rounded())
+    }
+
+    static func first<T: Sendable>(
+        wait: Duration,
+        operation: @escaping @Sendable () async throws -> T
+    ) async throws -> T? {
+        try await withThrowingTaskGroup(of: T?.self) { group in
+            group.addTask { try await operation() }
+            group.addTask {
+                try await Task.sleep(for: wait)
+                return nil
+            }
+            let value = try await group.next() ?? nil
+            group.cancelAll()
+            return value
+        }
+    }
+
+    static func hello(
+        _ connection: any WebSocketConnection,
+        until deadline: ContinuousClock.Instant
+    ) async throws -> ContractAnnouncement? {
+        while ContinuousClock.now < deadline {
+            guard let incoming = try await next(connection, until: deadline) else { return nil }
+            if case .hello(let announcement) = incoming {
+                return announcement
+            }
+        }
+        return nil
+    }
+
+    static func next(
+        _ connection: any WebSocketConnection,
+        until deadline: ContinuousClock.Instant
+    ) async throws -> WSIncoming? {
+        try await withThrowingTaskGroup(of: WSIncoming?.self) { group in
+            group.addTask { try await connection.receiveIncoming() }
+            group.addTask {
+                let remaining = deadline - ContinuousClock.now
+                if remaining > .zero {
+                    try await Task.sleep(for: remaining)
+                }
+                return nil
+            }
+            let value = try await group.next() ?? nil
+            group.cancelAll()
+            return value
+        }
+    }
+}

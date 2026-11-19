@@ -381,6 +381,10 @@ enum OpeningPanelTokens {
         static let segInk = color(0xF2E6C8, opacity: 0.4)
         static let lockInk = color(0xF2E6C8, opacity: 0.5)
         static let gaugeHairline = color(0xF2E6C8, opacity: 0.15)
+        /// 灯った LOAD の枠。`.gbox` の `rgba(242,230,200,.5)`。
+        static let gaugeFrame = color(0xF2E6C8, opacity: 0.5)
+        /// 空きに収まる面。`.gIn`。
+        static let gaugeFit = color(0xF2E6C8, opacity: 0.55)
         static let railTick = color(0xF2E6C8, opacity: 0.22)
         static let amber = color(0xFFB000, opacity: 0.85)
         static let amberDim = color(0xFFB000, opacity: 0.14)

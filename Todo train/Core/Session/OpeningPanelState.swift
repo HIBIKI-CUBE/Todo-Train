@@ -53,6 +53,9 @@ enum OpeningPanelTiming {
     static var checkBlink: TimeInterval { tempo(60) }
     /// 点・滅・点・滅・点。最後の段番号。
     static let checkBlinkLast = 4
+    /// LOAD が寄る段。1 段 35ms（テンポ）。
+    static let loadSteps = 4
+    static var loadStep: TimeInterval { tempo(35) }
 
     static let departBarStep: TimeInterval = 0.022
     static let departBarSteps = 3
@@ -388,6 +391,33 @@ final class OpeningPanelState {
         feedback.play(.light)
         feedback.play(.haptic(.operation))
         begin(module)
+        rearmAuto()
+    }
+
+    /// COMM の TEST。電気が来ていれば測り、来る前は鈍い音だけ。READY には入れない。
+    func pressCommTest() -> Bool {
+        guard !hasDeparted else { return false }
+        guard isPowered else {
+            feedback.play(.dull)
+            return false
+        }
+        feedback.play(.light)
+        feedback.play(.haptic(.operation))
+        rearmAuto()
+        return true
+    }
+
+    /// RELAY か MAC が点いたとき。
+    func noteCommLamp() {
+        guard isPowered, !hasDeparted else { return }
+        feedback.play(.light)
+        rearmAuto()
+    }
+
+    /// 往復が届かなかったとき。
+    func noteCommFailure() {
+        guard isPowered, !hasDeparted else { return }
+        feedback.play(.dull)
         rearmAuto()
     }
 
