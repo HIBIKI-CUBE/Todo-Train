@@ -12,3 +12,5 @@ Todo train/Features/Focus/CheckInControlsView.swift	運転士
 Todo train/Features/Service/OpeningPanel/NowBoard.swift	運行指令員
 Todo train/Features/Service/OpeningPanel/DepartStatusLine.swift	運行指令員
 Todo train/Features/Service/OpeningPanel/RunStatusNowDisplay.swift	運行指令員
+Todo train/Features/Service/OpeningPanel/TimetableModule.swift	運行指令員
+Todo train/Features/Service/OpeningPanel/RunStatusColumn.swift	運行指令員

@@ -278,6 +278,30 @@ enum OpeningPanelTokens {
         static let brightBandStroke = color(0xF2E6C8, opacity: 0.55)
     }
 
+    /// 縦の時間割と、運転状況の列の塗り。赤は置かない。
+    enum TimetableChrome {
+        static let amberSolid = color(0xFFB000)
+        static let adoptedBand = color(0xFFB000, opacity: 0.60)
+        static let passingEdge = color(0xFFB000, opacity: 0.55)
+        static let nowBand = color(0xFFB000, opacity: 0.07)
+        static let nowBandEdge = color(0xFFB000, opacity: 0.45)
+        static let nowBandHatch = color(0xFFB000, opacity: 0.16)
+        static let leader = color(0xFFB000, opacity: 0.60)
+        static let hourLine = color(0xFFB000, opacity: 0.20)
+        static let hourLabel = color(0xFFB000, opacity: 0.60)
+        static let rowTime = color(0xFFB000, opacity: 0.75)
+        static let nextIdle = color(0xFFB000, opacity: 0.30)
+        static let fill = color(0xFFB000, opacity: 0.60)
+        static let markInk = color(0x151617)
+        static let overviewTrack = color(0xF0EBDA, opacity: 0.84)
+        static let normalFace = color(0xFFB000, opacity: 0.16)
+        static let denseFace = color(0xFFB000, opacity: 0.06)
+        static let denseHatch = color(0xFFB000, opacity: 0.34)
+        static let holdName = color(0xF2E6C8, opacity: 0.60)
+        static let denseName = color(0xFFCF5A)
+        static let rowLine = color(0x222222)
+    }
+
     /// 仕様「間」。テンポの付いた項目は `tempo` を一度だけ掛ける。
     enum Interval {
         static let lampCheck: TimeInterval = 0.280
