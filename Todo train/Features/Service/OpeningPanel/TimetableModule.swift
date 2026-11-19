@@ -219,11 +219,14 @@ struct TimetableModule: View {
 
     private var header: some View {
         HStack(spacing: 6) {
-            TimetableScaleToggle(isTwentyFourHour: board.isTwentyFourHour, action: onScaleToggle)
             Text("TIMETABLE")
-                .font(.system(size: 9, weight: .medium))
-                .tracking(0.8)
+                .font(OpeningPanelFaceFont.legend(8))
+                .tracking(0.4)
                 .foregroundStyle(OpeningPanelTokens.Palette.legend)
+                .padding(.horizontal, 4)
+                .padding(.vertical, 2)
+                .background(OpeningPanelTokens.Palette.strip, in: RoundedRectangle(cornerRadius: 1))
+            TimetableScaleToggle(isTwentyFourHour: board.isTwentyFourHour, action: onScaleToggle)
             Spacer(minLength: 0)
             OpeningPanelWindow(label: isDrawn ? board.range.windowLabel : "範囲") {
                 Text(isDrawn ? board.range.windowLabel : "")
@@ -237,8 +240,12 @@ struct TimetableModule: View {
                 height: OpeningPanelTokens.Chrome.rangeWindow.height
             )
             Text("運転状況")
-                .font(.system(size: 9, weight: .medium))
+                .font(OpeningPanelFaceFont.legend(8))
+                .tracking(0.4)
                 .foregroundStyle(OpeningPanelTokens.Palette.legend)
+                .padding(.horizontal, 4)
+                .padding(.vertical, 2)
+                .background(OpeningPanelTokens.Palette.strip, in: RoundedRectangle(cornerRadius: 1))
                 .frame(width: OpeningPanelTokens.RunStatus.width)
         }
         .frame(height: 22)
@@ -342,13 +349,16 @@ private struct TimetableScaleToggle: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 3) {
-                ZStack(alignment: .top) {
+                ZStack(alignment: .topLeading) {
                     RoundedRectangle(cornerRadius: 2)
-                        .fill(OpeningPanelTokens.Palette.raised)
+                        .fill(OpeningPanelTokens.Palette.hex(0x2E3033))
+                    Rectangle()
+                        .fill(OpeningPanelTokens.Palette.hex(0x1D1E20))
+                        .frame(height: 1)
                     RoundedRectangle(cornerRadius: 1)
-                        .fill(OpeningPanelTokens.Palette.lens)
+                        .fill(OpeningPanelTokens.Palette.hex(0x8A8E92))
                         .frame(width: 6, height: 9)
-                        .offset(y: isTwentyFourHour ? 11 : 2)
+                        .offset(x: 3, y: isTwentyFourHour ? 11 : 2)
                 }
                 .frame(width: 12, height: 22)
                 VStack(alignment: .leading, spacing: 1) {
@@ -357,7 +367,8 @@ private struct TimetableScaleToggle: View {
                     Text("24H")
                         .foregroundStyle(label(active: isTwentyFourHour))
                 }
-                .font(.system(size: 7, weight: .medium))
+                .font(OpeningPanelFaceFont.legend(8))
+                .tracking(0.4)
             }
         }
         .buttonStyle(.plain)

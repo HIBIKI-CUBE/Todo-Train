@@ -18,7 +18,7 @@ struct OpeningPanelCover: View {
 
     var body: some View {
         ZStack {
-            OpeningPanelTokens.Palette.housing
+            Color.black
                 .ignoresSafeArea()
             if let panelState {
                 OpeningPanelGrid(
@@ -27,7 +27,6 @@ struct OpeningPanelCover: View {
                             panelState.pressMaster()
                         }
                     },
-                    departChevrons: { EmptyView() },
                     departBar: {
                         DepartModule(state: panelState) {
                             panelState.pressDepart()
@@ -36,6 +35,8 @@ struct OpeningPanelCover: View {
                 )
             }
         }
+        .statusBarHidden(true)
+        .persistentSystemOverlays(.hidden)
         .task {
             guard panelState == nil else { return }
             panelState = OpeningPanelState.live(

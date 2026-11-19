@@ -2,13 +2,12 @@
 //  OpeningPanelGrid.swift
 //  Todo train
 //
-//  盤の格子と、モジュールの外枠・窓。中身は差し込める。
-//  既存の ServiceBootCover はここでは差し替えない。
+//  盤の格子。地は設計寸法で描き、窓の中身だけを差し込む。
 //
 
 import SwiftUI
 
-/// 運行開始の盤。設計寸法で組み、安全領域に収まらないときだけ縮小する。
+/// 運行開始の盤。端末外形 390×844 を、入った領域へ縦横同じ倍率で収める。
 struct OpeningPanelGrid: View {
     private let check: AnyView
     private let phone: AnyView
@@ -68,7 +67,7 @@ struct OpeningPanelGrid: View {
         @ViewBuilder departLock: () -> some View = { EmptyView() },
         @ViewBuilder departStatus: () -> some View = { EmptyView() },
         @ViewBuilder departFirst: () -> some View = { EmptyView() },
-        @ViewBuilder departChevrons: () -> some View = { OpeningPanelChevronRow() },
+        @ViewBuilder departChevrons: () -> some View = { EmptyView() },
         @ViewBuilder departBar: () -> some View = { EmptyView() }
     ) {
         self.check = AnyView(check())
@@ -105,80 +104,140 @@ struct OpeningPanelGrid: View {
     var body: some View {
         GeometryReader { proxy in
             let fitted = TrainLayout.openingPanelSize(fitting: proxy.size)
-            let scale = fitted.width / OpeningPanelTokens.Canvas.outer.width
-            designBoard
+            let scale = fitted.width / OpeningPanelTokens.Phone.width
+            designPhone
                 .frame(
-                    width: OpeningPanelTokens.Canvas.outer.width,
-                    height: OpeningPanelTokens.Canvas.outer.height
+                    width: OpeningPanelTokens.Phone.width,
+                    height: OpeningPanelTokens.Phone.height
                 )
                 .scaleEffect(scale, anchor: .topLeading)
                 .frame(width: fitted.width, height: fitted.height, alignment: .topLeading)
                 .clipped()
                 .frame(width: proxy.size.width, height: proxy.size.height)
         }
+        .ignoresSafeArea()
         .accessibilityElement(children: .contain)
         .accessibilityLabel("運行開始の盤")
     }
 
-    private var designBoard: some View {
-        lattice
-            .padding(OpeningPanelTokens.Canvas.outerInset)
-            .background(OpeningPanelTokens.Palette.grid)
+    private var designPhone: some View {
+        Color.clear
+            .frame(
+                width: OpeningPanelTokens.Phone.width,
+                height: OpeningPanelTokens.Phone.height
+            )
+            .overlay(alignment: .topLeading) {
+                lattice
+                    .padding(.top, OpeningPanelTokens.Phone.gridOrigin.y)
+                    .padding(.leading, OpeningPanelTokens.Phone.gridOrigin.x)
+            }
+            .background {
+                RoundedRectangle(cornerRadius: OpeningPanelTokens.Phone.radius, style: .continuous)
+                    .fill(OpeningPanelTokens.Palette.housing)
+            }
+        .clipShape(RoundedRectangle(cornerRadius: OpeningPanelTokens.Phone.radius, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: OpeningPanelTokens.Phone.radius, style: .continuous)
+                .strokeBorder(OpeningPanelTokens.Palette.phoneBorder, lineWidth: OpeningPanelTokens.Phone.border)
+        }
+        .background(Color.black)
+        .ignoresSafeArea()
     }
 
     private var lattice: some View {
-        ZStack(alignment: .topLeading) {
-            placed(.sysbar) { sysbar }
-            placed(.master) { masterModule }
-            placed(.clock) { clockModule }
-            placed(.clockKey) { clockKeyModule }
-            placed(.timetable) { timetableModule }
-            placed(.nowBoard) { nowModule }
-            placed(.tickets) { ticketsModule }
-            placed(.load) { loadModule }
-            placed(.comm) { commModule }
-            placed(.depart) { departModule }
+        OpeningPanelLattice {
+            cell(.sysbar) { sysbar }
+            cell(.master) { masterModule }
+            cell(.clock) { clockModule }
+            cell(.clockKey) { clockKeyModule }
+            cell(.timetable) { timetableModule }
+            cell(.nowBoard) { nowModule }
+            cell(.tickets) { ticketsModule }
+            cell(.load) { loadModule }
+            cell(.comm) { commModule }
+            cell(.depart) { departModule }
         }
-        .background(OpeningPanelTokens.Palette.grid)
         .frame(
             width: OpeningPanelTokens.Canvas.width,
-            height: OpeningPanelTokens.Canvas.height
+            height: OpeningPanelTokens.Canvas.height,
+            alignment: .topLeading
         )
+        .background(OpeningPanelTokens.Palette.grid)
+        .clipped()
     }
 
-    private func placed<V: View>(
+    private func cell<V: View>(
         _ module: OpeningPanelTokens.Module,
         @ViewBuilder content: () -> V
     ) -> some View {
         let frame = module.frame()
         return content()
-            .frame(width: frame.width, height: frame.height)
-            .position(x: frame.midX, y: frame.midY)
+            .ignoresSafeArea()
+            .frame(width: frame.width, height: frame.height, alignment: .topLeading)
+            .clipped()
     }
 
     private var sysbar: some View {
         HStack(spacing: OpeningPanelTokens.Chrome.stripSplit) {
             OpeningPanelModule(tone: .standard) {
-                check
-                    .padding(.horizontal, 5)
+                HStack(spacing: 4) {
+                    OpeningPanelLegend(
+                        text: "CHK",
+                        size: 7,
+                        tracking: 0.14,
+                        padding: EdgeInsets(top: 1, leading: 3, bottom: 1, trailing: 3)
+                    )
+                    lampPair("MSTR")
+                    lampPair("CLK")
+                    lampPair("TT")
+                    lampPair("TKT")
+                    check
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 5)
             }
             .accessibilityElement(children: .contain)
             .accessibilityLabel("CHK")
 
             OpeningPanelModule(tone: .standard) {
-                OpeningPanelWindow { phone }
-                    .frame(height: OpeningPanelTokens.Chrome.phoneWindowHeight)
-                    .padding(.horizontal, 5)
+                HStack(spacing: 4) {
+                    OpeningPanelLegend(
+                        text: "PHONE",
+                        size: 7,
+                        tracking: 0.14,
+                        padding: EdgeInsets(top: 1, leading: 3, bottom: 1, trailing: 3)
+                    )
+                    OpeningPanelWindow { phone }
+                        .frame(width: 36, height: OpeningPanelTokens.Chrome.phoneWindowHeight)
+                    lampPair("EXT")
+                    lampPair("AWAKE")
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 5)
             }
             .accessibilityElement(children: .contain)
             .accessibilityLabel("PHONE")
         }
     }
 
+    private func lampPair(_ name: String) -> some View {
+        HStack(spacing: 2) {
+            OpeningPanelLamp()
+            Text(name)
+                .font(OpeningPanelFaceFont.legend(7))
+                .tracking(0.14)
+                .foregroundStyle(OpeningPanelTokens.Palette.legend)
+                .lineLimit(1)
+        }
+    }
+
     private var masterModule: some View {
         OpeningPanelModule(tone: .upper) {
-            OpeningPanelRaisedControl { master }
-                .padding(8)
+            ZStack {
+                OpeningPanelMasterAssembly()
+                    .accessibilityHidden(true)
+                master
+            }
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("MASTER")
@@ -187,7 +246,7 @@ struct OpeningPanelGrid: View {
     private var clockModule: some View {
         OpeningPanelModule(tone: .upper) {
             OpeningPanelWindow { clock }
-                .padding(OpeningPanelTokens.Chrome.modulePadding)
+                .padding(6)
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("時計")
@@ -195,18 +254,29 @@ struct OpeningPanelGrid: View {
 
     private var clockKeyModule: some View {
         OpeningPanelModule(tone: .upper) {
-            VStack(spacing: 6) {
-                OpeningPanelRaisedControl { clockKey }
-                    .frame(
-                        width: OpeningPanelTokens.Chrome.clockKeySize.width,
-                        height: OpeningPanelTokens.Chrome.clockKeySize.height
-                    )
-                OpeningPanelRaisedControl(style: .cap) { hourMode }
-                    .frame(
-                        width: OpeningPanelTokens.Chrome.hourModeSize.width,
-                        height: OpeningPanelTokens.Chrome.hourModeSize.height
-                    )
+            VStack(spacing: 0) {
+                OpeningPanelLegend(text: "CLOCK")
+                Spacer(minLength: 4)
+                ZStack {
+                    OpeningPanelConfirmKey()
+                    clockKey
+                }
+                .frame(width: 56, height: 40)
+                Spacer(minLength: 4)
+                HStack(spacing: 4) {
+                    ZStack {
+                        OpeningPanelCap()
+                        hourMode
+                    }
+                    .frame(width: 18, height: 18)
+                    Text("12/24")
+                        .font(OpeningPanelFaceFont.legend(8))
+                        .tracking(0.4)
+                        .foregroundStyle(OpeningPanelTokens.Palette.legend)
+                        .lineLimit(1)
+                }
             }
+            .padding(EdgeInsets(top: 8, leading: 6, bottom: 6, trailing: 6))
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("CLOCK")
@@ -226,78 +296,63 @@ struct OpeningPanelGrid: View {
     }
 
     private var timetableHeader: some View {
-        HStack(spacing: OpeningPanelTokens.RunStatus.columnGap) {
-            HStack(spacing: 6) {
-                OpeningPanelRaisedControl { scaleToggle }
-                    .frame(
-                        width: OpeningPanelTokens.Chrome.scaleToggleSize.width,
-                        height: OpeningPanelTokens.Chrome.scaleToggleSize.height
-                    )
-                timetableTitle
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-                OpeningPanelWindow { range }
-                    .frame(
-                        width: OpeningPanelTokens.Chrome.rangeWindow.width,
-                        height: OpeningPanelTokens.Chrome.rangeWindow.height
-                    )
+        HStack(spacing: 6) {
+            OpeningPanelLegend(text: "TIMETABLE")
+            timetableTitle
+            ZStack {
+                OpeningPanelScaleToggle()
+                scaleToggle
             }
+            OpeningPanelWindow { range }
+                .frame(
+                    width: OpeningPanelTokens.Chrome.rangeWindow.width,
+                    height: OpeningPanelTokens.Chrome.rangeWindow.height
+                )
+            Spacer(minLength: 0)
+            OpeningPanelLegend(text: "運転状況")
+                .frame(width: OpeningPanelTokens.RunStatus.width)
+                .padding(.trailing, 20)
             runStatusTitle
-                .frame(width: OpeningPanelTokens.RunStatus.width, height: 22)
         }
         .frame(height: 22)
     }
 
     private var timetableRow: some View {
-        GeometryReader { geo in
-            let split = OpeningPanelTokens.timetableSplit(
-                in: CGRect(origin: .zero, size: geo.size)
-            )
-            insetWindow(split.timetableWindow, content: split.timetableContent) {
-                timetable
-            }
-            insetWindow(
-                split.runStatusWindow,
-                content: split.runStatusContent,
-                label: "運転状況"
-            ) {
-                runStatus
-            }
+        HStack(spacing: OpeningPanelTokens.RunStatus.columnGap) {
+            OpeningPanelWindow { timetable }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            OpeningPanelWindow(label: "運転状況") { runStatus }
+                .frame(width: OpeningPanelTokens.RunStatus.width)
         }
         .frame(maxHeight: .infinity)
     }
 
     private var timetableFooter: some View {
-        HStack(spacing: OpeningPanelTokens.RunStatus.columnGap) {
-            OpeningPanelWindow { nextStop }
-                .frame(
-                    width: OpeningPanelTokens.Chrome.nextWindow.width,
-                    height: OpeningPanelTokens.Chrome.nextWindow.height
-                )
-            OpeningPanelWindow { nextRide }
-                .frame(
-                    width: OpeningPanelTokens.Chrome.nextWindow.width,
-                    height: OpeningPanelTokens.Chrome.nextWindow.height
-                )
+        HStack(spacing: 4) {
+            ZStack(alignment: .leading) {
+                OpeningPanelNextPair()
+                VStack(alignment: .leading, spacing: 2) {
+                    nextStop
+                    nextRide
+                }
+            }
             Spacer(minLength: 0)
-            OpeningPanelRaisedControl { timetableKey }
-                .frame(
-                    width: OpeningPanelTokens.Chrome.timetableKeySize.width,
-                    height: OpeningPanelTokens.Chrome.timetableKeySize.height
-                )
+            ZStack {
+                OpeningPanelConfirmKey()
+                timetableKey
+            }
+            .frame(width: 52, height: 30)
         }
-        .frame(height: OpeningPanelTokens.Chrome.timetableKeySize.height)
+        .frame(height: 30)
     }
 
     private var nowModule: some View {
         OpeningPanelModule(tone: .standard) {
             HStack(spacing: 6) {
+                OpeningPanelLegend(text: "ただいま")
                 nowLegend
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
                 OpeningPanelWindow { nowBoard }
-                    .frame(
-                        width: OpeningPanelTokens.Chrome.nowWindow.width,
-                        height: OpeningPanelTokens.Chrome.nowWindow.height
-                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 6)
@@ -309,31 +364,33 @@ struct OpeningPanelGrid: View {
     private var ticketsModule: some View {
         OpeningPanelModule(tone: .lower) {
             VStack(spacing: 5) {
-                HStack(spacing: 4) {
+                HStack(spacing: 8) {
+                    OpeningPanelLegend(text: "TICKETS")
                     Spacer(minLength: 0)
-                    OpeningPanelRaisedControl { sequenceKey }
-                        .frame(
-                            width: OpeningPanelTokens.Chrome.sequenceKeySize.width,
-                            height: OpeningPanelTokens.Chrome.sequenceKeySize.height
-                        )
-                    OpeningPanelRaisedControl { ticketsKey }
-                        .frame(
-                            width: OpeningPanelTokens.Chrome.ticketsKeySize.width,
-                            height: OpeningPanelTokens.Chrome.ticketsKeySize.height
-                        )
+                    ZStack {
+                        OpeningPanelSeqKey()
+                        sequenceKey
+                    }
+                    .frame(width: 36, height: 20)
+                    ZStack {
+                        OpeningPanelConfirmKey()
+                        ticketsKey
+                    }
+                    .frame(width: 64, height: 30)
                 }
-                .frame(height: OpeningPanelTokens.Chrome.ticketsKeySize.height)
-                HStack(spacing: 4) {
+                .frame(height: 30)
+                HStack(alignment: .top, spacing: 4) {
+                    OpeningPanelSlotNames()
                     ticketsLeading
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    OpeningPanelTodayMark()
+                    OpeningPanelTodayRail()
+                        .padding(.leading, -2)
                     OpeningPanelWindow { tickets }
-                        .frame(
-                            width: OpeningPanelTokens.Chrome.ticketsWindow.width,
-                            height: OpeningPanelTokens.Chrome.ticketsWindow.height
-                        )
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
+                .frame(maxHeight: .infinity, alignment: .top)
             }
-            .padding(OpeningPanelTokens.Chrome.modulePadding)
+            .padding(6)
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("TICKETS")
@@ -341,11 +398,15 @@ struct OpeningPanelGrid: View {
 
     private var loadModule: some View {
         OpeningPanelModule(tone: .standard) {
-            OpeningPanelWindow { load }
-                .frame(
-                    width: OpeningPanelTokens.Chrome.loadGauge.width,
-                    height: OpeningPanelTokens.Chrome.loadGauge.height
-                )
+            VStack(alignment: .leading, spacing: 4) {
+                OpeningPanelLegend(text: "LOAD")
+                ZStack {
+                    OpeningPanelLoadFace()
+                    load
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            .padding(EdgeInsets(top: 8, leading: 6, bottom: 6, trailing: 6))
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("LOAD")
@@ -353,14 +414,28 @@ struct OpeningPanelGrid: View {
 
     private var commModule: some View {
         OpeningPanelModule(tone: .standard) {
-            HStack(spacing: OpeningPanelTokens.Chrome.commSpacing) {
-                OpeningPanelRaisedControl(style: .cap) { commTest }
-                    .frame(
-                        width: OpeningPanelTokens.Chrome.testSize.width,
-                        height: OpeningPanelTokens.Chrome.testSize.height
-                    )
+            HStack(spacing: 4) {
+                OpeningPanelLegend(
+                    text: "COMM",
+                    size: 7,
+                    tracking: 0.14,
+                    padding: EdgeInsets(top: 1, leading: 3, bottom: 1, trailing: 3),
+                    strip: OpeningPanelTokens.Palette.commStrip
+                )
+                ZStack {
+                    OpeningPanelCap(side: 16)
+                    commTest
+                }
+                .frame(width: 16, height: 16)
+                Text("TEST")
+                    .font(OpeningPanelFaceFont.legend(7))
+                    .tracking(0.14)
+                    .foregroundStyle(OpeningPanelTokens.Palette.legend)
+                    .lineLimit(1)
                 OpeningPanelWindow { comm }
                     .frame(height: OpeningPanelTokens.Chrome.commWindowHeight)
+                lampPair("RELAY")
+                lampPair("MAC")
             }
             .padding(.horizontal, 8)
         }
@@ -370,49 +445,37 @@ struct OpeningPanelGrid: View {
 
     private var departModule: some View {
         OpeningPanelModule(tone: .lower) {
-            HStack(alignment: .center, spacing: OpeningPanelTokens.Chrome.departGap) {
+            HStack(alignment: .center, spacing: 6) {
                 VStack(spacing: 3) {
-                    departLock
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 14)
+                    ZStack {
+                        OpeningPanelLockRow()
+                        departLock
+                    }
+                    .frame(height: 11)
                     OpeningPanelWindow { departStatus }
                         .frame(height: OpeningPanelTokens.Chrome.departLineHeight)
                     OpeningPanelWindow { departFirst }
                         .frame(height: OpeningPanelTokens.Chrome.departLineHeight)
-                    OpeningPanelWindow { departChevrons }
-                        .frame(maxHeight: .infinity)
+                    OpeningPanelChevronWell()
+                        .overlay { departChevrons }
                 }
                 .frame(width: OpeningPanelTokens.Chrome.departReadoutWidth)
-                OpeningPanelPushBar { departBar }
+                OpeningPanelPushBar {
+                    ZStack {
+                        OpeningPanelDepartLabel()
+                            .accessibilityHidden(true)
+                        departBar
+                    }
+                }
                     .frame(
                         width: OpeningPanelTokens.Chrome.departBar.width,
                         height: OpeningPanelTokens.Chrome.departBar.height
                     )
             }
-            .padding(.horizontal, OpeningPanelTokens.Chrome.departPaddingH)
-            .padding(.vertical, OpeningPanelTokens.Chrome.departPaddingV)
+            .padding(EdgeInsets(top: 5, leading: 8, bottom: 5, trailing: 8))
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("DEPART")
-    }
-
-    private func insetWindow<V: View>(
-        _ window: CGRect,
-        content contentRect: CGRect,
-        label: String? = nil,
-        @ViewBuilder content: () -> V
-    ) -> some View {
-        OpeningPanelWindow(label: label) {
-            content()
-                .padding(EdgeInsets(
-                    top: contentRect.minY - window.minY,
-                    leading: contentRect.minX - window.minX,
-                    bottom: window.maxY - contentRect.maxY,
-                    trailing: window.maxX - contentRect.maxX
-                ))
-        }
-        .frame(width: window.width, height: window.height)
-        .position(x: window.midX, y: window.midY)
     }
 }
 
@@ -428,7 +491,7 @@ struct OpeningPanelModule<Content: View>: View {
 
     var body: some View {
         content
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .background(tone.fill)
             .overlay {
                 Rectangle()
@@ -459,19 +522,18 @@ struct OpeningPanelWindow<Content: View>: View {
     }
 
     var body: some View {
-        content
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background {
-                RoundedRectangle(cornerRadius: OpeningPanelTokens.Chrome.windowRadius)
-                    .fill(OpeningPanelTokens.Palette.window)
-            }
-            .overlay {
-                RoundedRectangle(cornerRadius: OpeningPanelTokens.Chrome.windowRadius)
-                    .strokeBorder(OpeningPanelTokens.Palette.windowEdge, lineWidth: 1)
-            }
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(label ?? "")
-            .accessibilityHidden(label == nil)
+        ZStack {
+            RoundedRectangle(cornerRadius: OpeningPanelTokens.Chrome.windowRadius, style: .continuous)
+                .fill(OpeningPanelTokens.Palette.window)
+            RoundedRectangle(cornerRadius: OpeningPanelTokens.Chrome.windowRadius, style: .continuous)
+                .strokeBorder(OpeningPanelTokens.Palette.windowEdge, lineWidth: 1)
+            content
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label ?? "")
+        .accessibilityHidden(label == nil)
     }
 }
 
@@ -506,7 +568,7 @@ struct OpeningPanelRaisedControl<Content: View>: View {
         switch style {
         case .key:
             ZStack {
-                RoundedRectangle(cornerRadius: OpeningPanelTokens.Chrome.controlRadius)
+                RoundedRectangle(cornerRadius: OpeningPanelTokens.Chrome.controlRadius, style: .continuous)
                     .fill(OpeningPanelTokens.Palette.raised)
                 content
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -515,12 +577,12 @@ struct OpeningPanelRaisedControl<Content: View>: View {
             }
         case .cap:
             ZStack {
-                RoundedRectangle(cornerRadius: OpeningPanelTokens.Chrome.controlRadius)
+                RoundedRectangle(cornerRadius: OpeningPanelTokens.Chrome.controlRadius, style: .continuous)
                     .fill(OpeningPanelTokens.Palette.capRingOuter)
-                RoundedRectangle(cornerRadius: OpeningPanelTokens.Chrome.controlRadius)
+                RoundedRectangle(cornerRadius: OpeningPanelTokens.Chrome.controlRadius, style: .continuous)
                     .fill(OpeningPanelTokens.Palette.capRing)
                     .padding(2)
-                RoundedRectangle(cornerRadius: OpeningPanelTokens.Chrome.controlRadius)
+                RoundedRectangle(cornerRadius: OpeningPanelTokens.Chrome.controlRadius, style: .continuous)
                     .fill(OpeningPanelTokens.Palette.cap)
                     .padding(3)
                 content
@@ -531,7 +593,7 @@ struct OpeningPanelRaisedControl<Content: View>: View {
     }
 }
 
-/// DEPART の押し棒。同心の平面の縁と、下の唇。
+/// DEPART の押し棒。同心の輪は枠の外へ 4。
 struct OpeningPanelPushBar<Content: View>: View {
     private var content: Content
 
@@ -540,39 +602,60 @@ struct OpeningPanelPushBar<Content: View>: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 4)
-                    .fill(OpeningPanelTokens.Palette.barRingInner)
-                RoundedRectangle(cornerRadius: 4)
-                    .fill(OpeningPanelTokens.Palette.barRingMid)
-                    .padding(1)
-                RoundedRectangle(cornerRadius: 4)
-                    .fill(OpeningPanelTokens.Palette.barRing)
-                    .padding(3)
-                RoundedRectangle(cornerRadius: 4)
-                    .fill(OpeningPanelTokens.Palette.barHousing)
-                    .padding(4)
-                VStack(spacing: 0) {
-                    Rectangle()
-                        .fill(OpeningPanelTokens.Palette.barHighlight)
-                        .frame(height: 1)
-                    content
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .background(OpeningPanelTokens.Palette.barFace)
-                    Rectangle()
-                        .fill(OpeningPanelTokens.Palette.barShade)
-                        .frame(height: 4)
-                }
-                .padding(.horizontal, 5)
-                .padding(.vertical, 4)
-            }
-            Rectangle()
-                .fill(OpeningPanelTokens.Palette.barLip)
-                .frame(height: 2)
+        VStack(spacing: 2) {
+            housing
+            Text("DEPART")
+                .font(OpeningPanelFaceFont.legend(6))
+                .tracking(0.3)
+                .foregroundStyle(OpeningPanelTokens.Palette.legend)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity)
+                .frame(height: 6)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .accessibilityElement(children: .contain)
+    }
+
+    private var housing: some View {
+        content
+            .padding(.horizontal, 5)
+            .padding(.vertical, 4)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(OpeningPanelTokens.Palette.barHousing)
+            .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .strokeBorder(OpeningPanelTokens.Palette.barRingInner, lineWidth: 1)
+                    .padding(-4)
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .strokeBorder(OpeningPanelTokens.Palette.barRingMid, lineWidth: 2)
+                    .padding(-3)
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .strokeBorder(OpeningPanelTokens.Palette.barRing, lineWidth: 1)
+                    .padding(-1)
+            }
+    }
+}
+
+/// 格子の外枠いっぱいにモジュールを置く。提案サイズを各枠の寸法に固定する。
+private struct OpeningPanelLattice: Layout {
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        OpeningPanelTokens.Canvas.outer
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        for (module, subview) in zip(OpeningPanelTokens.Module.allCases, subviews) {
+            let frame = module.frame()
+            subview.place(
+                at: CGPoint(x: bounds.minX + frame.minX, y: bounds.minY + frame.minY),
+                anchor: .topLeading,
+                proposal: ProposedViewSize(width: frame.width, height: frame.height)
+            )
+        }
     }
 }
 
@@ -601,7 +684,6 @@ struct OpeningPanelChevronRow: View {
                     .fill(OpeningPanelTokens.Palette.chevron)
             }
         }
-        .padding(3)
         .accessibilityHidden(true)
     }
 }
@@ -609,14 +691,14 @@ struct OpeningPanelChevronRow: View {
 #Preview("空の盤面") {
     OpeningPanelGrid()
         .frame(
-            width: OpeningPanelTokens.Canvas.outer.width,
-            height: OpeningPanelTokens.Canvas.outer.height
+            width: OpeningPanelTokens.Phone.width,
+            height: OpeningPanelTokens.Phone.height
         )
-        .background(OpeningPanelTokens.Palette.housing)
+        .background(Color.black)
 }
 
 #Preview("狭い枠") {
     OpeningPanelGrid()
         .frame(width: 320, height: 640)
-        .background(OpeningPanelTokens.Palette.housing)
+        .background(Color.black)
 }

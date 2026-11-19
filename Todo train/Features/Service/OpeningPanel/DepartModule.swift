@@ -13,32 +13,14 @@ struct DepartModule: View {
 
     var body: some View {
         Button(action: onPress) {
-            VStack(spacing: 2) {
-                departFace
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-                Text("DEPART")
-                    .font(.system(size: 7, weight: .regular))
-                    .kerning(1.4)
-                    .foregroundStyle(OpeningPanelTokens.Palette.legend.opacity(0.84))
-            }
+            OpeningPanelDepartLabel(sunk: state.departBarDepth >= OpeningPanelTiming.departBarSteps)
+                .offset(y: departSink)
+                .animation(nil, value: state.departBarDepth)
         }
         .buttonStyle(.plain)
         .accessibilityLabel("DEPART")
         .accessibilityHint("Hub へ出ます")
         .disabled(state.hasDeparted)
-    }
-
-    private var departFace: some View {
-        Text("出 発")
-            .font(.system(size: 15, weight: .semibold))
-            .kerning(5.4)
-            .foregroundStyle(departLabelColor)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(departFaceFill)
-            .clipShape(RoundedRectangle(cornerRadius: 2))
-            .offset(y: departSink)
-            .animation(nil, value: state.departBarDepth)
     }
 
     private var departSink: CGFloat {
@@ -52,18 +34,6 @@ struct DepartModule: View {
         default:
             return 3
         }
-    }
-
-    private var departFaceFill: Color {
-        state.departBarDepth >= OpeningPanelTiming.departBarSteps
-            ? Color(red: 31 / 255, green: 49 / 255, blue: 33 / 255)
-            : OpeningPanelTokens.Palette.barFace
-    }
-
-    private var departLabelColor: Color {
-        state.isPowered
-            ? OpeningPanelTokens.Palette.legend
-            : OpeningPanelTokens.Palette.legend.opacity(0.4)
     }
 }
 
