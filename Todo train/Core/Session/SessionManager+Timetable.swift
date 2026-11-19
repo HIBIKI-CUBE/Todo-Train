@@ -8,6 +8,84 @@ import SwiftData
 import TodoTrainSync
 import UserNotifications
 
+/// 運行開始の盤に出す予定。着発はダイヤ、通過は掲示か、今回だけ外した手入力。
+nonisolated struct OpeningTimetableEntry: Equatable, Sendable, Identifiable {
+    enum Kind: Equatable, Sendable {
+        case stop(blockID: UUID)
+        case passNotice(occurrenceID: String)
+        case passManual(blockID: UUID)
+    }
+
+    var kind: Kind
+    var title: String
+    var startsAt: Date
+    var endsAt: Date
+
+    var id: String {
+        switch kind {
+        case .stop(let blockID):
+            return "stop:\(blockID.uuidString)"
+        case .passNotice(let occurrenceID):
+            return "notice:\(occurrenceID)"
+        case .passManual(let blockID):
+            return "pass:\(blockID.uuidString)"
+        }
+    }
+
+    var stops: Bool {
+        if case .stop = kind { return true }
+        return false
+    }
+
+    var interval: TimetableOpeningInterval {
+        TimetableOpeningInterval(startsAt: startsAt, endsAt: endsAt)
+    }
+}
+
+/// 着発した予定だけから組んだ、盤の時間割・運転状況・ただいま・LOAD。
+nonisolated struct OpeningTimetableBoard: Equatable, Sendable {
+    var entries: [OpeningTimetableEntry]
+    var range: TimetableRange
+    var bands: [RunStatusBand]
+    var reading: RunStatusNow
+    var next: RunStatusNext
+    var load: ServiceLoadSnapshot
+    var isTwentyFourHour: Bool
+
+    static func make(
+        entries: [OpeningTimetableEntry],
+        now: Date,
+        isTwentyFourHour: Bool,
+        referenceDay: Date,
+        ticketsAboveCutoff: [ServiceLoadTicket],
+        calendar: Calendar
+    ) -> OpeningTimetableBoard {
+        let scheduled = entries.map(\.interval)
+        let adopted = entries.filter(\.stops).map(\.interval)
+        let range = TimetableRangeLogic.compute(
+            scheduledBlocks: scheduled,
+            referenceDay: referenceDay,
+            isTwentyFourHour: isTwentyFourHour,
+            calendar: calendar
+        )
+        let bands = RunStatusLogic.bands(range: range, adoptedBlocks: adopted)
+        return OpeningTimetableBoard(
+            entries: entries,
+            range: range,
+            bands: bands,
+            reading: RunStatusLogic.nowReading(now: now, range: range, bands: bands),
+            next: RunStatusLogic.nextMarkers(now: now, adoptedBlocks: adopted),
+            load: ServiceLoadLogic.compute(
+                now: now,
+                range: range,
+                adoptedBlocks: adopted,
+                ticketsAboveCutoff: ticketsAboveCutoff
+            ),
+            isTwentyFourHour: isTwentyFourHour
+        )
+    }
+}
+
 extension SessionManager {
     func timetableFit(at now: Date? = nil) -> TimetableFitSnapshot {
         let now = now ?? clock.now
@@ -228,6 +306,109 @@ extension SessionManager {
     func fetchSeriesRules() -> [TimetableSeriesRule] {
         let descriptor = FetchDescriptor<TimetableSeriesRule>()
         return (try? modelContext.fetch(descriptor)) ?? []
+    }
+
+    /// 今日の予定と、着発だけから計算した運転状況・ただいま・NEXT・LOAD。
+    func openingTimetableBoard(
+        now: Date? = nil,
+        isTwentyFourHour: Bool = false,
+        ticketsAboveCutoff: [ServiceLoadTicket] = []
+    ) -> OpeningTimetableBoard {
+        _ = openingTimetableRevision
+        let now = now ?? clock.now
+        return OpeningTimetableBoard.make(
+            entries: openingTimetableEntries(on: now),
+            now: now,
+            isTwentyFourHour: isTwentyFourHour,
+            referenceDay: now,
+            ticketsAboveCutoff: ticketsAboveCutoff,
+            calendar: calendar
+        )
+    }
+
+    /// 予定に触れたとき。着発と通過を入れ替える。効くのは今回だけ。
+    func toggleOpeningTimetableStop(_ entry: OpeningTimetableEntry) {
+        switch entry.kind {
+        case .stop(let blockID):
+            unadopt(blockID: blockID, scope: .occurrence)
+        case .passNotice(let occurrenceID):
+            if let occurrence = noticeOccurrences.first(where: { $0.id == occurrenceID }) {
+                adoptOccurrence(occurrence, scope: .occurrence)
+            }
+        case .passManual(let blockID):
+            restoreManualStopToday(blockID: blockID)
+        }
+        openingTimetableRevision += 1
+    }
+
+    func openingTimetableEntries(on day: Date) -> [OpeningTimetableEntry] {
+        let bounds = serviceDayBounds(for: day)
+        var entries: [OpeningTimetableEntry] = []
+        for block in fetchTimetableBlocks() where overlapsDay(block.startsAt, block.endsAt, bounds) && block.endsAt > block.startsAt {
+            if block.isActive {
+                entries.append(
+                    OpeningTimetableEntry(
+                        kind: .stop(blockID: block.id),
+                        title: block.title,
+                        startsAt: block.startsAt,
+                        endsAt: block.endsAt
+                    )
+                )
+            } else if block.source == .manual && block.isCancelled {
+                entries.append(
+                    OpeningTimetableEntry(
+                        kind: .passManual(blockID: block.id),
+                        title: block.title,
+                        startsAt: block.startsAt,
+                        endsAt: block.endsAt
+                    )
+                )
+            }
+        }
+
+        let active = fetchActiveTimetableBlocks()
+        for occurrence in noticeOccurrences where TimetableAdoption.isEligible(occurrence) && overlapsDay(occurrence.startsAt, occurrence.endsAt, bounds) {
+            let adopted = active.contains { block in
+                block.calendarEventIdentifier == occurrence.eventIdentifier
+                    && abs((block.occurrenceStartKey ?? block.startsAt.timeIntervalSince1970) - occurrence.occurrenceStartKey) < 0.5
+            }
+            if adopted { continue }
+            entries.append(
+                OpeningTimetableEntry(
+                    kind: .passNotice(occurrenceID: occurrence.id),
+                    title: occurrence.title,
+                    startsAt: occurrence.startsAt,
+                    endsAt: occurrence.endsAt
+                )
+            )
+        }
+
+        return entries.sorted { lhs, rhs in
+            if lhs.startsAt != rhs.startsAt { return lhs.startsAt < rhs.startsAt }
+            if lhs.endsAt != rhs.endsAt { return lhs.endsAt < rhs.endsAt }
+            return lhs.id < rhs.id
+        }
+    }
+
+    private func restoreManualStopToday(blockID: UUID) {
+        var membership = loadMembership()
+        guard let index = membership.blocks.firstIndex(where: {
+            $0.id == blockID && $0.source == .manual && $0.isCancelled
+        }) else { return }
+        membership.blocks[index].isCancelled = false
+        guard commitMembership(membership) else { return }
+        lastScheduledEndBellFireAt = nil
+        reconcile()
+    }
+
+    private func serviceDayBounds(for day: Date) -> Range<Date> {
+        let start = calendar.startOfDay(for: day)
+        let end = calendar.date(byAdding: .day, value: 1, to: start) ?? start.addingTimeInterval(86_400)
+        return start..<end
+    }
+
+    private func overlapsDay(_ startsAt: Date, _ endsAt: Date, _ day: Range<Date>) -> Bool {
+        startsAt < day.upperBound && endsAt > day.lowerBound
     }
 
     private func fetchOpenTimetableGuard() -> TimetableGuard? {

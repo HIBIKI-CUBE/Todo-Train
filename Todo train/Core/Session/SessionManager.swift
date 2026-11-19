@@ -83,6 +83,8 @@ final class SessionManager {
     var lastNotifyFireAt: Int?
     /// Calendar 掲示 (eligible, not necessarily adopted). Warmed from the ダイヤ tab, and Hub if already authorized.
     var noticeOccurrences: [CalendarOccurrence] = []
+    /// 着発と通過を切り替えた回数。盤はこれを読んで運転状況・ただいま・LOAD を取り直す。
+    var openingTimetableRevision = 0
     /// Last AlarmKit / end-bell fire we scheduled, so reconcile does not hammer AlarmKit.
     var lastScheduledEndBellFireAt: Date?
     /// 乗客レーン。SessionPhase には混ぜない。
