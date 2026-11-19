@@ -321,6 +321,7 @@ struct TicketsModule: View {
     var model: OpeningPanelTicketsModel
 
     var body: some View {
+        let _ = OpeningPanelRedrawProbe.bump("TicketsModule")
         VStack(spacing: 0) {
             ForEach(Array(rowSlots.enumerated()), id: \.offset) { index, slot in
                 Button {

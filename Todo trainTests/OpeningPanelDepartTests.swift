@@ -255,6 +255,53 @@ struct OpeningPanelDepartTests {
         #expect(!resting.columnHit)
         #expect(resting.alphas.allSatisfy { $0 == 0 })
     }
+
+    @Test func frameEdges_changeThePicture() {
+        let origin = waveCycleStart()
+        var date = origin
+        let visits = DepartChevronWave.changePoints.count + 1
+        for _ in 0..<visits {
+            let next = DepartChevronWave.nextFrameEdge(after: date)
+            #expect(next > date)
+            #expect(DepartChevronWave.sample(at: next) != DepartChevronWave.sample(at: date))
+            date = next
+        }
+        let elapsed = date.timeIntervalSince(origin)
+        #expect(abs(elapsed - DepartChevronWave.period) < 0.02)
+        var cursor = origin
+        var fires = 0
+        while cursor < origin.addingTimeInterval(2), fires < 80 {
+            cursor = DepartChevronWave.nextFrameEdge(after: cursor)
+            fires += 1
+        }
+        #expect(fires >= 18)
+        #expect(fires <= 28)
+    }
+
+    @Test func columnEdges_toggleTheHit() {
+        let origin = waveCycleStart()
+        let first = DepartChevronWave.nextColumnEdge(after: origin)
+        #expect(abs(first.timeIntervalSince(origin) - DepartChevronWave.sweep) < 0.01)
+        #expect(DepartChevronWave.sample(at: first).columnHit)
+        let second = DepartChevronWave.nextColumnEdge(after: first)
+        #expect(abs(second.timeIntervalSince(first) - DepartChevronWave.hitHold) < 0.01)
+        #expect(!DepartChevronWave.sample(at: second).columnHit)
+        let third = DepartChevronWave.nextColumnEdge(after: second)
+        #expect(DepartChevronWave.sample(at: third).columnHit)
+        #expect(abs(third.timeIntervalSince(second) - (DepartChevronWave.rest + DepartChevronWave.sweep)) < 0.01)
+    }
+}
+
+/// 周期の先頭（最初の段）に合わせた、桁が安定している時刻。
+private func waveCycleStart() -> Date {
+    let anchor = Date(timeIntervalSinceReferenceDate: 800_000_000)
+    let cycle = DepartChevronWave.period
+    var phase = anchor.timeIntervalSince(.distantPast).truncatingRemainder(dividingBy: cycle)
+    if phase < 0 { phase += cycle }
+    let origin = anchor.addingTimeInterval(cycle - phase)
+    let first = DepartChevronWave.sample(elapsed: 0)
+    if DepartChevronWave.sample(at: origin) == first { return origin }
+    return origin.addingTimeInterval(0.001)
 }
 
 @MainActor
