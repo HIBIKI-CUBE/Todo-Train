@@ -30,6 +30,7 @@ struct OpeningPanelCover: View {
     @State private var phoneSupply: OpeningPanelPhoneSupply = .unknown
 
     var body: some View {
+        let _ = OpeningPanelRedrawProbe.bump("OpeningPanelCover")
         ZStack {
             Color.black
                 .ignoresSafeArea()

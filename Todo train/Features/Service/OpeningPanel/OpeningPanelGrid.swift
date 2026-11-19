@@ -54,8 +54,6 @@ struct OpeningPanelGrid: View {
 
     @State private var todayRailDown = false
     @State private var hitActions = OpeningPanelHitActions()
-    /// 矢羽根の波を止めて見比べるときだけ、外から時刻を渡す。
-    @Environment(\.departWaveDate) private var pinnedWaveDate
     @Environment(\.openingPanelHitBounds) private var hitBoundsRequested
 
     init(
@@ -147,6 +145,11 @@ struct OpeningPanelGrid: View {
     }
 
     var body: some View {
+        let _ = OpeningPanelRedrawProbe.bump("OpeningPanelGrid")
+        latticeBody
+    }
+
+    private var latticeBody: some View {
         GeometryReader { proxy in
             let safe = CGRect(origin: .zero, size: proxy.size)
             let placed = TrainLayout.openingPanelPlacement(in: safe)
@@ -518,21 +521,13 @@ struct OpeningPanelGrid: View {
     }
 
     private var departModule: some View {
-        TimelineView(
-            .animation(
-                minimumInterval: 1.0 / 30.0,
-                paused: !chevronsFlowing || pinnedWaveDate != nil
-            )
-        ) { context in
-            let date = pinnedWaveDate ?? context.date
-            let waveHit = chevronsFlowing && DepartChevronWave.sample(at: date).columnHit
-            departFace(columnLit: departColumnLit || waveHit)
-                .environment(\.departWaveDate, chevronsFlowing ? date : nil)
-        }
+        // 波の時刻は矢羽根の Canvas と、当たった瞬間の輪だけが見る。
+        departFace(columnLit: departColumnLit)
     }
 
     private func departFace(columnLit: Bool) -> some View {
-        OpeningPanelModule(tone: .lower, glowing: glowingModules.contains(.depart)) {
+        let _ = OpeningPanelRedrawProbe.bump("departFace")
+        return OpeningPanelModule(tone: .lower, glowing: glowingModules.contains(.depart)) {
             HStack(alignment: .center, spacing: 6) {
                 VStack(spacing: 3) {
                     ZStack {
@@ -552,7 +547,7 @@ struct OpeningPanelGrid: View {
                         }
                 }
                 .frame(width: OpeningPanelTokens.Chrome.departReadoutWidth, alignment: .top)
-                OpeningPanelPushBar(columnLit: columnLit) {
+                OpeningPanelPushBar(columnLit: columnLit, chevronsFlowing: chevronsFlowing) {
                     departBar
                 }
                 .frame(width: OpeningPanelTokens.Chrome.departBar.width)
@@ -707,14 +702,21 @@ struct OpeningPanelRaisedControl<Content: View>: View {
 /// DEPART の押し棒。同心の輪は枠の外へ 4。
 struct OpeningPanelPushBar<Content: View>: View {
     var columnLit = false
+    var chevronsFlowing = false
     private var content: Content
 
-    init(columnLit: Bool = false, @ViewBuilder content: () -> Content) {
+    init(
+        columnLit: Bool = false,
+        chevronsFlowing: Bool = false,
+        @ViewBuilder content: () -> Content
+    ) {
         self.columnLit = columnLit
+        self.chevronsFlowing = chevronsFlowing
         self.content = content()
     }
 
     var body: some View {
+        let _ = OpeningPanelRedrawProbe.bump("OpeningPanelPushBar")
         VStack(spacing: 2) {
             housing
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -743,14 +745,7 @@ struct OpeningPanelPushBar<Content: View>: View {
                     .padding(-4)
             }
             .overlay {
-                RoundedRectangle(cornerRadius: 4, style: .continuous)
-                    .strokeBorder(
-                        columnLit
-                            ? OpeningPanelTokens.Palette.barColumnHit
-                            : OpeningPanelTokens.Palette.barRingMid,
-                        lineWidth: 2
-                    )
-                    .padding(-3)
+                DepartColumnRing(baseLit: columnLit, flowing: chevronsFlowing)
             }
             .overlay(alignment: .top) {
                 LinearGradient(
