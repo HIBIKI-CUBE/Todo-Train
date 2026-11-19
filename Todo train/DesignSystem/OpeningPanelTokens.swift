@@ -373,8 +373,32 @@ enum OpeningPanelTokens {
         static let barHighlight = color(0x75797C)
         static let barShade = color(0x3B3E41)
         static let barLip = color(0x0C0C0D)
+        /// `.dbar.p1` の上端。
+        static let barStageTop = color(0x6A6E71)
+        /// `.dbar.p2` の上端。
+        static let barStageTopSunk = color(0x2E3032)
+        /// `.dcol.dhit` の中の輪。`rgba(255,176,0,.55)`。
+        static let barColumnHit = color(0xFFB000, opacity: 0.55)
+        /// `.on .seg.nm`。`--grn`。押し棒に brightness は掛からない。
+        static let departMark = color(0x84C480, opacity: 0.85)
+        /// `.dbar.p3` の面。
+        static let departSunk = color(0x1F3121)
         static let chevron = color(0x2B2C2E)
         static let chevronWell = color(0x1A1B1C)
+        /// 流れる矢羽根。`rgba(255,176,0,α)`。
+        static func chevronFlow(_ alpha: Double) -> Color {
+            color(0xFFB000, opacity: alpha)
+        }
+        /// 視差効果を減らすときの矢羽根。`CH(.3)`。
+        static let chevronHeld = color(0xFFB000, opacity: 0.3)
+        /// 押したあとに満ちる矢羽根。`CH(.85)`。
+        static let chevronLit = color(0xFFB000, opacity: 0.85)
+        /// `.lrow .lk.in .hl`。
+        static let lockLit = color(0xFFB000, opacity: 0.6)
+        /// `.leg.bl`。READY が点いたときの字。
+        static let readyInk = color(0xF2E6C8, opacity: 0.95)
+        /// `.mod.rp`。下から上へ走る縁。
+        static let moduleSweep = color(0xFFB000, opacity: 0.55)
         static let lampOff = color(0x2A2B2C)
         static let commStrip = color(0x34373A)
         static let phoneBorder = color(0x222222)

@@ -38,6 +38,10 @@ struct OpeningPanelGrid: View {
     private let departFirst: AnyView
     private let departChevrons: AnyView
     private let departBar: AnyView
+    private let departLocks: OpeningPanelLockPicture
+    private let chevronsFlowing: Bool
+    private let departColumnLit: Bool
+    private let glowingModules: Set<OpeningPanelTokens.Module>
     private let lamps: OpeningPanelLampField
     private let commTesting: Bool
     private let loadLit: Bool
@@ -49,6 +53,8 @@ struct OpeningPanelGrid: View {
     private let onTodayRail: ((CGFloat, Bool) -> Void)?
 
     @State private var todayRailDown = false
+    /// 矢羽根の波を止めて見比べるときだけ、外から時刻を渡す。
+    @Environment(\.departWaveDate) private var pinnedWaveDate
 
     init(
         @ViewBuilder check: () -> some View = { EmptyView() },
@@ -78,8 +84,12 @@ struct OpeningPanelGrid: View {
         @ViewBuilder departLock: () -> some View = { EmptyView() },
         @ViewBuilder departStatus: () -> some View = { EmptyView() },
         @ViewBuilder departFirst: () -> some View = { EmptyView() },
-        @ViewBuilder departChevrons: () -> some View = { EmptyView() },
-        @ViewBuilder departBar: () -> some View = { EmptyView() },
+        @ViewBuilder departChevrons: () -> some View = { OpeningPanelChevronRow() },
+        @ViewBuilder departBar: () -> some View = { OpeningPanelDepartLabel() },
+        departLocks: OpeningPanelLockPicture = OpeningPanelLockPicture(),
+        chevronsFlowing: Bool = false,
+        departColumnLit: Bool = false,
+        glowingModules: Set<OpeningPanelTokens.Module> = [],
         lamps: OpeningPanelLampField = OpeningPanelLampField(),
         commTesting: Bool = false,
         loadLit: Bool = false,
@@ -119,6 +129,10 @@ struct OpeningPanelGrid: View {
         self.departFirst = AnyView(departFirst())
         self.departChevrons = AnyView(departChevrons())
         self.departBar = AnyView(departBar())
+        self.departLocks = departLocks
+        self.chevronsFlowing = chevronsFlowing
+        self.departColumnLit = departColumnLit
+        self.glowingModules = glowingModules
         self.lamps = lamps
         self.commTesting = commTesting
         self.loadLit = loadLit
@@ -207,7 +221,11 @@ struct OpeningPanelGrid: View {
 
     private var sysbar: some View {
         HStack(spacing: OpeningPanelTokens.Chrome.stripSplit) {
-            OpeningPanelModule(tone: .standard, alignment: .center) {
+            OpeningPanelModule(
+                tone: .standard,
+                alignment: .center,
+                glowing: glowingModules.contains(.sysbar)
+            ) {
                 OpeningPanelCenterRow {
                     HStack(spacing: 4) {
                         OpeningPanelLegend(
@@ -228,7 +246,11 @@ struct OpeningPanelGrid: View {
             .accessibilityElement(children: .contain)
             .accessibilityLabel("CHK")
 
-            OpeningPanelModule(tone: .standard, alignment: .center) {
+            OpeningPanelModule(
+                tone: .standard,
+                alignment: .center,
+                glowing: glowingModules.contains(.sysbar)
+            ) {
                 OpeningPanelCenterRow {
                     HStack(spacing: 4) {
                         OpeningPanelLegend(
@@ -265,7 +287,7 @@ struct OpeningPanelGrid: View {
     }
 
     private var masterModule: some View {
-        OpeningPanelModule(tone: .upper) {
+        OpeningPanelModule(tone: .upper, glowing: glowingModules.contains(.master)) {
             master
         }
         .accessibilityElement(children: .contain)
@@ -273,7 +295,7 @@ struct OpeningPanelGrid: View {
     }
 
     private var clockModule: some View {
-        OpeningPanelModule(tone: .upper) {
+        OpeningPanelModule(tone: .upper, glowing: glowingModules.contains(.clock)) {
             OpeningPanelWindow(exposesContent: true) { clock }
                 .padding(6)
         }
@@ -282,7 +304,7 @@ struct OpeningPanelGrid: View {
     }
 
     private var clockKeyModule: some View {
-        OpeningPanelModule(tone: .upper) {
+        OpeningPanelModule(tone: .upper, glowing: glowingModules.contains(.clockKey)) {
             VStack(spacing: 0) {
                 OpeningPanelLegend(text: "CLOCK")
                 Spacer(minLength: 4)
@@ -312,7 +334,7 @@ struct OpeningPanelGrid: View {
     }
 
     private var timetableModule: some View {
-        OpeningPanelModule(tone: .standard) {
+        OpeningPanelModule(tone: .standard, glowing: glowingModules.contains(.timetable)) {
             VStack(spacing: 3) {
                 timetableHeader
                 timetableRow
@@ -376,7 +398,7 @@ struct OpeningPanelGrid: View {
     }
 
     private var nowModule: some View {
-        OpeningPanelModule(tone: .standard) {
+        OpeningPanelModule(tone: .standard, glowing: glowingModules.contains(.nowBoard)) {
             HStack(spacing: 6) {
                 OpeningPanelLegend(text: "ただいま")
                 nowLegend
@@ -391,7 +413,7 @@ struct OpeningPanelGrid: View {
     }
 
     private var ticketsModule: some View {
-        OpeningPanelModule(tone: .lower) {
+        OpeningPanelModule(tone: .lower, glowing: glowingModules.contains(.tickets)) {
             VStack(spacing: 5) {
                 HStack(spacing: 8) {
                     OpeningPanelLegend(text: "TICKETS")
@@ -451,7 +473,7 @@ struct OpeningPanelGrid: View {
     }
 
     private var loadModule: some View {
-        OpeningPanelModule(tone: .standard) {
+        OpeningPanelModule(tone: .standard, glowing: glowingModules.contains(.load)) {
             VStack(alignment: .leading, spacing: 4) {
                 OpeningPanelLegend(text: "LOAD")
                 OpeningPanelLoadFace(lit: loadLit, frameTop: loadFrameTop) {
@@ -466,7 +488,7 @@ struct OpeningPanelGrid: View {
     }
 
     private var commModule: some View {
-        OpeningPanelModule(tone: .standard) {
+        OpeningPanelModule(tone: .standard, glowing: glowingModules.contains(.comm)) {
             HStack(spacing: 4) {
                 OpeningPanelLegend(
                     text: "COMM",
@@ -497,11 +519,25 @@ struct OpeningPanelGrid: View {
     }
 
     private var departModule: some View {
-        OpeningPanelModule(tone: .lower) {
+        TimelineView(
+            .animation(
+                minimumInterval: 1.0 / 30.0,
+                paused: !chevronsFlowing || pinnedWaveDate != nil
+            )
+        ) { context in
+            let date = pinnedWaveDate ?? context.date
+            let waveHit = chevronsFlowing && DepartChevronWave.sample(at: date).columnHit
+            departFace(columnLit: departColumnLit || waveHit)
+                .environment(\.departWaveDate, chevronsFlowing ? date : nil)
+        }
+    }
+
+    private func departFace(columnLit: Bool) -> some View {
+        OpeningPanelModule(tone: .lower, glowing: glowingModules.contains(.depart)) {
             HStack(alignment: .center, spacing: 6) {
                 VStack(spacing: 3) {
                     ZStack {
-                        OpeningPanelLockRow()
+                        OpeningPanelLockRow(picture: departLocks)
                         departLock
                     }
                     .frame(height: 11)
@@ -511,18 +547,17 @@ struct OpeningPanelGrid: View {
                         .frame(height: OpeningPanelTokens.Chrome.departLineHeight)
                     OpeningPanelChevronWell()
                         .frame(height: OpeningPanelTokens.Chrome.chevronWellHeight)
-                        .overlay { departChevrons }
+                        .overlay {
+                            departChevrons
+                                .padding(3)
+                        }
                 }
                 .frame(width: OpeningPanelTokens.Chrome.departReadoutWidth, alignment: .top)
-                OpeningPanelPushBar {
-                    ZStack {
-                        OpeningPanelDepartLabel()
-                            .accessibilityHidden(true)
-                        departBar
-                    }
+                OpeningPanelPushBar(columnLit: columnLit) {
+                    departBar
                 }
-                    .frame(width: OpeningPanelTokens.Chrome.departBar.width)
-                    .frame(maxHeight: .infinity)
+                .frame(width: OpeningPanelTokens.Chrome.departBar.width)
+                .frame(maxHeight: .infinity)
             }
             .padding(EdgeInsets(top: 5, leading: 8, bottom: 5, trailing: 8))
         }
@@ -535,15 +570,19 @@ struct OpeningPanelGrid: View {
 struct OpeningPanelModule<Content: View>: View {
     var tone: OpeningPanelTokens.FaceTone
     var alignment: Alignment = .top
+    /// `.mod.rp`。縁の走査が当たっているあいだだけ。
+    var glowing = false
     private var content: Content
 
     init(
         tone: OpeningPanelTokens.FaceTone,
         alignment: Alignment = .top,
+        glowing: Bool = false,
         @ViewBuilder content: () -> Content
     ) {
         self.tone = tone
         self.alignment = alignment
+        self.glowing = glowing
         self.content = content()
     }
 
@@ -551,21 +590,27 @@ struct OpeningPanelModule<Content: View>: View {
         content
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: alignment)
             .background(tone.fill)
-            .overlay {
-                Rectangle()
-                    .strokeBorder(
-                        OpeningPanelTokens.Palette.moduleEdgeOuter,
-                        lineWidth: OpeningPanelTokens.Chrome.hairline
-                    )
-            }
-            .overlay {
-                Rectangle()
-                    .strokeBorder(
-                        OpeningPanelTokens.Palette.moduleEdgeInner,
-                        lineWidth: OpeningPanelTokens.Chrome.hairline
-                    )
-                    .padding(OpeningPanelTokens.Chrome.hairline)
-            }
+            .overlay { edges }
+    }
+
+    @ViewBuilder
+    private var edges: some View {
+        if glowing {
+            Rectangle()
+                .strokeBorder(OpeningPanelTokens.Palette.moduleSweep, lineWidth: 1)
+        } else {
+            Rectangle()
+                .strokeBorder(
+                    OpeningPanelTokens.Palette.moduleEdgeOuter,
+                    lineWidth: OpeningPanelTokens.Chrome.hairline
+                )
+            Rectangle()
+                .strokeBorder(
+                    OpeningPanelTokens.Palette.moduleEdgeInner,
+                    lineWidth: OpeningPanelTokens.Chrome.hairline
+                )
+                .padding(OpeningPanelTokens.Chrome.hairline)
+        }
     }
 }
 
@@ -662,9 +707,11 @@ struct OpeningPanelRaisedControl<Content: View>: View {
 
 /// DEPART の押し棒。同心の輪は枠の外へ 4。
 struct OpeningPanelPushBar<Content: View>: View {
+    var columnLit = false
     private var content: Content
 
-    init(@ViewBuilder content: () -> Content) {
+    init(columnLit: Bool = false, @ViewBuilder content: () -> Content) {
+        self.columnLit = columnLit
         self.content = content()
     }
 
@@ -698,8 +745,24 @@ struct OpeningPanelPushBar<Content: View>: View {
             }
             .overlay {
                 RoundedRectangle(cornerRadius: 4, style: .continuous)
-                    .strokeBorder(OpeningPanelTokens.Palette.barRingMid, lineWidth: 2)
+                    .strokeBorder(
+                        columnLit
+                            ? OpeningPanelTokens.Palette.barColumnHit
+                            : OpeningPanelTokens.Palette.barRingMid,
+                        lineWidth: 2
+                    )
                     .padding(-3)
+            }
+            .overlay(alignment: .top) {
+                LinearGradient(
+                    colors: [Color.black.opacity(0.6), .clear],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: 5)
+                .offset(y: 1)
+                .mask(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                .allowsHitTesting(false)
             }
             .overlay {
                 RoundedRectangle(cornerRadius: 4, style: .continuous)
