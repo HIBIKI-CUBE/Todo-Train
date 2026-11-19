@@ -369,6 +369,128 @@ struct OpeningPanelStateTests {
         #expect(tickets.state.ticketsStage == .shown(3))
         #expect(tickets.state.confirmation(of: .tickets) == .confirmed)
         #expect(tickets.state.isLockLit(.tickets))
+        #expect(tickets.state.ticketGrowthStep == 0)
+    }
+
+    @Test func fiveTickets_cursorThenRevealOneByOne() {
+        let harness = OpeningPanelHarness(ticketCount: 5)
+        harness.state.pressMaster()
+        harness.state.pressConfirm(.tickets)
+        harness.advance(by: OpeningPanelTiming.backlight)
+        for step in 1...5 {
+            #expect(harness.state.ticketsStage == .cursor(step))
+            if step < 5 {
+                harness.advance(by: OpeningPanelTiming.ticketCursor)
+            }
+        }
+        harness.advance(by: OpeningPanelTiming.ticketAfterCursor)
+        for shown in 1...5 {
+            #expect(harness.state.ticketsStage == .shown(shown))
+            if shown < 5 {
+                harness.advance(by: OpeningPanelTiming.ticketStep)
+            }
+        }
+        #expect(harness.state.confirmation(of: .tickets) == .confirmed)
+    }
+
+    @Test func ticketGrowth_sixStepsAfterTheLamp() {
+        let harness = OpeningPanelHarness(ticketCount: 1)
+        harness.state.pressMaster()
+        harness.state.pressConfirm(.tickets)
+        harness.finishTickets()
+        #expect(harness.state.ticketGrowthStep == 0)
+        harness.advanceAlmost(OpeningPanelTiming.ticketGrowthDelay)
+        #expect(harness.state.ticketGrowthStep == 0)
+        harness.advance(by: microsecond)
+        #expect(harness.state.ticketGrowthStep == 1)
+        for step in 2...OpeningPanelTiming.ticketGrowthSteps {
+            harness.advance(by: OpeningPanelTiming.ticketGrowthStep)
+            #expect(harness.state.ticketGrowthStep == step)
+        }
+    }
+
+    @Test func repressTickets_restartsGrowth() {
+        let harness = OpeningPanelHarness(ticketCount: 1)
+        harness.state.pressMaster()
+        harness.state.pressConfirm(.tickets)
+        harness.finishTickets()
+        harness.advance(by: OpeningPanelTiming.ticketGrowthDelay)
+        harness.advance(by: OpeningPanelTiming.ticketGrowthStep)
+        #expect(harness.state.ticketGrowthStep == 2)
+        harness.state.pressConfirm(.tickets)
+        #expect(harness.state.ticketGrowthStep == 0)
+        #expect(harness.state.ticketsStage == .backlight)
+        #expect(harness.state.confirmation(of: .tickets) == .confirming)
+    }
+
+    @Test func reduceMotion_ticketsFinishAtFullGrowth() {
+        let harness = OpeningPanelHarness(ticketCount: 2, reduceMotion: true)
+        harness.state.pressMaster()
+        harness.state.pressConfirm(.tickets)
+        harness.advance(by: OpeningPanelTiming.backlight)
+        #expect(harness.state.ticketsStage == .shown(2))
+        #expect(harness.state.ticketGrowthStep == OpeningPanelTiming.ticketGrowthSteps)
+    }
+
+    @Test func sequenceBlink_exitsWithoutCommit() {
+        let harness = OpeningPanelHarness(ticketCount: 1)
+        harness.state.pressMaster()
+        harness.state.pressConfirm(.tickets)
+        harness.finishTickets()
+        harness.state.pressSequence()
+        #expect(harness.state.isSequencing)
+        #expect(harness.state.sequenceLampLit)
+        #expect(harness.log.commits == 0)
+        harness.advanceAlmost(OpeningPanelTiming.sequenceQuiet)
+        #expect(harness.state.isSequencing)
+        #expect(harness.state.sequenceLampLit)
+        harness.advance(by: microsecond)
+        #expect(!harness.state.sequenceLampLit)
+        harness.advance(by: 0.5)
+        #expect(harness.state.sequenceLampLit)
+        #expect(harness.state.isSequencing)
+        harness.advance(by: OpeningPanelTiming.sequenceBlink)
+        #expect(!harness.state.isSequencing)
+        #expect(!harness.state.sequenceLampLit)
+        #expect(harness.log.commits == 0)
+        #expect(harness.log.abandons == 1)
+        #expect(harness.feedback.cues.filter { $0 == .dull }.count == 1)
+    }
+
+    @Test func sequenceRow_startsBlinkImmediately() {
+        let harness = OpeningPanelHarness(ticketCount: 1)
+        harness.state.pressMaster()
+        harness.state.pressConfirm(.tickets)
+        harness.finishTickets()
+        harness.state.pressSequence()
+        let before = harness.feedback.cues.count
+        harness.state.noteSequenceRow(accepted: true)
+        let added = harness.feedback.cues.dropFirst(before)
+        #expect(added.contains(.light))
+        #expect(added.contains(.haptic(.operation)))
+        harness.advance(by: 0)
+        #expect(!harness.state.sequenceLampLit)
+        #expect(harness.state.isSequencing)
+        harness.state.noteSequenceRow(accepted: false)
+        #expect(harness.feedback.cues.last == .dull)
+        #expect(harness.state.isSequencing)
+        #expect(harness.log.commits == 0)
+    }
+
+    @Test func masterOffDuringSequence_doesNotCommit() {
+        let harness = OpeningPanelHarness(ticketCount: 1)
+        harness.state.pressMaster()
+        harness.state.pressConfirm(.tickets)
+        harness.finishTickets()
+        harness.state.pressSequence()
+        harness.state.pressMaster()
+        #expect(!harness.state.isPowered)
+        #expect(!harness.state.isSequencing)
+        #expect(harness.log.commits == 0)
+        #expect(harness.log.abandons == 0)
+        harness.advance(by: 4)
+        #expect(harness.log.commits == 0)
+        #expect(harness.log.abandons == 0)
     }
 
     @Test func reduceMotion_skipsStagedBootsAndHoldsChevronsDim() {
@@ -569,6 +691,7 @@ struct OpeningPanelStateTests {
 private final class OpeningPanelLog {
     var starts = 0
     var commits = 0
+    var abandons = 0
     var hubs = 0
 }
 
@@ -657,6 +780,7 @@ private final class OpeningPanelHarness {
             reduceMotion: reduceMotion,
             onStartService: { log.starts += 1 },
             onCommitSequence: { log.commits += 1 },
+            onAbandonSequence: { log.abandons += 1 },
             onShowHub: { log.hubs += 1 }
         )
     }

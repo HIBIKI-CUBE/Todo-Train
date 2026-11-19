@@ -38,6 +38,13 @@ struct OpeningPanelGrid: View {
     private let departFirst: AnyView
     private let departChevrons: AnyView
     private let departBar: AnyView
+    private let sequenceLit: Bool
+    private let todayCut: Int
+    private let todayRows: Int
+    private let todayRailLit: Bool
+    private let onTodayRail: ((CGFloat, Bool) -> Void)?
+
+    @State private var todayRailDown = false
 
     init(
         @ViewBuilder check: () -> some View = { EmptyView() },
@@ -68,7 +75,12 @@ struct OpeningPanelGrid: View {
         @ViewBuilder departStatus: () -> some View = { EmptyView() },
         @ViewBuilder departFirst: () -> some View = { EmptyView() },
         @ViewBuilder departChevrons: () -> some View = { EmptyView() },
-        @ViewBuilder departBar: () -> some View = { EmptyView() }
+        @ViewBuilder departBar: () -> some View = { EmptyView() },
+        sequenceLit: Bool = false,
+        todayCut: Int = 3,
+        todayRows: Int = 5,
+        todayRailLit: Bool = false,
+        onTodayRail: ((CGFloat, Bool) -> Void)? = nil
     ) {
         self.check = AnyView(check())
         self.phone = AnyView(phone())
@@ -99,6 +111,11 @@ struct OpeningPanelGrid: View {
         self.departFirst = AnyView(departFirst())
         self.departChevrons = AnyView(departChevrons())
         self.departBar = AnyView(departBar())
+        self.sequenceLit = sequenceLit
+        self.todayCut = todayCut
+        self.todayRows = todayRows
+        self.todayRailLit = todayRailLit
+        self.onTodayRail = onTodayRail
     }
 
     var body: some View {
@@ -365,24 +382,25 @@ struct OpeningPanelGrid: View {
                     OpeningPanelLegend(text: "TICKETS")
                     Spacer(minLength: 0)
                     ZStack {
-                        OpeningPanelSeqKey()
+                        OpeningPanelSeqKey(lit: sequenceLit)
+                            .accessibilityHidden(true)
                         sequenceKey
                     }
                     .frame(width: 36, height: 20)
                     ZStack {
                         OpeningPanelConfirmKey()
+                            .accessibilityHidden(true)
                         ticketsKey
                     }
                     .frame(width: 64, height: 30)
                 }
                 .frame(height: 30)
                 HStack(alignment: .top, spacing: 4) {
-                    OpeningPanelSlotNames()
+                    OpeningPanelSlotNames(count: todayRows)
                     ticketsLeading
                     OpeningPanelTodayMark()
-                    OpeningPanelTodayRail()
-                        .padding(.leading, -2)
-                    OpeningPanelWindow { tickets }
+                    todayRail
+                    OpeningPanelWindow(exposesContent: true) { tickets }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
                 .frame(maxHeight: .infinity, alignment: .top)
@@ -391,6 +409,30 @@ struct OpeningPanelGrid: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("TICKETS")
+    }
+
+    private var todayRail: some View {
+        OpeningPanelTodayRail(
+            rows: max(todayRows, 5),
+            cutAfter: todayCut,
+            lit: todayRailLit
+        )
+        .padding(.leading, -2)
+        .contentShape(Rectangle())
+        .gesture(todayRailGesture)
+    }
+
+    private var todayRailGesture: some Gesture {
+        DragGesture(minimumDistance: 0, coordinateSpace: .local)
+            .onChanged { value in
+                guard onTodayRail != nil else { return }
+                let began = !todayRailDown
+                todayRailDown = true
+                onTodayRail?(value.location.y, began)
+            }
+            .onEnded { _ in
+                todayRailDown = false
+            }
     }
 
     private var loadModule: some View {
@@ -451,7 +493,7 @@ struct OpeningPanelGrid: View {
                     .frame(height: 11)
                     OpeningPanelWindow { departStatus }
                         .frame(height: OpeningPanelTokens.Chrome.departLineHeight)
-                    OpeningPanelWindow { departFirst }
+                    OpeningPanelWindow(exposesContent: true) { departFirst }
                         .frame(height: OpeningPanelTokens.Chrome.departLineHeight)
                     OpeningPanelChevronWell()
                         .frame(height: OpeningPanelTokens.Chrome.chevronWellHeight)
