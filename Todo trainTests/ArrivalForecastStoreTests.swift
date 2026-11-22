@@ -57,6 +57,16 @@ final class HoldingForecastEngine: ArrivalForecasting {
 
 @MainActor
 struct ArrivalForecastStoreTests {
+    @Test func lookup_returnsMissWithoutCachedEntry() throws {
+        let container = try AppModelContainer.make(inMemory: true)
+        let context = ModelContext(container)
+        let ticket = Ticket(title: "レビュー", estimatedSeconds: 30 * 60)
+        context.insert(ticket)
+        let store = ArrivalForecastStore()
+        #expect(store.cachedEntry(for: ticket.id) == nil)
+        #expect(store.lookup(ticket: ticket, sessions: []) == .miss)
+    }
+
     @Test func refresh_reusesCacheAcrossNewArrivals() async throws {
         let container = try AppModelContainer.make(inMemory: true)
         let context = ModelContext(container)
