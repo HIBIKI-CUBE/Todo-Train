@@ -281,29 +281,14 @@ struct TimetableModule: View {
         }
     }
 
-    @ViewBuilder
     private var timetableFace: some View {
-        if stageNumber >= 1 && stageNumber <= OpeningPanelTiming.timetableFillCount {
-            TimetableFill(fraction: CGFloat(stageNumber) / CGFloat(OpeningPanelTiming.timetableFillCount))
-        } else if stageNumber == OpeningPanelTiming.timetableFillCount + 1 {
-            Text("IN TEST")
-                .font(.system(size: 11, weight: .medium))
-                .tracking(2.2)
-                .foregroundStyle(OpeningPanelTokens.TimetableChrome.amberSolid)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if isDrawn {
-            TimetableTape(
-                entries: board.entries,
-                range: board.range,
-                next: board.next,
-                now: now,
-                calendar: calendar,
-                onToggleEntry: onToggleEntry
-            )
-            .padding(.vertical, OpeningPanelTokens.RunStatus.verticalInset)
-        } else {
-            Color.clear
-        }
+        TimetableColumnFace(
+            stage: stage,
+            board: board,
+            now: now,
+            calendar: calendar,
+            onToggleEntry: onToggleEntry
+        )
     }
 
     private var footer: some View {
@@ -322,6 +307,217 @@ struct TimetableModule: View {
             Spacer(minLength: 0)
         }
         .frame(height: OpeningPanelTokens.Chrome.timetableKeySize.height)
+    }
+}
+
+/// 時間割の窓の中身。充填・IN TEST・描画を、プレビューと同じ段で分ける。
+struct TimetableColumnFace: View {
+    var stage: OpeningPanelTimetableStage
+    var board: OpeningTimetableBoard
+    var now: Date
+    var calendar: Calendar = .current
+    var onToggleEntry: (OpeningTimetableEntry) -> Void = { _ in }
+
+    private var stageNumber: Int { stage.stageNumber }
+
+    private var isDrawn: Bool {
+        stageNumber == OpeningPanelTiming.timetableFillCount + 2
+    }
+
+    var body: some View {
+        Group {
+            if stageNumber >= 1 && stageNumber <= OpeningPanelTiming.timetableFillCount {
+                TimetableFill(fraction: CGFloat(stageNumber) / CGFloat(OpeningPanelTiming.timetableFillCount))
+            } else if stageNumber == OpeningPanelTiming.timetableFillCount + 1 {
+                Text("IN TEST")
+                    .font(.system(size: 11, weight: .medium))
+                    .tracking(2.2)
+                    .foregroundStyle(OpeningPanelTokens.TimetableChrome.amberSolid)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if isDrawn {
+                TimetableTape(
+                    entries: board.entries,
+                    range: board.range,
+                    next: RunStatusLogic.nextMarkers(
+                        now: now,
+                        adoptedBlocks: board.entries.filter(\.stops).map(\.interval)
+                    ),
+                    now: now,
+                    calendar: calendar,
+                    onToggleEntry: onToggleEntry
+                )
+                .padding(.vertical, OpeningPanelTokens.RunStatus.verticalInset)
+            } else {
+                Color.clear
+            }
+        }
+    }
+}
+
+/// 描画後だけ秒で送る。格子そのものは描き直さない。
+struct TimetableColumnClock: View {
+    var stage: OpeningPanelTimetableStage
+    var board: OpeningTimetableBoard
+    var now: Date
+    var calendar: Calendar = .current
+    var onToggleEntry: (OpeningTimetableEntry) -> Void = { _ in }
+
+    var body: some View {
+        if stage == .drawn {
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                TimetableColumnFace(
+                    stage: stage,
+                    board: board,
+                    now: context.date,
+                    calendar: calendar,
+                    onToggleEntry: onToggleEntry
+                )
+            }
+        } else {
+            TimetableColumnFace(
+                stage: stage,
+                board: board,
+                now: now,
+                calendar: calendar,
+                onToggleEntry: onToggleEntry
+            )
+        }
+    }
+}
+
+/// 描画後だけ秒で送る運転状況の列。
+struct RunStatusColumnClock: View {
+    var stage: OpeningPanelTimetableStage
+    var board: OpeningTimetableBoard
+    var calendar: Calendar = .current
+
+    var body: some View {
+        if stage == .drawn {
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                RunStatusColumn(
+                    bands: board.bands,
+                    range: board.range,
+                    now: context.date,
+                    reading: RunStatusLogic.nowReading(
+                        now: context.date,
+                        range: board.range,
+                        bands: board.bands
+                    ),
+                    calendar: calendar
+                )
+                .padding(.horizontal, OpeningPanelTokens.RunStatus.horizontalInset)
+                .padding(.vertical, OpeningPanelTokens.RunStatus.verticalInset)
+            }
+        }
+    }
+}
+
+struct TimetableRangeReadout: View {
+    var board: OpeningTimetableBoard
+    var drawn: Bool
+
+    var body: some View {
+        Text(drawn ? board.range.windowLabel : "")
+            .font(.system(size: 10, weight: .medium, design: .monospaced))
+            .foregroundStyle(OpeningPanelTokens.TimetableChrome.amberSolid)
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+            .accessibilityLabel("範囲")
+            .accessibilityValue(drawn ? board.range.windowLabel : "")
+    }
+}
+
+/// 見出しの隣に幅を足さない。読みだけ盤の値にする。
+struct TimetableSlotMark: View {
+    var label: String
+    var value: String
+
+    var body: some View {
+        Color.clear
+            .frame(width: 0, height: 0)
+            .accessibilityElement()
+            .accessibilityLabel(label)
+            .accessibilityValue(value)
+    }
+}
+
+enum OpeningPanelTimetableSpeech {
+    static func runStatus(_ reading: RunStatusNow) -> String {
+        switch reading.caseKind {
+        case .ridingNormal:
+            return RunStatusNowCopy.normalLong
+        case .beforeStart:
+            return RunStatusNowCopy.beforeStart
+        case .waitingForNormal(let status, _, _):
+            return RunStatusColumnLayout.longName(status)
+        case .afterLastNormal(let status):
+            return RunStatusColumnLayout.longName(status)
+        case .afterRangeEnd:
+            return RunStatusNowCopy.serviceEndedToday
+        }
+    }
+}
+
+struct TimetableConfirmKey: View {
+    var state: OpeningPanelState
+    var onPress: () -> Void
+
+    private var standbyAvailable: Bool {
+        state.isPowered && state.confirmation(of: .timetable) == .unconfirmed
+    }
+
+    private var okLit: Bool {
+        guard state.isPowered else { return false }
+        switch state.confirmation(of: .timetable) {
+        case .confirming, .confirmed:
+            return true
+        case .unconfirmed:
+            return false
+        }
+    }
+
+    var body: some View {
+        Button(action: onPress) {
+            OpeningPanelConfirmKey(
+                topAvailable: standbyAvailable,
+                bottomLit: okLit,
+                sunk: okLit,
+                showsNextEdge: state.nextAutomaticModule == .timetable
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .buttonStyle(.plain)
+        .openingPanelAction(.timetableKey, perform: onPress)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("TT")
+        .accessibilityValue(okLit ? "OK" : (standbyAvailable ? "STBY" : "消灯"))
+        .accessibilityHint(hint)
+    }
+
+    private var hint: String {
+        if !state.isPowered {
+            return "電気が来ると確認できます"
+        }
+        if state.confirmation(of: .timetable) == .unconfirmed {
+            return "予定表の確認を始めます"
+        }
+        return "予定表の確認をやり直します"
+    }
+}
+
+struct TimetableScaleKey: View {
+    var onPress: () -> Void
+
+    var body: some View {
+        Button(action: onPress) {
+            Color.clear
+                .contentShape(Rectangle())
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .buttonStyle(.plain)
+        .openingPanelAction(.scaleToggle, perform: onPress)
+        .accessibilityHidden(true)
     }
 }
 

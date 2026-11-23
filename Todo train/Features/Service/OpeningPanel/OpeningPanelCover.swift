@@ -36,7 +36,10 @@ struct OpeningPanelCover: View {
                 .ignoresSafeArea()
             if let panelState {
                 let phone = phoneReading(powered: panelState.isPowered)
-                let loadTarget = loadTarget(for: panelState, now: loadNow)
+                let live = liveBoard(for: panelState, now: loadNow)
+                let board = live.board
+                let loadTarget = live.target
+                let drawn = panelState.timetableStage == .drawn
                 let loadDrawing = OpeningPanelLoadLogic.drawing(loadPlayer.sample)
                 OpeningPanelGrid(
                     phone: {
@@ -58,6 +61,48 @@ struct OpeningPanelCover: View {
                     hourMode: {
                         ClockHourModeKey(state: panelState) {
                             panelState.pressHourMode()
+                        }
+                    },
+                    scaleToggle: {
+                        TimetableScaleKey {
+                            panelState.pressHourMode()
+                        }
+                    },
+                    timetableTitle: {
+                        TimetableSlotMark(
+                            label: "範囲",
+                            value: drawn ? board.range.windowLabel : ""
+                        )
+                    },
+                    range: {
+                        TimetableRangeReadout(board: board, drawn: drawn)
+                    },
+                    runStatusTitle: {
+                        TimetableSlotMark(
+                            label: "運転状況",
+                            value: drawn ? OpeningPanelTimetableSpeech.runStatus(board.reading) : ""
+                        )
+                    },
+                    timetable: {
+                        TimetableColumnClock(
+                            stage: panelState.timetableStage,
+                            board: board,
+                            now: loadNow,
+                            calendar: sessionManager.calendar
+                        ) { entry in
+                            sessionManager.toggleOpeningTimetableStop(entry)
+                        }
+                    },
+                    runStatus: {
+                        RunStatusColumnClock(
+                            stage: panelState.timetableStage,
+                            board: board,
+                            calendar: sessionManager.calendar
+                        )
+                    },
+                    timetableKey: {
+                        TimetableConfirmKey(state: panelState) {
+                            panelState.pressConfirm(.timetable)
                         }
                     },
                     sequenceKey: {
@@ -131,7 +176,8 @@ struct OpeningPanelCover: View {
                             state: panelState,
                             model: ticketsModel
                         )
-                    }
+                    },
+                    timetableTwentyFour: panelState.hourCycle == .twentyFour
                 )
                 .onChange(of: loadTarget) { _, target in
                     loadPlayer.set(target)
@@ -146,6 +192,9 @@ struct OpeningPanelCover: View {
         }
         .statusBarHidden(true)
         .persistentSystemOverlays(.hidden)
+        .task {
+            await sessionManager.refreshCalendarBoardIfAuthorized()
+        }
         .task {
             guard panelState == nil else { return }
             syncTickets()
@@ -217,7 +266,10 @@ struct OpeningPanelCover: View {
         )
     }
 
-    private func loadTarget(for state: OpeningPanelState, now: Date) -> OpeningPanelLoadTarget {
+    private func liveBoard(
+        for state: OpeningPanelState,
+        now: Date
+    ) -> (board: OpeningTimetableBoard, target: OpeningPanelLoadTarget) {
         let _ = OpeningPanelRedrawProbe.bump("loadTarget")
         let lit = OpeningPanelLoadLogic.isLit(
             powered: state.isPowered,
@@ -228,15 +280,17 @@ struct OpeningPanelCover: View {
         let tickets = above.map { ServiceLoadTicket(durationMinutes: $0.actualMinutes) }
         let board = sessionManager.openingTimetableBoard(
             now: now,
+            isTwentyFourHour: state.hourCycle == .twentyFour,
             ticketsAboveCutoff: tickets
         )
         let span = max(1, Int(board.range.endsAt.timeIntervalSince(now) / 60))
-        return OpeningPanelLoadTarget(
+        let target = OpeningPanelLoadTarget(
             lit: lit,
             freeMinutes: Double(board.load.freeMinutes),
             spanMinutes: Double(span),
             tickets: lit ? above.map { Double($0.actualMinutes) } : []
         )
+        return (board, target)
     }
 
     private func beginCommTest(_ state: OpeningPanelState) {

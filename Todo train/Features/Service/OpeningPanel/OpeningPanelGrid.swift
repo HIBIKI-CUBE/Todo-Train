@@ -51,6 +51,7 @@ struct OpeningPanelGrid: View {
     private let todayRows: Int
     private let todayRailLit: Bool
     private let onTodayRail: ((CGFloat, Bool) -> Void)?
+    private let timetableTwentyFour: Bool
 
     @State private var todayRailDown = false
     @State private var hitActions = OpeningPanelHitActions()
@@ -98,7 +99,8 @@ struct OpeningPanelGrid: View {
         todayCut: Int = 3,
         todayRows: Int = 5,
         todayRailLit: Bool = false,
-        onTodayRail: ((CGFloat, Bool) -> Void)? = nil
+        onTodayRail: ((CGFloat, Bool) -> Void)? = nil,
+        timetableTwentyFour: Bool = false
     ) {
         self.check = AnyView(check())
         self.phone = AnyView(phone())
@@ -142,6 +144,7 @@ struct OpeningPanelGrid: View {
         self.todayRows = todayRows
         self.todayRailLit = todayRailLit
         self.onTodayRail = onTodayRail
+        self.timetableTwentyFour = timetableTwentyFour
     }
 
     var body: some View {
@@ -368,10 +371,10 @@ struct OpeningPanelGrid: View {
             OpeningPanelLegend(text: "TIMETABLE")
             timetableTitle
             ZStack {
-                OpeningPanelScaleToggle()
+                OpeningPanelScaleToggle(twentyFour: timetableTwentyFour)
                 scaleToggle
             }
-            OpeningPanelWindow { range }
+            OpeningPanelWindow(exposesContent: true) { range }
                 .frame(
                     width: OpeningPanelTokens.Chrome.rangeWindow.width,
                     height: OpeningPanelTokens.Chrome.rangeWindow.height
@@ -387,9 +390,9 @@ struct OpeningPanelGrid: View {
 
     private var timetableRow: some View {
         HStack(spacing: OpeningPanelTokens.RunStatus.columnGap) {
-            OpeningPanelWindow { timetable }
+            OpeningPanelWindow(exposesContent: true) { timetable }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-            OpeningPanelWindow(label: "運転状況") { runStatus }
+            OpeningPanelWindow(label: "運転状況", exposesContent: true) { runStatus }
                 .frame(width: OpeningPanelTokens.RunStatus.width)
         }
         .frame(maxHeight: .infinity)
@@ -634,7 +637,13 @@ struct OpeningPanelWindow<Content: View>: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
 
         if exposesContent {
-            chrome.accessibilityElement(children: .contain)
+            if let label, !label.isEmpty {
+                chrome
+                    .accessibilityElement(children: .contain)
+                    .accessibilityLabel(label)
+            } else {
+                chrome.accessibilityElement(children: .contain)
+            }
         } else {
             chrome
                 .accessibilityElement(children: .ignore)
