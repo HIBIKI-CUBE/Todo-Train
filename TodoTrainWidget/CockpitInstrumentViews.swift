@@ -55,6 +55,35 @@ enum CockpitCompactTimerWidth {
     static func frameWidth(of template: String) -> CGFloat {
         width(of: template) + timerSlack
     }
+
+    /// Widest count-up `Text(timerInterval:)` may reserve for this template.
+    /// `CockpitGaugeRange.countUp` looks six hours ahead (`360:00`) and the
+    /// compact pill grows to that width while the digits on screen are shorter.
+    static func bucketMaxSeconds(matching template: String) -> TimeInterval {
+        let minuteDigits: Int
+        let includesSeconds: Bool
+        if template.contains("分") {
+            minuteDigits = max(template.filter(\.isNumber).count, 1)
+            includesSeconds = false
+        } else {
+            minuteDigits = max(template.split(separator: ":").first?.filter(\.isNumber).count ?? 1, 1)
+            includesSeconds = true
+        }
+        var maxMinutes = 1
+        for _ in 0..<minuteDigits {
+            maxMinutes *= 10
+        }
+        maxMinutes -= 1
+        if includesSeconds {
+            return TimeInterval(maxMinutes * 60 + 59)
+        }
+        return TimeInterval(maxMinutes * 60)
+    }
+
+    static func countUpRange(since start: Date, template: String) -> ClosedRange<Date> {
+        let end = start.addingTimeInterval(max(bucketMaxSeconds(matching: template), 1))
+        return start...end
+    }
 }
 
 /// Compact Dynamic Island trailing. The width is the monospaced template, not the
@@ -81,6 +110,7 @@ struct CockpitCompactTimer: View {
                 width: CockpitCompactTimerWidth.frameWidth(of: template),
                 alignment: .trailing
             )
+            .fixedSize(horizontal: true, vertical: false)
     }
 
     private var template: String {
@@ -124,7 +154,10 @@ struct CockpitCompactTimer: View {
         case .alert, .overtime:
             if let scheduledAt {
                 Text(
-                    timerInterval: CockpitGaugeRange.countUp(since: scheduledAt),
+                    timerInterval: CockpitCompactTimerWidth.countUpRange(
+                        since: scheduledAt,
+                        template: template
+                    ),
                     countsDown: false,
                     showsHours: false
                 )

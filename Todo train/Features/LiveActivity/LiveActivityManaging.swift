@@ -23,6 +23,14 @@ struct LiveActivitySessionContent: Equatable, Sendable {
     var promptKeepsTimerColor: Bool = false
 }
 
+/// Whether a Live Activity has anything to draw. A blank title starts an
+/// activity whose Dynamic Island and Lock Screen presentations are empty.
+enum LiveActivityLifecycle {
+    static func shouldPresent(_ content: LiveActivitySessionContent) -> Bool {
+        !content.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+}
+
 protocol LiveActivityManaging: Sendable {
     var areActivitiesEnabled: Bool { get }
     func startOrUpdate(_ content: LiveActivitySessionContent)
@@ -48,6 +56,10 @@ final class InMemoryLiveActivityManager: LiveActivityManaging {
     }
 
     func startOrUpdate(_ content: LiveActivitySessionContent) {
+        guard LiveActivityLifecycle.shouldPresent(content) else {
+            end()
+            return
+        }
         current = content
         if content.alertTitle != nil {
             alertCount += 1
@@ -62,20 +74,38 @@ final class InMemoryLiveActivityManager: LiveActivityManaging {
 
 #if canImport(ActivityKit)
 import ActivityKit
+#if canImport(UIKit)
+import UIKit
+#endif
 
 @MainActor
 final class LiveActivityManager: LiveActivityManaging {
     static let shared = LiveActivityManager()
 
     private var currentSessionID: UUID?
+    private var currentActivityID: String?
+    private var updatesTask: Task<Void, Never>?
 
-    private init() {}
+    private init() {
+        // `Activity.activities` is often empty during the first moments of launch.
+        // Activities restored after that still have to be ended, or a ride that
+        // already finished stays on the island and the Lock Screen.
+        updatesTask = Task { @MainActor [weak self] in
+            for await activity in Activity<TodoTrainActivityAttributes>.activityUpdates {
+                self?.enforce(activity)
+            }
+        }
+    }
 
     var areActivitiesEnabled: Bool {
         ActivityAuthorizationInfo().areActivitiesEnabled
     }
 
     func startOrUpdate(_ content: LiveActivitySessionContent) {
+        guard LiveActivityLifecycle.shouldPresent(content) else {
+            end()
+            return
+        }
         guard areActivitiesEnabled else { return }
 
         let state = TodoTrainActivityAttributes.ContentState(
@@ -100,35 +130,86 @@ final class LiveActivityManager: LiveActivityManaging {
         let activityContent = ActivityContent(state: state, staleDate: staleDate)
         let alert = Self.alertConfiguration(title: content.alertTitle, body: content.alertBody)
 
-        if currentSessionID == content.sessionID,
-           let activity = Activity<TodoTrainActivityAttributes>.activities.first {
+        let running = runningActivities()
+        if let activity = running.first(where: {
+            $0.id == currentActivityID && $0.attributes.sessionID == content.sessionID
+        }) ?? running.first(where: { $0.attributes.sessionID == content.sessionID }) {
+            currentSessionID = content.sessionID
+            currentActivityID = activity.id
+            endActivities(running.filter { $0.id != activity.id } + lingeringActivities())
             Task {
                 await activity.update(activityContent, alertConfiguration: alert)
             }
             return
         }
 
-        end()
+        endActivities(running + lingeringActivities())
         currentSessionID = content.sessionID
 
         let attributes = TodoTrainActivityAttributes(sessionID: content.sessionID)
         do {
-            _ = try Activity.request(
+            let activity = try Activity.request(
                 attributes: attributes,
                 content: activityContent,
                 pushType: nil
             )
+            currentActivityID = activity.id
         } catch {
             currentSessionID = nil
+            currentActivityID = nil
         }
     }
 
     func end() {
         currentSessionID = nil
-        for activity in Activity<TodoTrainActivityAttributes>.activities {
-            Task {
-                await activity.end(nil, dismissalPolicy: .immediate)
+        currentActivityID = nil
+        endActivities(runningActivities() + lingeringActivities())
+    }
+
+    /// `end(nil)` clears the content and the island stays at width 0 when the
+    /// unstructured task is suspended before dismissal. Pass the last content
+    /// and keep the process up until ActivityKit finishes.
+    private func endActivities(_ activities: [Activity<TodoTrainActivityAttributes>]) {
+        let finals = activities.map { activity in
+            (activity, ActivityContent(state: activity.content.state, staleDate: nil as Date?))
+        }
+        guard !finals.isEmpty else { return }
+        #if canImport(UIKit)
+        let token = UIApplication.shared.beginBackgroundTask(withName: "todotrain.live-activity.end")
+        #endif
+        Task {
+            for (activity, content) in finals {
+                await activity.end(content, dismissalPolicy: .immediate)
             }
+            #if canImport(UIKit)
+            if token != .invalid {
+                UIApplication.shared.endBackgroundTask(token)
+            }
+            #endif
+        }
+    }
+
+    private func enforce(_ activity: Activity<TodoTrainActivityAttributes>) {
+        guard activity.id != currentActivityID else { return }
+        switch activity.activityState {
+        case .dismissed:
+            return
+        case .active, .ended, .stale:
+            endActivities([activity])
+        @unknown default:
+            endActivities([activity])
+        }
+    }
+
+    private func runningActivities() -> [Activity<TodoTrainActivityAttributes>] {
+        Activity<TodoTrainActivityAttributes>.activities.filter {
+            $0.activityState == .active || $0.activityState == .stale
+        }
+    }
+
+    private func lingeringActivities() -> [Activity<TodoTrainActivityAttributes>] {
+        Activity<TodoTrainActivityAttributes>.activities.filter {
+            $0.activityState == .ended
         }
     }
 

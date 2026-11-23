@@ -883,6 +883,14 @@ enum CockpitCompactMark {
     static func stroke(for side: CGFloat) -> CGFloat {
         max(2.5, side * 0.14)
     }
+
+    /// Square that fills the minimum minimal circle after its margins.
+    /// Larger than this, plus `minimalEdgeInset`, pushes the island to its max width.
+    static var minimalSide: CGFloat {
+        let canvas = CockpitSizeContract.islandMinimalMin.width
+        let inset = CockpitSafeChrome.minimalEdgeInset
+        return max(legibleSide, canvas - inset * 2)
+    }
 }
 
 struct CockpitCompactLeadingGauge: View {
@@ -907,7 +915,20 @@ struct CockpitCompactLeadingGauge: View {
                 .accessibilityHidden(true)
         }
         .frame(width: side, height: side)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .fixedSize()
         .accessibilityLabel("進捗")
+    }
+}
+
+/// Minimal Dynamic Island. A ring with no frame takes the system's maximum
+/// width (45pt) even when the mark is smaller.
+struct CockpitMinimalMark: View {
+    let model: CockpitDisplayModel
+
+    var body: some View {
+        let side = CockpitCompactMark.minimalSide
+        CockpitRingGauge(model: model)
+            .frame(width: side, height: side)
+            .fixedSize()
     }
 }

@@ -105,34 +105,38 @@ final class AlarmKitScheduler: AlarmScheduling {
     }
 
     func cancelAll() {
-        let ids = trackedAlarmIDs.union(previousAlarmStates.keys).union(scheduleTasks.keys)
-        for task in scheduleTasks.values { task.cancel() }
-        scheduleTasks.removeAll()
-        trackedAlarmIDs.removeAll()
-        for id in ids {
-            sessionOriginatedIDs.insert(id)
-            try? AlarmManager.shared.cancel(id: id)
-        }
+        cancel(ids: AlarmCancellation.ids(
+            tracked: knownAlarmIDs(),
+            system: systemAlarmIDs(),
+            keep: nil
+        ))
     }
 
     func cancelAllExcept(sessionID: UUID?) {
         let keep = sessionID.map { SessionEndSchedule.alarmID(sessionID: $0) }
-        let ids = trackedAlarmIDs.union(previousAlarmStates.keys).union(scheduleTasks.keys)
-        for id in ids where id != keep {
+        cancel(ids: AlarmCancellation.ids(
+            tracked: knownAlarmIDs(),
+            system: systemAlarmIDs(),
+            keep: keep
+        ))
+    }
+
+    /// In-memory IDs are empty after a relaunch. AlarmKit still has the Live Activity.
+    private func knownAlarmIDs() -> Set<UUID> {
+        trackedAlarmIDs.union(previousAlarmStates.keys).union(scheduleTasks.keys)
+    }
+
+    private func systemAlarmIDs() -> Set<UUID> {
+        Set((try? AlarmManager.shared.alarms)?.map(\.id) ?? [])
+    }
+
+    private func cancel(ids: Set<UUID>) {
+        for id in ids {
             scheduleTasks.removeValue(forKey: id)?.cancel()
             sessionOriginatedIDs.insert(id)
             trackedAlarmIDs.remove(id)
             previousAlarmStates.removeValue(forKey: id)
             try? AlarmManager.shared.cancel(id: id)
-        }
-        // Also cancel any system-visible alarms we may have lost track of.
-        if let systemAlarms = try? AlarmManager.shared.alarms {
-            for alarm in systemAlarms where alarm.id != keep {
-                sessionOriginatedIDs.insert(alarm.id)
-                trackedAlarmIDs.remove(alarm.id)
-                previousAlarmStates.removeValue(forKey: alarm.id)
-                try? AlarmManager.shared.cancel(id: alarm.id)
-            }
         }
     }
 

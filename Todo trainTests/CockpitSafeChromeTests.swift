@@ -206,6 +206,42 @@ final class CockpitSafeChromeTests: XCTestCase {
         )
     }
 
+    /// Compact leading is the ring, not the full pill. Minimal stays inside the small circle.
+    func testCompactAndMinimalMarksMatchTheirContent() {
+        XCTAssertLessThan(
+            CockpitCompactMark.slotSide,
+            CockpitSizeContract.islandCompactSide.width - 20
+        )
+        XCTAssertGreaterThanOrEqual(CockpitCompactMark.slotSide, CockpitCompactMark.legibleSide)
+        let minimal = CockpitCompactMark.minimalSide
+        let occupied = minimal + CockpitSafeChrome.minimalEdgeInset * 2
+        XCTAssertLessThanOrEqual(occupied, CockpitSizeContract.islandMinimalMin.width + 0.01)
+        XCTAssertGreaterThanOrEqual(minimal, CockpitCompactMark.legibleSide)
+        XCTAssertLessThan(minimal, CockpitSizeContract.islandMinimalMaxWidth)
+    }
+
+    /// Overtime count-up must not reserve the six-hour "360:00" string.
+    func testCountUpRangeStaysInsideTheTemplateWidth() {
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let template = CockpitCompactTimerWidth.template(remaining: 75 * 60, limitedWidth: false)
+        XCTAssertEqual(template, "00:00")
+        let range = CockpitCompactTimerWidth.countUpRange(since: start, template: template)
+        let span = range.upperBound.timeIntervalSince(start)
+        XCTAssertLessThan(span, 6 * 3600)
+        let widest = CockpitCompactTimerWidth.template(remaining: span, limitedWidth: false)
+        XCTAssertEqual(
+            CockpitCompactTimerWidth.width(of: widest),
+            CockpitCompactTimerWidth.width(of: template)
+        )
+        let short = CockpitCompactTimerWidth.template(remaining: 90, limitedWidth: false)
+        let shortSpan = CockpitCompactTimerWidth.countUpRange(since: start, template: short)
+            .upperBound.timeIntervalSince(start)
+        XCTAssertEqual(
+            CockpitCompactTimerWidth.template(remaining: shortSpan, limitedWidth: false),
+            short
+        )
+    }
+
     func testCardCornersKeepAControlInside() {
         let canvases: [(CockpitSafeSurface, CGSize)] = [
             (.lockScreen, CGSize(width: 408, height: 160)),

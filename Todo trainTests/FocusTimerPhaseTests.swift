@@ -166,6 +166,6 @@ final class FocusTimerPhaseTests: XCTestCase {
         let end = start.addingTimeInterval(-30)
         let range = CockpitTimerInterval.countdown(to: end, from: start)
         XCTAssertEqual(range.lowerBound, start)
-        XCTAssertEqual(range.upperBound, start)
+        XCTAssertEqual(range.upperBound.timeIntervalSince(start), 1, accuracy: 0.001)
     }
 }
