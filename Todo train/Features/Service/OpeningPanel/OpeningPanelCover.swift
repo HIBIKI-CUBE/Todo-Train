@@ -270,7 +270,7 @@ struct OpeningPanelCover: View {
                 serviceAlreadyRunning: serviceAlreadyRunning,
                 onStartService: beginServiceFromMaster,
                 onCommitSequence: { model.commitSequenceOrder(in: context) },
-                onAbandonSequence: { model.dropPicks() },
+                onAbandonSequence: { model.abandonSequence() },
                 onShowHub: { dismiss() }
             )
             await Task.yield()
@@ -297,7 +297,7 @@ struct OpeningPanelCover: View {
                 loadNow = Date()
                 commModel.showIdle()
             } else {
-                ticketsModel.dropPicks()
+                ticketsModel.abandonSequence()
                 commModel.reset()
             }
             refreshPhone()
@@ -422,7 +422,9 @@ struct OpeningPanelCover: View {
                 now: loadNow,
                 isTwentyFourHour: state.timetableTwentyFour
             ).load.freeMinutes
-            guard ticketsModel.beginSequence(
+            guard OpeningPanelTickets.enterSequence(
+                state: state,
+                model: ticketsModel,
                 sessions: sessions,
                 freeMinutes: free,
                 now: loadNow,
@@ -432,7 +434,6 @@ struct OpeningPanelCover: View {
                 state.rejectTouch()
                 return
             }
-            state.pressSequence()
             return
         }
         if ticketsModel.sequencePhase == .result {

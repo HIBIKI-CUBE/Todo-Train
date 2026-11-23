@@ -93,8 +93,10 @@ struct OpeningPanelDepartTests {
         tickets.forEach { context.insert($0) }
         let model = OpeningPanelTicketsModel()
         model.sync(tickets: tickets, sessions: [])
-        model.select(tickets[2].id)
-        model.select(tickets[0].id)
+        #expect(model.beginSequence(sessions: [], freeMinutes: 1_000, in: context, seed: 1))
+        #expect(model.chooseSequencePile(0))
+        model.finishSequenceEarly()
+        let expected = model.rows.map(\.id)
 
         let seen = DepartCommitProbe()
         let box = DepartStateBox()
@@ -111,6 +113,7 @@ struct OpeningPanelDepartTests {
         #expect(harness.state.confirmation(of: .tickets) == .confirmed)
         harness.state.pressSequence()
         #expect(harness.state.isSequencing)
+        #expect(model.engine != nil)
         let before = harness.feedback.cues.count
         harness.state.pressDepart()
         let added = Array(harness.feedback.cues.dropFirst(before))
@@ -121,9 +124,9 @@ struct OpeningPanelDepartTests {
         #expect(harness.state.hasDeparted)
         #expect(harness.state.departBarDepth == 1)
         #expect(added == [.heavy, .haptic(.depart)])
-        #expect(model.picks.isEmpty)
-        #expect(model.rows.map(\.id) == [tickets[2].id, tickets[0].id, tickets[1].id])
-        #expect(tickets.map(\.sortOrder) == [1, 2, 0])
+        #expect(model.engine == nil)
+        #expect(model.rows.map(\.id) == expected)
+        #expect(tickets.sorted { $0.sortOrder < $1.sortOrder }.map(\.id) == expected)
         #expect(harness.log.hubs == 0)
         harness.advance(by: OpeningPanelTiming.hubSwitch - microsecond)
         #expect(harness.log.hubs == 0)

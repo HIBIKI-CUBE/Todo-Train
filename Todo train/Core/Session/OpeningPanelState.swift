@@ -266,7 +266,7 @@ final class OpeningPanelState {
     private let feedback: any OpeningPanelFeedback
     private let onStartService: () -> Void
     private let onCommitSequence: () -> Void
-    /// 仕分けは時間では抜けない。電源を切ったときの破棄は画面側の dropPicks。
+    /// 仕分けは時間では抜けない。電源を切ったときの破棄は画面側の abandonSequence。
     private let onAbandonSequence: () -> Void
     private let onShowHub: () -> Void
     /// 運行中に盤を開いたとき。MASTER は運行を始め直さない。
