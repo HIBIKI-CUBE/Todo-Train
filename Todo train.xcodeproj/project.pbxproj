@@ -49,6 +49,9 @@
 		F086C124302B4E710022EBAD /* Todo train/Models/NudgeEventRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = F086D124302B4E710022EBAD /* Todo train/Models/NudgeEventRecord.swift */; };
 		F086C125302B4E710022EBAD /* Todo train/App/AppSchemaV6+Frozen.swift in Sources */ = {isa = PBXBuildFile; fileRef = F086D125302B4E710022EBAD /* Todo train/App/AppSchemaV6+Frozen.swift */; };
 		F086C126302B4E710022EBAD /* Todo train/Core/Estimate/ReestimateRecords.swift in Sources */ = {isa = PBXBuildFile; fileRef = F086D126302B4E710022EBAD /* Todo train/Core/Estimate/ReestimateRecords.swift */; };
+		F086C127302B4E710022EBAD /* Todo train/Models/RideSummaryCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = F086D127302B4E710022EBAD /* Todo train/Models/RideSummaryCache.swift */; };
+		F086C128302B4E710022EBAD /* Todo train/Models/ArrivalForecastCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = F086D128302B4E710022EBAD /* Todo train/Models/ArrivalForecastCache.swift */; };
+		F086C129302B4E710022EBAD /* Todo train/Models/OpeningSequenceRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = F086D129302B4E710022EBAD /* Todo train/Models/OpeningSequenceRecord.swift */; };
 		W0971004302B4E730022EB01 /* TodoTrainSync in Frameworks */ = {isa = PBXBuildFile; productRef = W0971002302B4E730022EB01 /* TodoTrainSync */; };
 		W0972E8C302B4E730022EB01 /* TodoTrainWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = W0972101302B4E730022EB01 /* TodoTrainWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		W097B213302B4E710022EB01 /* BuildInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = F086B201302B4E710022EBAD /* BuildInfo.swift */; };
@@ -147,6 +150,9 @@
 		F086D124302B4E710022EBAD /* Todo train/Models/NudgeEventRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Todo train/Models/NudgeEventRecord.swift"; sourceTree = "<group>"; };
 		F086D125302B4E710022EBAD /* Todo train/App/AppSchemaV6+Frozen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Todo train/App/AppSchemaV6+Frozen.swift"; sourceTree = "<group>"; };
 		F086D126302B4E710022EBAD /* Todo train/Core/Estimate/ReestimateRecords.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Todo train/Core/Estimate/ReestimateRecords.swift"; sourceTree = "<group>"; };
+		F086D127302B4E710022EBAD /* Todo train/Models/RideSummaryCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Todo train/Models/RideSummaryCache.swift"; sourceTree = "<group>"; };
+		F086D128302B4E710022EBAD /* Todo train/Models/ArrivalForecastCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Todo train/Models/ArrivalForecastCache.swift"; sourceTree = "<group>"; };
+		F086D129302B4E710022EBAD /* Todo train/Models/OpeningSequenceRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Todo train/Models/OpeningSequenceRecord.swift"; sourceTree = "<group>"; };
 		W0972101302B4E730022EB01 /* TodoTrainWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TodoTrainWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -361,6 +367,9 @@
 				F086D119302B4E710022EBAD /* Todo train/Models/TimetableGuard.swift */,
 				F086D120302B4E710022EBAD /* Todo train/Models/TimetableSeriesRule.swift */,
 				F086D121302B4E710022EBAD /* Todo train/Models/WorkSession.swift */,
+				F086D127302B4E710022EBAD /* Todo train/Models/RideSummaryCache.swift */,
+				F086D128302B4E710022EBAD /* Todo train/Models/ArrivalForecastCache.swift */,
+				F086D129302B4E710022EBAD /* Todo train/Models/OpeningSequenceRecord.swift */,
 			);
 			name = CompanionStoreSchema;
 			sourceTree = "<group>";
@@ -737,6 +746,9 @@
 				F086C119302B4E710022EBAD /* Todo train/Models/TimetableGuard.swift in Sources */,
 				F086C120302B4E710022EBAD /* Todo train/Models/TimetableSeriesRule.swift in Sources */,
 				F086C121302B4E710022EBAD /* Todo train/Models/WorkSession.swift in Sources */,
+				F086C127302B4E710022EBAD /* Todo train/Models/RideSummaryCache.swift in Sources */,
+				F086C128302B4E710022EBAD /* Todo train/Models/ArrivalForecastCache.swift in Sources */,
+				F086C129302B4E710022EBAD /* Todo train/Models/OpeningSequenceRecord.swift in Sources */,
 			);
 		};
 		C0DE2124302B4E730022EBAD /* Sources */ = {
