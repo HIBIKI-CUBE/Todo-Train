@@ -11,6 +11,18 @@ struct EndBellRequest: Equatable, Sendable {
     let fireAt: Date
 }
 
+/// Which AlarmKit alarms to cancel. Tracked IDs are empty after a relaunch,
+/// while the system list still holds the Live Activity.
+enum AlarmCancellation {
+    static func ids(tracked: Set<UUID>, system: Set<UUID>, keep: UUID?) -> Set<UUID> {
+        var ids = tracked.union(system)
+        if let keep {
+            ids.remove(keep)
+        }
+        return ids
+    }
+}
+
 protocol AlarmScheduling: Sendable {
     /// AlarmKit authorization is granted (false for NoOp / unauthorized).
     var isAuthorized: Bool { get }

@@ -105,9 +105,10 @@ nonisolated enum CockpitPresentation {
 
 nonisolated enum CockpitTimerInterval {
     /// `Text(timerInterval:)` / `ProgressView(timerInterval:)` crash if lowerBound > upperBound.
+    /// A zero-length range lays out at width 0 and leaves an empty island and Lock Screen.
     static func countdown(to end: Date, from start: Date = .now) -> ClosedRange<Date> {
-        if end >= start { return start...end }
-        return start...start
+        if end > start { return start...end }
+        return start...start.addingTimeInterval(1)
     }
 
     static func progress(end: Date, budgetSeconds: Int) -> ClosedRange<Date> {

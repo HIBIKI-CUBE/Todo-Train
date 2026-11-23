@@ -38,7 +38,7 @@ struct TodoTrainAlarmLiveActivity: Widget {
             } compactTrailing: {
                 AlarmCompactTrailingTimer(presentation: presentation)
             } minimal: {
-                CockpitRingGauge(model: presentation.display)
+                CockpitMinimalMark(model: presentation.display)
                     .accessibilityLabel(presentation.display.showsOvertimeMark ? "予定の時刻を過ぎています" : "残り時間")
             }
             .safeCompactChrome()
