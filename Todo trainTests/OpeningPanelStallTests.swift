@@ -12,6 +12,7 @@ import UIKit
 import Testing
 @testable import Todo_train
 
+extension OpeningPanelTimedSuites {
 @Suite(.serialized)
 @MainActor
 struct OpeningPanelStallTests {
@@ -53,6 +54,7 @@ struct OpeningPanelStallTests {
         #expect(cover.counts["loadTarget", default: 0] <= 2)
         #expect(cover.counts["ticketSyncKey", default: 0] <= 2)
     }
+}
 }
 
 @MainActor

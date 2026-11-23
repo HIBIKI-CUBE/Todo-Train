@@ -19,6 +19,8 @@ struct HubView: View {
 
     @State private var showQuickAdd = false
     @State private var showOpeningPanel = false
+    /// 運行中に開いた盤。MASTER で運行を始め直さない。
+    @State private var openingPanelReviewsService = false
     @State private var showServiceShutdownCover = false
     @State private var hubDestination: HubDestination?
     @State private var detailTicket: Ticket?
@@ -226,10 +228,13 @@ struct HubView: View {
             }
         }
         .fullScreenCover(isPresented: $showOpeningPanel) {
-            OpeningPanelCover(onServiceDayNeedsEnd: {
-                showOpeningPanel = false
-                showServiceShutdownCover = true
-            })
+            OpeningPanelCover(
+                serviceAlreadyRunning: openingPanelReviewsService,
+                onServiceDayNeedsEnd: {
+                    showOpeningPanel = false
+                    showServiceShutdownCover = true
+                }
+            )
             .environment(sessionManager)
         }
         .fullScreenCover(isPresented: $showServiceShutdownCover) {
@@ -395,6 +400,9 @@ struct HubView: View {
                 },
                 onRequestEndService: {
                     requestEndService()
+                },
+                onOpenPanel: {
+                    openPanelFromHub()
                 }
             )
             .padding(.horizontal, TrainTheme.Space.md)
@@ -723,10 +731,18 @@ struct HubView: View {
             needsServiceDayEndPrompt: sessionManager.needsServiceDayEndPrompt
         ) {
         case .showPanel:
+            openingPanelReviewsService = false
             showOpeningPanel = true
         case .promptEndPreviousDay:
             showServiceShutdownCover = true
         }
+    }
+
+    private func openPanelFromHub() {
+        openingPanelReviewsService = OpeningPanelHubFlow.panelEntry(
+            isInService: sessionManager.isInService
+        ).serviceAlreadyRunning
+        showOpeningPanel = true
     }
 
     private func requestEndService() {

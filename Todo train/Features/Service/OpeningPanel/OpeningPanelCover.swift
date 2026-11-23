@@ -17,6 +17,8 @@ struct OpeningPanelCover: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.modelContext) private var modelContext
 
+    /// 運行中に開いた盤。MASTER は運行を始め直さない。
+    var serviceAlreadyRunning = false
     var onServiceDayNeedsEnd: () -> Void
 
     @State private var panelState: OpeningPanelState?
@@ -24,6 +26,7 @@ struct OpeningPanelCover: View {
     @State private var reserveGate = OpeningPanelReserveGate()
     @State private var commModel = OpeningPanelCommModel()
     @State private var loadPlayer = OpeningPanelLoadPlayer(scheduler: OpeningPanelDispatchScheduler())
+    @State private var loadDrawing = OpeningPanelLoadDrawing.dark
     @State private var loadNow = Date()
     @State private var phoneSupply: OpeningPanelPhoneSupply = .unknown
 
@@ -38,7 +41,9 @@ struct OpeningPanelCover: View {
                 let board = live.board
                 let loadTarget = live.target
                 let drawn = panelState.timetableStage == .drawn
-                let loadDrawing = OpeningPanelLoadLogic.drawing(loadPlayer.sample)
+                let timetableLit = drawn
+                    && panelState.isPowered
+                    && panelState.confirmation(of: .timetable) == .confirmed
                 OpeningPanelGrid(
                     phone: {
                         OpeningPanelPhoneWindow(reading: phone, powered: panelState.isPowered)
@@ -63,7 +68,7 @@ struct OpeningPanelCover: View {
                     },
                     scaleToggle: {
                         TimetableScaleKey {
-                            panelState.pressHourMode()
+                            panelState.pressTimetableScale()
                         }
                     },
                     timetableTitle: {
@@ -98,10 +103,44 @@ struct OpeningPanelCover: View {
                             calendar: sessionManager.calendar
                         )
                     },
+                    nextStop: {
+                        let _ = OpeningPanelSlotProbe.mark("nextStop")
+                        TimetableNextSlotClock(
+                            kind: .stop,
+                            stage: panelState.timetableStage,
+                            board: board
+                        )
+                    },
+                    nextRide: {
+                        let _ = OpeningPanelSlotProbe.mark("nextRide")
+                        TimetableNextSlotClock(
+                            kind: .ride,
+                            stage: panelState.timetableStage,
+                            board: board
+                        )
+                    },
                     timetableKey: {
                         TimetableConfirmKey(state: panelState) {
                             panelState.pressConfirm(.timetable)
                         }
+                    },
+                    nowLegend: {
+                        let _ = OpeningPanelSlotProbe.mark("nowLegend")
+                        TimetableSlotMark(
+                            label: "ただいま",
+                            value: timetableLit
+                                ? OpeningPanelTimetableSpeech.runStatus(board.reading)
+                                : ""
+                        )
+                    },
+                    nowBoard: {
+                        let _ = OpeningPanelSlotProbe.mark("nowBoard")
+                        NowBoardClock(
+                            stage: panelState.timetableStage,
+                            board: board,
+                            isLit: timetableLit,
+                            calendar: sessionManager.calendar
+                        )
                     },
                     sequenceKey: {
                         TicketsSequenceKey(state: panelState) {
@@ -112,6 +151,11 @@ struct OpeningPanelCover: View {
                         TicketsConfirmKey(state: panelState) {
                             panelState.pressConfirm(.tickets)
                         }
+                    },
+                    // 段名は格子の OpeningPanelSlotNames が描く。先頭に足す計器はない。
+                    ticketsLeading: {
+                        let _ = OpeningPanelSlotProbe.mark("ticketsLeading")
+                        EmptyView()
                     },
                     tickets: {
                         TicketsModule(state: panelState, model: ticketsModel)
@@ -128,6 +172,20 @@ struct OpeningPanelCover: View {
                         OpeningPanelCommWindow(
                             text: commModel.display.text,
                             visible: commModel.display.visible && panelState.isPowered
+                        )
+                    },
+                    // ロック行の灯は departLocks を格子の OpeningPanelLockRow が描く。重ねる計器はない。
+                    departLock: {
+                        let _ = OpeningPanelSlotProbe.mark("departLock")
+                        EmptyView()
+                    },
+                    departStatus: {
+                        let _ = OpeningPanelSlotProbe.mark("departStatus")
+                        DepartStatusClock(
+                            stage: panelState.timetableStage,
+                            board: board,
+                            isLit: timetableLit,
+                            calendar: sessionManager.calendar
                         )
                     },
                     departFirst: {
@@ -175,10 +233,13 @@ struct OpeningPanelCover: View {
                             model: ticketsModel
                         )
                     },
-                    timetableTwentyFour: panelState.hourCycle == .twentyFour
+                    timetableTwentyFour: panelState.timetableTwentyFour
                 )
-                .onChange(of: loadTarget) { _, target in
+                // onChange は既定だと最初の値を渡さない。計器は出た瞬間の目標も受け取る。
+                .onChange(of: loadTarget, initial: true) { _, target in
+                    bindLoadSample()
                     loadPlayer.set(target)
+                    loadDrawing = OpeningPanelLoadLogic.drawing(loadPlayer.sample)
                 }
             }
         }
@@ -201,6 +262,7 @@ struct OpeningPanelCover: View {
             panelState = OpeningPanelState.live(
                 ticketCount: model.rows.count,
                 reduceMotion: reduceMotion,
+                serviceAlreadyRunning: serviceAlreadyRunning,
                 onStartService: beginServiceFromMaster,
                 onCommitSequence: { model.commitSequenceOrder(in: context) },
                 onAbandonSequence: { model.dropPicks() },
@@ -288,17 +350,25 @@ struct OpeningPanelCover: View {
         let tickets = above.map { ServiceLoadTicket(durationMinutes: $0.actualMinutes) }
         let board = sessionManager.openingTimetableBoard(
             now: now,
-            isTwentyFourHour: state.hourCycle == .twentyFour,
+            isTwentyFourHour: state.timetableTwentyFour,
             ticketsAboveCutoff: tickets
         )
-        let span = max(1, Int(board.range.endsAt.timeIntervalSince(now) / 60))
-        let target = OpeningPanelLoadTarget(
+        let target = OpeningPanelLoadWire.target(
             lit: lit,
-            freeMinutes: Double(board.load.freeMinutes),
-            spanMinutes: Double(span),
-            tickets: lit ? above.map { Double($0.actualMinutes) } : []
+            now: now,
+            rangeEndsAt: board.range.endsAt,
+            freeMinutes: board.load.freeMinutes,
+            ticketMinutes: above.map(\.actualMinutes)
         )
         return (board, target)
+    }
+
+    private func bindLoadSample() {
+        guard loadPlayer.onSample == nil else { return }
+        loadPlayer.onSample = { [weak loadPlayer] in
+            guard let loadPlayer else { return }
+            loadDrawing = OpeningPanelLoadLogic.drawing(loadPlayer.sample)
+        }
     }
 
     private func beginCommTest(_ state: OpeningPanelState) {
@@ -369,6 +439,36 @@ struct OpeningPanelCover: View {
         case .failed:
             break
         }
+    }
+}
+
+enum OpeningPanelSlotProbe {
+    static var enabled = false
+    static let names = [
+        "nextStop", "nextRide", "nowLegend", "nowBoard",
+        "departLock", "departStatus", "ticketsLeading",
+    ]
+    private static let lock = NSLock()
+    private static var storage: Set<String> = []
+
+    static func mark(_ name: String) {
+        guard enabled else { return }
+        lock.lock()
+        storage.insert(name)
+        lock.unlock()
+    }
+
+    static func reset() {
+        lock.lock()
+        storage.removeAll(keepingCapacity: true)
+        lock.unlock()
+    }
+
+    static func snapshot() -> Set<String> {
+        lock.lock()
+        let copy = storage
+        lock.unlock()
+        return copy
     }
 }
 

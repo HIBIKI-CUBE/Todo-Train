@@ -17,6 +17,25 @@ struct OpeningPanelLoadTarget: Equatable {
     static let dark = OpeningPanelLoadTarget()
 }
 
+enum OpeningPanelLoadWire {
+    /// 盤が出す LOAD の目標。灯っていないときは切符の積みを空にする。
+    static func target(
+        lit: Bool,
+        now: Date,
+        rangeEndsAt: Date,
+        freeMinutes: Int,
+        ticketMinutes: [Int]
+    ) -> OpeningPanelLoadTarget {
+        let span = max(1, Int(rangeEndsAt.timeIntervalSince(now) / 60))
+        return OpeningPanelLoadTarget(
+            lit: lit,
+            freeMinutes: Double(freeMinutes),
+            spanMinutes: Double(span),
+            tickets: lit ? ticketMinutes.map(Double.init) : []
+        )
+    }
+}
+
 struct OpeningPanelLoadSlab: Equatable, Identifiable {
     var id: Int
     /// 窓の下端からの割合。
@@ -152,6 +171,9 @@ enum OpeningPanelLoadLogic {
 final class OpeningPanelLoadPlayer {
     private let scheduler: any OpeningPanelScheduling
     private(set) var sample: OpeningPanelLoadTarget = .dark
+    /// 段が進んだとき。SwiftUI は @State のクラスの変更だけでは窓を描き直さないことがある。
+    @ObservationIgnored
+    var onSample: (@MainActor () -> Void)?
     private var committed: OpeningPanelLoadTarget = .dark
     private var tasks: [OpeningPanelTask] = []
     private var generation = 0
@@ -168,20 +190,25 @@ final class OpeningPanelLoadPlayer {
         tasks.forEach { $0.cancel() }
         tasks = []
         guard target.lit, from.lit else {
-            sample = target
+            publish(target)
             return
         }
         let generation = generation
-        sample = OpeningPanelLoadLogic.interpolate(from: from, to: target, step: 1)
+        publish(OpeningPanelLoadLogic.interpolate(from: from, to: target, step: 1))
         guard OpeningPanelTiming.loadSteps > 1 else { return }
         for step in 2...OpeningPanelTiming.loadSteps {
             let delay = OpeningPanelTiming.loadStep * Double(step - 1)
             let task = scheduler.schedule(after: delay) { [weak self] in
                 guard let self, self.generation == generation else { return }
-                self.sample = OpeningPanelLoadLogic.interpolate(from: from, to: target, step: step)
+                self.publish(OpeningPanelLoadLogic.interpolate(from: from, to: target, step: step))
             }
             tasks.append(task)
         }
+    }
+
+    private func publish(_ next: OpeningPanelLoadTarget) {
+        sample = next
+        onSample?()
     }
 }
 
