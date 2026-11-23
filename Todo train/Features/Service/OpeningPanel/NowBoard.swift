@@ -22,6 +22,27 @@ struct NowBoard: View {
     }
 }
 
+/// 描画後だけ分で送る。格子そのものは描き直さない。
+struct NowBoardClock: View {
+    var stage: OpeningPanelTimetableStage
+    var board: OpeningTimetableBoard
+    var isLit: Bool
+    var calendar: Calendar = .current
+
+    var body: some View {
+        if stage == .drawn {
+            NowBoardTimeline(
+                range: board.range,
+                bands: board.bands,
+                isLit: isLit,
+                calendar: calendar
+            )
+        } else {
+            NowBoard(reading: board.reading, isLit: false, calendar: calendar)
+        }
+    }
+}
+
 /// 分が変わるたびに nowReading を取り直してただいま板を更新する。
 struct NowBoardTimeline: View {
     var range: TimetableRange

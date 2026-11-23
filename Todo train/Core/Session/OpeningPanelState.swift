@@ -268,6 +268,8 @@ final class OpeningPanelState {
     private let onCommitSequence: () -> Void
     private let onAbandonSequence: () -> Void
     private let onShowHub: () -> Void
+    /// 運行中に盤を開いたとき。MASTER は運行を始め直さない。
+    private let serviceAlreadyRunning: Bool
 
     let reducesMotion: Bool
     var ticketCount: Int
@@ -284,6 +286,8 @@ final class OpeningPanelState {
     private(set) var powerSettled = false
     private(set) var clockStage: OpeningPanelClockStage = .dark
     private(set) var hourCycle: OpeningPanelHourCycle = .twentyFour
+    /// 予定表の AUTO / 24H。時計の 12/24 とは別。既定は AUTO。
+    private(set) var timetableTwentyFour = false
     private(set) var timetableStage: OpeningPanelTimetableStage = .dark
     private(set) var ticketsStage: OpeningPanelTicketsStage = .dark
     /// 0 は見積もり。6 で予測の長さまで伸びきる。
@@ -316,6 +320,7 @@ final class OpeningPanelState {
         feedback: any OpeningPanelFeedback,
         ticketCount: Int = 0,
         reduceMotion: Bool = false,
+        serviceAlreadyRunning: Bool = false,
         onStartService: @escaping () -> Void = {},
         onCommitSequence: @escaping () -> Void = {},
         onAbandonSequence: @escaping () -> Void = {},
@@ -325,6 +330,7 @@ final class OpeningPanelState {
         self.feedback = feedback
         self.ticketCount = max(0, ticketCount)
         self.reducesMotion = reduceMotion
+        self.serviceAlreadyRunning = serviceAlreadyRunning
         self.onStartService = onStartService
         self.onCommitSequence = onCommitSequence
         self.onAbandonSequence = onAbandonSequence
@@ -381,7 +387,9 @@ final class OpeningPanelState {
         }
         isPowered = true
         serviceStarted = true
-        onStartService()
+        if !serviceAlreadyRunning {
+            onStartService()
+        }
         feedback.play(.light)
         feedback.play(.haptic(.operation))
         beginPower()
@@ -435,6 +443,19 @@ final class OpeningPanelState {
             return
         }
         hourCycle = hourCycle.toggled
+        feedback.play(.light)
+        feedback.play(.haptic(.operation))
+        rearmAuto()
+    }
+
+    /// 予定表の AUTO / 24H。時計の 12/24 は変えない。電気が来ていれば切り替わり、来る前は鈍い音だけ。
+    func pressTimetableScale() {
+        guard !hasDeparted else { return }
+        guard isPowered else {
+            feedback.play(.dull)
+            return
+        }
+        timetableTwentyFour.toggle()
         feedback.play(.light)
         feedback.play(.haptic(.operation))
         rearmAuto()

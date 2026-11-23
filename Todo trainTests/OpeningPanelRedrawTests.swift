@@ -11,6 +11,11 @@ import UIKit
 import Testing
 @testable import Todo_train
 
+/// 盤を窓に出して時間や描き直しを数える組。同じ計器を共有するので、一つずつ走らせる。
+@Suite(.serialized)
+struct OpeningPanelTimedSuites {}
+
+extension OpeningPanelTimedSuites {
 @Suite(.serialized)
 @MainActor
 struct OpeningPanelRedrawTests {
@@ -64,6 +69,7 @@ struct OpeningPanelRedrawTests {
         expectClockOnly(clockCounts)
         expectReadyWave(ready)
     }
+}
 }
 
 @MainActor

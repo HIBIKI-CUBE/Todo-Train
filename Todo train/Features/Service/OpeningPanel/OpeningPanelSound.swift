@@ -295,6 +295,7 @@ extension OpeningPanelState {
     static func live(
         ticketCount: Int = 0,
         reduceMotion: Bool = false,
+        serviceAlreadyRunning: Bool = false,
         onStartService: @escaping () -> Void = {},
         onCommitSequence: @escaping () -> Void = {},
         onAbandonSequence: @escaping () -> Void = {},
@@ -305,6 +306,7 @@ extension OpeningPanelState {
             feedback: OpeningPanelSound(),
             ticketCount: ticketCount,
             reduceMotion: reduceMotion,
+            serviceAlreadyRunning: serviceAlreadyRunning,
             onStartService: onStartService,
             onCommitSequence: onCommitSequence,
             onAbandonSequence: onAbandonSequence,

@@ -385,6 +385,44 @@ struct TimetableColumnClock: View {
     }
 }
 
+/// NEXT STOP IN / NEXT RIDE IN。描画後だけ秒で送る。格子そのものは描き直さない。
+struct TimetableNextSlotClock: View {
+    enum Kind {
+        case stop
+        case ride
+    }
+
+    var kind: Kind
+    var stage: OpeningPanelTimetableStage
+    var board: OpeningTimetableBoard
+
+    var body: some View {
+        if stage == .drawn {
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                line(now: context.date)
+            }
+        } else {
+            line(now: board.range.startsAt)
+        }
+    }
+
+    private func line(now: Date) -> some View {
+        let next = RunStatusLogic.nextMarkers(
+            now: now,
+            adoptedBlocks: board.entries.filter(\.stops).map(\.interval)
+        )
+        let readout = TimetableNextReadout.make(now: now, next: next)
+        let drawn = stage == .drawn
+        let title = kind == .stop ? "NEXT STOP IN" : "NEXT RIDE IN"
+        let text = drawn
+            ? (kind == .stop ? readout.stopText : readout.rideText)
+            : TimetableNextReadout.idle
+        let lit = drawn && (kind == .stop ? readout.stopLit : readout.rideLit)
+        return TimetableNextWindow(title: title, text: text, lit: lit)
+            .background(OpeningPanelTokens.Palette.module)
+    }
+}
+
 /// 描画後だけ秒で送る運転状況の列。
 struct RunStatusColumnClock: View {
     var stage: OpeningPanelTimetableStage
@@ -593,7 +631,7 @@ private struct TimetableFill: View {
     }
 }
 
-private struct TimetableNextWindow: View {
+struct TimetableNextWindow: View {
     var title: String
     var text: String
     var lit: Bool

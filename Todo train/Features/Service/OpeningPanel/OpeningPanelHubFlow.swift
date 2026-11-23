@@ -16,6 +16,16 @@ enum OpeningPanelHubFlow {
     static func startIntent(needsServiceDayEndPrompt: Bool) -> StartIntent {
         needsServiceDayEndPrompt ? .promptEndPreviousDay : .showPanel
     }
+
+    struct PanelEntry: Equatable {
+        /// 運行中に開く。MASTER は運行を始め直さない。
+        var serviceAlreadyRunning: Bool
+    }
+
+    /// ハブの盤の入口。運行中も運行開始前も盤を出す。運行中は発車済みとして扱う。
+    static func panelEntry(isInService: Bool) -> PanelEntry {
+        PanelEntry(serviceAlreadyRunning: isInService)
+    }
 }
 
 enum OpeningPanelServiceStart {

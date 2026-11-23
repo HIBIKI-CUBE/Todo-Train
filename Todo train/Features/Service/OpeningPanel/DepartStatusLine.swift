@@ -22,6 +22,27 @@ struct DepartStatusLine: View {
     }
 }
 
+/// 描画後だけ分で送る。格子そのものは描き直さない。
+struct DepartStatusClock: View {
+    var stage: OpeningPanelTimetableStage
+    var board: OpeningTimetableBoard
+    var isLit: Bool
+    var calendar: Calendar = .current
+
+    var body: some View {
+        if stage == .drawn {
+            DepartStatusLineTimeline(
+                range: board.range,
+                bands: board.bands,
+                isLit: isLit,
+                calendar: calendar
+            )
+        } else {
+            DepartStatusLine(reading: board.reading, isLit: false, calendar: calendar)
+        }
+    }
+}
+
 /// 分が変わるたびに nowReading を取り直して DEPART 横の行を更新する。
 struct DepartStatusLineTimeline: View {
     var range: TimetableRange

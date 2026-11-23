@@ -11,6 +11,7 @@ struct ServiceSummaryBar: View {
 
     let onRequestStartService: () -> Void
     let onRequestEndService: () -> Void
+    let onOpenPanel: () -> Void
 
     private var canEndOpenService: Bool {
         sessionManager.isInService || sessionManager.needsServiceDayEndPrompt
@@ -50,6 +51,11 @@ struct ServiceSummaryBar: View {
                 .tint(TrainTheme.rail)
                 .frame(maxWidth: .infinity)
             }
+
+            Button("運行の盤", action: onOpenPanel)
+                .buttonStyle(.bordered)
+                .frame(maxWidth: .infinity)
+                .accessibilityHint("運行開始の盤を開きます")
         }
         .padding(.vertical, usesTightVerticalLayout ? 2 : 4)
     }

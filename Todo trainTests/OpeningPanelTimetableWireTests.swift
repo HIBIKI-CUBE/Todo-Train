@@ -11,6 +11,7 @@ import UIKit
 import Testing
 @testable import Todo_train
 
+extension OpeningPanelTimedSuites {
 @Suite(.serialized)
 @MainActor
 struct OpeningPanelTimetableWireTests {
@@ -112,7 +113,7 @@ struct OpeningPanelTimetableWireTests {
         try await Task.sleep(for: .milliseconds(400))
         let loaded = manager.openingTimetableBoard(
             now: now,
-            isTwentyFourHour: state.hourCycle == .twentyFour
+            isTwentyFourHour: state.timetableTwentyFour
         )
         #expect(loaded.entries.contains { $0.title == "定例" })
         let labels = host.labels()
@@ -125,7 +126,7 @@ struct OpeningPanelTimetableWireTests {
         try await Task.sleep(for: .milliseconds(300))
         let adopted = manager.openingTimetableBoard(
             now: now,
-            isTwentyFourHour: state.hourCycle == .twentyFour
+            isTwentyFourHour: state.timetableTwentyFour
         )
         #expect(adopted.entries.contains { $0.title == "定例" && $0.stops })
         #expect(adopted.load.freeMinutes < beforeAdopt)
@@ -146,7 +147,7 @@ struct OpeningPanelTimetableWireTests {
         scheduler.advance { state.timetableStage == .drawn }
         let board = manager.openingTimetableBoard(
             now: now,
-            isTwentyFourHour: state.hourCycle == .twentyFour
+            isTwentyFourHour: state.timetableTwentyFour
         )
 
         let host = OpeningPanelWireHost()
@@ -154,7 +155,7 @@ struct OpeningPanelTimetableWireTests {
         defer { host.release() }
         host.show(
             OpeningPanelGrid(
-                scaleToggle: { TimetableScaleKey { state.pressHourMode() } },
+                scaleToggle: { TimetableScaleKey { state.pressTimetableScale() } },
                 timetableTitle: {
                     TimetableSlotMark(
                         label: "範囲",
@@ -187,7 +188,7 @@ struct OpeningPanelTimetableWireTests {
                 timetableKey: {
                     TimetableConfirmKey(state: state) { state.pressConfirm(.timetable) }
                 },
-                timetableTwentyFour: state.hourCycle == .twentyFour
+                timetableTwentyFour: state.timetableTwentyFour
             )
             .frame(width: 402, height: 874)
         )
@@ -201,6 +202,7 @@ struct OpeningPanelTimetableWireTests {
         #expect(counts["OpeningPanelCover", default: 0] == 0)
     }
 }
+}
 
 private struct OpeningPanelTimetableWireHost: View {
     @Environment(SessionManager.self) private var sessionManager
@@ -210,11 +212,11 @@ private struct OpeningPanelTimetableWireHost: View {
     var body: some View {
         let board = sessionManager.openingTimetableBoard(
             now: now,
-            isTwentyFourHour: state.hourCycle == .twentyFour
+            isTwentyFourHour: state.timetableTwentyFour
         )
         let drawn = state.timetableStage == .drawn
         OpeningPanelGrid(
-            scaleToggle: { TimetableScaleKey { state.pressHourMode() } },
+            scaleToggle: { TimetableScaleKey { state.pressTimetableScale() } },
             timetableTitle: {
                 TimetableSlotMark(label: "範囲", value: drawn ? board.range.windowLabel : "")
             },
@@ -245,7 +247,7 @@ private struct OpeningPanelTimetableWireHost: View {
             timetableKey: {
                 TimetableConfirmKey(state: state) { state.pressConfirm(.timetable) }
             },
-            timetableTwentyFour: state.hourCycle == .twentyFour
+            timetableTwentyFour: state.timetableTwentyFour
         )
         .frame(width: 402, height: 874)
         .background(Color.black)
