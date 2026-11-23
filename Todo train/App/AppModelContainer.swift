@@ -11,7 +11,7 @@ import SQLite3
 #endif
 
 enum AppModelContainer {
-    static let schema = Schema(versionedSchema: AppSchemaV8.self)
+    static let schema = Schema(versionedSchema: AppSchemaV9.self)
 
     #if DEBUG
     /// 作り直しに落ちた回数。移行の試験は 0 のままであることを見る。

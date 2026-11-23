@@ -796,6 +796,31 @@ struct AppModelContainerMigrationTests {
         "WorkSession": "EKG1yM3FZPuYPtoHe3NbdQeET1CHI9A5xQivbjQr3Rk=",
     ]
 
+    @Test func make_migratesV8WithoutRebuild() throws {
+        let url = Self.temporaryStoreURL()
+        defer { Self.removeStoreFiles(at: url) }
+        let ticketID = UUID()
+        try autoreleasepool {
+            let schema = Schema(versionedSchema: AppSchemaV8.self)
+            let container = try ModelContainer(
+                for: schema,
+                configurations: [ModelConfiguration(schema: schema, url: url)]
+            )
+            let ticket = Ticket(id: ticketID, title: "残す切符", estimatedSeconds: 900, sortOrder: 1)
+            container.mainContext.insert(ticket)
+            try container.mainContext.save()
+        }
+        AppModelContainer.rebuildCount = 0
+        let created = try Self.creationDate(of: url)
+        let migrated = try AppModelContainer.make(storeURL: url)
+        #expect(AppModelContainer.rebuildCount == 0)
+        #expect(try Self.creationDate(of: url) == created)
+        let tickets = try migrated.mainContext.fetch(FetchDescriptor<Ticket>())
+        #expect(tickets.map(\.title) == ["残す切符"])
+        #expect(try migrated.mainContext.fetch(FetchDescriptor<OpeningSequenceRecord>()).isEmpty)
+        #expect(try migrated.mainContext.fetch(FetchDescriptor<OpeningSequenceBelowDays>()).isEmpty)
+    }
+
     private static func versionHashes(at url: URL) throws -> [String: String] {
         let metadata = try NSPersistentStoreCoordinator.metadataForPersistentStore(
             ofType: NSSQLiteStoreType,

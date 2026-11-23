@@ -432,7 +432,7 @@ struct OpeningPanelStateTests {
         #expect(harness.state.ticketGrowthStep == OpeningPanelTiming.ticketGrowthSteps)
     }
 
-    @Test func sequenceBlink_exitsWithoutCommit() {
+    @Test func sequenceStaysOpenWhileTheClockRuns() {
         let harness = OpeningPanelHarness(ticketCount: 1)
         harness.state.pressMaster()
         harness.state.pressConfirm(.tickets)
@@ -441,23 +441,14 @@ struct OpeningPanelStateTests {
         #expect(harness.state.isSequencing)
         #expect(harness.state.sequenceLampLit)
         #expect(harness.log.commits == 0)
-        harness.advanceAlmost(OpeningPanelTiming.sequenceQuiet)
+        harness.advance(by: OpeningPanelTiming.sequenceQuiet + OpeningPanelTiming.sequenceBlink + 2)
         #expect(harness.state.isSequencing)
         #expect(harness.state.sequenceLampLit)
-        harness.advance(by: microsecond)
-        #expect(!harness.state.sequenceLampLit)
-        harness.advance(by: 0.5)
-        #expect(harness.state.sequenceLampLit)
-        #expect(harness.state.isSequencing)
-        harness.advance(by: OpeningPanelTiming.sequenceBlink)
-        #expect(!harness.state.isSequencing)
-        #expect(!harness.state.sequenceLampLit)
         #expect(harness.log.commits == 0)
-        #expect(harness.log.abandons == 1)
-        #expect(harness.feedback.cues.filter { $0 == .dull }.count == 1)
+        #expect(harness.log.abandons == 0)
     }
 
-    @Test func sequenceRow_startsBlinkImmediately() {
+    @Test func sequenceRow_keepsTheLampLit() {
         let harness = OpeningPanelHarness(ticketCount: 1)
         harness.state.pressMaster()
         harness.state.pressConfirm(.tickets)
@@ -469,11 +460,12 @@ struct OpeningPanelStateTests {
         #expect(added.contains(.light))
         #expect(added.contains(.haptic(.operation)))
         harness.advance(by: 0)
-        #expect(!harness.state.sequenceLampLit)
+        #expect(harness.state.sequenceLampLit)
         #expect(harness.state.isSequencing)
         harness.state.noteSequenceRow(accepted: false)
         #expect(harness.feedback.cues.last == .dull)
         #expect(harness.state.isSequencing)
+        #expect(harness.state.sequenceLampLit)
         #expect(harness.log.commits == 0)
     }
 

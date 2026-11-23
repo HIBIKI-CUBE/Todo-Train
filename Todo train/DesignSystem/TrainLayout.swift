@@ -189,6 +189,9 @@ enum OpeningPanelHitLayout {
         case depart
         case todayRail
         case ticketRow(Int)
+        case sequencePile(Int)
+        case sequenceUndo
+        case sequenceCard(Int)
         case timetableBand(String)
         case timetableRow(String)
 
@@ -208,14 +211,53 @@ enum OpeningPanelHitLayout {
         var hit: CGRect
     }
 
+    enum SequenceMode: Equatable {
+        case sorting
+        case comparing
+        case result
+    }
+
     /// Fixed controls, the rail, and ticket rows. Confirmation and power are not inputs.
-    static func board(minimum: CGFloat, ticketRows: Int) -> [Target] {
+    /// SEQ 中は行の当たりを外し、山のキーと取消を窓の中に置く。
+    static func board(
+        minimum: CGFloat,
+        ticketRows: Int,
+        sequence: SequenceMode? = nil
+    ) -> [Target] {
         let floor = max(1, minimum)
         let visuals = fixedVisuals(ticketRows: max(0, ticketRows))
         let claims = fixedClaims(minimum: floor, ticketRows: max(0, ticketRows))
-        return zip(visuals, claims).map { visual, claim in
+        var targets = zip(visuals, claims).map { visual, claim in
             Target(id: visual.id, visual: visual.rect, hit: claim)
         }
+        guard let sequence else { return targets }
+        targets.removeAll {
+            if case .ticketRow = $0.id { return true }
+            return false
+        }
+        guard sequence != .result else { return targets }
+        targets.append(contentsOf: sequenceControls(sequence))
+        return targets
+    }
+
+    static var ticketWindow: CGRect { ticketContent.window }
+
+    private static func sequenceControls(_ mode: SequenceMode) -> [Target] {
+        let window = ticketWindow
+        let local = OpeningPanelSequenceLayout.frames(in: window)
+        func placed(_ id: ID, _ rect: CGRect) -> Target {
+            let canvas = rect.offsetBy(dx: window.minX, dy: window.minY)
+            return Target(id: id, visual: canvas, hit: canvas)
+        }
+        var targets = local.keys.enumerated().map { index, rect in
+            placed(.sequencePile(index), rect)
+        }
+        targets.append(placed(.sequenceUndo, local.undo))
+        if mode == .comparing {
+            targets.append(placed(.sequenceCard(0), local.upperCard))
+            targets.append(placed(.sequenceCard(1), local.lowerCard))
+        }
+        return targets
     }
 
     /// Timetable bands and labels inside `bounds` (tape space). Same geometry at every stage.
