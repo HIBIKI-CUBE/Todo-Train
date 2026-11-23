@@ -82,8 +82,8 @@ test("V4 の今のモデルで検査が通る", () => {
   const head = readFingerprint();
   const latest = latestSchema(readAppSchema());
   const computed = fingerprintOf();
-  assert.equal(head.name, "AppSchemaV7");
-  assert.equal(head.version, "7.0.0");
+  assert.equal(head.name, "AppSchemaV8");
+  assert.equal(head.version, "8.0.0");
   assert.equal(head.fingerprint, computed);
   assert.equal(latest.name, head.name);
   assert.equal(latest.version, head.version);
@@ -273,7 +273,9 @@ test("いまのモデルは保存される列だけを拾う", () => {
   assert.deepEqual(
     [...byName.keys()].sort(),
     [
+      "ArrivalForecastCache",
       "PassengerRide",
+      "RideSummaryCache",
       "ServiceDay",
       "SessionExtension",
       "SessionPause",
@@ -320,11 +322,18 @@ test("凍結した版の型を書き換えると落ちる", () => {
   assert.equal(frozenBodiesChanged(source, v1), true);
 
   const current = source.replace(
-    "enum AppSchemaV7: VersionedSchema {\n    static var versionIdentifier: Schema.Version { Schema.Version(7, 0, 0) }",
-    "enum AppSchemaV7: VersionedSchema {\n    static var versionIdentifier: Schema.Version { Schema.Version(7, 0, 0) } // x",
+    "enum AppSchemaV8: VersionedSchema {\n    static var versionIdentifier: Schema.Version { Schema.Version(8, 0, 0) }",
+    "enum AppSchemaV8: VersionedSchema {\n    static var versionIdentifier: Schema.Version { Schema.Version(8, 0, 0) } // x",
   );
   assert.notEqual(current, source);
   assert.equal(frozenBodiesChanged(source, current), false);
+
+  const frozenV7 = source.replace(
+    "enum AppSchemaV7: VersionedSchema {\n    static var versionIdentifier: Schema.Version { Schema.Version(7, 0, 0) }",
+    "enum AppSchemaV7: VersionedSchema {\n    static var versionIdentifier: Schema.Version { Schema.Version(7, 0, 0) } // x",
+  );
+  assert.notEqual(frozenV7, source);
+  assert.equal(frozenBodiesChanged(source, frozenV7), true);
 
   const frozenV6 = source.replace(
     "enum AppSchemaV6: VersionedSchema {\n    static var versionIdentifier: Schema.Version { Schema.Version(6, 0, 0) }",

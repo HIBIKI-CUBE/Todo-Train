@@ -374,6 +374,32 @@ struct AppModelContainerMigrationTests {
         #expect(running.extensions.first?.workingSeconds == 150)
     }
 
+    @Test func make_migratesV7WithoutRebuild() throws {
+        let url = Self.temporaryStoreURL()
+        defer { Self.removeStoreFiles(at: url) }
+        let ticketID = UUID()
+        try autoreleasepool {
+            let schema = Schema(versionedSchema: AppSchemaV7.self)
+            let container = try ModelContainer(
+                for: schema,
+                configurations: [ModelConfiguration(schema: schema, url: url)]
+            )
+            let ticket = Ticket(id: ticketID, title: "残す切符", estimatedSeconds: 900, sortOrder: 1)
+            container.mainContext.insert(ticket)
+            try container.mainContext.save()
+        }
+        AppModelContainer.rebuildCount = 0
+        let created = try Self.creationDate(of: url)
+        let migrated = try AppModelContainer.make(storeURL: url)
+        #expect(AppModelContainer.rebuildCount == 0)
+        #expect(try Self.creationDate(of: url) == created)
+        let tickets = try migrated.mainContext.fetch(FetchDescriptor<Ticket>())
+        #expect(tickets.map(\.title) == ["残す切符"])
+        #expect(try migrated.mainContext.fetch(FetchDescriptor<RideSummaryCache>()).isEmpty)
+        #expect(try migrated.mainContext.fetch(FetchDescriptor<ArrivalForecastCache>()).isEmpty)
+        _ = ticketID
+    }
+
     @Test func frozenV3_1HashesMatchThePostPR71Store() throws {
         let url = Self.temporaryStoreURL()
         defer { Self.removeStoreFiles(at: url) }

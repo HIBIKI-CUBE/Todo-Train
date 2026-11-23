@@ -138,6 +138,28 @@ enum ArrivalForecast {
         now: Date,
         calendar: Calendar
     ) -> ArrivalForecastContext {
+        context(
+            title: ticket.title,
+            tagNames: ticket.tags.sorted { $0.sortOrder < $1.sortOrder }.map(\.name),
+            estimatedSeconds: ticket.estimatedSeconds,
+            rides: rides,
+            pooled: pooled,
+            medianMinutes: medianMinutes,
+            now: now,
+            calendar: calendar
+        )
+    }
+
+    static func context(
+        title: String,
+        tagNames: [String],
+        estimatedSeconds: Int,
+        rides: [EstimateHeuristic.ArrivedRide],
+        pooled: [EstimateHeuristic.ArrivedRide],
+        medianMinutes: Int,
+        now: Date,
+        calendar: Calendar
+    ) -> ArrivalForecastContext {
         let hour = calendar.component(.hour, from: now)
         let band = WorkHourBand.of(hour: hour)
         let recent = pooled
@@ -156,9 +178,9 @@ enum ArrivalForecast {
                 )
             }
         return ArrivalForecastContext(
-            title: ticket.title,
-            tagNames: ticket.tags.sorted { $0.sortOrder < $1.sortOrder }.map(\.name),
-            estimatedMinutes: max(ticket.estimatedSeconds / 60, 1),
+            title: title,
+            tagNames: tagNames,
+            estimatedMinutes: max(estimatedSeconds / 60, 1),
             nowLabel: ArrivalForecastPrompt.clockLabel(now, calendar: calendar),
             hour: hour,
             band: band,

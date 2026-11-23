@@ -34,6 +34,7 @@ struct HubView: View {
     @State private var departingTicketID: UUID?
     @State private var isPuttingBack = false
     @State private var lastWarmedBand: WorkHourBand?
+    @State private var forecastWarm: Task<Void, Never>?
 
     @Environment(TicketMotionBridge.self) private var ticketMotion
     @Environment(ArrivalForecastStore.self) private var forecastStore
@@ -73,10 +74,33 @@ struct HubView: View {
     }
 
     private func warmForecasts() {
-        guard !isFocusCoverPresented else { return }
+        forecastWarm?.cancel()
+        guard !isFocusCoverPresented, !showOpeningPanel else { return }
         lastWarmedBand = currentBand
-        let sessions = (try? modelContext.fetch(FetchDescriptor<WorkSession>())) ?? []
-        forecastStore.warm(tickets: stackTickets, sessions: sessions)
+        let order = stackTickets.map(\.id)
+        let context = modelContext
+        let store = forecastStore
+        forecastWarm = Task { @MainActor in
+            guard !Task.isCancelled else { return }
+            await ForecastReserveStore.refresh(
+                in: context,
+                rowOrder: order,
+                cut: 0,
+                refine: { forecastContext, ticketID in
+                    guard !Task.isCancelled, !showOpeningPanel, !isFocusCoverPresented else {
+                        return .skipped
+                    }
+                    let minutes = await store.refinePrepared(
+                        ticketID: ticketID,
+                        context: forecastContext,
+                        priority: .warm
+                    )
+                    guard !Task.isCancelled, !showOpeningPanel else { return .skipped }
+                    return .finished(minutes)
+                },
+                onPlace: { _, _ in }
+            )
+        }
     }
 
     private var zoomNamespace: Namespace.ID {
@@ -240,6 +264,11 @@ struct HubView: View {
         }
         .onChange(of: sessionManager.phase) { _, _ in
             presentServiceEndIfNeeded()
+        }
+        .onChange(of: showOpeningPanel) { _, shown in
+            if shown {
+                forecastWarm?.cancel()
+            }
         }
         .onChange(of: isFocusCoverPresented) { _, presented in
             if presented {
