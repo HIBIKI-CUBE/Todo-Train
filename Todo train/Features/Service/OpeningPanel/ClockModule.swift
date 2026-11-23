@@ -241,11 +241,19 @@ struct OpeningPanelClockReadout: Equatable {
 }
 
 enum OpeningPanelClockDrawer {
+    struct Parts: OptionSet {
+        let rawValue: Int
+        static let digits = Parts(rawValue: 1 << 0)
+        static let colon = Parts(rawValue: 1 << 1)
+        static let all: Parts = [.digits, .colon]
+    }
+
     /// 最終の `--glow` は `none`。点いた桁に影を付けない。
     static func draw(
         _ readout: OpeningPanelClockReadout,
         in context: inout GraphicsContext,
-        size: CGSize
+        size: CGSize,
+        parts: Parts = .all
     ) {
         guard readout.visible else { return }
         let scale = OpeningPanelClockMetrics.scale(fitting: size)
@@ -254,22 +262,34 @@ enum OpeningPanelClockDrawer {
         let faceHeight = OpeningPanelClockMetrics.faceHeight * scale
         context.translateBy(x: (size.width - faceWidth) / 2, y: (size.height - faceHeight) / 2)
         context.scaleBy(x: scale, y: scale)
-        let chars = Array(readout.pattern.prefix(4))
-        for index in 0..<4 {
-            let character = index < chars.count ? chars[index] : " "
-            let lit = OpeningPanelClockGlyph.segments(for: character)
-            for segment in OpeningPanelClockSegment.allCases {
-                let rect = OpeningPanelClockLayout.segment(segment, digit: index)
-                let color = lit.contains(segment)
-                    ? OpeningPanelTokens.Palette.amber
-                    : OpeningPanelTokens.Palette.amberDim
-                context.fill(Path(rect), with: .color(color))
+        if parts.contains(.digits) {
+            let chars = Array(readout.pattern.prefix(4))
+            for index in 0..<4 {
+                let character = index < chars.count ? chars[index] : " "
+                let lit = OpeningPanelClockGlyph.segments(for: character)
+                for segment in OpeningPanelClockSegment.allCases {
+                    let rect = OpeningPanelClockLayout.segment(segment, digit: index)
+                    let color = lit.contains(segment)
+                        ? OpeningPanelTokens.Palette.amber
+                        : OpeningPanelTokens.Palette.amberDim
+                    context.fill(Path(rect), with: .color(color))
+                }
             }
         }
-        let colon = readout.colonLit ? OpeningPanelTokens.Palette.amber : OpeningPanelTokens.Palette.amberDim
-        for bar in OpeningPanelClockLayout.colonBars() {
-            context.fill(Path(bar), with: .color(colon))
+        if parts.contains(.colon) {
+            let colon = readout.colonLit ? OpeningPanelTokens.Palette.amber : OpeningPanelTokens.Palette.amberDim
+            for bar in OpeningPanelClockLayout.colonBars() {
+                context.fill(Path(bar), with: .color(colon))
+            }
         }
+    }
+}
+
+enum OpeningPanelClockTiming {
+    static func floor(_ date: Date, step: TimeInterval) -> Date {
+        let time = date.timeIntervalSinceReferenceDate
+        let snapped = (time / step).rounded(.down) * step
+        return Date(timeIntervalSinceReferenceDate: snapped)
     }
 }
 
@@ -277,11 +297,114 @@ struct ClockModule: View {
     var state: OpeningPanelState
 
     var body: some View {
+        let _ = OpeningPanelRedrawProbe.bump("ClockModule")
         let stage = state.clockStage
         let cycle = state.hourCycle
-        TimelineView(.animation(minimumInterval: 0.05, paused: stage != .live)) { context in
-            OpeningPanelClockFace(stage: stage, cycle: cycle, date: context.date)
+        // 秒は 1 秒、コロンの点滅は 0.5 秒。`.animation` は表示リンクに乗り、盤の外まで落とす。
+        if stage == .live {
+            OpeningPanelLiveClock(cycle: cycle)
+        } else {
+            OpeningPanelClockFace(stage: stage, cycle: cycle, date: .distantPast)
         }
+    }
+}
+
+/// 実時刻。桁と秒は 1 秒ごと、コロンだけ 0.5 秒ごと。
+private struct OpeningPanelLiveClock: View {
+    var cycle: OpeningPanelHourCycle
+    private let secondStart: Date
+    private let halfStart: Date
+
+    init(cycle: OpeningPanelHourCycle, now: Date = .now) {
+        self.cycle = cycle
+        secondStart = OpeningPanelClockTiming.floor(now, step: 1)
+        halfStart = OpeningPanelClockTiming.floor(now, step: 0.5)
+    }
+
+    var body: some View {
+        ZStack {
+            TimelineView(.periodic(from: secondStart, by: 1)) { context in
+                let _ = OpeningPanelRedrawProbe.bump("ClockTick")
+                let readout = OpeningPanelClockReadout.make(
+                    stage: .live,
+                    cycle: cycle,
+                    date: context.date,
+                    calendar: .current
+                )
+                ZStack {
+                    OpeningPanelClockDigits(pattern: readout.pattern)
+                        .equatable()
+                    OpeningPanelClockSeconds(text: readout.seconds ?? "")
+                        .equatable()
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(readout.spoken)
+            }
+            TimelineView(.periodic(from: halfStart, by: 0.5)) { context in
+                let _ = OpeningPanelRedrawProbe.bump("ClockColonTick")
+                let lit = OpeningPanelClockReadout.millisecond(of: context.date) < 500
+                OpeningPanelClockColon(lit: lit)
+                    .equatable()
+            }
+        }
+    }
+}
+
+private struct OpeningPanelClockDigits: View, Equatable {
+    var pattern: String
+
+    var body: some View {
+        let _ = OpeningPanelRedrawProbe.bump("OpeningPanelClockDigits") { Self._printChanges() }
+        Canvas { context, size in
+            let readout = OpeningPanelClockReadout(
+                visible: true,
+                pattern: pattern,
+                colonLit: false,
+                seconds: nil,
+                spoken: ""
+            )
+            OpeningPanelClockDrawer.draw(readout, in: &context, size: size, parts: .digits)
+        }
+        .accessibilityHidden(true)
+    }
+}
+
+private struct OpeningPanelClockColon: View, Equatable {
+    var lit: Bool
+
+    var body: some View {
+        let _ = OpeningPanelRedrawProbe.bump("OpeningPanelClockColon") { Self._printChanges() }
+        Canvas { context, size in
+            let readout = OpeningPanelClockReadout(
+                visible: true,
+                pattern: "    ",
+                colonLit: lit,
+                seconds: nil,
+                spoken: ""
+            )
+            OpeningPanelClockDrawer.draw(readout, in: &context, size: size, parts: .colon)
+        }
+        .accessibilityHidden(true)
+        .allowsHitTesting(false)
+    }
+}
+
+private struct OpeningPanelClockSeconds: View, Equatable {
+    var text: String
+
+    var body: some View {
+        let _ = OpeningPanelRedrawProbe.bump("OpeningPanelClockSeconds")
+        Text(text)
+            .font(.system(size: OpeningPanelClockMetrics.secondsFontSize))
+            .tracking(OpeningPanelClockMetrics.secondsFontSize * OpeningPanelClockMetrics.secondsTrackingEm)
+            .monospacedDigit()
+            .foregroundStyle(OpeningPanelTokens.Palette.amber)
+            .opacity(OpeningPanelClockMetrics.secondsOpacity)
+            .lineLimit(1)
+            .padding(.trailing, OpeningPanelClockMetrics.secondsTrailing)
+            .padding(.bottom, OpeningPanelClockMetrics.secondsBottom)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+            .accessibilityHidden(true)
     }
 }
 
@@ -291,6 +414,7 @@ private struct OpeningPanelClockFace: View {
     var date: Date
 
     var body: some View {
+        let _ = OpeningPanelRedrawProbe.bump("OpeningPanelClockFace")
         let readout = OpeningPanelClockReadout.make(
             stage: stage,
             cycle: cycle,
@@ -302,16 +426,7 @@ private struct OpeningPanelClockFace: View {
         }
         .overlay(alignment: .bottomTrailing) {
             if let seconds = readout.seconds {
-                Text(seconds)
-                    .font(.system(size: OpeningPanelClockMetrics.secondsFontSize))
-                    .tracking(OpeningPanelClockMetrics.secondsFontSize * OpeningPanelClockMetrics.secondsTrackingEm)
-                    .monospacedDigit()
-                    .foregroundStyle(OpeningPanelTokens.Palette.amber)
-                    .opacity(OpeningPanelClockMetrics.secondsOpacity)
-                    .lineLimit(1)
-                    .padding(.trailing, OpeningPanelClockMetrics.secondsTrailing)
-                    .padding(.bottom, OpeningPanelClockMetrics.secondsBottom)
-                    .accessibilityHidden(true)
+                OpeningPanelClockSeconds(text: seconds)
             }
         }
         .accessibilityElement(children: .ignore)

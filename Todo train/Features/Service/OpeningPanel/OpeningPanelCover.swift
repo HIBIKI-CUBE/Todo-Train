@@ -30,6 +30,7 @@ struct OpeningPanelCover: View {
     @State private var phoneSupply: OpeningPanelPhoneSupply = .unknown
 
     var body: some View {
+        let _ = OpeningPanelRedrawProbe.bump("OpeningPanelCover")
         ZStack {
             Color.black
                 .ignoresSafeArea()
@@ -217,6 +218,7 @@ struct OpeningPanelCover: View {
     }
 
     private func loadTarget(for state: OpeningPanelState, now: Date) -> OpeningPanelLoadTarget {
+        let _ = OpeningPanelRedrawProbe.bump("loadTarget")
         let lit = OpeningPanelLoadLogic.isLit(
             powered: state.isPowered,
             timetableConfirmed: state.confirmation(of: .timetable) == .confirmed,
@@ -264,17 +266,19 @@ struct OpeningPanelCover: View {
     }
 
     private var ticketSyncKey: String {
-        let sessions = Array(allSessions)
-        return allTickets.map { ticket in
-            let refined: String
-            switch forecastStore.lookup(ticket: ticket, sessions: sessions) {
-            case .hit(let minutes):
-                refined = minutes.map(String.init) ?? "median"
-            case .miss:
-                refined = "miss"
+        let _ = OpeningPanelRedrawProbe.bump("ticketSyncKey")
+        return allTickets
+            .filter(\.isOpen)
+            .map { ticket in
+                let refined: String
+                if let entry = forecastStore.cachedEntry(for: ticket.id) {
+                    refined = "\(entry.medianAtRun):\(entry.minutes.map(String.init) ?? "median"):\(entry.fingerprint.band.rawValue)"
+                } else {
+                    refined = "miss"
+                }
+                return "\(ticket.id.uuidString)|\(ticket.sortOrder)|\(ticket.estimatedSeconds)|\(ticket.title)|\(refined)"
             }
-            return "\(ticket.id.uuidString)|\(ticket.sortOrder)|\(ticket.estimatedSeconds)|\(ticket.title)|\(ticket.closedAt?.timeIntervalSinceReferenceDate ?? -1)|\(refined)"
-        }.joined(separator: ";") + "#\(sessions.count)"
+            .joined(separator: ";") + "#\(allSessions.count)"
     }
 
     private func syncTickets() {

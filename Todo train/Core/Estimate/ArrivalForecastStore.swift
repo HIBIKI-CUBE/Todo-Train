@@ -80,12 +80,19 @@ final class ArrivalForecastStore {
         )
     }
 
+    func cachedEntry(for ticketID: UUID) -> Entry? {
+        cache[ticketID]
+    }
+
     func lookup(
         ticket: Ticket,
         sessions: [WorkSession],
         now: Date = .now,
         calendar: Calendar = .current
     ) -> Lookup {
+        guard cache[ticket.id] != nil else {
+            return .miss
+        }
         guard let context = BoardingForecast.forecastContext(
             ticket: ticket,
             sessions: sessions,
