@@ -145,7 +145,7 @@ struct OpeningPanelTicketsTests {
 
     @Test func sequencePicks_putChosenFirstAndRejectARepeat() {
         let ids = (0..<5).map { _ in UUID() }
-        let first = OpeningPanelTickets.touchRow(
+        let during = OpeningPanelTickets.touchRow(
             index: 3,
             ids: ids,
             cut: 3,
@@ -155,18 +155,7 @@ struct OpeningPanelTicketsTests {
             powered: true,
             departed: false
         )
-        #expect(first == .select(ids[3]))
-        let again = OpeningPanelTickets.touchRow(
-            index: 3,
-            ids: ids,
-            cut: 3,
-            picks: [ids[3]],
-            sequencing: true,
-            confirmed: true,
-            powered: true,
-            departed: false
-        )
-        #expect(again == .duplicate)
+        #expect(during == .reject)
 
         let ordered = OpeningPanelTickets.reorderedIDs(ids, picks: [ids[3], ids[1]])
         #expect(ordered == [ids[3], ids[1], ids[0], ids[2], ids[4]])

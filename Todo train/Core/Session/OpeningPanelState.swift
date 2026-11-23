@@ -266,6 +266,7 @@ final class OpeningPanelState {
     private let feedback: any OpeningPanelFeedback
     private let onStartService: () -> Void
     private let onCommitSequence: () -> Void
+    /// 仕分けは時間では抜けない。電源を切ったときの破棄は画面側の dropPicks。
     private let onAbandonSequence: () -> Void
     private let onShowHub: () -> Void
     /// 運行中に盤を開いたとき。MASTER は運行を始め直さない。
@@ -292,7 +293,7 @@ final class OpeningPanelState {
     private(set) var ticketsStage: OpeningPanelTicketsStage = .dark
     /// 0 は見積もり。6 で予測の長さまで伸びきる。
     private(set) var ticketGrowthStep = 0
-    /// SEQ のレンズ。点滅のあいだは段ごとに入れ替わる。
+    /// SEQ のレンズ。仕分けのあいだは点いたまま。
     private(set) var sequenceLampLit = false
 
     private(set) var departBarDepth = 0
@@ -312,8 +313,6 @@ final class OpeningPanelState {
     private var powerTasks: [OpeningPanelTask] = []
     private var autoTasks: [OpeningPanelTask] = []
     private var departTasks: [OpeningPanelTask] = []
-    private var sequenceTasks: [OpeningPanelTask] = []
-    private var sequenceGeneration = 0
 
     init(
         scheduler: any OpeningPanelScheduling,
@@ -471,14 +470,14 @@ final class OpeningPanelState {
             commitSequence()
         } else {
             isSequencing = true
-            armSequenceLamp(fromEntry: true)
+            sequenceLampLit = true
         }
         feedback.play(.light)
         feedback.play(.haptic(.operation))
         rearmAuto()
     }
 
-    /// SEQ 中の行。受け付けた行は軽い音、同じ行は鈍い音。どちらも点滅をすぐ始め直す。
+    /// SEQ 中に山や取消を受けたとき。灯は点いたままにする。
     func noteSequenceRow(accepted: Bool) {
         guard isSequencing, !hasDeparted else { return }
         if accepted {
@@ -487,7 +486,6 @@ final class OpeningPanelState {
         } else {
             feedback.play(.dull)
         }
-        armSequenceLamp(fromEntry: false)
         rearmAuto()
     }
 
@@ -530,57 +528,9 @@ final class OpeningPanelState {
 
     private func commitSequence() {
         guard isSequencing else { return }
-        cancelSequenceLamp()
         isSequencing = false
         sequenceLampLit = false
         onCommitSequence()
-    }
-
-    private func abandonSequence() {
-        guard isSequencing else { return }
-        cancelSequenceLamp()
-        isSequencing = false
-        sequenceLampLit = false
-        feedback.play(.dull)
-        onAbandonSequence()
-    }
-
-    /// 入った直後は灯を点けたまま待つ。行を押したあとは待ちなしで点滅を始め直す。
-    private func armSequenceLamp(fromEntry: Bool) {
-        sequenceGeneration += 1
-        let generation = sequenceGeneration
-        sequenceTasks.forEach { $0.cancel() }
-        sequenceTasks = []
-        sequenceLampLit = true
-        guard isSequencing else { return }
-        let wait = fromEntry ? OpeningPanelTiming.sequenceQuiet : 0
-        let task = scheduler.schedule(after: wait) { [weak self] in
-            self?.blinkSequence(elapsed: 0, lit: true, generation: generation)
-        }
-        sequenceTasks.append(task)
-    }
-
-    /// 周期は 500ms から始まり、1500ms で 6 倍まで速まる。窓を超えた段で、並びを変えずに抜ける。
-    private func blinkSequence(elapsed: TimeInterval, lit: Bool, generation: Int) {
-        guard isSequencing, generation == sequenceGeneration else { return }
-        if elapsed >= OpeningPanelTiming.sequenceBlink {
-            abandonSequence()
-            return
-        }
-        let next = !lit
-        sequenceLampLit = next
-        let pace = 1 + 5 * elapsed / OpeningPanelTiming.sequenceBlink
-        let delay = 0.5 / pace
-        let task = scheduler.schedule(after: delay) { [weak self] in
-            self?.blinkSequence(elapsed: elapsed + delay, lit: next, generation: generation)
-        }
-        sequenceTasks.append(task)
-    }
-
-    private func cancelSequenceLamp() {
-        sequenceGeneration += 1
-        sequenceTasks.forEach { $0.cancel() }
-        sequenceTasks = []
     }
 
     private func powerOff() {
@@ -592,7 +542,6 @@ final class OpeningPanelState {
         for module in OpeningPanelModuleID.allCases {
             _ = bump(module)
         }
-        cancelSequenceLamp()
         isPowered = false
         isReady = false
         isSequencing = false

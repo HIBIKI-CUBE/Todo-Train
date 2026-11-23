@@ -143,8 +143,8 @@ struct OpeningPanelCover: View {
                         )
                     },
                     sequenceKey: {
-                        TicketsSequenceKey(state: panelState) {
-                            panelState.pressSequence()
+                        TicketsSequenceKey(state: panelState, phase: ticketsModel.sequencePhase) {
+                            pressSequenceKey(panelState)
                         }
                     },
                     ticketsKey: {
@@ -158,7 +158,11 @@ struct OpeningPanelCover: View {
                         EmptyView()
                     },
                     tickets: {
-                        TicketsModule(state: panelState, model: ticketsModel)
+                        TicketsModule(
+                            state: panelState,
+                            model: ticketsModel,
+                            calendar: sessionManager.calendar
+                        )
                     },
                     load: {
                         LoadGauge(drawing: loadDrawing)
@@ -233,7 +237,8 @@ struct OpeningPanelCover: View {
                             model: ticketsModel
                         )
                     },
-                    timetableTwentyFour: panelState.timetableTwentyFour
+                    timetableTwentyFour: panelState.timetableTwentyFour,
+                    sequenceMode: sequenceHitMode
                 )
                 // onChange は既定だと最初の値を渡さない。計器は出た瞬間の目標も受け取る。
                 .onChange(of: loadTarget, initial: true) { _, target in
@@ -395,6 +400,47 @@ struct OpeningPanelCover: View {
             state: UIDevice.current.batteryState,
             level: UIDevice.current.batteryLevel
         )
+    }
+
+    private var sequenceHitMode: OpeningPanelHitLayout.SequenceMode? {
+        switch ticketsModel.sequencePhase {
+        case .sorting: return .sorting
+        case .comparing: return .comparing
+        case .result: return .result
+        case nil: return nil
+        }
+    }
+
+    private func pressSequenceKey(_ state: OpeningPanelState) {
+        guard state.isPowered, state.confirmation(of: .tickets) == .confirmed, !state.hasDeparted else {
+            state.pressSequence()
+            return
+        }
+        if !state.isSequencing {
+            let sessions = (try? modelContext.fetch(FetchDescriptor<WorkSession>())) ?? []
+            let free = sessionManager.openingTimetableBoard(
+                now: loadNow,
+                isTwentyFourHour: state.timetableTwentyFour
+            ).load.freeMinutes
+            guard ticketsModel.beginSequence(
+                sessions: sessions,
+                freeMinutes: free,
+                now: loadNow,
+                calendar: sessionManager.calendar,
+                in: modelContext
+            ) else {
+                state.rejectTouch()
+                return
+            }
+            state.pressSequence()
+            return
+        }
+        if ticketsModel.sequencePhase == .result {
+            state.pressSequence()
+            return
+        }
+        ticketsModel.finishSequenceEarly()
+        state.noteSequenceRow(accepted: true)
     }
 
     private func paintTickets() {

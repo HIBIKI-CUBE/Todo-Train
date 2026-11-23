@@ -248,9 +248,8 @@ enum OpeningPanelTickets {
         departed: Bool
     ) -> OpeningPanelTicketTouch {
         guard powered, !departed, ids.indices.contains(index) else { return .reject }
-        let id = ids[index]
         if sequencing {
-            return picks.contains(id) ? .duplicate : .select(id)
+            return .reject
         }
         guard confirmed else { return .reject }
         let next = index + 1
@@ -308,7 +307,10 @@ final class OpeningPanelTicketsModel {
     private(set) var rows: [OpeningPanelTicketRow] = []
     private(set) var cut: Int = OpeningPanelTicketMetrics.defaultCut
     private(set) var picks: [UUID] = []
+    private(set) var engine: OpeningPanelSequenceEngine?
     private var openTickets: [UUID: Ticket] = [:]
+    private var orderSnapshot: [UUID]?
+    private var cutSnapshot = 0
 
     func sync(
         tickets: [Ticket],
@@ -340,6 +342,8 @@ final class OpeningPanelTicketsModel {
             rows = incoming
             picks = []
             cut = OpeningPanelTickets.initialCut(count: rows.count)
+            engine = nil
+            orderSnapshot = nil
         }
         if cut > rows.count {
             cut = rows.count
@@ -367,12 +371,94 @@ final class OpeningPanelTicketsModel {
         cut = min(max(next, 0), rows.count)
     }
 
-    func dropPicks() {
-        picks.removeAll()
+    var sequencePhase: OpeningPanelSequenceEngine.Phase? { engine?.phase }
+
+    func beginSequence(
+        sessions: [WorkSession],
+        freeMinutes: Int,
+        now: Date = .now,
+        calendar: Calendar = .current,
+        in context: ModelContext,
+        seed: UInt32? = nil
+    ) -> Bool {
+        let marks = (try? context.fetch(FetchDescriptor<OpeningSequenceBelowDays>())) ?? []
+        let days = Dictionary(uniqueKeysWithValues: marks.map { ($0.ticketID, $0.consecutiveDays) })
+        let stats = rows.compactMap { row -> OpeningPanelSequenceStat? in
+            guard let ticket = openTickets[row.id] else { return nil }
+            return OpeningPanelSequenceStat.make(
+                ticket: ticket,
+                sessions: sessions,
+                now: now,
+                calendar: calendar,
+                daysBelow: days[row.id] ?? 0
+            )
+        }
+        guard stats.count == rows.count else { return false }
+        let resolved = seed ?? UInt32(truncatingIfNeeded: UInt64.random(in: .min ... .max))
+        guard let started = OpeningPanelSequenceEngine.start(
+            stats: stats,
+            freeMinutes: Double(freeMinutes),
+            seed: resolved
+        ) else { return false }
+        orderSnapshot = rows.map(\.id)
+        cutSnapshot = cut
+        engine = started
+        return true
     }
 
-    /// 選んだ順で先頭から並べ、Hub の順として保存する。#208 の DEPART からも呼ぶ。
-    func commitSequenceOrder(in context: ModelContext) {
+    @discardableResult
+    func chooseSequencePile(_ index: Int) -> Bool {
+        guard var engine else { return false }
+        let accepted = engine.choosePile(index)
+        self.engine = engine
+        publishIfSettled()
+        return accepted
+    }
+
+    @discardableResult
+    func chooseSequenceInsertedFirst(_ insertedFirst: Bool) -> Bool {
+        guard var engine else { return false }
+        let accepted = engine.chooseInsertedFirst(insertedFirst)
+        self.engine = engine
+        publishIfSettled()
+        return accepted
+    }
+
+    @discardableResult
+    func undoSequence() -> Bool {
+        guard var engine else { return false }
+        let accepted = engine.undo()
+        self.engine = engine
+        return accepted
+    }
+
+    func finishSequenceEarly() {
+        guard var engine else { return }
+        engine.finishEarly()
+        self.engine = engine
+        publishIfSettled()
+    }
+
+    func dropPicks() {
+        if let orderSnapshot {
+            let byID = Dictionary(uniqueKeysWithValues: rows.map { ($0.id, $0) })
+            let restored = orderSnapshot.compactMap { byID[$0] }
+            if restored.count == rows.count {
+                rows = restored
+            }
+            cut = min(cutSnapshot, rows.count)
+        }
+        picks.removeAll()
+        engine = nil
+        orderSnapshot = nil
+    }
+
+    /// 仕分けの結果を先頭から並べ、Hub の順として保存する。#208 の DEPART からも呼ぶ。
+    func commitSequenceOrder(in context: ModelContext, now: Date = .now, calendar: Calendar = .current) {
+        if engine != nil {
+            commitEngine(in: context, now: now, calendar: calendar)
+            return
+        }
         let ids = OpeningPanelTickets.reorderedIDs(rows.map(\.id), picks: picks)
         let orders = TicketSortOrdering.normalizedOrders(forOrderedIDs: ids)
         for (id, order) in orders {
@@ -385,14 +471,136 @@ final class OpeningPanelTicketsModel {
             try? context.save()
         }
     }
+
+    private func publishIfSettled() {
+        guard let engine, engine.phase != .sorting else { return }
+        let ids = engine.orderIDs
+        let byID = Dictionary(uniqueKeysWithValues: rows.map { ($0.id, $0) })
+        let next = ids.compactMap { byID[$0] }
+        guard next.count == rows.count else { return }
+        rows = next
+        cut = min(max(engine.lineIndex, 0), rows.count)
+    }
+
+    private func commitEngine(in context: ModelContext, now: Date, calendar: Calendar) {
+        guard var engine else { return }
+        if engine.phase != .result {
+            engine.finishEarly()
+        }
+        self.engine = engine
+        publishIfSettled()
+        let ids = engine.orderIDs
+        let orders = TicketSortOrdering.normalizedOrders(forOrderedIDs: ids)
+        for (id, order) in orders {
+            openTickets[id]?.sortOrder = order
+        }
+        let byID = Dictionary(uniqueKeysWithValues: rows.map { ($0.id, $0) })
+        let ordered = ids.compactMap { byID[$0] }
+        if ordered.count == rows.count {
+            rows = ordered
+        }
+        cut = min(max(engine.lineIndex, 0), rows.count)
+        let record = OpeningSequenceRecord(
+            dayStart: calendar.startOfDay(for: now),
+            freeMinutes: engine.freeMinutes,
+            lineIndex: engine.lineIndex,
+            placementsJSON: OpeningPanelSequenceArchive.json(engine.placements),
+            answersJSON: OpeningPanelSequenceArchive.json(engine.answers)
+        )
+        context.insert(record)
+        writeBelowDays(engine.placements, now: now, calendar: calendar, in: context)
+        picks = []
+        self.engine = nil
+        orderSnapshot = nil
+        if context.hasChanges {
+            try? context.save()
+        }
+    }
+
+    private func writeBelowDays(
+        _ placements: [OpeningPanelSequencePlacement],
+        now: Date,
+        calendar: Calendar,
+        in context: ModelContext
+    ) {
+        let existing = (try? context.fetch(FetchDescriptor<OpeningSequenceBelowDays>())) ?? []
+        let previous = existing.map {
+            OpeningPanelSequenceDayMark(
+                ticketID: $0.ticketID,
+                consecutiveDays: $0.consecutiveDays,
+                lastBelowDay: $0.lastBelowDay
+            )
+        }
+        let updated = OpeningPanelSequenceDays.advance(
+            previous: previous,
+            placements: placements,
+            day: now,
+            calendar: calendar
+        )
+        var stored: [UUID: OpeningSequenceBelowDays] = [:]
+        for row in existing where stored[row.ticketID] == nil {
+            stored[row.ticketID] = row
+        }
+        for mark in updated {
+            let row = stored[mark.ticketID] ?? OpeningSequenceBelowDays(
+                ticketID: mark.ticketID,
+                consecutiveDays: 0,
+                lastBelowDay: nil
+            )
+            if stored[mark.ticketID] == nil {
+                context.insert(row)
+                stored[mark.ticketID] = row
+            }
+            row.consecutiveDays = mark.consecutiveDays
+            row.lastBelowDay = mark.lastBelowDay
+        }
+    }
 }
 
 struct TicketsModule: View {
     var state: OpeningPanelState
     var model: OpeningPanelTicketsModel
+    var calendar: Calendar = .current
 
     var body: some View {
         let _ = OpeningPanelRedrawProbe.bump("TicketsModule")
+        if state.isSequencing, let engine = model.engine {
+            OpeningPanelSequenceBoard(
+                picture: OpeningPanelSequencePicture.make(
+                    engine: engine,
+                    title: { id in
+                        model.rows.first { $0.id == id }?.title ?? ""
+                    },
+                    calendar: calendar
+                ),
+                onPile: { index in
+                    if model.chooseSequencePile(index) {
+                        state.noteSequenceRow(accepted: true)
+                    } else {
+                        state.rejectTouch()
+                    }
+                },
+                onInsertedFirst: { insertedFirst in
+                    if model.chooseSequenceInsertedFirst(insertedFirst) {
+                        state.noteSequenceRow(accepted: true)
+                    } else {
+                        state.rejectTouch()
+                    }
+                },
+                onUndo: {
+                    if model.undoSequence() {
+                        state.noteSequenceRow(accepted: true)
+                    } else {
+                        state.rejectTouch()
+                    }
+                }
+            )
+        } else {
+            ticketList
+        }
+    }
+
+    private var ticketList: some View {
         VStack(spacing: 0) {
             ForEach(Array(rowSlots.enumerated()), id: \.offset) { index, slot in
                 Button {
@@ -681,6 +889,7 @@ private struct OpeningPanelTicketHatch: View {
 
 struct TicketsSequenceKey: View {
     var state: OpeningPanelState
+    var phase: OpeningPanelSequenceEngine.Phase?
     var onPress: () -> Void
 
     var body: some View {
@@ -693,8 +902,17 @@ struct TicketsSequenceKey: View {
         .openingPanelAction(.sequence, perform: onPress)
         .contentShape(Rectangle())
         .accessibilityLabel("SEQ")
-        .accessibilityValue(state.isSequencing ? "並べ替え" : "待機")
+        .accessibilityValue(accessibilityValue)
         .accessibilityHint(hint)
+    }
+
+    private var accessibilityValue: String {
+        guard state.isSequencing else { return "待機" }
+        switch phase {
+        case .sorting, nil: return "仕分け"
+        case .comparing: return "決め直し"
+        case .result: return "結果"
+        }
     }
 
     private var hint: String {
@@ -705,9 +923,12 @@ struct TicketsSequenceKey: View {
             return "切符の確認が済むと順を入れ替えられます"
         }
         if state.isSequencing {
-            return "選んだ順で先頭から並べます"
+            if phase == .result {
+                return "この順番を採用します"
+            }
+            return "ここまでの仕分けで結果を出します"
         }
-        return "切符の順を入れ替えます"
+        return "切符を仕分けます"
     }
 }
 

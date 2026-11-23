@@ -541,6 +541,17 @@ enum AppSchemaV8: VersionedSchema {
     }
 }
 
+enum AppSchemaV9: VersionedSchema {
+    static var versionIdentifier: Schema.Version { Schema.Version(9, 0, 0) }
+
+    static var models: [any PersistentModel.Type] {
+        AppSchemaV8.models + [
+            OpeningSequenceRecord.self,
+            OpeningSequenceBelowDays.self,
+        ]
+    }
+}
+
 enum AppMigrationPlan: SchemaMigrationPlan {
     static var schemas: [any VersionedSchema.Type] {
         [
@@ -553,6 +564,7 @@ enum AppMigrationPlan: SchemaMigrationPlan {
             AppSchemaV6.self,
             AppSchemaV7.self,
             AppSchemaV8.self,
+            AppSchemaV9.self,
         ]
     }
 
@@ -566,6 +578,7 @@ enum AppMigrationPlan: SchemaMigrationPlan {
             migrateV5toV6,
             migrateV6toV7,
             migrateV7toV8,
+            migrateV8toV9,
         ]
     }
 
@@ -633,6 +646,14 @@ enum AppMigrationPlan: SchemaMigrationPlan {
     static let migrateV7toV8 = MigrationStage.custom(
         fromVersion: AppSchemaV7.self,
         toVersion: AppSchemaV8.self,
+        willMigrate: { _ in },
+        didMigrate: { _ in }
+    )
+
+    /// SEQ の置き場所・答え・線の下の日数を空の表として足す。
+    static let migrateV8toV9 = MigrationStage.custom(
+        fromVersion: AppSchemaV8.self,
+        toVersion: AppSchemaV9.self,
         willMigrate: { _ in },
         didMigrate: { _ in }
     )

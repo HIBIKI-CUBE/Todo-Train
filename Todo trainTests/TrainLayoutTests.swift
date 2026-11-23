@@ -204,7 +204,7 @@ struct TrainLayoutTests {
                 #expect(hitContains(target.hit, target.visual))
             case .timetableBand:
                 #expect(hitContains(target.hit, target.visual))
-            case .master, .clockKey, .hourMode, .scaleToggle, .timetableKey, .sequence, .ticketsKey, .commTest, .depart, .todayRail, .ticketRow:
+            case .master, .clockKey, .hourMode, .scaleToggle, .timetableKey, .sequence, .ticketsKey, .commTest, .depart, .todayRail, .ticketRow, .sequencePile, .sequenceUndo, .sequenceCard:
                 break
             }
         }

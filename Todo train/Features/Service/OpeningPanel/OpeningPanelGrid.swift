@@ -52,6 +52,7 @@ struct OpeningPanelGrid: View {
     private let todayRailLit: Bool
     private let onTodayRail: ((CGFloat, Bool) -> Void)?
     private let timetableTwentyFour: Bool
+    private let sequenceMode: OpeningPanelHitLayout.SequenceMode?
 
     @State private var todayRailDown = false
     @State private var hitActions = OpeningPanelHitActions()
@@ -100,7 +101,8 @@ struct OpeningPanelGrid: View {
         todayRows: Int = 5,
         todayRailLit: Bool = false,
         onTodayRail: ((CGFloat, Bool) -> Void)? = nil,
-        timetableTwentyFour: Bool = false
+        timetableTwentyFour: Bool = false,
+        sequenceMode: OpeningPanelHitLayout.SequenceMode? = nil
     ) {
         self.check = AnyView(check())
         self.phone = AnyView(phone())
@@ -145,6 +147,7 @@ struct OpeningPanelGrid: View {
         self.todayRailLit = todayRailLit
         self.onTodayRail = onTodayRail
         self.timetableTwentyFour = timetableTwentyFour
+        self.sequenceMode = sequenceMode
     }
 
     var body: some View {
@@ -186,7 +189,11 @@ struct OpeningPanelGrid: View {
     }
 
     private func lattice(minimum: CGFloat) -> some View {
-        let targets = OpeningPanelHitLayout.board(minimum: minimum, ticketRows: todayRows)
+        let targets = OpeningPanelHitLayout.board(
+            minimum: minimum,
+            ticketRows: todayRows,
+            sequence: sequenceMode
+        )
         return OpeningPanelLattice {
             cell(.sysbar) { sysbar }
             cell(.master) { masterModule }
