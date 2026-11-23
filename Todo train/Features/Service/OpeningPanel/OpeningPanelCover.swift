@@ -11,19 +11,17 @@ import UIKit
 
 struct OpeningPanelCover: View {
     @Environment(SessionManager.self) private var sessionManager
-    @Environment(ArrivalForecastStore.self) private var forecastStore
     @Environment(AppSettings.self) private var settings
     @Environment(CompanionSyncRuntime.self) private var companion
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.modelContext) private var modelContext
-    @Query(sort: \Ticket.sortOrder) private var allTickets: [Ticket]
-    @Query private var allSessions: [WorkSession]
 
     var onServiceDayNeedsEnd: () -> Void
 
     @State private var panelState: OpeningPanelState?
     @State private var ticketsModel = OpeningPanelTicketsModel()
+    @State private var reserveGate = OpeningPanelReserveGate()
     @State private var commModel = OpeningPanelCommModel()
     @State private var loadPlayer = OpeningPanelLoadPlayer(scheduler: OpeningPanelDispatchScheduler())
     @State private var loadNow = Date()
@@ -197,7 +195,7 @@ struct OpeningPanelCover: View {
         }
         .task {
             guard panelState == nil else { return }
-            syncTickets()
+            paintTickets()
             let model = ticketsModel
             let context = modelContext
             panelState = OpeningPanelState.live(
@@ -208,9 +206,19 @@ struct OpeningPanelCover: View {
                 onAbandonSequence: { model.dropPicks() },
                 onShowHub: { dismiss() }
             )
+            await Task.yield()
+            startReserve()
         }
-        .onChange(of: ticketSyncKey) {
-            syncTickets()
+        .onReceive(NotificationCenter.default.publisher(for: ModelContext.didSave)) { note in
+            guard panelState != nil else { return }
+            guard !ForecastReserveStore.savedByUs(note) else { return }
+            startReserve()
+        }
+        .onChange(of: ticketsModel.cut) {
+            guard panelState != nil, reserveGate.isActive else { return }
+            startReserve()
+        }
+        .onChange(of: ticketsModel.rows.count) {
             guard let panelState else { return }
             if panelState.ticketsStage == .dark,
                panelState.confirmation(of: .tickets) == .unconfirmed {
@@ -319,31 +327,35 @@ struct OpeningPanelCover: View {
         )
     }
 
-    private var ticketSyncKey: String {
-        let _ = OpeningPanelRedrawProbe.bump("ticketSyncKey")
-        return allTickets
-            .filter(\.isOpen)
-            .map { ticket in
-                let refined: String
-                if let entry = forecastStore.cachedEntry(for: ticket.id) {
-                    refined = "\(entry.medianAtRun):\(entry.minutes.map(String.init) ?? "median"):\(entry.fingerprint.band.rawValue)"
-                } else {
-                    refined = "miss"
-                }
-                return "\(ticket.id.uuidString)|\(ticket.sortOrder)|\(ticket.estimatedSeconds)|\(ticket.title)|\(refined)"
-            }
-            .joined(separator: ";") + "#\(allSessions.count)"
+    private func paintTickets() {
+        let tickets = (try? modelContext.fetch(
+            FetchDescriptor<Ticket>(sortBy: [SortDescriptor(\.sortOrder)])
+        )) ?? []
+        ticketsModel.show(
+            tickets: tickets,
+            arrivals: ForecastReserveStore.tentativePlaces(in: modelContext, tickets: tickets)
+        )
     }
 
-    private func syncTickets() {
-        let sessions = Array(allSessions)
-        ticketsModel.sync(tickets: Array(allTickets), sessions: sessions) { ticket in
-            switch forecastStore.lookup(ticket: ticket, sessions: sessions) {
-            case .hit(let minutes):
-                return minutes
-            case .miss:
-                return nil
-            }
+    private func startReserve() {
+        let generation = reserveGate.begin()
+        let context = modelContext
+        let model = ticketsModel
+        let calendar = sessionManager.calendar
+        let order = model.rows.map(\.id)
+        let cut = model.cut
+        Task { @MainActor in
+            await ForecastReserveStore.refresh(
+                in: context,
+                rowOrder: order,
+                cut: cut,
+                calendar: calendar,
+                onPlace: { id, place in
+                    guard reserveGate.isCurrent(generation) else { return }
+                    model.applyArrival(id: id, place: place)
+                }
+            )
+            reserveGate.end(generation)
         }
     }
 
@@ -356,6 +368,30 @@ struct OpeningPanelCover: View {
             onServiceDayNeedsEnd()
         case .failed:
             break
+        }
+    }
+}
+
+@MainActor
+private final class OpeningPanelReserveGate {
+    private var generation = 0
+    private var active: Int?
+
+    var isActive: Bool { active != nil }
+
+    func begin() -> Int {
+        generation += 1
+        active = generation
+        return generation
+    }
+
+    func isCurrent(_ generation: Int) -> Bool {
+        self.generation == generation
+    }
+
+    func end(_ generation: Int) {
+        if active == generation {
+            active = nil
         }
     }
 }

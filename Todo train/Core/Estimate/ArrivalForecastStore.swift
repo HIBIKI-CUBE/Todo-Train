@@ -177,6 +177,15 @@ final class ArrivalForecastStore {
         return await finish(ticketID: ticketID, forecast: forecast, priority: priority)
     }
 
+    /// 似たきっぷ探しを終えたあとの仕上げ。文脈は呼び出し側が渡す。
+    func refinePrepared(
+        ticketID: UUID,
+        context: ArrivalForecastContext,
+        priority: ArrivalForecastPriority = .warm
+    ) async -> Int? {
+        await finish(ticketID: ticketID, forecast: context, priority: priority)
+    }
+
     private func finish(
         ticketID: UUID,
         forecast: ArrivalForecastContext?,

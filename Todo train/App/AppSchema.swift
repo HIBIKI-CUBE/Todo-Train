@@ -8,6 +8,7 @@
 //  V5 で延長の時点の実働秒を足す。V4 の乗車グラフは AppSchemaV4+Frozen.swift。
 //  V6 で声掛けの記録を既定の空配列で足す。V5 の乗車グラフは AppSchemaV5+Frozen.swift。
 //  V7 で見積もり直しの JSON・到着前の無操作秒数・現在の予算を足す。budgetSecondsAtStart は発車時固定。
+//  V8 で乗車の要約と到着予想の控えを足す。元の記録はそのまま。
 //
 
 import Foundation
@@ -529,6 +530,17 @@ enum AppSchemaV7: VersionedSchema {
     }
 }
 
+enum AppSchemaV8: VersionedSchema {
+    static var versionIdentifier: Schema.Version { Schema.Version(8, 0, 0) }
+
+    static var models: [any PersistentModel.Type] {
+        AppSchemaV7.models + [
+            RideSummaryCache.self,
+            ArrivalForecastCache.self,
+        ]
+    }
+}
+
 enum AppMigrationPlan: SchemaMigrationPlan {
     static var schemas: [any VersionedSchema.Type] {
         [
@@ -540,6 +552,7 @@ enum AppMigrationPlan: SchemaMigrationPlan {
             AppSchemaV5.self,
             AppSchemaV6.self,
             AppSchemaV7.self,
+            AppSchemaV8.self,
         ]
     }
 
@@ -552,6 +565,7 @@ enum AppMigrationPlan: SchemaMigrationPlan {
             migrateV4toV5,
             migrateV5toV6,
             migrateV6toV7,
+            migrateV7toV8,
         ]
     }
 
@@ -613,5 +627,13 @@ enum AppMigrationPlan: SchemaMigrationPlan {
             }
             try? context.save()
         }
+    )
+
+    /// 乗車の要約と到着予想の控えを空の表として足す。
+    static let migrateV7toV8 = MigrationStage.custom(
+        fromVersion: AppSchemaV7.self,
+        toVersion: AppSchemaV8.self,
+        willMigrate: { _ in },
+        didMigrate: { _ in }
     )
 }

@@ -16,6 +16,8 @@ enum OpeningPanelTicketMetrics {
     static let durationSize: CGFloat = 11
     static let durationWidth: CGFloat = 32
     static let durationOpacity: Double = 0.8
+    /// 計算中の前回の値。確定した所要は `durationOpacity` のまま。
+    static let staleDurationOpacity: Double = 0.35
     static let contentTop: CGFloat = 2
     static let contentHorizontal: CGFloat = 6
     static let bandInset: CGFloat = 2
@@ -40,6 +42,12 @@ struct OpeningPanelTicketRow: Equatable, Identifiable, Sendable {
     var title: String
     var estimateMinutes: Int
     var actualMinutes: Int
+    var arrival: OpeningPanelArrivalPlace = .empty
+}
+
+struct OpeningPanelDurationPresentation: Equatable, Sendable {
+    var text: String
+    var faint: Bool
 }
 
 enum OpeningPanelTicketTouch: Equatable {
@@ -87,7 +95,8 @@ enum OpeningPanelTickets {
                     id: ticket.id,
                     title: ticket.title,
                     estimateMinutes: resolved.estimate,
-                    actualMinutes: resolved.actual
+                    actualMinutes: resolved.actual,
+                    arrival: .current(resolved.actual)
                 )
             }
     }
@@ -112,6 +121,50 @@ enum OpeningPanelTickets {
             estimatedSeconds: estimatedSeconds,
             medianMinutes: BoardingForecast.predictedDuration(from: samples)?.minutes,
             refined: refined
+        )
+    }
+
+    static func rows(
+        from tickets: [Ticket],
+        arrivals: [UUID: OpeningPanelArrivalPlace]
+    ) -> [OpeningPanelTicketRow] {
+        tickets
+            .filter(\.isOpen)
+            .sorted { $0.sortOrder < $1.sortOrder }
+            .map { ticket in
+                let estimate = max(ticket.estimatedSeconds / 60, 1)
+                let place = arrivals[ticket.id] ?? .empty
+                return OpeningPanelTicketRow(
+                    id: ticket.id,
+                    title: ticket.title,
+                    estimateMinutes: estimate,
+                    actualMinutes: place.minutes ?? estimate,
+                    arrival: place
+                )
+            }
+    }
+
+    static func durationPresentation(
+        arrival: OpeningPanelArrivalPlace,
+        estimate: Int,
+        growthStep: Int
+    ) -> OpeningPanelDurationPresentation {
+        let minutes: Int
+        let faint: Bool
+        switch arrival {
+        case .empty:
+            return OpeningPanelDurationPresentation(text: "", faint: false)
+        case .previous(let value):
+            minutes = value
+            faint = true
+        case .current(let value):
+            minutes = value
+            faint = false
+        }
+        let shown = shownMinutes(estimate: estimate, actual: minutes, step: growthStep)
+        return OpeningPanelDurationPresentation(
+            text: durationText(minutes: shown),
+            faint: faint
         )
     }
 
@@ -264,13 +317,19 @@ final class OpeningPanelTicketsModel {
         calendar: Calendar = .current,
         refinedMinutes: (Ticket) -> Int? = { _ in nil }
     ) {
-        let incoming = OpeningPanelTickets.rows(
-            from: tickets,
-            sessions: sessions,
-            now: now,
-            calendar: calendar,
-            refinedMinutes: refinedMinutes
+        adopt(
+            OpeningPanelTickets.rows(
+                from: tickets,
+                sessions: sessions,
+                now: now,
+                calendar: calendar,
+                refinedMinutes: refinedMinutes
+            ),
+            tickets: tickets
         )
+    }
+
+    private func adopt(_ incoming: [OpeningPanelTicketRow], tickets: [Ticket]) {
         openTickets = Dictionary(uniqueKeysWithValues: tickets.filter(\.isOpen).map { ($0.id, $0) })
         let incomingIDs = Set(incoming.map(\.id))
         if Set(rows.map(\.id)) == incomingIDs {
@@ -285,6 +344,18 @@ final class OpeningPanelTicketsModel {
         if cut > rows.count {
             cut = rows.count
         }
+    }
+
+    func show(tickets: [Ticket], arrivals: [UUID: OpeningPanelArrivalPlace]) {
+        adopt(OpeningPanelTickets.rows(from: tickets, arrivals: arrivals), tickets: tickets)
+    }
+
+    func applyArrival(id: UUID, place: OpeningPanelArrivalPlace) {
+        guard let index = rows.firstIndex(where: { $0.id == id }) else { return }
+        let actual = place.minutes ?? rows[index].estimateMinutes
+        guard rows[index].arrival != place || rows[index].actualMinutes != actual else { return }
+        rows[index].arrival = place
+        rows[index].actualMinutes = actual
     }
 
     func select(_ id: UUID) {
@@ -447,6 +518,7 @@ private struct OpeningPanelTicketRowView: View {
                         .frame(width: widths.fill)
                     OpeningPanelTicketHatch()
                         .frame(width: widths.hatch)
+                        .opacity(row.arrival.isFaint ? OpeningPanelTicketMetrics.staleDurationOpacity : 1)
                     Spacer(minLength: 0)
                 }
                 .padding(.vertical, OpeningPanelTicketMetrics.bandInset)
@@ -467,10 +539,10 @@ private struct OpeningPanelTicketRowView: View {
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
         case .ticket(let row):
-            let minutes = OpeningPanelTickets.shownMinutes(
+            let presentation = OpeningPanelTickets.durationPresentation(
+                arrival: row.arrival,
                 estimate: row.estimateMinutes,
-                actual: row.actualMinutes,
-                step: growthStep
+                growthStep: growthStep
             )
             HStack(spacing: OpeningPanelTicketMetrics.rowGap) {
                 OpeningPanelTicketDigit(
@@ -489,11 +561,15 @@ private struct OpeningPanelTicketRowView: View {
                     .lineLimit(1)
                     .truncationMode(.tail)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                Text(OpeningPanelTickets.durationText(minutes: minutes))
+                Text(presentation.text)
                     .font(.system(size: OpeningPanelTicketMetrics.durationSize))
                     .monospacedDigit()
                     .foregroundStyle(OpeningPanelTokens.Palette.amber)
-                    .opacity(OpeningPanelTicketMetrics.durationOpacity)
+                    .opacity(
+                        presentation.faint
+                            ? OpeningPanelTicketMetrics.staleDurationOpacity
+                            : OpeningPanelTicketMetrics.durationOpacity
+                    )
                     .frame(width: OpeningPanelTicketMetrics.durationWidth, alignment: .trailing)
                     .lineLimit(1)
             }
@@ -527,12 +603,11 @@ private struct OpeningPanelTicketRowView: View {
             }
             return "未選択"
         }
-        let minutes = OpeningPanelTickets.shownMinutes(
+        return OpeningPanelTickets.durationPresentation(
+            arrival: row.arrival,
             estimate: row.estimateMinutes,
-            actual: row.actualMinutes,
-            step: growthStep
-        )
-        return OpeningPanelTickets.durationText(minutes: minutes)
+            growthStep: growthStep
+        ).text
     }
 
     private var hint: String {

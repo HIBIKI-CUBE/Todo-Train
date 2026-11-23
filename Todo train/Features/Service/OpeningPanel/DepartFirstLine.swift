@@ -15,10 +15,10 @@ struct DepartFirstLine: View {
     var body: some View {
         Group {
             if isLit, let row {
-                let minutes = OpeningPanelTickets.shownMinutes(
+                let presentation = OpeningPanelTickets.durationPresentation(
+                    arrival: row.arrival,
                     estimate: row.estimateMinutes,
-                    actual: row.actualMinutes,
-                    step: growthStep
+                    growthStep: growthStep
                 )
                 HStack(spacing: 6) {
                     Text("先発")
@@ -28,8 +28,9 @@ struct DepartFirstLine: View {
                         .lineLimit(1)
                         .truncationMode(.tail)
                     Spacer(minLength: 0)
-                    Text(OpeningPanelTickets.durationText(minutes: minutes))
+                    Text(presentation.text)
                         .monospacedDigit()
+                        .opacity(presentation.faint ? OpeningPanelTicketMetrics.staleDurationOpacity : 1)
                 }
                 .font(.system(size: OpeningPanelTokens.TypeSize.departLine))
                 .foregroundStyle(OpeningPanelTokens.Palette.amber)
@@ -37,7 +38,7 @@ struct DepartFirstLine: View {
                 .padding(.horizontal, 5)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("先発 \(row.title)")
-                .accessibilityValue(OpeningPanelTickets.durationText(minutes: minutes))
+                .accessibilityValue(presentation.text)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
