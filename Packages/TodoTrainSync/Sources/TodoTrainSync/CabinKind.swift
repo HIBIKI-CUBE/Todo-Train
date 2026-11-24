@@ -131,6 +131,7 @@ public enum CabinCopy {
     public static let backHint = "分数の選択を閉じます。"
     public static let restoreHint = "端から乗務を出します。"
     public static let questionHint = "答えを選ぶと iPhone に送られます。"
+    public static let extendPickerHint = "5分、10分、15分の延長を選べます。"
     public static let boardHint = "予約の切符で発車します。"
     public static let closeGapHint = "この知らせを閉じます。"
     public static let gapPromptHint = "予約があれば、その切符で発車できます。"
