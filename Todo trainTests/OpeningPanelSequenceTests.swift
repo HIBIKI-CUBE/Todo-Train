@@ -296,6 +296,138 @@ struct OpeningPanelSequenceTests {
         #expect(tickets.map(\.sortOrder).sorted() == [0, 1, 2])
     }
 
+    @Test func enterSequenceLeavesThePanelIdleWithoutAnEngine() throws {
+        let container = try AppModelContainer.make(inMemory: true)
+        let context = ModelContext(container)
+        let model = OpeningPanelTicketsModel()
+        let clock = SequenceHoldClock()
+        let state = OpeningPanelState(
+            scheduler: clock,
+            feedback: SequenceHoldCues(),
+            ticketCount: 1,
+            reduceMotion: true
+        )
+        state.pressMaster()
+        state.pressConfirm(.tickets)
+        clock.advance(by: OpeningPanelTiming.backlight)
+        #expect(state.confirmation(of: .tickets) == .confirmed)
+        #expect(!OpeningPanelTickets.enterSequence(
+            state: state,
+            model: model,
+            sessions: [],
+            freeMinutes: 10,
+            in: context
+        ))
+        #expect(!state.isSequencing)
+        #expect(model.engine == nil)
+    }
+
+    @Test func arrivedTicketsWaitUntilTheSequenceEnds() throws {
+        let container = try AppModelContainer.make(inMemory: true)
+        let context = ModelContext(container)
+        let tickets = (0..<3).map { index in
+            Ticket(title: "切符\(index)", estimatedSeconds: (index + 1) * 600, sortOrder: index)
+        }
+        tickets.forEach { context.insert($0) }
+        let model = OpeningPanelTicketsModel()
+        model.sync(tickets: tickets, sessions: [])
+        model.placeCut(1)
+
+        let clock = SequenceHoldClock()
+        let state = OpeningPanelState(
+            scheduler: clock,
+            feedback: SequenceHoldCues(),
+            ticketCount: tickets.count,
+            reduceMotion: true,
+            onCommitSequence: { model.commitSequenceOrder(in: context) },
+            onAbandonSequence: { model.abandonSequence() }
+        )
+        state.pressMaster()
+        state.pressConfirm(.tickets)
+        clock.advance(by: OpeningPanelTiming.backlight)
+        #expect(state.confirmation(of: .tickets) == .confirmed)
+        #expect(OpeningPanelTickets.enterSequence(
+            state: state,
+            model: model,
+            sessions: [],
+            freeMinutes: 1_000,
+            in: context
+        ))
+        #expect(model.chooseSequencePile(0))
+        let sortedCount = model.engine?.sortedCount
+        let queue = model.engine?.queueIDs
+        let phase = model.sequencePhase
+        let heldRows = model.rows.map(\.id)
+        let heldCut = model.cut
+        expectPaired(state, model)
+
+        let extra = Ticket(title: "追加", estimatedSeconds: 600, sortOrder: 3)
+        context.insert(extra)
+        tickets[0].title = "改題"
+        model.sync(tickets: tickets + [extra], sessions: [])
+
+        #expect(model.rows.map(\.id) == heldRows)
+        #expect(model.rows.first { $0.id == tickets[0].id }?.title == "切符0")
+        #expect(model.engine?.sortedCount == sortedCount)
+        #expect(model.engine?.queueIDs == queue)
+        #expect(model.sequencePhase == phase)
+        #expect(model.cut == heldCut)
+        #expect(state.isSequencing)
+        #expect(model.engine != nil)
+        expectPaired(state, model)
+
+        model.finishSequenceEarly()
+        let committed = model.rows.map(\.id)
+        let line = model.cut
+        state.pressSequence()
+        #expect(!state.isSequencing)
+        #expect(model.engine == nil)
+        expectPaired(state, model)
+        #expect(model.rows.map(\.id) == committed + [extra.id])
+        #expect(model.rows.first { $0.id == tickets[0].id }?.title == "改題")
+        #expect(model.cut == line)
+        #expect(tickets.sorted { $0.sortOrder < $1.sortOrder }.map(\.id) == committed)
+    }
+
+    @Test func arrivedTicketsApplyWhenTheSequenceIsAbandoned() throws {
+        let container = try AppModelContainer.make(inMemory: true)
+        let context = ModelContext(container)
+        let tickets = (0..<3).map { index in
+            Ticket(title: "切符\(index)", estimatedSeconds: 600, sortOrder: index)
+        }
+        tickets.forEach { context.insert($0) }
+        let model = OpeningPanelTicketsModel()
+        model.sync(tickets: tickets, sessions: [])
+        let original = model.rows.map(\.id)
+        model.placeCut(1)
+        #expect(model.beginSequence(sessions: [], freeMinutes: 1_000, in: context, seed: 3))
+        while model.sequencePhase == .sorting {
+            #expect(model.chooseSequencePile(0))
+        }
+        #expect(model.sequencePhase == .result)
+        tickets[1].title = "改題"
+        model.sync(tickets: tickets, sessions: [])
+        #expect(model.rows.first { $0.id == tickets[1].id }?.title == "切符1")
+        #expect(model.engine != nil)
+
+        model.abandonSequence()
+        #expect(model.engine == nil)
+        #expect(model.rows.map(\.id) == original)
+        #expect(model.rows.first { $0.id == tickets[1].id }?.title == "改題")
+        #expect(model.cut == 1)
+        #expect(tickets.map(\.sortOrder) == [0, 1, 2])
+    }
+
+    private func expectPaired(
+        _ state: OpeningPanelState,
+        _ model: OpeningPanelTicketsModel,
+        sourceLocation: SourceLocation = #_sourceLocation
+    ) {
+        if state.isSequencing {
+            #expect(model.engine != nil, sourceLocation: sourceLocation)
+        }
+    }
+
     private func sortSameWay(_ model: OpeningPanelTicketsModel, first: UUID) throws {
         while model.sequencePhase == .sorting {
             let id = try #require(model.engine?.queueIDs.first)
@@ -324,5 +456,48 @@ struct OpeningPanelSequenceTests {
             daysBelowLine: 0,
             dueDate: nil
         )
+    }
+}
+
+@MainActor
+private final class SequenceHoldCues: OpeningPanelFeedback {
+    func play(_ cue: OpeningPanelCue) {}
+}
+
+@MainActor
+private final class SequenceHoldClock: OpeningPanelScheduling {
+    private struct Item {
+        var id: Int
+        var due: Int64
+        var action: () -> Void
+    }
+
+    private var now: Int64 = 0
+    private var nextID = 0
+    private var items: [Item] = []
+
+    func schedule(after seconds: TimeInterval, execute: @escaping () -> Void) -> OpeningPanelTask {
+        let id = nextID
+        nextID += 1
+        let due = now + Int64((seconds * 1_000_000).rounded())
+        items.append(Item(id: id, due: due, action: execute))
+        return OpeningPanelTask { [weak self] in
+            self?.items.removeAll { $0.id == id }
+        }
+    }
+
+    func advance(by seconds: TimeInterval) {
+        let target = now + Int64((seconds * 1_000_000).rounded())
+        while true {
+            guard let index = items.indices.min(by: {
+                items[$0].due < items[$1].due || (items[$0].due == items[$1].due && items[$0].id < items[$1].id)
+            }), items[index].due <= target else {
+                now = target
+                return
+            }
+            let item = items.remove(at: index)
+            now = item.due
+            item.action()
+        }
     }
 }

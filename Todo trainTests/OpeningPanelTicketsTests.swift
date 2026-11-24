@@ -83,7 +83,6 @@ struct OpeningPanelTicketsTests {
             index: 0,
             ids: ids,
             cut: 3,
-            picks: [],
             sequencing: false,
             confirmed: true,
             powered: true,
@@ -94,13 +93,14 @@ struct OpeningPanelTicketsTests {
             index: 2,
             ids: ids,
             cut: 3,
-            picks: [],
             sequencing: false,
             confirmed: true,
             powered: true,
             departed: false
         )
         #expect(same == .cutStays)
+        #expect(OpeningPanelTickets.numberDigit(index: 4) == "5")
+        #expect(OpeningPanelTickets.numberDigit(index: 9) == nil)
 
         #expect(OpeningPanelTickets.cut(atRailY: 2, count: 5) == 0)
         #expect(OpeningPanelTickets.cut(atRailY: 2 + 21, count: 5) == 1)
@@ -134,48 +134,25 @@ struct OpeningPanelTicketsTests {
             index: 1,
             ids: ids,
             cut: 3,
-            picks: [],
             sequencing: false,
             confirmed: false,
             powered: true,
             departed: false
         )
         #expect(beforeConfirm == .reject)
-    }
-
-    @Test func sequencePicks_putChosenFirstAndRejectARepeat() {
-        let ids = (0..<5).map { _ in UUID() }
-        let during = OpeningPanelTickets.touchRow(
-            index: 3,
+        let duringSequence = OpeningPanelTickets.touchRow(
+            index: 1,
             ids: ids,
             cut: 3,
-            picks: [],
             sequencing: true,
             confirmed: true,
             powered: true,
             departed: false
         )
-        #expect(during == .reject)
-
-        let ordered = OpeningPanelTickets.reorderedIDs(ids, picks: [ids[3], ids[1]])
-        #expect(ordered == [ids[3], ids[1], ids[0], ids[2], ids[4]])
-        let orders = TicketSortOrdering.normalizedOrders(forOrderedIDs: ordered)
-        #expect(orders[ids[3]] == 0)
-        #expect(orders[ids[1]] == 1)
-        #expect(orders[ids[0]] == 2)
-        #expect(OpeningPanelTickets.reorderedIDs(ids, picks: []) == ids)
-
-        #expect(
-            OpeningPanelTickets.numberDigit(index: 3, id: ids[3], picks: [ids[3], ids[1]], sequencing: true) == "1"
-        )
-        #expect(
-            OpeningPanelTickets.numberDigit(index: 1, id: ids[1], picks: [ids[3], ids[1]], sequencing: true) == "2"
-        )
-        #expect(OpeningPanelTickets.numberDigit(index: 0, id: ids[0], picks: [ids[3]], sequencing: true) == nil)
-        #expect(OpeningPanelTickets.numberDigit(index: 4, id: ids[4], picks: [], sequencing: false) == "5")
+        #expect(duringSequence == .reject)
     }
 
-    @Test func commitSequenceOrder_savesHubOrderAndKeepsTheCut() throws {
+    @Test func syncKeepsOrderAndCutWhenTheSameTicketsArrive() throws {
         let container = try AppModelContainer.make(inMemory: true)
         let context = ModelContext(container)
         let tickets = (0..<5).map { index in
@@ -185,29 +162,15 @@ struct OpeningPanelTicketsTests {
         let model = OpeningPanelTicketsModel()
         model.sync(tickets: tickets, sessions: [])
         #expect(model.cut == 3)
-        #expect(model.rows.map(\.title) == ["切符0", "切符1", "切符2", "切符3", "切符4"])
-
-        model.select(tickets[3].id)
-        model.select(tickets[1].id)
         model.placeCut(4)
-        model.commitSequenceOrder(in: context)
-
-        #expect(model.picks.isEmpty)
-        #expect(model.cut == 4)
-        #expect(model.rows.map(\.id) == [
-            tickets[3].id, tickets[1].id, tickets[0].id, tickets[2].id, tickets[4].id,
-        ])
-        #expect(tickets.map(\.sortOrder) == [2, 1, 3, 0, 4])
-
+        tickets[2].title = "改題"
         model.sync(tickets: tickets, sessions: [])
-        #expect(model.rows.map(\.id).first == tickets[3].id)
         #expect(model.cut == 4)
-
-        model.select(tickets[4].id)
-        model.dropPicks()
-        #expect(model.picks.isEmpty)
-        #expect(model.rows.map(\.id).first == tickets[3].id)
-        #expect(model.cut == 4)
+        #expect(model.rows.map(\.id) == tickets.map(\.id))
+        #expect(model.rows[2].title == "改題")
+        model.commitSequenceOrder(in: context)
+        #expect(model.rows.map(\.id) == tickets.map(\.id))
+        #expect(model.engine == nil)
     }
 
     @Test func slotNames_runFirstSecondThirdThenNumbers() {

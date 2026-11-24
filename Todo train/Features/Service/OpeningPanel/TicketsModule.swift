@@ -53,8 +53,6 @@ struct OpeningPanelDurationPresentation: Equatable, Sendable {
 enum OpeningPanelTicketTouch: Equatable {
     case reject
     case ignore
-    case select(UUID)
-    case duplicate
     case placeCut(Int)
     case cutStays
 }
@@ -199,36 +197,10 @@ enum OpeningPanelTickets {
         index >= cut ? OpeningPanelTicketMetrics.belowNumberOpacity : 1
     }
 
-    static func numberDigit(
-        index: Int,
-        id: UUID,
-        picks: [UUID],
-        sequencing: Bool
-    ) -> Character? {
-        let number: Int
-        if sequencing {
-            guard let pick = picks.firstIndex(of: id) else { return nil }
-            number = pick + 1
-        } else {
-            number = index + 1
-        }
-        let text = String(number)
+    static func numberDigit(index: Int) -> Character? {
+        let text = String(index + 1)
         guard text.count == 1 else { return nil }
         return text.first
-    }
-
-    /// 選んだ順を先頭へ。選ばなかった切符は元の順で後ろに続く。
-    static func reorderedIDs(_ ids: [UUID], picks: [UUID]) -> [UUID] {
-        var order = ids
-        for (target, id) in picks.enumerated() {
-            guard let from = order.firstIndex(of: id), from != target else { continue }
-            let destination = ServiceCabinSequence.consistMoveOffset(from: from, to: target)
-            let item = order.remove(at: from)
-            let adjusted = destination - (from < destination ? 1 : 0)
-            let index = min(max(adjusted, 0), order.count)
-            order.insert(item, at: index)
-        }
-        return order
     }
 
     static func cut(atRailY y: CGFloat, count: Int) -> Int {
@@ -241,7 +213,6 @@ enum OpeningPanelTickets {
         index: Int,
         ids: [UUID],
         cut: Int,
-        picks: [UUID],
         sequencing: Bool,
         confirmed: Bool,
         powered: Bool,
@@ -254,6 +225,28 @@ enum OpeningPanelTickets {
         guard confirmed else { return .reject }
         let next = index + 1
         return next == cut ? .cutStays : .placeCut(next)
+    }
+
+    /// engine が立ったときだけ仕分けに入る。立たなければ `isSequencing` も立てない。
+    @MainActor
+    static func enterSequence(
+        state: OpeningPanelState,
+        model: OpeningPanelTicketsModel,
+        sessions: [WorkSession],
+        freeMinutes: Int,
+        now: Date = .now,
+        calendar: Calendar = .current,
+        in context: ModelContext
+    ) -> Bool {
+        guard model.beginSequence(
+            sessions: sessions,
+            freeMinutes: freeMinutes,
+            now: now,
+            calendar: calendar,
+            in: context
+        ) else { return false }
+        state.pressSequence()
+        return model.engine != nil && state.isSequencing
     }
 
     static func touchRail(
@@ -288,11 +281,6 @@ enum OpeningPanelTickets {
             break
         case .cutStays:
             state.moveTodayCut(changed: false)
-        case .select(let id):
-            model.select(id)
-            state.noteSequenceRow(accepted: true)
-        case .duplicate:
-            state.noteSequenceRow(accepted: false)
         case .placeCut(let next):
             model.placeCut(next)
             state.moveTodayCut(changed: true)
@@ -306,11 +294,12 @@ enum OpeningPanelTickets {
 final class OpeningPanelTicketsModel {
     private(set) var rows: [OpeningPanelTicketRow] = []
     private(set) var cut: Int = OpeningPanelTicketMetrics.defaultCut
-    private(set) var picks: [UUID] = []
     private(set) var engine: OpeningPanelSequenceEngine?
     private var openTickets: [UUID: Ticket] = [:]
     private var orderSnapshot: [UUID]?
     private var cutSnapshot = 0
+    /// engine があるあいだに届いた切符。確定か破棄のあとで反映する。
+    private var arrivedWhileSorting: (rows: [OpeningPanelTicketRow], tickets: [Ticket])?
 
     func sync(
         tickets: [Ticket],
@@ -331,18 +320,30 @@ final class OpeningPanelTicketsModel {
         )
     }
 
+    /// 仕分け中は行と engine を残す。届いた切符は確定か破棄のあとで反映する。
     private func adopt(_ incoming: [OpeningPanelTicketRow], tickets: [Ticket]) {
+        if engine != nil {
+            arrivedWhileSorting = (incoming, tickets)
+            return
+        }
+        apply(incoming, tickets: tickets)
+    }
+
+    private func apply(
+        _ incoming: [OpeningPanelTicketRow],
+        tickets: [Ticket],
+        keepCut: Bool = false
+    ) {
         openTickets = Dictionary(uniqueKeysWithValues: tickets.filter(\.isOpen).map { ($0.id, $0) })
         let incomingIDs = Set(incoming.map(\.id))
         if Set(rows.map(\.id)) == incomingIDs {
             let byID = Dictionary(uniqueKeysWithValues: incoming.map { ($0.id, $0) })
             rows = rows.compactMap { byID[$0.id] }
-            picks = picks.filter { incomingIDs.contains($0) }
         } else {
             rows = incoming
-            picks = []
-            cut = OpeningPanelTickets.initialCut(count: rows.count)
-            engine = nil
+            if !keepCut {
+                cut = OpeningPanelTickets.initialCut(count: rows.count)
+            }
             orderSnapshot = nil
         }
         if cut > rows.count {
@@ -360,11 +361,6 @@ final class OpeningPanelTicketsModel {
         guard rows[index].arrival != place || rows[index].actualMinutes != actual else { return }
         rows[index].arrival = place
         rows[index].actualMinutes = actual
-    }
-
-    func select(_ id: UUID) {
-        guard rows.contains(where: { $0.id == id }), !picks.contains(id) else { return }
-        picks.append(id)
     }
 
     func placeCut(_ next: Int) {
@@ -439,7 +435,7 @@ final class OpeningPanelTicketsModel {
         publishIfSettled()
     }
 
-    func dropPicks() {
+    func abandonSequence() {
         if let orderSnapshot {
             let byID = Dictionary(uniqueKeysWithValues: rows.map { ($0.id, $0) })
             let restored = orderSnapshot.compactMap { byID[$0] }
@@ -448,28 +444,26 @@ final class OpeningPanelTicketsModel {
             }
             cut = min(cutSnapshot, rows.count)
         }
-        picks.removeAll()
         engine = nil
         orderSnapshot = nil
+        flushArrived()
     }
 
     /// 仕分けの結果を先頭から並べ、Hub の順として保存する。#208 の DEPART からも呼ぶ。
     func commitSequenceOrder(in context: ModelContext, now: Date = .now, calendar: Calendar = .current) {
-        if engine != nil {
-            commitEngine(in: context, now: now, calendar: calendar)
-            return
-        }
-        let ids = OpeningPanelTickets.reorderedIDs(rows.map(\.id), picks: picks)
-        let orders = TicketSortOrdering.normalizedOrders(forOrderedIDs: ids)
-        for (id, order) in orders {
-            openTickets[id]?.sortOrder = order
-        }
-        let byID = Dictionary(uniqueKeysWithValues: rows.map { ($0.id, $0) })
-        rows = ids.compactMap { byID[$0] }
-        picks = []
-        if context.hasChanges {
-            try? context.save()
-        }
+        guard engine != nil else { return }
+        commitEngine(in: context, now: now, calendar: calendar)
+        flushArrived()
+    }
+
+    private func flushArrived() {
+        guard let arrivedWhileSorting else { return }
+        self.arrivedWhileSorting = nil
+        let byID = Dictionary(uniqueKeysWithValues: arrivedWhileSorting.rows.map { ($0.id, $0) })
+        let open = arrivedWhileSorting.tickets.filter(\.isOpen).sorted { $0.sortOrder < $1.sortOrder }
+        let ordered = open.compactMap { byID[$0.id] }
+        let incoming = ordered.count == open.count ? ordered : arrivedWhileSorting.rows
+        apply(incoming, tickets: arrivedWhileSorting.tickets, keepCut: true)
     }
 
     private func publishIfSettled() {
@@ -509,7 +503,6 @@ final class OpeningPanelTicketsModel {
         )
         context.insert(record)
         writeBelowDays(engine.placements, now: now, calendar: calendar, in: context)
-        picks = []
         self.engine = nil
         orderSnapshot = nil
         if context.hasChanges {
@@ -610,8 +603,6 @@ struct TicketsModule: View {
                         slot: slot,
                         index: index,
                         cut: model.cut,
-                        picks: model.picks,
-                        sequencing: state.isSequencing,
                         growthStep: state.ticketGrowthStep
                     )
                 }
@@ -643,7 +634,6 @@ struct TicketsModule: View {
                 index: index,
                 ids: model.rows.map(\.id),
                 cut: model.cut,
-                picks: model.picks,
                 sequencing: state.isSequencing,
                 confirmed: ticketsConfirmed,
                 powered: state.isPowered,
@@ -683,8 +673,6 @@ private struct OpeningPanelTicketRowView: View {
     var slot: OpeningPanelTicketSlot
     var index: Int
     var cut: Int
-    var picks: [UUID]
-    var sequencing: Bool
     var growthStep: Int
 
     var body: some View {
@@ -754,13 +742,8 @@ private struct OpeningPanelTicketRowView: View {
             )
             HStack(spacing: OpeningPanelTicketMetrics.rowGap) {
                 OpeningPanelTicketDigit(
-                    character: OpeningPanelTickets.numberDigit(
-                        index: index,
-                        id: row.id,
-                        picks: picks,
-                        sequencing: sequencing
-                    ),
-                    fallback: numberFallback(for: row),
+                    character: OpeningPanelTickets.numberDigit(index: index),
+                    fallback: numberFallback,
                     opacity: OpeningPanelTickets.numberOpacity(index: index, cut: cut)
                 )
                 Text(row.title)
@@ -784,13 +767,8 @@ private struct OpeningPanelTicketRowView: View {
         }
     }
 
-    private func numberFallback(for row: OpeningPanelTicketRow) -> String? {
-        guard sequencing else {
-            let number = index + 1
-            return number > 9 ? String(number) : nil
-        }
-        guard let pick = picks.firstIndex(of: row.id) else { return nil }
-        let number = pick + 1
+    private var numberFallback: String? {
+        let number = index + 1
         return number > 9 ? String(number) : nil
     }
 
@@ -805,12 +783,6 @@ private struct OpeningPanelTicketRowView: View {
 
     private var accessibilityValue: String {
         guard case .ticket(let row) = slot else { return "" }
-        if sequencing {
-            if let pick = picks.firstIndex(of: row.id) {
-                return "\(pick + 1)"
-            }
-            return "未選択"
-        }
         return OpeningPanelTickets.durationPresentation(
             arrival: row.arrival,
             estimate: row.estimateMinutes,
@@ -823,9 +795,6 @@ private struct OpeningPanelTicketRowView: View {
         case .empty, .cursor:
             return ""
         case .ticket:
-            if sequencing {
-                return "この切符に番号を付けます"
-            }
             return "この行の下へ区切りを移します"
         }
     }
