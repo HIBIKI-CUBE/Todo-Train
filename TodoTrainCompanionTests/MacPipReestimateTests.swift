@@ -140,7 +140,7 @@ struct MacPipReestimateTests {
         let scale: CGFloat = 2
         let card = RideOverlayGeometry.cardSize
         let shots: [(String, AnyView)] = [
-            ("pip-normal-ride", AnyView(ridePreview(rideSnap(title: "原稿")))),
+            ("pip-normal-ride", AnyView(ridePreview(rideSnap(title: "原稿", now: 1_768_000_600)))),
             ("pip-band-answers", AnyView(rideReestimatePreview(.answers))),
             ("pip-band-progress", AnyView(rideReestimatePreview(.progress))),
             ("pip-band-declare", AnyView(rideReestimatePreview(.declare, progress: 0.5))),

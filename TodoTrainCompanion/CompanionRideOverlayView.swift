@@ -62,8 +62,8 @@ struct CompanionRideOverlayView: View {
         CGFloat(RideOverlayGeometry.cardSize.height) - reestimateHeadingHeight - bottomBandHeight
     private static let pauseInstrumentHeight =
         CGFloat(RideOverlayGeometry.cardSize.height) - pauseHeadingHeight - bottomBandHeight
-    private static let classicExpandedDigitHeight =
-        CGFloat(RideOverlayGeometry.cardSize.height) - classicTitleBandHeight - bottomBandHeight
+    private static let classicExpandedInstrumentHeight =
+        CGFloat(RideOverlayGeometry.cardSize.height) - classicTitleBandHeight
 
     private enum PipColumnLayout: Equatable {
         case gap
@@ -86,7 +86,7 @@ struct CompanionRideOverlayView: View {
     private var rideDigitAreaHeight: CGFloat {
         switch pipColumnLayout {
         case .classicExpanded:
-            Self.classicExpandedDigitHeight
+            Self.classicExpandedInstrumentHeight
         case .classicCompact:
             Self.bottomBandHeight
         case .reestimate:
@@ -335,16 +335,8 @@ struct CompanionRideOverlayView: View {
         VStack(alignment: .leading, spacing: 0) {
             classicRideTitle
             classicFailureLine
-            VStack(spacing: 0) {
-                pipDigitLabel(
-                    presentation.remainingLabel,
-                    color: RideOverlayPalette.onTrack,
-                    areaHeight: rideDigitAreaHeight
-                )
-                .frame(height: rideDigitAreaHeight)
-                progressFillBand(height: Self.bottomBandHeight)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+            rideProgressInstrument(digitAreaHeight: rideDigitAreaHeight)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
@@ -615,7 +607,7 @@ struct CompanionRideOverlayView: View {
                 )
                 .padding(.horizontal, 8)
             } else {
-                progressRow(digitAreaHeight: areaHeight)
+                rideProgressInstrument(digitAreaHeight: areaHeight)
             }
         }
         .accessibilityElement(children: .ignore)
@@ -738,7 +730,7 @@ struct CompanionRideOverlayView: View {
             if model.reestimateUndoUntil != nil {
                 undoRow
             } else {
-                progressRow(digitAreaHeight: rideDigitAreaHeight)
+                rideProgressInstrument(digitAreaHeight: rideDigitAreaHeight)
                     .opacity(showsCabinActions || showsAction ? 0 : 1)
                 if showsCabinActions {
                     cabinActionRow
@@ -776,7 +768,7 @@ struct CompanionRideOverlayView: View {
         )
     }
 
-    private func progressFillBand(height: CGFloat) -> some View {
+    private func rideProgressInstrument(digitAreaHeight: CGFloat) -> some View {
         let fillWidth = progressFillWidth
         return ZStack(alignment: .leading) {
             Color.black
@@ -785,23 +777,7 @@ struct CompanionRideOverlayView: View {
                     .frame(width: fillWidth)
                 Spacer(minLength: 0)
             }
-            occupancyProgressMarks(width: Self.contentColumnWidth, height: height)
-        }
-        .frame(maxWidth: .infinity)
-        .frame(height: height)
-        .clipped()
-    }
-
-    private func progressRow(digitAreaHeight: CGFloat) -> some View {
-        let fillWidth = progressFillWidth
-        return ZStack(alignment: .leading) {
-            Color.black
-            HStack(spacing: 0) {
-                RideOverlayPalette.fill(for: presentation)
-                    .frame(width: fillWidth)
-                Spacer(minLength: 0)
-            }
-            occupancyProgressMarks(width: Self.contentColumnWidth, height: Self.bottomBandHeight)
+            occupancyProgressMarks(width: Self.contentColumnWidth, height: digitAreaHeight)
             remainingDigits(RideOverlayPalette.onTrack, areaHeight: digitAreaHeight)
             remainingDigits(RideOverlayPalette.onFill(for: presentation), areaHeight: digitAreaHeight)
                 .mask {
@@ -812,7 +788,7 @@ struct CompanionRideOverlayView: View {
                 }
         }
         .frame(maxWidth: .infinity)
-        .frame(height: Self.bottomBandHeight)
+        .frame(height: digitAreaHeight)
         .clipped()
     }
 
@@ -1154,7 +1130,8 @@ func rideSnap(
     title: String,
     nextTitle: String? = nil,
     startsAt: Int? = nil,
-    endsAt: Int? = nil
+    endsAt: Int? = nil,
+    now: Int = 1_768_000_120
 ) -> RideOverlayPresentation {
     let snap = SnapPlaintext(
         rev: 1,
@@ -1177,7 +1154,7 @@ func rideSnap(
         MenuBarInput(
             pairing: .paired,
             snap: snap,
-            now: 1_768_000_120,
+            now: now,
             cabinEnabledLocal: false
         )
     )
