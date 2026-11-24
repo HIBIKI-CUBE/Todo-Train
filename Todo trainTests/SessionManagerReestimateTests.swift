@@ -96,6 +96,31 @@ struct SessionManagerReestimateTests {
         #expect(session.currentBudgetSeconds == budgetAtBoard)
     }
 
+    @Test func commitAndUndoReestimate_bumpCompanionSync() throws {
+        let (manager, context, clock, _) = try SessionManagerFixtures.makeHarness()
+        try manager.startService()
+        let ticket = try SessionManagerFixtures.makeTicket(context, seconds: 30 * 60)
+        try manager.board(ticket: ticket)
+        clock.advance(by: 5 * 60)
+        manager.presentReestimate(trigger: .manual, surface: .iphonePortrait)
+        let beforeCommit = manager.companionSyncTick
+        try manager.commitReestimate(
+            mode: .minutesOnly,
+            progressAnswer: nil,
+            committedRemainingSeconds: 10 * 60,
+            shownBandLowSeconds: nil,
+            shownBandHighSeconds: nil,
+            detailsOpened: false,
+            promptId: ReestimatePromptID.remainingV1
+        )
+        #expect(manager.companionSyncTick > beforeCommit)
+        let eventID = try #require(manager.activeSession?.reestimateEvents.last?.id)
+
+        let beforeUndo = manager.companionSyncTick
+        try manager.undoReestimate(eventID: eventID)
+        #expect(manager.companionSyncTick > beforeUndo)
+    }
+
     @Test func undoPauseFromFocus_resumesRideAndMarksPauseUndone() throws {
         let (manager, context, clock, _) = try SessionManagerFixtures.makeHarness()
         try manager.startService()

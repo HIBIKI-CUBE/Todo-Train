@@ -117,6 +117,7 @@ extension SessionManager {
         try save()
         reconcile(now: now)
         refreshRideSideEffects(for: session, now: now)
+        bumpCompanionSync()
 
         let statusLine = positionUndoStatusLine(
             declaration: declaration,
@@ -151,6 +152,7 @@ extension SessionManager {
         if let session = activeSession {
             refreshRideSideEffects(for: session, now: now)
         }
+        bumpCompanionSync()
     }
 
     func undoPauseFromFocus(pauseID: UUID, now: Date? = nil) throws {
