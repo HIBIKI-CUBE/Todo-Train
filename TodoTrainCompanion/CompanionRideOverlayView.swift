@@ -51,6 +51,14 @@ struct CompanionRideOverlayView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var radioLit = true
 
+    private static let bottomBandHeight: CGFloat = 40
+    private static let reestimateHeadingHeight: CGFloat = 28
+    private static let pauseHeadingHeight: CGFloat = 36
+    private static let reestimateInstrumentHeight =
+        CGFloat(RideOverlayGeometry.cardSize.height) - reestimateHeadingHeight - bottomBandHeight
+    private static let pauseInstrumentHeight =
+        CGFloat(RideOverlayGeometry.cardSize.height) - pauseHeadingHeight - bottomBandHeight
+
     private var presentation: RideOverlayPresentation { model.presentation }
 
     var body: some View {
@@ -391,7 +399,7 @@ struct CompanionRideOverlayView: View {
             .padding(.top, 8)
             .frame(height: 36, alignment: .center)
 
-            nudgeInstrument
+            nudgeInstrument(areaHeight: Self.pauseInstrumentHeight)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             equalChoiceRow([PauseInputCopy.resume, PauseInputCopy.keepPaused])
@@ -416,7 +424,7 @@ struct CompanionRideOverlayView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .frame(height: 28, alignment: .center)
 
-            nudgeInstrument
+            nudgeInstrument(areaHeight: Self.reestimateInstrumentHeight)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             if let line = presentation.failureLine ?? (presentation.isSending ? presentation.statusLine : nil) {
@@ -498,23 +506,19 @@ struct CompanionRideOverlayView: View {
         }
     }
 
-    private var nudgeInstrument: some View {
-        GeometryReader { geo in
-            ZStack {
-                if let caption = presentation.instrumentCaption {
-                    pipFillHeightLabel(
-                        caption,
-                        color: RideOverlayPalette.fill(for: presentation),
-                        size: geo.size,
-                        heightRatio: 0.82,
-                        weight: .semibold
-                    )
-                    .padding(.horizontal, 8)
-                } else {
-                    progressRowContents(size: geo.size)
-                }
+    private func nudgeInstrument(areaHeight: CGFloat) -> some View {
+        ZStack {
+            if let caption = presentation.instrumentCaption {
+                pipDigitLabel(
+                    caption,
+                    color: RideOverlayPalette.fill(for: presentation),
+                    areaHeight: areaHeight * 0.82,
+                    weight: .semibold
+                )
+                .padding(.horizontal, 8)
+            } else {
+                progressRow(digitAreaHeight: areaHeight)
             }
-            .frame(width: geo.size.width, height: geo.size.height)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(presentation.instrumentCaption ?? "残り \(presentation.remainingLabel)")
@@ -636,7 +640,7 @@ struct CompanionRideOverlayView: View {
             if model.reestimateUndoUntil != nil {
                 undoRow
             } else {
-                progressRow
+                progressRow(digitAreaHeight: Self.bottomBandHeight)
                     .opacity(showsCabinActions || showsAction ? 0 : 1)
                 if showsCabinActions {
                     cabinActionRow
@@ -646,7 +650,7 @@ struct CompanionRideOverlayView: View {
                 }
             }
         }
-        .frame(height: 40)
+        .frame(height: Self.bottomBandHeight)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.16), value: showsAction || showsCabinActions || model.reestimateUndoUntil != nil)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(bottomAccessibilityLabel)
@@ -665,58 +669,63 @@ struct CompanionRideOverlayView: View {
             && (presentation.canPause || presentation.canResume)
     }
 
-    private var progressRow: some View {
+    private func progressRow(digitAreaHeight: CGFloat) -> some View {
         GeometryReader { geo in
-            progressRowContents(size: geo.size)
+            let fillWidth = CGFloat(
+                RideOverlayGeometry.fillLength(
+                    progress: presentation.progress,
+                    total: geo.size.width
+                )
+            )
+            ZStack(alignment: .leading) {
+                Color.black
+                HStack(spacing: 0) {
+                    RideOverlayPalette.fill(for: presentation)
+                        .frame(width: fillWidth)
+                    Spacer(minLength: 0)
+                }
+                occupancyProgressMarks(width: geo.size.width, height: geo.size.height)
+                remainingDigits(RideOverlayPalette.onTrack, areaHeight: digitAreaHeight)
+                remainingDigits(RideOverlayPalette.onFill(for: presentation), areaHeight: digitAreaHeight)
+                    .mask {
+                        HStack(spacing: 0) {
+                            Color.white.frame(width: fillWidth)
+                            Color.clear
+                        }
+                    }
+            }
+            .frame(width: geo.size.width, height: geo.size.height)
         }
         .clipped()
     }
 
-    private func progressRowContents(size: CGSize) -> some View {
-        let fillWidth = CGFloat(
-            RideOverlayGeometry.fillLength(
-                progress: presentation.progress,
-                total: size.width
-            )
-        )
-        return ZStack(alignment: .leading) {
-            Color.black
-            HStack(spacing: 0) {
-                RideOverlayPalette.fill(for: presentation)
-                    .frame(width: fillWidth)
-                Spacer(minLength: 0)
-            }
-            occupancyProgressMarks(width: size.width, height: size.height)
-            remainingDigits(RideOverlayPalette.onTrack, size: size)
-            remainingDigits(RideOverlayPalette.onFill(for: presentation), size: size)
-                .mask {
-                    HStack(spacing: 0) {
-                        Color.white.frame(width: fillWidth)
-                        Color.clear
-                    }
-                }
-        }
-        .frame(width: size.width, height: size.height)
+    private func pipDigitFontSize(forAreaHeight areaHeight: CGFloat) -> CGFloat {
+        max(11, areaHeight * 0.9)
     }
 
-    private func pipFillHeightLabel(
+    private func pipDigitLabel(
         _ label: String,
         color: Color,
-        size: CGSize,
-        heightRatio: CGFloat = 0.9,
+        areaHeight: CGFloat,
         weight: Font.Weight = .medium
     ) -> some View {
-        let fontSize = max(11, size.height * heightRatio)
-        return Text(label)
-            .font(.system(size: fontSize, weight: weight, design: .rounded).monospacedDigit())
+        Text(label)
+            .font(
+                .system(
+                    size: pipDigitFontSize(forAreaHeight: areaHeight),
+                    weight: weight,
+                    design: .rounded
+                )
+                .monospacedDigit()
+            )
             .foregroundStyle(color)
             .lineLimit(1)
             .minimumScaleFactor(0.35)
-            .frame(width: size.width, height: size.height)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private func remainingDigits(_ color: Color, size: CGSize) -> some View {
-        pipFillHeightLabel(presentation.remainingLabel, color: color, size: size)
+    private func remainingDigits(_ color: Color, areaHeight: CGFloat) -> some View {
+        pipDigitLabel(presentation.remainingLabel, color: color, areaHeight: areaHeight)
     }
 
     @ViewBuilder
