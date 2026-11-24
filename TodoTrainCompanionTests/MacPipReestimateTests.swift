@@ -153,12 +153,28 @@ struct MacPipReestimateTests {
             let rep = try #require(bitmap(image))
             #expect(rep.pixelsWide == Int(card.width * scale))
             #expect(rep.pixelsHigh == Int(card.height * scale))
-            if let dir = ProcessInfo.processInfo.environment["PIP_BAND_DIR"], !dir.isEmpty {
-                let png = try #require(rep.representation(using: .png, properties: [:]))
-                let url = URL(fileURLWithPath: dir, isDirectory: true).appendingPathComponent("\(name).png")
+            let png = try #require(rep.representation(using: .png, properties: [:]))
+            if ProcessInfo.processInfo.environment["PIP_BAND_STDOUT"] == "1" {
+                print("PIP_BAND_PNG:\(name):\(png.base64EncodedString())")
+            }
+            if let staging = Self.pipBandScreenshotDirectory {
+                try FileManager.default.createDirectory(at: staging, withIntermediateDirectories: true)
+                let url = staging.appendingPathComponent("\(name).png")
                 try png.write(to: url, options: .atomic)
             }
         }
+    }
+
+    private static var projectRoot: URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+    }
+
+    private static var pipBandScreenshotDirectory: URL? {
+        guard let raw = ProcessInfo.processInfo.environment["PIP_BAND_DIR"], !raw.isEmpty else { return nil }
+        let expanded = raw.replacingOccurrences(of: "$(SRCROOT)", with: projectRoot.path())
+        return URL(fileURLWithPath: expanded, isDirectory: true)
     }
 
     private func make(

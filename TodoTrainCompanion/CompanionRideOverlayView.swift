@@ -499,17 +499,22 @@ struct CompanionRideOverlayView: View {
     }
 
     private var nudgeInstrument: some View {
-        ZStack {
-            if let caption = presentation.instrumentCaption {
-                Text(caption)
-                    .font(.system(size: 18, weight: .semibold, design: .rounded).monospacedDigit())
-                    .foregroundStyle(RideOverlayPalette.fill(for: presentation))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.6)
+        GeometryReader { geo in
+            ZStack {
+                if let caption = presentation.instrumentCaption {
+                    pipFillHeightLabel(
+                        caption,
+                        color: RideOverlayPalette.fill(for: presentation),
+                        size: geo.size,
+                        heightRatio: 0.82,
+                        weight: .semibold
+                    )
                     .padding(.horizontal, 8)
-            } else {
-                progressRow
+                } else {
+                    progressRowContents(size: geo.size)
+                }
             }
+            .frame(width: geo.size.width, height: geo.size.height)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(presentation.instrumentCaption ?? "残り \(presentation.remainingLabel)")
@@ -662,32 +667,56 @@ struct CompanionRideOverlayView: View {
 
     private var progressRow: some View {
         GeometryReader { geo in
-            let fillWidth = CGFloat(
-                RideOverlayGeometry.fillLength(
-                    progress: presentation.progress,
-                    total: geo.size.width
-                )
-            )
-            ZStack(alignment: .leading) {
-                Color.black
-                HStack(spacing: 0) {
-                    RideOverlayPalette.fill(for: presentation)
-                        .frame(width: fillWidth)
-                    Spacer(minLength: 0)
-                }
-                occupancyProgressMarks(width: geo.size.width, height: geo.size.height)
-                remainingDigits(RideOverlayPalette.onTrack)
-                remainingDigits(RideOverlayPalette.onFill(for: presentation))
-                    .mask {
-                        HStack(spacing: 0) {
-                            Color.white.frame(width: fillWidth)
-                            Color.clear
-                        }
-                    }
-            }
-            .frame(width: geo.size.width, height: geo.size.height)
+            progressRowContents(size: geo.size)
         }
         .clipped()
+    }
+
+    private func progressRowContents(size: CGSize) -> some View {
+        let fillWidth = CGFloat(
+            RideOverlayGeometry.fillLength(
+                progress: presentation.progress,
+                total: size.width
+            )
+        )
+        return ZStack(alignment: .leading) {
+            Color.black
+            HStack(spacing: 0) {
+                RideOverlayPalette.fill(for: presentation)
+                    .frame(width: fillWidth)
+                Spacer(minLength: 0)
+            }
+            occupancyProgressMarks(width: size.width, height: size.height)
+            remainingDigits(RideOverlayPalette.onTrack, size: size)
+            remainingDigits(RideOverlayPalette.onFill(for: presentation), size: size)
+                .mask {
+                    HStack(spacing: 0) {
+                        Color.white.frame(width: fillWidth)
+                        Color.clear
+                    }
+                }
+        }
+        .frame(width: size.width, height: size.height)
+    }
+
+    private func pipFillHeightLabel(
+        _ label: String,
+        color: Color,
+        size: CGSize,
+        heightRatio: CGFloat = 0.9,
+        weight: Font.Weight = .medium
+    ) -> some View {
+        let fontSize = max(11, size.height * heightRatio)
+        return Text(label)
+            .font(.system(size: fontSize, weight: weight, design: .rounded).monospacedDigit())
+            .foregroundStyle(color)
+            .lineLimit(1)
+            .minimumScaleFactor(0.35)
+            .frame(width: size.width, height: size.height)
+    }
+
+    private func remainingDigits(_ color: Color, size: CGSize) -> some View {
+        pipFillHeightLabel(presentation.remainingLabel, color: color, size: size)
     }
 
     @ViewBuilder
@@ -710,13 +739,6 @@ struct CompanionRideOverlayView: View {
                     .offset(x: tick.origin)
             }
         }
-    }
-
-    private func remainingDigits(_ color: Color) -> some View {
-        Text(presentation.remainingLabel)
-            .font(.system(size: 22, weight: .medium, design: .rounded).monospacedDigit())
-            .foregroundStyle(color)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var undoRow: some View {
