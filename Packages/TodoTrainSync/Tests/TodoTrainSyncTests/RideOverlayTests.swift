@@ -137,7 +137,7 @@ struct RideOverlayPresentationTests {
         #expect(localOff.cabinPrompt == nil)
     }
 
-    @Test func disconnectedKeepsProgress() {
+    @Test func droppedSocketKeepsProgressWithoutADisconnectLine() {
         let view = RideOverlayPresentation.make(
             MenuBarInput(
                 pairing: .paired,
@@ -148,7 +148,23 @@ struct RideOverlayPresentationTests {
         )
         #expect(view.isVisible)
         #expect(view.progress == 120.0 / 1500.0)
-        #expect(view.statusLine == "リレーが切れました")
+        #expect(view.statusLine == nil)
+        #expect(view.radio.phase == .quiet)
+    }
+
+    @Test func outOfContactLampRidesOnTheCard() {
+        let radio = RelayRadioReading(phase: .outOfContact, lastReceivedClock: "12:34")
+        let view = RideOverlayPresentation.make(
+            MenuBarInput(
+                pairing: .paired,
+                snap: running,
+                now: 1_768_000_120,
+                connection: .disconnected,
+                radio: radio
+            )
+        )
+        #expect(view.radio == radio)
+        #expect(view.statusLine == nil)
     }
 
     @Test func truncatesPeekTitle() {

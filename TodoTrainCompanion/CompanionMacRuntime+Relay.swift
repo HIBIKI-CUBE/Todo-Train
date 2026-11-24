@@ -9,6 +9,7 @@ extension CompanionMacRuntime {
                 self?.now = Int(Date().timeIntervalSince1970)
                 self?.notePauseInputClock()
                 self?.confirmSnapWhileConnected()
+                self?.refreshRadio()
                 self?.syncCabinNotification()
                 self?.maybeSendTimetablePause()
                 self?.refreshMacPresence()
@@ -18,25 +19,17 @@ extension CompanionMacRuntime {
     }
 
     func startListening() {
-        hintTask?.cancel()
-        hintTask = nil
-        listenTask?.cancel()
-        listenTask = nil
-        guard HintPolling.shouldListen(isPaired: isPaired, isIdle: presence.isIdle) else { return }
-        listenTask = Task { [weak self] in
-            await self?.connectOnce()
+        guard HintPolling.shouldListen(isPaired: isPaired, isIdle: presence.isIdle) else {
+            suppressRelay()
+            return
         }
-    }
-
-    func startHintPolling() {
-        guard HintPolling.shouldPoll(
-            isPaired: isPaired,
-            connection: connection,
-            isIdle: presence.isIdle
-        ) else { return }
-        hintTask?.cancel()
-        hintTask = Task { [weak self] in
-            await self?.pollHints()
+        // Join the previous task so its socket is closed before this one opens.
+        let previous = listenTask
+        listenTask = Task { [weak self] in
+            previous?.cancel()
+            await previous?.value
+            guard let self, !Task.isCancelled else { return }
+            await self.maintainRelay()
         }
     }
 
@@ -76,60 +69,165 @@ extension CompanionMacRuntime {
     }
 
     func suppressRelay() {
-        hintTask?.cancel()
-        hintTask = nil
         listenTask?.cancel()
-        listenTask = nil
         connection = .disconnected
+        relayRetryingSince = nil
+        relayExhausted = false
+        refreshRadio()
     }
 
-    func connectOnce() async {
-        refreshPaired()
-        guard HintPolling.shouldListen(isPaired: isPaired, isIdle: presence.isIdle), !Task.isCancelled else {
-            connection = .disconnected
-            return
+    /// One task, one socket. After the attempt cap, hint polling is the only watcher.
+    func maintainRelay() async {
+        relayExhausted = false
+        relayRetryingSince = nil
+        refreshRadio()
+        var attempt = 0
+        var failedAt: Date?
+        while !Task.isCancelled {
+            refreshPaired()
+            guard HintPolling.shouldListen(isPaired: isPaired, isIdle: presence.isIdle) else {
+                connection = .disconnected
+                relayRetryingSince = nil
+                relayExhausted = false
+                refreshRadio()
+                return
+            }
+            let result = await openAndListen()
+            if Task.isCancelled || presence.isIdle || !isPaired { return }
+            switch result {
+            case .cancelled:
+                return
+            case .unauthorized:
+                connection = .disconnected
+                lastStatus = userFacing(SyncError.transport(status: 401, code: "invalid"))
+                relayRetryingSince = nil
+                relayExhausted = false
+                refreshRadio()
+                return
+            case .rateLimited, .dropped:
+                let healthy = if case .dropped(let wasHealthy) = result { wasHealthy } else { false }
+                if healthy {
+                    attempt = 0
+                    failedAt = nil
+                    relayRetryingSince = nil
+                    relayExhausted = false
+                }
+                connection = .disconnected
+                attempt += 1
+                let moment = Date()
+                if failedAt == nil { failedAt = moment }
+                if relayRetryingSince == nil { relayRetryingSince = failedAt }
+                relayExhausted = false
+                refreshRadio()
+                let elapsed = moment.timeIntervalSince(failedAt ?? moment)
+                if !RelayReconnect.shouldRetry(attempt: attempt, elapsedSeconds: elapsed) {
+                    relayExhausted = true
+                    refreshRadio()
+                    _ = await pollHints(until: nil)
+                    return
+                }
+                let delay = RelayReconnect.delaySeconds(
+                    attempt: attempt,
+                    unit: Double.random(in: 0..<1)
+                )
+                let waited = await pollHints(until: Date().addingTimeInterval(delay))
+                switch waited {
+                case .unauthorized:
+                    connection = .disconnected
+                    lastStatus = userFacing(SyncError.transport(status: 401, code: "invalid"))
+                    relayRetryingSince = nil
+                    refreshRadio()
+                    return
+                case .cancelled:
+                    return
+                case .elapsed:
+                    break
+                }
+            }
         }
+    }
+
+    func openAndListen() async -> RelaySocketResult {
         do {
             try await pullSnapAndAck()
-            try await listenWebSocket()
         } catch is CancellationError {
-            return
+            return .cancelled
         } catch {
-            if Task.isCancelled { return }
-            connection = .disconnected
-            lastStatus = userFacing(error)
-            startHintPolling()
+            if Task.isCancelled { return .cancelled }
+            return finishOpen(error, healthy: false)
         }
+        relayRetryingSince = nil
+        relayExhausted = false
+        refreshRadio()
+        let listened = await listenWebSocket()
+        if let error = listened.error {
+            return finishOpen(error, healthy: listened.healthy)
+        }
+        if Task.isCancelled { return .cancelled }
+        return .dropped(healthy: listened.healthy)
+    }
+
+    func finishOpen(_ error: Error, healthy: Bool) -> RelaySocketResult {
+        if error is CancellationError || Task.isCancelled { return .cancelled }
+        lastStatus = userFacing(error)
+        if let status = RelayReconnect.transportStatus(error) {
+            switch HintPolling.rateLimit(status) {
+            case .stop:
+                return .unauthorized
+            case .wait:
+                return .rateLimited
+            case .again:
+                break
+            }
+        }
+        return .dropped(healthy: healthy)
     }
 
     func pullSnapAndAck() async throws {
         let pairing = try requireSecrets()
         let keys = try SyncCrypto.deriveKeys(masterKey: pairing.masterKey, pairingId: pairing.pairingId)
         let client = try authedClient(pairing)
-        if let envelope = try? await client.getSnap() {
-            try applySnap(envelope, pairingId: pairing.pairingId, encKey: keys.enc)
+        try await readIfPresent {
+            let envelope = try await client.getSnap()
+            try self.applySnap(envelope, pairingId: pairing.pairingId, encKey: keys.enc)
         }
-        if let envelope = try? await client.getAck() {
-            try applyAck(envelope, pairingId: pairing.pairingId, encKey: keys.enc)
+        try await readIfPresent {
+            let envelope = try await client.getAck()
+            try self.applyAck(envelope, pairingId: pairing.pairingId, encKey: keys.enc)
         }
         guard !Task.isCancelled, !presence.isIdle else { throw CancellationError() }
         connection = .connected
         lastStatus = nil
     }
 
-    func pollHints() async {
+    /// 401 and 429 leave the optional read. Anything else (a missing snap) stays quiet.
+    func readIfPresent(_ body: () async throws -> Void) async throws {
+        do {
+            try await body()
+        } catch {
+            if let status = RelayReconnect.transportStatus(error), HintPolling.rateLimit(status) != .again {
+                throw error
+            }
+        }
+    }
+
+    /// `until == nil` watches until cancel or an invalid pairing. A deadline is the backoff bridge.
+    func pollHints(until deadline: Date?) async -> HintWatch {
         var previous: HintPlaintext?
         var etag: String?
+        var rateAttempt = 0
         while !Task.isCancelled {
+            if let deadline, Date() >= deadline { return .elapsed }
             guard HintPolling.shouldPoll(
                 isPaired: isPaired,
                 connection: connection,
                 isIdle: presence.isIdle
-            ) else { return }
+            ) else { return .cancelled }
             do {
                 let pairing = try requireSecrets()
                 let client = try authedClient(pairing)
                 let result = try await client.getHint(pairingId: pairing.pairingId, etag: etag)
+                rateAttempt = 0
                 switch HintPolling.outcome(
                     subscriber: .mac,
                     previous: previous,
@@ -150,32 +248,87 @@ extension CompanionMacRuntime {
                         masterKey: pairing.masterKey,
                         pairingId: pairing.pairingId
                     )
-                    if catchUp.snap, let envelope = try? await client.getSnap() {
-                        try applySnap(envelope, pairingId: pairing.pairingId, encKey: keys.enc)
+                    if catchUp.snap {
+                        try await readIfPresent {
+                            let envelope = try await client.getSnap()
+                            try self.applySnap(envelope, pairingId: pairing.pairingId, encKey: keys.enc)
+                        }
                     }
-                    if catchUp.ack, let envelope = try? await client.getAck() {
-                        try applyAck(envelope, pairingId: pairing.pairingId, encKey: keys.enc)
+                    if catchUp.ack {
+                        try await readIfPresent {
+                            let envelope = try await client.getAck()
+                            try self.applyAck(envelope, pairingId: pairing.pairingId, encKey: keys.enc)
+                        }
                     }
                     confirmSnapFromRelay()
                 case .stop:
-                    return
+                    return .unauthorized
                 }
-            } catch SyncError.transport(let status, _) where status == 429 || status == 401 {
+            } catch SyncError.transport(let status, _) {
                 lastStatus = userFacing(SyncError.transport(status: status, code: "invalid"))
-                return
+                switch HintPolling.rateLimit(status) {
+                case .stop:
+                    return .unauthorized
+                case .wait:
+                    rateAttempt += 1
+                    let pause = RelayReconnect.delaySeconds(
+                        attempt: rateAttempt,
+                        unit: Double.random(in: 0..<1)
+                    )
+                    let paused = await sleepHint(pause, until: deadline)
+                    if !paused {
+                        return Task.isCancelled ? .cancelled : .elapsed
+                    }
+                    continue
+                case .again:
+                    break
+                }
             } catch is CancellationError {
-                return
+                return .cancelled
             } catch {
-                if Task.isCancelled { return }
+                if Task.isCancelled { return .cancelled }
                 lastStatus = userFacing(error)
             }
-            try? await Task.sleep(nanoseconds: HintPolling.intervalNanoseconds)
+            let paused = await sleepHint(
+                Double(HintPolling.intervalNanoseconds) / 1_000_000_000,
+                until: deadline
+            )
+            if !paused {
+                return Task.isCancelled ? .cancelled : .elapsed
+            }
         }
+        return .cancelled
     }
 
-    func listenWebSocket() async throws {
-        let pairing = try requireSecrets()
-        let url = try requireRelay()
+    /// False when the wait was cut short by cancellation or the deadline.
+    func sleepHint(_ seconds: Double, until deadline: Date?) async -> Bool {
+        let requested = max(0, seconds)
+        let slice: Double
+        if let deadline {
+            let remaining = deadline.timeIntervalSinceNow
+            if remaining <= 0 { return false }
+            slice = min(requested, remaining)
+        } else {
+            slice = requested
+        }
+        let nanos = UInt64((slice * 1_000_000_000).rounded())
+        if nanos > 0 {
+            try? await Task.sleep(nanoseconds: nanos)
+        }
+        if Task.isCancelled { return false }
+        if let deadline, Date() >= deadline { return false }
+        return true
+    }
+
+    func listenWebSocket() async -> (healthy: Bool, error: Error?) {
+        let pairing: PairingSecrets
+        let url: URL
+        do {
+            pairing = try requireSecrets()
+            url = try requireRelay()
+        } catch {
+            return (false, error)
+        }
         let connector = URLSessionWebSocketConnecting(baseURL: url)
         let socket = BearerWebSocket(
             writeToken: pairing.writeToken,
@@ -183,24 +336,40 @@ extension CompanionMacRuntime {
             role: .mac,
             connector: connector
         )
-        let connection = EchoingWebSocketConnection(try await socket.connect())
+        let connection: EchoingWebSocketConnection
+        do {
+            connection = EchoingWebSocketConnection(try await socket.connect())
+        } catch {
+            return (false, error)
+        }
         self.connection = .connected
         lastStatus = nil
-        defer { Task { await connection.close() } }
+        var healthy = false
+        var failure: Error?
         while !Task.isCancelled {
             let incoming: WSIncoming
             do {
                 incoming = try await connection.receiveIncoming()
             } catch SyncError.invalidJSON {
                 continue
+            } catch {
+                failure = error
+                break
             }
+            healthy = true
             switch incoming {
             case .hello(let announcement):
                 noteRelayContract(announcement)
             case .ping, .pong, .echo:
                 break
             case .frame(let frame):
-                let keys = try SyncCrypto.deriveKeys(masterKey: pairing.masterKey, pairingId: pairing.pairingId)
+                let keys: DerivedKeys
+                do {
+                    keys = try SyncCrypto.deriveKeys(masterKey: pairing.masterKey, pairingId: pairing.pairingId)
+                } catch {
+                    lastStatus = userFacing(error)
+                    continue
+                }
                 do {
                     switch frame.t {
                     case .snap:
@@ -215,6 +384,11 @@ extension CompanionMacRuntime {
                 }
             }
         }
+        if failure == nil, Task.isCancelled {
+            failure = CancellationError()
+        }
+        await connection.close()
+        return (healthy, failure)
     }
 
     func confirmSnapWhileConnected() {
@@ -225,11 +399,62 @@ extension CompanionMacRuntime {
     func confirmSnapFromRelay() {
         guard snap != nil else { return }
         snapConfirmedAt = Date()
+        refreshRadio()
+    }
+
+    func refreshRadio() {
+        let output = RelayRadio.judge(
+            RelayRadio.Input(
+                now: now,
+                snapConfirmedAt: snapConfirmedAt.map { Int($0.timeIntervalSince1970) },
+                retryingSince: relayRetryingSince.map { Int($0.timeIntervalSince1970) },
+                exhausted: relayExhausted,
+                acknowledged: radioAcknowledged,
+                prior: radioPrior,
+                recoveredUntil: radioRecoveredUntil,
+                timeZone: .current
+            )
+        )
+        radioReading = output.reading
+        radioPrior = output.reading.phase
+        radioRecoveredUntil = output.recoveredUntil
+        if output.clearAcknowledged {
+            radioAcknowledged = false
+        }
+        syncRadioNotice()
+    }
+
+    func acknowledgeRadio() {
+        guard radioReading.phase == .reconnecting || radioReading.phase == .outOfContact else { return }
+        radioAcknowledged = true
+        refreshRadio()
+    }
+
+    func syncRadioNotice() {
+        let riding = snap.map { RelayRadio.riding($0.phase) } ?? false
+        if RelayRadio.shouldPostNotice(
+            phase: radioReading.phase,
+            riding: riding,
+            session: snap?.sessionId,
+            postedFor: radioNotifiedSession
+        ), let session = snap?.sessionId {
+            radioNotifiedSession = session
+            cabinNotifier.postRadio(title: SyncCopy.radioNoticeTitle, body: SyncCopy.radioNoticeBody)
+            return
+        }
+        if radioReading.phase != .outOfContact {
+            cabinNotifier.withdrawRadio()
+        }
     }
 
     func applySnap(_ envelope: Envelope, pairingId: UUID, encKey: Data) throws {
+        let previousSession = snap?.sessionId
         snap = try SyncCrypto.openJSON(SnapPlaintext.self, envelope: envelope, pairingId: pairingId, encKey: encKey)
+        if snap?.sessionId != previousSession {
+            radioNotifiedSession = nil
+        }
         snapConfirmedAt = Date()
+        refreshRadio()
         if let build = snap?.build {
             notePeerBuild(build)
         }

@@ -5,7 +5,18 @@ public enum SyncCopy {
     public static let relayDisconnected = "リレーが切れました"
     public static let notConnected = "つながっていません"
     public static let invalidQR = "その QR ではつながりません"
-    public static let reconnectNeeded = "つなぎ直しが必要"
+    public static let reconnectNeeded = "再接続が必要"
+    /// Menu bar suffix while the snap has been silent long enough to call the link down.
+    public static let radioBreak = "無線断"
+    public static let radioOut = "無線不通"
+    public static let reconnect = "再接続"
+    public static let radioNoticeTitle = "指令無線 不通"
+    public static let radioNoticeBody = "指令との無線が不通。iPhone の Todo列車を開けば再接続する。"
+
+    public static func radioOutDetail(clock: String?) -> String {
+        guard let clock, !clock.isEmpty else { return radioOut }
+        return "\(radioOut)　最終受信 \(clock)"
+    }
     public static let confirmTimedOut = "確定の時間が切れました。画面を自分に戻すと、もう一度確定できます。"
     public static let confirmFailed = "確定できませんでした。画面を自分に戻すと、もう一度確定できます。"
     public static let relayURLMissing = "リレー URL を設定に入れてから、もう一度お試しください。"

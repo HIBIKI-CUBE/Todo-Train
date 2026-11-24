@@ -66,6 +66,13 @@ public enum HintPollOutcome: Equatable, Sendable {
     case stop
 }
 
+/// 401 ends the watcher (the pairing is no longer valid). 429 waits and continues.
+public enum HintRateAction: Equatable, Sendable {
+    case stop
+    case wait
+    case again
+}
+
 /// Disconnect-only hint watching. Not a connected-path catch-up loop.
 public enum HintPolling: Sendable {
     public static let intervalNanoseconds: UInt64 = 5_000_000_000
@@ -80,6 +87,13 @@ public enum HintPolling: Sendable {
 
     public static func shouldListen(isPaired: Bool, isIdle: Bool = false) -> Bool {
         isPaired && !isIdle
+    }
+
+    /// 401 is an invalid pairing and ends the watcher. 429 waits outside this function.
+    public static func rateLimit(_ status: Int) -> HintRateAction {
+        if status == 401 { return .stop }
+        if status == 429 { return .wait }
+        return .again
     }
 
     public static func etag(for hint: HintPlaintext) -> String {

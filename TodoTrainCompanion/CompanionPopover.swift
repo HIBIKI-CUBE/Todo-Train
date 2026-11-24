@@ -65,7 +65,9 @@ struct CompanionPopover: View {
                 Text(failure)
                     .font(.callout)
                     .foregroundStyle(.red)
-            } else if let status = runtime.lastStatus, runtime.connection == .disconnected {
+            } else if let status = runtime.lastStatus,
+                      view.canReconnect,
+                      status != SyncCopy.relayDisconnected {
                 Text(status)
                     .font(.callout)
                     .foregroundStyle(.secondary)
@@ -88,7 +90,7 @@ struct CompanionPopover: View {
             }
 
             if view.canReconnect {
-                Button("つなぎ直す") {
+                Button(SyncCopy.reconnect) {
                     runtime.reconnect()
                 }
                 .buttonStyle(.bordered)
@@ -224,7 +226,7 @@ struct RelaySettingsView: View {
             }
             Button("やめる", role: .cancel) {}
         } message: {
-            Text("この Mac とのつながりを解除します。つなぎ直すときは、もう一度画面を向けます。")
+            Text("この Mac とのつながりを解除します。再接続するときは、もう一度画面を向けます。")
         }
     }
 }

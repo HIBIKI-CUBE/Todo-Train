@@ -7,6 +7,7 @@ final class CompanionCabinNotifier: NSObject, UNUserNotificationCenterDelegate {
     nonisolated static let identifier = "todotrain.cabin.idle"
     nonisolated static let categoryIdentifier = "todotrain.cabin.idle"
     nonisolated static let stillAction = "todotrain.checkin.still"
+    nonisolated static let radioIdentifier = "todotrain.radio.out"
 
     var onStill: (() -> Void)?
     private let center = UNUserNotificationCenter.current()
@@ -66,6 +67,20 @@ final class CompanionCabinNotifier: NSObject, UNUserNotificationCenterDelegate {
                 UNNotificationRequest(identifier: request.identifier, content: content, trigger: trigger)
             )
         }
+    }
+
+    func postRadio(title: String, body: String) {
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.sound = .default
+        center.removePendingNotificationRequests(withIdentifiers: [Self.radioIdentifier])
+        center.add(UNNotificationRequest(identifier: Self.radioIdentifier, content: content, trigger: nil))
+    }
+
+    func withdrawRadio() {
+        center.removePendingNotificationRequests(withIdentifiers: [Self.radioIdentifier])
+        center.removeDeliveredNotifications(withIdentifiers: [Self.radioIdentifier])
     }
 
     func remove() {

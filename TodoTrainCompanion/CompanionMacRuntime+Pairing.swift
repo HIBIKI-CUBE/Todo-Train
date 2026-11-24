@@ -37,12 +37,17 @@ extension CompanionMacRuntime {
         pairingQR = nil
         pairingCue = .scanning
         listenTask?.cancel()
-        listenTask = nil
-        hintTask?.cancel()
-        hintTask = nil
         try? secrets.delete()
         snap = nil
         snapConfirmedAt = nil
+        relayRetryingSince = nil
+        relayExhausted = false
+        radioAcknowledged = false
+        radioPrior = .quiet
+        radioRecoveredUntil = nil
+        radioNotifiedSession = nil
+        radioReading = .quiet
+        cabinNotifier.withdrawRadio()
         peerBuild = nil
         PeerBuildStore.save(nil, to: defaults)
         peerContract = nil

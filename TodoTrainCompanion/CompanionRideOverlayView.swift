@@ -27,8 +27,10 @@ struct CompanionRideOverlayView: View {
     var onBoardReserved: () -> Void
     var onCloseGap: () -> Void
     var onPausePrompt: (PausePromptAnswer) -> Void
+    var onAcknowledgeRadio: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var radioLit = true
 
     private var presentation: RideOverlayPresentation { model.presentation }
 
@@ -137,6 +139,86 @@ struct CompanionRideOverlayView: View {
             cardShape
                 .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
         }
+        .overlay(alignment: .topTrailing) {
+            radioLamp
+                .padding(.top, 6)
+                .padding(.trailing, 8)
+        }
+    }
+
+    @ViewBuilder
+    private var radioLamp: some View {
+        let radio = presentation.radio
+        if radio.phase != .quiet {
+            let blinks = radio.blinks && !reduceMotion && !radio.dimmed
+            let face = radioFace(radio, blinks: blinks)
+            if radio.phase == .recovered {
+                face.accessibilityHidden(true)
+            } else {
+                Button(action: onAcknowledgeRadio) {
+                    face
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(radio.phase == .outOfContact ? SyncCopy.radioOut : "再接続中")
+                .accessibilityValue(radio.lastReceivedClock ?? "")
+                .accessibilityHint("確認すると点滅が止まります")
+            }
+        }
+    }
+
+    private func radioFace(_ radio: RelayRadioReading, blinks: Bool) -> some View {
+        let color = radioColor(radio.phase, dimmed: radio.dimmed)
+        return VStack(spacing: 1) {
+            ZStack {
+                Circle()
+                    .fill(color)
+                    .frame(width: 22, height: 22)
+                    .opacity(blinks && !radioLit ? 0.25 : 1)
+                if radio.phase == .outOfContact, let clock = radio.lastReceivedClock {
+                    Text(clock)
+                        .font(.system(size: 7, weight: .bold, design: .rounded).monospacedDigit())
+                        .foregroundStyle(.white.opacity(radio.dimmed ? 0.7 : 1))
+                        .minimumScaleFactor(0.5)
+                        .lineLimit(1)
+                }
+            }
+            if radio.phase == .outOfContact, let clock = radio.lastReceivedClock {
+                Text(clock)
+                    .font(.system(size: 9, weight: .semibold, design: .rounded).monospacedDigit())
+                    .foregroundStyle(color)
+                    .lineLimit(1)
+            }
+        }
+        .onAppear { pulseRadio(blinks) }
+        .onChange(of: blinks) { _, blinking in
+            pulseRadio(blinking)
+        }
+    }
+
+    private func pulseRadio(_ blinks: Bool) {
+        guard blinks else {
+            radioLit = true
+            return
+        }
+        radioLit = true
+        withAnimation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true)) {
+            radioLit = false
+        }
+    }
+
+    private func radioColor(_ phase: RelayRadioPhase, dimmed: Bool) -> Color {
+        let base: Color
+        switch phase {
+        case .quiet:
+            base = .clear
+        case .reconnecting:
+            base = RideOverlayPalette.approach
+        case .outOfContact:
+            base = Color(red: 0.86, green: 0.16, blue: 0.18)
+        case .recovered:
+            base = RideOverlayPalette.resume
+        }
+        return dimmed ? base.opacity(0.4) : base
     }
 
     private var classicColumn: some View {
@@ -595,7 +677,11 @@ struct CompanionRideOverlayView: View {
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.16), value: model.hovering)
         .overlay(alignment: .top) {
-            if model.edgeLamp {
+            if presentation.radio.phase != .quiet {
+                radioLamp
+                    .scaleEffect(0.72)
+                    .padding(.top, 4)
+            } else if model.edgeLamp {
                 Circle()
                     .fill(RideOverlayPalette.approach)
                     .frame(width: 8, height: 8)
@@ -707,7 +793,8 @@ func ridePreview(_ presentation: RideOverlayPresentation) -> some View {
         onCancelExtend: {},
         onBoardReserved: {},
         onCloseGap: {},
-        onPausePrompt: { _ in }
+        onPausePrompt: { _ in },
+        onAcknowledgeRadio: {}
     )
 }
 
