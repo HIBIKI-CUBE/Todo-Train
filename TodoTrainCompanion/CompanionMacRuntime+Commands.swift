@@ -11,6 +11,97 @@ extension CompanionMacRuntime {
         await sendRideCommand(.resume)
     }
 
+    /// メニューと PiP の停車・再乗車。今送れる方を一つ送る。
+    func sendPauseOrResume() async {
+        if presentation.canResume {
+            await sendResume()
+        } else if presentation.canPause {
+            await sendPause()
+        }
+    }
+
+    func expireReestimateUndo() {
+        guard let until = reestimateUndoUntil, now >= until else { return }
+        reestimateUndoUntil = nil
+        reestimateUndoCommandID = nil
+    }
+
+    /// 見積もり直しを送る。届いたあと 5 秒だけ取り消しを出す。
+    @discardableResult
+    func sendReestimate(_ choice: MacPipReestimateChoice) async -> Bool {
+        guard let sessionId = snap?.sessionId else { return false }
+        if let blocked = ContractCompat.commandBlock(peer: peerContract, relay: relayContract, side: .mac) {
+            lastStatus = blocked
+            return false
+        }
+        let active = TimeInterval(snap?.elapsedActiveSeconds(at: now) ?? 0)
+        let cmdId = UUID()
+        guard let command = MacPipReestimate.command(
+            id: cmdId,
+            sessionId: sessionId,
+            at: now,
+            activeSeconds: active,
+            nudgeStage: snap?.nudge?.stage,
+            choice: choice,
+            build: LocalWireBuild.current,
+            contract: ContractVersion.contract,
+            minReadable: ContractVersion.minReadable
+        ) else { return false }
+        guard let next = OutgoingPauseApplying.beginSending(cmdId: cmdId, current: outgoingPause) else {
+            return false
+        }
+        outgoingPause = next
+        transportNotice = nil
+        do {
+            try await post(command)
+            reestimateUndoCommandID = cmdId
+            reestimateUndoUntil = now + MacPipReestimate.undoSeconds
+            return true
+        } catch {
+            noteCommandTransportFailure(error)
+            return false
+        }
+    }
+
+    /// 直前の見積もり直しを取り消す。送信中の見積もり直しは、このコマンドに差し替える。
+    @discardableResult
+    func sendUndoReestimate() async -> Bool {
+        guard let sessionId = snap?.sessionId else { return false }
+        if let blocked = ContractCompat.commandBlock(peer: peerContract, relay: relayContract, side: .mac) {
+            lastStatus = blocked
+            return false
+        }
+        if case .sending(let id) = outgoingPause, id != reestimateUndoCommandID {
+            return false
+        }
+        let keptUntil = reestimateUndoUntil
+        let keptID = reestimateUndoCommandID
+        let cmdId = UUID()
+        let command = MacPipReestimate.undoCommand(
+            id: cmdId,
+            sessionId: sessionId,
+            at: now,
+            build: LocalWireBuild.current,
+            contract: ContractVersion.contract,
+            minReadable: ContractVersion.minReadable
+        )
+        outgoingPause = .sending(cmdId: cmdId)
+        reestimateUndoUntil = nil
+        reestimateUndoCommandID = nil
+        transportNotice = nil
+        do {
+            try await post(command)
+            return true
+        } catch {
+            noteCommandTransportFailure(error)
+            if reestimateUndoUntil == nil {
+                reestimateUndoUntil = keptUntil
+                reestimateUndoCommandID = keptID
+            }
+            return false
+        }
+    }
+
     func sendStill() async {
         let interrupt = cabinInterrupt
         let pip = overlayPresentation.cabinPrompt != nil
@@ -114,14 +205,10 @@ extension CompanionMacRuntime {
         }
     }
 
-    func sendNudgeAnswer(_ choice: NudgeChoice, addSeconds: Int? = nil) async {
+    func sendNudgeAnswer(_ choice: NudgeChoice) async {
+        guard choice == .stillOnIt || choice == .alreadyDone || choice == .paused else { return }
         guard snap?.nudge != nil else { return }
         guard let sessionId = snap?.sessionId, let nudgeId = snap?.nudge?.id else { return }
-        if choice == .willExtend {
-            guard let addSeconds, NudgeCommandEvaluating.extendPresetSeconds.contains(addSeconds) else { return }
-        } else if addSeconds != nil {
-            return
-        }
         if let blocked = ContractCompat.commandBlock(peer: peerContract, relay: relayContract, side: .mac) {
             lastStatus = blocked
             return
@@ -136,7 +223,6 @@ extension CompanionMacRuntime {
         nudgeWinnerLine = nil
         answerEstimateBefore = snap?.estimatedSeconds
         answerNudgeID = nudgeId
-        pendingExtendMinutes = choice == .willExtend ? (addSeconds ?? 0) / 60 : nil
         do {
             let command = CommandPlaintext(
                 id: cmdId,
@@ -148,12 +234,10 @@ extension CompanionMacRuntime {
                 minReadable: ContractVersion.minReadable,
                 nudgeId: nudgeId,
                 choice: choice,
-                addSeconds: addSeconds,
                 answeredOn: .mac
             )
             try await post(command)
         } catch {
-            pendingExtendMinutes = nil
             noteCommandTransportFailure(error)
         }
     }

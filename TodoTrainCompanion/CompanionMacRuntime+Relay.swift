@@ -7,6 +7,7 @@ extension CompanionMacRuntime {
         tickTask = Task { [weak self] in
             while !Task.isCancelled {
                 self?.now = Int(Date().timeIntervalSince1970)
+                self?.expireReestimateUndo()
                 self?.notePauseInputClock()
                 self?.confirmSnapWhileConnected()
                 self?.refreshRadio()
@@ -486,7 +487,10 @@ extension CompanionMacRuntime {
         issueBoardTrack = IssueBoardTracking.applyAck(ack, current: issueBoardTrack)
         guard ack.cmdId == inFlight else { return }
         transportNotice = nil
-        pendingExtendMinutes = nil
+        if ack.cmdId == reestimateUndoCommandID, !ack.ok {
+            reestimateUndoUntil = nil
+            reestimateUndoCommandID = nil
+        }
         if ack.ok {
             staleWinner = false
             nudgeWinnerLine = nil
@@ -509,7 +513,8 @@ extension CompanionMacRuntime {
     func noteCommandTransportFailure(_ error: Error) {
         if let sync = error as? SyncError, case .transport(_, let code) = sync, code == "fifoFull" {
             outgoingPause = .idle
-            pendingExtendMinutes = nil
+            reestimateUndoUntil = nil
+            reestimateUndoCommandID = nil
             transportNotice = SyncCopy.fifoFull
             lastStatus = SyncCopy.fifoFull
             return

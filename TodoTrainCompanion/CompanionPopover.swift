@@ -113,16 +113,9 @@ struct CompanionPopover: View {
                 .buttonStyle(.bordered)
             }
 
-            if view.canPause {
-                Button("停車") {
-                    Task { await runtime.sendPause() }
-                }
-                .keyboardShortcut(.defaultAction)
-                .buttonStyle(.borderedProminent)
-                .disabled(view.isSending)
-            } else if view.canResume {
-                Button("再乗車") {
-                    Task { await runtime.sendResume() }
+            if view.canPause || view.canResume {
+                Button(view.canResume ? "再乗車" : "停車") {
+                    Task { await runtime.sendPauseOrResume() }
                 }
                 .keyboardShortcut(.defaultAction)
                 .buttonStyle(.borderedProminent)
