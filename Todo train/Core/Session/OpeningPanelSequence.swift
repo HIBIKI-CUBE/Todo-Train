@@ -91,11 +91,14 @@ enum OpeningPanelSequenceMath {
         return line
     }
 
-    /// 線の下は最大 3 枚。それより奥はまとめ表示。
+    /// 窓に並ぶ切符の行は最大 7 行。8 行目は「ほか N 枚」の行で、盤の大きさは変わらない。
+    static let maxShownRows = 7
+
+    /// 線の下は最大 3 枚。全体は `maxShownRows` まで。それより奥はまとめ表示。
     static func visibleSpan(line: Int, total: Int) -> (shown: Int, hidden: Int) {
         guard total > 0 else { return (0, 0) }
-        let below = max(1, min(3, 7 - line))
-        let shown = min(total, line + below)
+        let below = max(1, min(3, maxShownRows - line))
+        let shown = min(total, line + below, maxShownRows)
         return (shown, total - shown)
     }
 }

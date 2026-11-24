@@ -156,7 +156,9 @@ struct OpeningPanelTicketsTests {
         #expect(OpeningPanelSequenceMath.visibleSpan(line: 3, total: 16) == (6, 10))
         #expect(OpeningPanelSequenceMath.visibleSpan(line: 0, total: 5) == (3, 2))
         #expect(OpeningPanelSequenceMath.visibleSpan(line: 6, total: 6) == (6, 0))
-        #expect(OpeningPanelSequenceMath.visibleSpan(line: 8, total: 10) == (9, 1))
+        #expect(OpeningPanelSequenceMath.visibleSpan(line: 8, total: 10) == (7, 3))
+        #expect(OpeningPanelSequenceMath.visibleSpan(line: 12, total: 20) == (7, 13))
+        #expect(OpeningPanelSequenceMath.visibleSpan(line: 7, total: 7) == (7, 0))
 
         let idle = OpeningPanelTickets.pileKeys(sequencing: false, powered: true, keys: [])
         #expect(idle.map(\.title) == ["TODAY", "MAYBE", "LATER"])
