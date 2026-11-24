@@ -35,8 +35,19 @@ def role_of(path: str, table: list[tuple[str, str]]) -> str:
     return next((role for pattern, role in table if fnmatch(path, pattern)), "アプリ")
 
 
+# Issue #190（2026-10-20）で文言を固定した指令の通知。アプリの声の規則には載せない。
+LOCKED_DISPATCH = {
+    "指令との無線が不通。iPhone の Todo列車を開けば再接続する。",
+}
+
+
 def problems(text: str, kind: str, role: str) -> list[str]:
     t = QUOTED.sub("◯", text)
+    if text in LOCKED_DISPATCH or t in LOCKED_DISPATCH:
+        hit = [w for w in BANNED if w in t]
+        if hit:
+            return [f"用語表で使わない語がある（{'、'.join(hit)}）"]
+        return []
     sents = sentences(t) or [t]
     ends = [ending(s) for s in sents]
     out = []

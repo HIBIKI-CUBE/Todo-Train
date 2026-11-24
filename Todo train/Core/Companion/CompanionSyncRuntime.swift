@@ -120,18 +120,56 @@ final class CompanionSyncRuntime {
         }
     }
 
+    /// Foreground only. Background still cancels this task and leaves the socket closed.
     private func runForeground(sessionManager: SessionManager) async {
         refreshPaired()
         guard isPaired else { return }
-        await syncNow(sessionManager: sessionManager)
-        guard !Task.isCancelled else { return }
-        await listenWebSocket(sessionManager: sessionManager)
-        guard !Task.isCancelled else { return }
-        await pollHints(sessionManager: sessionManager)
+        var attempt = 0
+        var failedAt: Date?
+        while !Task.isCancelled {
+            refreshPaired()
+            guard isPaired else { return }
+            await syncNow(sessionManager: sessionManager)
+            guard !Task.isCancelled else { return }
+            let result = await listenWebSocket(sessionManager: sessionManager)
+            if Task.isCancelled || !isPaired { return }
+            switch result {
+            case .cancelled, .unauthorized:
+                return
+            case .rateLimited, .dropped:
+                let healthy = if case .dropped(let wasHealthy) = result { wasHealthy } else { false }
+                if healthy {
+                    attempt = 0
+                    failedAt = nil
+                }
+                attempt += 1
+                let moment = Date()
+                if failedAt == nil { failedAt = moment }
+                let elapsed = moment.timeIntervalSince(failedAt ?? moment)
+                if !RelayReconnect.shouldRetry(attempt: attempt, elapsedSeconds: elapsed) {
+                    _ = await pollHints(sessionManager: sessionManager, until: nil)
+                    return
+                }
+                let delay = RelayReconnect.delaySeconds(
+                    attempt: attempt,
+                    unit: Double.random(in: 0..<1)
+                )
+                let waited = await pollHints(
+                    sessionManager: sessionManager,
+                    until: Date().addingTimeInterval(delay)
+                )
+                switch waited {
+                case .unauthorized, .cancelled:
+                    return
+                case .elapsed:
+                    break
+                }
+            }
+        }
     }
 
-    private func listenWebSocket(sessionManager: SessionManager) async {
-        guard let pairing = try? secrets.load(), let url = relayURL else { return }
+    private func listenWebSocket(sessionManager: SessionManager) async -> RelaySocketResult {
+        guard let pairing = try? secrets.load(), let url = relayURL else { return .cancelled }
         let connector = URLSessionWebSocketConnecting(baseURL: url)
         let socket = BearerWebSocket(
             writeToken: pairing.writeToken,
@@ -142,26 +180,29 @@ final class CompanionSyncRuntime {
         let connection: any WebSocketConnection
         do {
             connection = try await socket.connect()
+        } catch is CancellationError {
+            return .cancelled
         } catch {
             lastStatus = userFacing(error)
             sessionManager.noteMacPresenceUnreachable()
-            return
+            return classifySocket(error, healthy: false)
         }
-        defer { Task { await connection.close() } }
-        while !Task.isCancelled {
+        var healthy = false
+        var failure: Error?
+        while failure == nil && !Task.isCancelled {
             let incoming: WSIncoming
             do {
                 incoming = try await connection.receiveIncoming()
             } catch is CancellationError {
-                return
+                failure = CancellationError()
+                break
             } catch SyncError.invalidJSON {
                 continue
             } catch {
-                if Task.isCancelled { return }
-                lastStatus = userFacing(error)
-                sessionManager.noteMacPresenceUnreachable()
-                return
+                failure = error
+                break
             }
+            healthy = true
             switch incoming {
             case .hello(let announcement):
                 noteRelayContract(announcement)
@@ -178,16 +219,42 @@ final class CompanionSyncRuntime {
                 }
             }
         }
+        await connection.close()
+        if Task.isCancelled || failure is CancellationError { return .cancelled }
+        if let failure {
+            lastStatus = userFacing(failure)
+            sessionManager.noteMacPresenceUnreachable()
+            return classifySocket(failure, healthy: healthy)
+        }
+        return .cancelled
     }
 
-    private func pollHints(sessionManager: SessionManager) async {
+    private func classifySocket(_ error: Error, healthy: Bool) -> RelaySocketResult {
+        if error is CancellationError || Task.isCancelled { return .cancelled }
+        if let status = RelayReconnect.transportStatus(error) {
+            switch HintPolling.rateLimit(status) {
+            case .stop:
+                return .unauthorized
+            case .wait:
+                return .rateLimited
+            case .again:
+                break
+            }
+        }
+        return .dropped(healthy: healthy)
+    }
+
+    private func pollHints(sessionManager: SessionManager, until deadline: Date?) async -> HintWatch {
         var previous: HintPlaintext?
         var etag: String?
+        var rateAttempt = 0
         while !Task.isCancelled {
+            if let deadline, Date() >= deadline { return .elapsed }
             do {
-                guard let pairing = try secrets.load() else { return }
+                guard let pairing = try secrets.load() else { return .cancelled }
                 let client = try authedClient(pairing)
                 let result = try await client.getHint(pairingId: pairing.pairingId, etag: etag)
+                rateAttempt = 0
                 switch HintPolling.outcome(
                     subscriber: .iphone,
                     previous: previous,
@@ -207,20 +274,62 @@ final class CompanionSyncRuntime {
                         try await pullCommandsAndPushSnap(sessionManager: sessionManager)
                     }
                 case .stop:
-                    return
+                    return .unauthorized
                 }
-            } catch SyncError.transport(let status, _) where status == 429 || status == 401 {
+            } catch SyncError.transport(let status, _) {
                 lastStatus = userFacing(SyncError.transport(status: status, code: "invalid"))
-                return
+                switch HintPolling.rateLimit(status) {
+                case .stop:
+                    return .unauthorized
+                case .wait:
+                    rateAttempt += 1
+                    let pause = RelayReconnect.delaySeconds(
+                        attempt: rateAttempt,
+                        unit: Double.random(in: 0..<1)
+                    )
+                    let paused = await sleepHint(pause, until: deadline)
+                    if !paused {
+                        return Task.isCancelled ? .cancelled : .elapsed
+                    }
+                    continue
+                case .again:
+                    break
+                }
             } catch is CancellationError {
-                return
+                return .cancelled
             } catch {
-                if Task.isCancelled { return }
+                if Task.isCancelled { return .cancelled }
                 lastStatus = userFacing(error)
                 sessionManager.noteMacPresenceUnreachable()
             }
-            try? await Task.sleep(nanoseconds: HintPolling.intervalNanoseconds)
+            let paused = await sleepHint(
+                Double(HintPolling.intervalNanoseconds) / 1_000_000_000,
+                until: deadline
+            )
+            if !paused {
+                return Task.isCancelled ? .cancelled : .elapsed
+            }
         }
+        return .cancelled
+    }
+
+    private func sleepHint(_ seconds: Double, until deadline: Date?) async -> Bool {
+        let requested = max(0, seconds)
+        let slice: Double
+        if let deadline {
+            let remaining = deadline.timeIntervalSinceNow
+            if remaining <= 0 { return false }
+            slice = min(requested, remaining)
+        } else {
+            slice = requested
+        }
+        let nanos = UInt64((slice * 1_000_000_000).rounded())
+        if nanos > 0 {
+            try? await Task.sleep(nanoseconds: nanos)
+        }
+        if Task.isCancelled { return false }
+        if let deadline, Date() >= deadline { return false }
+        return true
     }
 
     private func pullCommandsAndPushSnap(sessionManager: SessionManager) async throws {

@@ -105,7 +105,7 @@ struct MenuBarPresentationTests {
         #expect(failed.failureLine == "停車できません（停車上限）")
     }
 
-    @Test func disconnectedKeepsDateBasedRemaining() {
+    @Test func droppedSocketWithAFreshSnapDoesNotSayDisconnected() {
         let view = MenuBarPresentation.make(
             MenuBarInput(
                 pairing: .paired,
@@ -117,21 +117,57 @@ struct MenuBarPresentationTests {
         #expect(view.remainingSeconds == 1380)
         #expect(view.canPause)
         #expect(!view.canResume)
-        #expect(view.canReconnect)
-        #expect(view.popoverDetail == "リレーが切れました")
+        #expect(!view.canReconnect)
+        #expect(view.popoverDetail == "23:00")
+        #expect(view.barTitle?.contains(SyncCopy.radioBreak) != true)
     }
 
-    @Test func disconnectedIdleOffersReconnect() {
+    @Test func outOfContactAppendsTheBreakAndOffersReconnect() {
+        let radio = RelayRadioReading(
+            phase: .outOfContact,
+            lastReceivedClock: "12:34"
+        )
+        let view = MenuBarPresentation.make(
+            MenuBarInput(
+                pairing: .paired,
+                snap: running,
+                now: 1_768_000_120,
+                connection: .disconnected,
+                radio: radio
+            )
+        )
+        #expect(view.remainingSeconds == 1380)
+        #expect(view.canReconnect)
+        #expect(view.barTitle?.hasSuffix("無線断") == true)
+        #expect(view.popoverDetail == "無線不通　最終受信 12:34")
+
+        let reconnecting = MenuBarPresentation.make(
+            MenuBarInput(
+                pairing: .paired,
+                snap: running,
+                now: 1_768_000_120,
+                connection: .disconnected,
+                radio: RelayRadioReading(phase: .reconnecting, blinks: true)
+            )
+        )
+        #expect(!reconnecting.canReconnect)
+        #expect(reconnecting.barTitle?.contains("無線断") != true)
+        #expect(reconnecting.popoverDetail == "23:00")
+    }
+
+    @Test func outOfContactIdleOffersReconnect() {
         let view = MenuBarPresentation.make(
             MenuBarInput(
                 pairing: .paired,
                 snap: idle,
                 now: 1_768_000_120,
-                connection: .disconnected
+                connection: .disconnected,
+                radio: RelayRadioReading(phase: .outOfContact, lastReceivedClock: "09:05")
             )
         )
         #expect(view.canReconnect)
-        #expect(view.popoverDetail == "リレーが切れました")
+        #expect(view.barTitle == "無線断")
+        #expect(view.popoverDetail == "無線不通　最終受信 09:05")
         #expect(!view.canPause)
     }
 

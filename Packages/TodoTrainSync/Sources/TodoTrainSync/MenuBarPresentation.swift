@@ -33,6 +33,8 @@ public struct MenuBarInput: Equatable, Sendable {
     public var transportNotice: String?
     /// Pause question already decided by the Mac ledger. Nil hides it.
     public var pausePromptLine: String?
+    /// Snap-silence lamp. A dropped socket with a fresh snap stays `.quiet`.
+    public var radio: RelayRadioReading
 
     public init(
         pairing: PairingStatus,
@@ -46,7 +48,8 @@ public struct MenuBarInput: Equatable, Sendable {
         sendingExtendMinutes: Int? = nil,
         nudgeWinnerLine: String? = nil,
         transportNotice: String? = nil,
-        pausePromptLine: String? = nil
+        pausePromptLine: String? = nil,
+        radio: RelayRadioReading = .quiet
     ) {
         self.pairing = pairing
         self.snap = snap
@@ -60,6 +63,7 @@ public struct MenuBarInput: Equatable, Sendable {
         self.nudgeWinnerLine = nudgeWinnerLine
         self.transportNotice = transportNotice
         self.pausePromptLine = pausePromptLine
+        self.radio = radio
     }
 }
 
@@ -108,11 +112,7 @@ public struct MenuBarPresentation: Equatable, Sendable {
         }
 
         guard let snap = input.snap else {
-            return idle(
-                sending: sending,
-                failureLine: failureLine,
-                disconnected: input.connection == .disconnected
-            )
+            return idle(sending: sending, failureLine: failureLine, radio: input.radio)
         }
 
         switch snap.phase {
@@ -124,29 +124,27 @@ public struct MenuBarPresentation: Equatable, Sendable {
             return idle(
                 sending: sending,
                 failureLine: failureLine,
-                disconnected: input.connection == .disconnected,
+                radio: input.radio,
                 canBoardReserved: gap?.canBoard == true
             )
         case .paused:
             let remaining = snap.remainingSeconds(at: input.now)
             let detail: String
-            if input.connection == .disconnected {
-                detail = SyncCopy.relayDisconnected
-            } else if sending {
+            if sending {
                 detail = SyncCopy.sentToIPhone
             } else {
                 detail = "停車中"
             }
             return MenuBarPresentation(
-                barTitle: "停車中",
+                barTitle: radioBar("停車中", outOfContact: input.radio.phase == .outOfContact),
                 remainingSeconds: remaining,
                 isOvertime: (remaining ?? 1) <= 0,
                 canPause: false,
                 canResume: true,
-                canReconnect: input.connection == .disconnected,
+                canReconnect: input.radio.phase == .outOfContact,
                 isSending: sending,
                 popoverTitle: snap.title ?? "停車中",
-                popoverDetail: detail,
+                popoverDetail: radioDetail(detail, radio: input.radio),
                 failureLine: failureLine
             )
         case .running, .overtime:
@@ -156,9 +154,7 @@ public struct MenuBarPresentation: Equatable, Sendable {
             let remainingLabel = remaining.map(formatRemaining) ?? ""
             let bar = [truncated, remainingLabel].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " ")
             let detail: String
-            if input.connection == .disconnected {
-                detail = SyncCopy.relayDisconnected
-            } else if sending {
+            if sending {
                 detail = SyncCopy.sentToIPhone
             } else if overtime {
                 detail = "超過 \(remainingLabel)"
@@ -166,18 +162,30 @@ public struct MenuBarPresentation: Equatable, Sendable {
                 detail = remainingLabel
             }
             return MenuBarPresentation(
-                barTitle: bar.isEmpty ? truncated : bar,
+                barTitle: radioBar(bar.isEmpty ? truncated : bar, outOfContact: input.radio.phase == .outOfContact),
                 remainingSeconds: remaining,
                 isOvertime: overtime,
                 canPause: true,
                 canResume: false,
-                canReconnect: input.connection == .disconnected,
+                canReconnect: input.radio.phase == .outOfContact,
                 isSending: sending,
                 popoverTitle: snap.title ?? "",
-                popoverDetail: detail,
+                popoverDetail: radioDetail(detail, radio: input.radio),
                 failureLine: failureLine
             )
         }
+    }
+
+    static func radioBar(_ title: String?, outOfContact: Bool) -> String? {
+        guard outOfContact else { return title }
+        let mark = SyncCopy.radioBreak
+        guard let title, !title.isEmpty else { return mark }
+        return "\(title) \(mark)"
+    }
+
+    static func radioDetail(_ detail: String, radio: RelayRadioReading) -> String {
+        guard radio.phase == .outOfContact else { return detail }
+        return SyncCopy.radioOutDetail(clock: radio.lastReceivedClock)
     }
 
     public static func truncatedTitle(_ title: String?) -> String? {
@@ -209,19 +217,20 @@ public struct MenuBarPresentation: Equatable, Sendable {
     private static func idle(
         sending: Bool,
         failureLine: String?,
-        disconnected: Bool,
+        radio: RelayRadioReading,
         canBoardReserved: Bool = false
     ) -> MenuBarPresentation {
-        MenuBarPresentation(
-            barTitle: nil,
+        let out = radio.phase == .outOfContact
+        return MenuBarPresentation(
+            barTitle: radioBar(nil, outOfContact: out),
             remainingSeconds: nil,
             isOvertime: false,
             canPause: false,
             canResume: false,
-            canReconnect: disconnected,
+            canReconnect: out,
             isSending: sending,
             popoverTitle: "乗務なし",
-            popoverDetail: disconnected ? SyncCopy.relayDisconnected : "乗務なし",
+            popoverDetail: out ? SyncCopy.radioOutDetail(clock: radio.lastReceivedClock) : "乗務なし",
             failureLine: failureLine,
             canBoardReserved: canBoardReserved
         )

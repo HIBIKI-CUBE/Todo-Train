@@ -69,6 +69,8 @@ public struct RideOverlayPresentation: Equatable, Sendable {
     public var canBoardReserved: Bool = false
     /// 「停車のまま？」. Nil when this pause is not asking.
     public var pausePrompt: String? = nil
+    /// Wireless lamp. Quiet draws nothing.
+    public var radio: RelayRadioReading = .quiet
 
     public static let peekTitleLimit = 6
 
@@ -129,9 +131,7 @@ public struct RideOverlayPresentation: Equatable, Sendable {
         }
         let remainingLabel = remaining.map(MenuBarPresentation.formatRemaining) ?? ""
         let statusLine: String?
-        if input.connection == .disconnected {
-            statusLine = SyncCopy.relayDisconnected
-        } else if bar.isSending {
+        if bar.isSending {
             statusLine = SyncCopy.sentToIPhone
         } else {
             statusLine = nil
@@ -189,7 +189,8 @@ public struct RideOverlayPresentation: Equatable, Sendable {
             showsNudgeChoices: pausePrompt == nil && nudge.showsChoices,
             holdLamp: nudge.holdLamp || pausePrompt != nil,
             instrumentCaption: nudge.instrumentCaption,
-            pausePrompt: pausePrompt
+            pausePrompt: pausePrompt,
+            radio: input.radio
         )
     }
 
@@ -200,9 +201,7 @@ public struct RideOverlayPresentation: Equatable, Sendable {
         bar: MenuBarPresentation
     ) -> RideOverlayPresentation {
         let statusLine: String?
-        if input.connection == .disconnected {
-            statusLine = SyncCopy.relayDisconnected
-        } else if bar.isSending {
+        if bar.isSending {
             statusLine = SyncCopy.sentToIPhone
         } else {
             statusLine = nil
@@ -229,7 +228,8 @@ public struct RideOverlayPresentation: Equatable, Sendable {
             holdLamp: gap.holdLamp,
             instrumentCaption: nil,
             showsArrivalGap: true,
-            canBoardReserved: gap.canBoard
+            canBoardReserved: gap.canBoard,
+            radio: input.radio
         )
     }
 

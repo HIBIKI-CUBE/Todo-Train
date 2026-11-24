@@ -63,6 +63,9 @@ final class CompanionRideOverlayController: NSObject {
                 },
                 onPausePrompt: { [weak self] choice in
                     self?.runtime.answerPausePrompt(choice)
+                },
+                onAcknowledgeRadio: { [weak self] in
+                    self?.runtime.acknowledgeRadio()
                 }
             )
         )

@@ -20,8 +20,14 @@ final class CompanionMacRuntime {
     let defaults: UserDefaults
     let registersLoginItem: Bool
     var listenTask: Task<Void, Never>?
-    var hintTask: Task<Void, Never>?
     var tickTask: Task<Void, Never>?
+    var relayRetryingSince: Date?
+    var relayExhausted = false
+    var radioReading = RelayRadioReading.quiet
+    var radioPrior = RelayRadioPhase.quiet
+    var radioRecoveredUntil: Int?
+    var radioAcknowledged = false
+    var radioNotifiedSession: UUID?
     var presence = RelayPresence()
     let cabinNotifier = CompanionCabinNotifier()
     var optimisticIdleConsumed = false
@@ -146,7 +152,8 @@ final class CompanionMacRuntime {
             sendingExtendMinutes: pendingExtendMinutes,
             nudgeWinnerLine: nudgeWinnerLine,
             transportNotice: transportNotice,
-            pausePromptLine: pausePromptLine
+            pausePromptLine: pausePromptLine,
+            radio: radioReading
         )
     }
 
