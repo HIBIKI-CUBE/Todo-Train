@@ -139,14 +139,14 @@ struct MacPipReestimateTests {
     @Test func rendersThreeBands() throws {
         let scale: CGFloat = 2
         let card = RideOverlayGeometry.cardSize
-        let bands: [(String, PipReestimateBand)] = [
-            ("pip-band-answers", .answers),
-            ("pip-band-progress", .progress),
-            ("pip-band-declare", .declare),
+        let shots: [(String, AnyView)] = [
+            ("pip-normal-ride", AnyView(ridePreview(rideSnap(title: "原稿")))),
+            ("pip-band-answers", AnyView(rideReestimatePreview(.answers))),
+            ("pip-band-progress", AnyView(rideReestimatePreview(.progress))),
+            ("pip-band-declare", AnyView(rideReestimatePreview(.declare, progress: 0.5))),
         ]
-        for (name, band) in bands {
-            let progress = band == .declare ? 0.5 : nil
-            let renderer = ImageRenderer(content: rideReestimatePreview(band, progress: progress))
+        for (name, content) in shots {
+            let renderer = ImageRenderer(content: content)
             renderer.scale = scale
             renderer.isOpaque = true
             let image = try #require(renderer.nsImage)

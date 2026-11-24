@@ -45,8 +45,8 @@ for line in log.read_text(errors='replace').splitlines():
     name, payload = match.group(1), match.group(2)
     (out / f"{name}.png").write_bytes(base64.b64decode(payload))
     count += 1
-if count != 3:
-    raise SystemExit(f'expected 3 PNG payloads, got {count}')
+if count != 4:
+    raise SystemExit(f'expected 4 PNG payloads, got {count}')
 PY
 
 echo "Wrote $SHOT_DIR"
