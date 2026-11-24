@@ -139,26 +139,42 @@ struct MacPipReestimateTests {
     @Test func rendersThreeBands() throws {
         let scale: CGFloat = 2
         let card = RideOverlayGeometry.cardSize
-        let bands: [(String, PipReestimateBand)] = [
-            ("pip-band-answers", .answers),
-            ("pip-band-progress", .progress),
-            ("pip-band-declare", .declare),
+        let shots: [(String, AnyView)] = [
+            ("pip-normal-ride", AnyView(ridePreview(rideSnap(title: "原稿")))),
+            ("pip-band-answers", AnyView(rideReestimatePreview(.answers))),
+            ("pip-band-progress", AnyView(rideReestimatePreview(.progress))),
+            ("pip-band-declare", AnyView(rideReestimatePreview(.declare, progress: 0.5))),
         ]
-        for (name, band) in bands {
-            let progress = band == .declare ? 0.5 : nil
-            let renderer = ImageRenderer(content: rideReestimatePreview(band, progress: progress))
+        for (name, content) in shots {
+            let renderer = ImageRenderer(content: content)
             renderer.scale = scale
             renderer.isOpaque = true
             let image = try #require(renderer.nsImage)
             let rep = try #require(bitmap(image))
             #expect(rep.pixelsWide == Int(card.width * scale))
             #expect(rep.pixelsHigh == Int(card.height * scale))
-            if let dir = ProcessInfo.processInfo.environment["PIP_BAND_DIR"], !dir.isEmpty {
-                let png = try #require(rep.representation(using: .png, properties: [:]))
-                let url = URL(fileURLWithPath: dir, isDirectory: true).appendingPathComponent("\(name).png")
+            let png = try #require(rep.representation(using: .png, properties: [:]))
+            if ProcessInfo.processInfo.environment["PIP_BAND_STDOUT"] == "1" {
+                print("PIP_BAND_PNG:\(name):\(png.base64EncodedString())")
+            }
+            if let staging = Self.pipBandScreenshotDirectory {
+                try FileManager.default.createDirectory(at: staging, withIntermediateDirectories: true)
+                let url = staging.appendingPathComponent("\(name).png")
                 try png.write(to: url, options: .atomic)
             }
         }
+    }
+
+    private static var projectRoot: URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+    }
+
+    private static var pipBandScreenshotDirectory: URL? {
+        guard let raw = ProcessInfo.processInfo.environment["PIP_BAND_DIR"], !raw.isEmpty else { return nil }
+        let expanded = raw.replacingOccurrences(of: "$(SRCROOT)", with: projectRoot.path())
+        return URL(fileURLWithPath: expanded, isDirectory: true)
     }
 
     private func make(
