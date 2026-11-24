@@ -1,46 +1,70 @@
 import Foundation
 import TodoTrainSync
 
-/// PiP の見積もり直し。一段は声掛け、二段は割合、三段は残りの分。
+/// PiP の位置確認。一段は声掛け、二段は割合、三段は回復運転と運転調整。
 enum PipReestimateBand: Equatable, Sendable {
     case answers
     case progress
-    case minutes
+    case declare
+}
+
+enum PipReestimateDeclaration: Equatable, Sendable {
+    case recovery
+    case adjust
 }
 
 enum MacPipReestimateChoice: Equatable, Sendable {
-    case progress(Double)
-    case minutes(Int)
+    case recovery(progress: Double, committedRemainingSeconds: Int)
+    case adjust(progress: Double)
 }
 
 enum PipBandCopy {
-    static let reestimate = "見積もり直す"
+    static let positionCheck = "位置確認"
     static let share30 = "3割"
     static let share50 = "5割"
     static let share80 = "8割"
-    static let byMinutes = "分で決める"
-    static let undo = "取り消し"
-    static let progressHeading = "進捗は何割？"
-    static let minutesHeading = "残りは何分？"
-    static let reestimateHint = "進捗の割合を選びます。"
-    static let shareHint = "その割合で見積もり直します。"
-    static let byMinutesHint = "残りの分数を選びます。"
-    static let minutesHint = "その分数を残りにして見積もり直します。"
-    static let undoHint = "直前の見積もり直しを取り消します。"
+    static let recovery = "回復運転"
+    static let adjust = "運転調整"
+    static let undo = "取り消す"
+    static let positionHeading = "位置確認"
+    static let positionCheckHint = "進捗の割合を選びます。"
+    static let shareHint = "その割合で次の選択へ進みます。"
+    static let declareHint = "回復運転か運転調整を選びます。"
+    static let undoHint = "直前の位置確認を取り消します。"
+}
 
-    static func minutes(_ value: Int) -> String {
-        "\(value)分"
+enum PipPositionWording {
+    private static let arrivalFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ja_JP")
+        formatter.dateFormat = "HH:mm"
+        return formatter
+    }()
+
+    static func clock(_ date: Date) -> String {
+        arrivalFormatter.string(from: date)
     }
+
+    static func recoveryCaption(arrival: Date) -> String {
+        "\(clock(arrival))着を目指す"
+    }
+
+    static func adjustCaption(arrival: Date) -> String {
+        "\(clock(arrival))着にする"
+    }
+}
+
+struct PipPositionDeclareLabels: Equatable, Sendable {
+    var showsRecovery: Bool
+    var recoveryCaption: String?
+    var adjustCaption: String
 }
 
 /// `reestimate` / `undoReestimate` の平文を組み立てる。送信そのものはしない。
 enum MacPipReestimate {
-    /// 四等分の帯に収まる残り分。発券ゲージの停止位置から短い・中・長を取る。
-    static let minuteAnswers = [5, 15, 30, 60]
     static let progressAnswers = [0.3, 0.5, 0.8]
     static let undoSeconds = 5
-    static let progressPromptID = "reestimate.progress.v1"
-    static let minutesPromptID = "reestimate.remaining.v1"
+    static let positionPromptID = "reestimate.position.v2"
 
     static func trigger(for stage: NudgeStageWire?) -> WireReestimateTrigger {
         switch stage {
@@ -51,6 +75,33 @@ enum MacPipReestimate {
         case .approach, .gap1, .gap2, .unknown, .none:
             return .manual
         }
+    }
+
+    static func declareLabels(
+        progress: Double,
+        activeSeconds: TimeInterval,
+        plannedBudgetSeconds: Int,
+        remainingSeconds: Int,
+        now: Date
+    ) -> PipPositionDeclareLabels? {
+        guard progressAnswers.contains(progress), activeSeconds >= 1, remainingSeconds >= 0 else { return nil }
+        guard let projectedArrival = PositionReport.projectedArrival(
+            now: now,
+            activeSeconds: activeSeconds,
+            progress: progress
+        ) else {
+            return nil
+        }
+        let showsRecovery = PositionReport.showsRecoveryDeclaration(
+            activeSeconds: activeSeconds,
+            plannedBudgetSeconds: plannedBudgetSeconds
+        )
+        let originalArrival = now.addingTimeInterval(TimeInterval(remainingSeconds))
+        return PipPositionDeclareLabels(
+            showsRecovery: showsRecovery,
+            recoveryCaption: showsRecovery ? PipPositionWording.recoveryCaption(arrival: originalArrival) : nil,
+            adjustCaption: PipPositionWording.adjustCaption(arrival: projectedArrival)
+        )
     }
 
     static func command(
@@ -64,27 +115,21 @@ enum MacPipReestimate {
         contract: Int,
         minReadable: Int
     ) -> CommandPlaintext? {
-        let mode: WireReestimateMode
-        let progressAnswer: Double?
-        let remaining: Int
-        let promptId: String
+        let progress: Double
+        let committed: Int
         switch choice {
-        case .progress(let ratio):
+        case .recovery(let ratio, let remaining):
+            guard progressAnswers.contains(ratio), remaining > 0 else { return nil }
+            progress = ratio
+            committed = remaining
+        case .adjust(let ratio):
             guard progressAnswers.contains(ratio) else { return nil }
-            guard let committed = PositionReport.committedRemainingSeconds(
+            guard let remaining = PositionReport.committedRemainingSeconds(
                 activeSeconds: activeSeconds,
                 progress: ratio
-            ) else { return nil }
-            mode = .progress
-            progressAnswer = ratio
-            remaining = committed
-            promptId = progressPromptID
-        case .minutes(let minutes):
-            guard minuteAnswers.contains(minutes), minutes > 0 else { return nil }
-            mode = .minutesOnly
-            progressAnswer = nil
-            remaining = minutes * 60
-            promptId = minutesPromptID
+            ), remaining > 0 else { return nil }
+            progress = ratio
+            committed = remaining
         }
         return CommandPlaintext(
             id: id,
@@ -94,11 +139,11 @@ enum MacPipReestimate {
             build: build,
             contract: contract,
             minReadable: minReadable,
-            progressAnswer: progressAnswer,
-            committedRemainingSeconds: remaining,
-            mode: mode,
+            progressAnswer: progress,
+            committedRemainingSeconds: committed,
+            mode: .positionReport,
             trigger: trigger(for: nudgeStage),
-            promptId: promptId,
+            promptId: positionPromptID,
             surface: .macPip,
             input: .click
         )

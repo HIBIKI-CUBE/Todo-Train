@@ -9,75 +9,93 @@ struct MacPipReestimateTests {
     private let sessionID = UUID(uuidString: "11111111-1111-4111-8111-111111111111")!
     private let commandID = UUID(uuidString: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")!
     private let build = WireBuildInfo(sha: "abc", dirty: false, schema: "7", builtAt: "2026-11-25T00:00:00Z")
+    private let now = Date(timeIntervalSince1970: 1_768_000_120)
 
-    @Test func progressCommandUsesClickOnMacPip() throws {
-        let ratio = MacPipReestimate.progressAnswers[1]
-        let command = try #require(make(.progress(ratio), active: 600, stage: .checkIn))
+    @Test func adjustCommandUsesPositionReportOnMacPip() throws {
+        let progress = MacPipReestimate.progressAnswers[1]
+        let command = try #require(make(.adjust(progress: progress), active: 600, stage: .checkIn))
         #expect(command.op == .reestimate)
-        #expect(command.mode == .progress)
+        #expect(command.mode == .positionReport)
         #expect(command.trigger == .checkIn)
         #expect(command.surface == .macPip)
         #expect(command.input == .click)
         #expect(command.progressAnswer == 0.5)
         #expect(command.committedRemainingSeconds == 600)
-        #expect(command.promptId == MacPipReestimate.progressPromptID)
+        #expect(command.promptId == MacPipReestimate.positionPromptID)
         #expect(command.sessionId == sessionID)
         let object = try json(command)
         #expect(object["surface"] as? String == "macPip")
         #expect(object["input"] as? String == "click")
-        #expect(object["mode"] as? String == "progress")
+        #expect(object["mode"] as? String == "positionReport")
         #expect(object["trigger"] as? String == "checkIn")
         #expect(object["heldBy"] == nil)
         #expect(object["choice"] == nil)
     }
 
+    @Test func recoveryCommandKeepsTheSnapRemaining() throws {
+        let progress = MacPipReestimate.progressAnswers[0]
+        let remaining = 540
+        let command = try #require(
+            make(.recovery(progress: progress, committedRemainingSeconds: remaining), active: 900, stage: .checkIn)
+        )
+        #expect(command.mode == .positionReport)
+        #expect(command.progressAnswer == 0.3)
+        #expect(command.committedRemainingSeconds == remaining)
+        #expect(command.promptId == MacPipReestimate.positionPromptID)
+    }
+
     @Test func progressTriggerFollowsTheQuestion() throws {
         let ratio = MacPipReestimate.progressAnswers[0]
-        let checkIn = try #require(make(.progress(ratio), active: 900, stage: .checkIn))
+        let checkIn = try #require(make(.adjust(progress: ratio), active: 900, stage: .checkIn))
         #expect(checkIn.trigger == .checkIn)
         #expect(checkIn.committedRemainingSeconds == 2_100)
 
-        let estimate = try #require(make(.progress(ratio), active: 900, stage: .estimate))
+        let estimate = try #require(make(.adjust(progress: ratio), active: 900, stage: .estimate))
         #expect(estimate.trigger == .planEnd)
 
-        let handoff = try #require(make(.progress(MacPipReestimate.progressAnswers[2]), active: 600, stage: .handoff3))
+        let handoff = try #require(
+            make(.adjust(progress: MacPipReestimate.progressAnswers[2]), active: 600, stage: .handoff3)
+        )
         #expect(handoff.trigger == .planEnd)
         #expect(handoff.progressAnswer == 0.8)
         #expect(handoff.committedRemainingSeconds == 150)
     }
 
-    @Test func minutesCommandOmitsTheProgressAnswer() throws {
-        let command = try #require(make(.minutes(15), active: 0, stage: nil))
-        #expect(command.op == .reestimate)
-        #expect(command.mode == .minutesOnly)
-        #expect(command.trigger == .manual)
-        #expect(command.surface == .macPip)
-        #expect(command.input == .click)
-        #expect(command.progressAnswer == nil)
-        #expect(command.committedRemainingSeconds == 900)
-        #expect(command.promptId == MacPipReestimate.minutesPromptID)
-        let object = try json(command)
-        #expect(object["progressAnswer"] == nil)
-        #expect(object["mode"] as? String == "minutesOnly")
-        #expect(object["committedRemainingSeconds"] as? Int == 900)
-        #expect(object["surface"] as? String == "macPip")
-        #expect(object["input"] as? String == "click")
+    @Test func declareLabelsShowRecoveryBeforeOriginalArrival() {
+        let progress = 0.5
+        let labels = MacPipReestimate.declareLabels(
+            progress: progress,
+            activeSeconds: 21 * 60,
+            plannedBudgetSeconds: 30 * 60,
+            remainingSeconds: 9 * 60,
+            now: now
+        )
+        #expect(labels?.showsRecovery == true)
+        #expect(labels?.recoveryCaption == PipPositionWording.recoveryCaption(arrival: now.addingTimeInterval(9 * 60)))
+        #expect(
+            labels?.adjustCaption
+                == PipPositionWording.adjustCaption(
+                    arrival: PositionReport.projectedArrival(now: now, activeSeconds: 21 * 60, progress: progress)!
+                )
+        )
     }
 
-    @Test func eachMinuteStopBecomesRemainingSeconds() throws {
-        for minutes in MacPipReestimate.minuteAnswers {
-            let command = try #require(make(.minutes(minutes), active: 10, stage: .approach))
-            #expect(command.committedRemainingSeconds == minutes * 60)
-            #expect(command.mode == .minutesOnly)
-            #expect(command.trigger == .manual)
-            #expect(command.progressAnswer == nil)
-        }
+    @Test func declareLabelsHideRecoveryAfterOriginalArrival() {
+        let labels = MacPipReestimate.declareLabels(
+            progress: 0.5,
+            activeSeconds: 31 * 60,
+            plannedBudgetSeconds: 30 * 60,
+            remainingSeconds: 120,
+            now: now
+        )
+        #expect(labels?.showsRecovery == false)
+        #expect(labels?.recoveryCaption == nil)
     }
 
     @Test func refusesProgressWithoutARunningSecond() {
-        #expect(make(.progress(0.5), active: 0, stage: .checkIn) == nil)
-        #expect(make(.progress(0.4), active: 600, stage: .checkIn) == nil)
-        #expect(make(.minutes(10), active: 600, stage: .checkIn) == nil)
+        #expect(make(.adjust(progress: 0.5), active: 0, stage: .checkIn) == nil)
+        #expect(make(.adjust(progress: 0.4), active: 600, stage: .checkIn) == nil)
+        #expect(make(.recovery(progress: 0.5, committedRemainingSeconds: 0), active: 600, stage: .checkIn) == nil)
     }
 
     @Test func undoCommandCarriesOnlyTheSession() throws {
@@ -124,10 +142,11 @@ struct MacPipReestimateTests {
         let bands: [(String, PipReestimateBand)] = [
             ("pip-band-answers", .answers),
             ("pip-band-progress", .progress),
-            ("pip-band-minutes", .minutes),
+            ("pip-band-declare", .declare),
         ]
         for (name, band) in bands {
-            let renderer = ImageRenderer(content: rideReestimatePreview(band))
+            let progress = band == .declare ? 0.5 : nil
+            let renderer = ImageRenderer(content: rideReestimatePreview(band, progress: progress))
             renderer.scale = scale
             renderer.isOpaque = true
             let image = try #require(renderer.nsImage)
@@ -137,7 +156,7 @@ struct MacPipReestimateTests {
             if let dir = ProcessInfo.processInfo.environment["PIP_BAND_DIR"], !dir.isEmpty {
                 let png = try #require(rep.representation(using: .png, properties: [:]))
                 let url = URL(fileURLWithPath: dir, isDirectory: true).appendingPathComponent("\(name).png")
-                try png.write(to: url)
+                try png.write(to: url, options: .atomic)
             }
         }
     }

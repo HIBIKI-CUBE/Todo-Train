@@ -45,9 +45,10 @@ final class CompanionRideOverlayController: NSObject {
                 },
                 onOpenProgress: { [weak self] in
                     self?.model.reestimateBand = .progress
+                    self?.model.reestimateProgress = nil
                 },
-                onOpenMinutes: { [weak self] in
-                    self?.model.reestimateBand = .minutes
+                onSelectProgress: { [weak self] progress in
+                    self?.selectProgress(progress)
                 },
                 onCommitReestimate: { [weak self] choice in
                     self?.commitReestimate(choice)
@@ -157,18 +158,35 @@ final class CompanionRideOverlayController: NSObject {
             if model.reestimateUndoUntil == nil {
                 model.settledNudgeID = nil
                 model.reestimateBand = nil
+                model.reestimateProgress = nil
             } else {
                 model.settledNudgeID = nil
             }
         }
+        syncPositionCheckContext()
         let previousUndo = model.reestimateUndoUntil
         model.reestimateUndoUntil = runtime.reestimateUndoUntil
         if let previousUndo, runtime.reestimateUndoUntil == nil, runtime.now < previousUndo {
             if case .failed = runtime.outgoingPause {
                 model.settledNudgeID = nil
                 model.reestimateBand = nil
+                model.reestimateProgress = nil
             }
         }
+    }
+
+    private func syncPositionCheckContext() {
+        guard let snap = runtime.snap else {
+            model.positionActiveSeconds = 0
+            model.positionPlannedBudgetSeconds = 0
+            model.positionRemainingSeconds = 0
+            model.positionNowUnix = runtime.now
+            return
+        }
+        model.positionNowUnix = runtime.now
+        model.positionActiveSeconds = TimeInterval(snap.elapsedActiveSeconds(at: runtime.now) ?? 0)
+        model.positionPlannedBudgetSeconds = snap.estimatedSeconds ?? 0
+        model.positionRemainingSeconds = max(0, snap.remainingSeconds(at: runtime.now) ?? 0)
     }
 
     private func applyPresentation(_ presentation: RideOverlayPresentation) {
@@ -322,19 +340,43 @@ final class CompanionRideOverlayController: NSObject {
             default: break
             }
         case .progress:
-            switch choiceIndex(at: point) {
-            case 0: commitReestimate(.progress(0.3))
-            case 1: commitReestimate(.progress(0.5))
-            case 2: commitReestimate(.progress(0.8))
-            case 3: model.reestimateBand = .minutes
-            default: break
+            let ratios = MacPipReestimate.progressAnswers
+            guard let index = choiceIndex(at: point, segments: ratios.count),
+                  ratios.indices.contains(index) else { return }
+            selectProgress(ratios[index])
+        case .declare:
+            guard let progress = model.reestimateProgress,
+                  let labels = MacPipReestimate.declareLabels(
+                    progress: progress,
+                    activeSeconds: model.positionActiveSeconds,
+                    plannedBudgetSeconds: model.positionPlannedBudgetSeconds,
+                    remainingSeconds: model.positionRemainingSeconds,
+                    now: Date(timeIntervalSince1970: TimeInterval(model.positionNowUnix))
+                  ) else { return }
+            let segments = labels.showsRecovery ? 2 : 1
+            guard let index = choiceIndex(at: point, segments: segments) else { return }
+            if labels.showsRecovery {
+                switch index {
+                case 0:
+                    commitReestimate(.recovery(
+                        progress: progress,
+                        committedRemainingSeconds: model.positionRemainingSeconds
+                    ))
+                case 1:
+                    commitReestimate(.adjust(progress: progress))
+                default:
+                    break
+                }
+            } else if index == 0 {
+                commitReestimate(.adjust(progress: progress))
             }
-        case .minutes:
-            guard let index = choiceIndex(at: point), MacPipReestimate.minuteAnswers.indices.contains(index) else {
-                return
-            }
-            commitReestimate(.minutes(MacPipReestimate.minuteAnswers[index]))
         }
+    }
+
+    private func selectProgress(_ progress: Double) {
+        model.reestimateProgress = progress
+        syncPositionCheckContext()
+        model.reestimateBand = .declare
     }
 
     private func commitReestimate(_ choice: MacPipReestimateChoice) {
@@ -344,6 +386,7 @@ final class CompanionRideOverlayController: NSObject {
             let sent = await runtime.sendReestimate(choice)
             guard sent else { return }
             model.reestimateBand = nil
+            model.reestimateProgress = nil
             model.settledNudgeID = nudgeID
             model.reestimateUndoUntil = runtime.reestimateUndoUntil
         }
@@ -352,22 +395,25 @@ final class CompanionRideOverlayController: NSObject {
     private func undoReestimate() {
         model.settledNudgeID = nil
         model.reestimateBand = nil
+        model.reestimateProgress = nil
         Task { await runtime.sendUndoReestimate() }
     }
 
-    private func choiceIndex(at point: NSPoint) -> Int? {
+    private func choiceIndex(at point: NSPoint, segments: Int = 4) -> Int? {
+        guard segments > 0 else { return nil }
         let contentWidth = panel.frame.width - Self.handleWidth
         guard contentWidth > 0 else { return nil }
         let x = point.x - Self.handleWidth
         guard x >= 0 else { return nil }
-        let index = Int(x / (contentWidth / 4))
-        return min(index, 3)
+        let index = Int(x / (contentWidth / CGFloat(segments)))
+        return min(max(index, 0), segments - 1)
     }
 
     private func handleNudgeChoice(_ choice: NudgeChoice) {
         guard choice == .stillOnIt || choice == .alreadyDone || choice == .paused else { return }
         guard !model.presentation.isSending else { return }
         model.reestimateBand = nil
+        model.reestimateProgress = nil
         Task { await runtime.sendNudgeAnswer(choice) }
     }
 
