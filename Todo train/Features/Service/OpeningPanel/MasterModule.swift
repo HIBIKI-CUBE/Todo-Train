@@ -127,7 +127,7 @@ final class OpeningPanelFeedbackSilent: OpeningPanelFeedback {
 }
 
 @MainActor
-private final class OpeningPanelPreviewScheduler: OpeningPanelScheduling {
+final class OpeningPanelPreviewScheduler: OpeningPanelScheduling {
     private struct Item {
         var id: Int
         var due: TimeInterval

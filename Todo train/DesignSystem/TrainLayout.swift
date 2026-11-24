@@ -187,7 +187,6 @@ enum OpeningPanelHitLayout {
         case ticketsKey
         case commTest
         case depart
-        case todayRail
         case ticketRow(Int)
         case sequencePile(Int)
         case sequenceUndo
@@ -217,8 +216,8 @@ enum OpeningPanelHitLayout {
         case result
     }
 
-    /// Fixed controls, the rail, and ticket rows. Confirmation and power are not inputs.
-    /// SEQ 中は行の当たりを外し、山のキーと取消を窓の中に置く。
+    /// Fixed controls, the pile keys, and ticket rows. Confirmation and power are not inputs.
+    /// SEQ 中は行の当たりを外し、取消と決め直しの札を窓の中に置く。山のキーは常に窓の右。
     static func board(
         minimum: CGFloat,
         ticketRows: Int,
@@ -249,10 +248,7 @@ enum OpeningPanelHitLayout {
             let canvas = rect.offsetBy(dx: window.minX, dy: window.minY)
             return Target(id: id, visual: canvas, hit: canvas)
         }
-        var targets = local.keys.enumerated().map { index, rect in
-            placed(.sequencePile(index), rect)
-        }
-        targets.append(placed(.sequenceUndo, local.undo))
+        var targets = [placed(.sequenceUndo, local.undo)]
         if mode == .comparing {
             targets.append(placed(.sequenceCard(0), local.upperCard))
             targets.append(placed(.sequenceCard(1), local.lowerCard))
@@ -384,9 +380,11 @@ enum OpeningPanelHitLayout {
             Placed(id: .sequence, rect: sequenceVisual),
             Placed(id: .ticketsKey, rect: ticketsKeyVisual),
             Placed(id: .commTest, rect: commTestVisual),
-            Placed(id: .depart, rect: departVisual),
-            Placed(id: .todayRail, rect: railVisual)
+            Placed(id: .depart, rect: departVisual)
         ]
+        placed.append(contentsOf: pileVisuals().enumerated().map { index, rect in
+            Placed(id: .sequencePile(index), rect: rect)
+        })
         for index in 0..<ticketRows {
             placed.append(Placed(id: .ticketRow(index), rect: ticketRowVisual(index)))
         }
@@ -404,9 +402,9 @@ enum OpeningPanelHitLayout {
             sequenceClaim(minimum: minimum),
             ticketsKeyClaim(minimum: minimum),
             commTestClaim(minimum: minimum),
-            departVisual,
-            railClaim(minimum: minimum)
+            departVisual
         ]
+        claims.append(contentsOf: pileVisuals())
         claims.append(contentsOf: ticketRowClaims(count: ticketRows, minimum: minimum))
         return claims
     }
@@ -505,10 +503,26 @@ enum OpeningPanelHitLayout {
         let visual = ticketsKeyVisual
         let width = max(minimum, visual.width)
         let height = max(minimum, visual.height)
-        return CGRect(x: visual.midX - width / 2, y: visual.midY - height / 2, width: width, height: height)
+        var rect = CGRect(
+            x: visual.midX - width / 2,
+            y: visual.midY - height / 2,
+            width: width,
+            height: height
+        )
+        let bodyTop = ticketContent.window.minY
+        if rect.maxY > bodyTop {
+            rect.origin.y = bodyTop - rect.height
+        }
+        if rect.minY > visual.minY {
+            rect.origin.y = visual.minY
+        }
+        if rect.maxY < visual.maxY {
+            rect.size.height = visual.maxY - rect.minY
+        }
+        return rect
     }
 
-    private static var ticketContent: (window: CGRect, rail: CGRect, rowOriginY: CGFloat) {
+    private static var ticketContent: (window: CGRect, piles: CGRect, rowOriginY: CGFloat) {
         let module = OpeningPanelTokens.Module.tickets.frame()
         let pad: CGFloat = 6
         let header: CGFloat = 30
@@ -516,26 +530,19 @@ enum OpeningPanelHitLayout {
         let blockY = module.minY + pad + header + spacing
         let blockH = module.height - pad - pad - header - spacing
         let innerX = module.minX + pad
-        let slots: CGFloat = 34
-        let mark: CGFloat = 8
-        let gap: CGFloat = 4
-        let railW: CGFloat = 16
-        let railX = innerX + slots + gap + mark + gap
-        let windowX = railX + railW + gap
-        let windowW = module.maxX - pad - windowX
+        let keyW = OpeningPanelSequenceLayout.keyWidth
+        let gap = OpeningPanelSequenceLayout.keyGap
+        let pilesX = module.maxX - pad - keyW
+        let windowW = max(0, pilesX - gap - innerX)
         return (
-            CGRect(x: windowX, y: blockY, width: windowW, height: blockH),
-            CGRect(x: railX, y: blockY, width: railW, height: blockH),
+            CGRect(x: innerX, y: blockY, width: windowW, height: blockH),
+            CGRect(x: pilesX, y: blockY, width: keyW, height: blockH),
             blockY + OpeningPanelTicketMetrics.contentTop
         )
     }
 
-    private static var railVisual: CGRect { ticketContent.rail }
-
-    private static func railClaim(minimum: CGFloat) -> CGRect {
-        let visual = railVisual
-        let width = max(minimum, visual.width)
-        return CGRect(x: visual.maxX - width, y: visual.minY, width: width, height: max(minimum, visual.height))
+    private static func pileVisuals() -> [CGRect] {
+        OpeningPanelSequenceLayout.pileFrames(in: ticketContent.piles)
     }
 
     private static func ticketRowVisual(_ index: Int) -> CGRect {
@@ -572,16 +579,7 @@ enum OpeningPanelHitLayout {
     private static func commTestClaim(minimum: CGFloat) -> CGRect {
         let visual = commTestVisual
         let side = minimum
-        var rect = CGRect(x: visual.midX - side / 2, y: visual.midY - side / 2, width: side, height: side)
-        let rail = railClaim(minimum: minimum)
-        if overlaps(rect, rail) {
-            rect.origin.y = rail.maxY
-        }
-        if rect.minY > visual.minY {
-            rect.origin.y = visual.minY
-            rect.size.height = max(side, visual.maxY - rect.minY)
-        }
-        return rect
+        return CGRect(x: visual.midX - side / 2, y: visual.midY - side / 2, width: side, height: side)
     }
 
     private static var departVisual: CGRect {

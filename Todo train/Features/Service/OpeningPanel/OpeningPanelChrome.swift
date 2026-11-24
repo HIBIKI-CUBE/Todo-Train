@@ -2,7 +2,7 @@
 //  OpeningPanelChrome.swift
 //  Todo train
 //
-//  盤の地。電源オフの刻印・窓・灯・キー・レール。中身は窓へ差し込む。
+//  盤の地。電源オフの刻印・窓・灯・キー。中身は窓へ差し込む。
 //
 
 import SwiftUI
@@ -201,65 +201,6 @@ struct OpeningPanelScaleToggle: View {
     }
 }
 
-struct OpeningPanelTodayRail: View {
-    var rows = 5
-    var cutAfter = 3
-    /// TKT が灯っているとき、つまみの小さな孔を琥珀にする。
-    var lit = false
-
-    var body: some View {
-        ZStack(alignment: .topLeading) {
-            RoundedRectangle(cornerRadius: 2, style: .continuous)
-                .fill(OpeningPanelTokens.Palette.hex(0x1C1D1F))
-                .overlay(alignment: .topLeading) {
-                    Rectangle()
-                        .fill(OpeningPanelTokens.Palette.hex(0x0D0D0E))
-                        .frame(width: 1)
-                        .frame(maxHeight: .infinity)
-                }
-                .overlay(alignment: .top) {
-                    Rectangle()
-                        .fill(OpeningPanelTokens.Palette.hex(0x0D0D0E))
-                        .frame(height: 1)
-                }
-            ForEach(0...rows, id: \.self) { index in
-                Rectangle()
-                    .fill(OpeningPanelTokens.Palette.railTick)
-                    .frame(height: 1)
-                    .padding(.horizontal, 2)
-                    .offset(y: 2 + CGFloat(index) * 21)
-            }
-            knob
-                .offset(x: 1, y: 2 + CGFloat(cutAfter) * 21 - 6)
-        }
-        .frame(width: 16)
-        .accessibilityHidden(true)
-    }
-
-    private var knob: some View {
-        ZStack(alignment: .topLeading) {
-            RoundedRectangle(cornerRadius: 2, style: .continuous)
-                .fill(OpeningPanelTokens.Palette.hex(0x85898D))
-            VStack {
-                Spacer(minLength: 0)
-                Rectangle()
-                    .fill(OpeningPanelTokens.Palette.hex(0x5C6064))
-                    .frame(height: 2)
-            }
-            UnevenRoundedRectangle(bottomLeadingRadius: 3)
-                .fill(OpeningPanelTokens.Palette.hex(0x2A2B2D))
-                .frame(width: 6, height: 5)
-                .offset(x: 6, y: 3)
-            Rectangle()
-                .fill(lit ? OpeningPanelTokens.Palette.amber : OpeningPanelTokens.Palette.hex(0x3A3C3F))
-                .frame(width: 3, height: 2)
-                .offset(x: 2, y: 5)
-        }
-        .frame(width: 14, height: 12)
-        .shadow(color: OpeningPanelTokens.Palette.hex(0x0E0F10), radius: 0, y: 1)
-    }
-}
-
 struct OpeningPanelLoadFace<Content: View>: View {
     var lit = false
     /// 窓の上端から、灯っている枠の上辺までの割合。消灯中は 36%。
@@ -330,44 +271,6 @@ struct OpeningPanelLoadFace<Content: View>: View {
 extension OpeningPanelLoadFace where Content == EmptyView {
     init(lit: Bool = false, frameTop: CGFloat = 0.36) {
         self.init(lit: lit, frameTop: frameTop) { EmptyView() }
-    }
-}
-
-struct OpeningPanelSlotNames: View {
-    var count = 5
-
-    private var names: [String] {
-        let total = max(count, 5)
-        return (0..<total).map { OpeningPanelTickets.slotName(index: $0) }
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ForEach(Array(names.enumerated()), id: \.offset) { _, name in
-                Text(name)
-                    .font(OpeningPanelFaceFont.legend(8))
-                    .tracking(0.4)
-                    .foregroundStyle(OpeningPanelTokens.Palette.legend)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-                    .frame(height: 21)
-            }
-        }
-        .padding(.top, 2)
-        .frame(width: 34, alignment: .top)
-    }
-}
-
-struct OpeningPanelTodayMark: View {
-    var body: some View {
-        Text("TODAY")
-            .font(OpeningPanelFaceFont.legend(7))
-            .tracking(7 * 0.2)
-            .foregroundStyle(OpeningPanelTokens.Palette.legend)
-            .fixedSize()
-            .rotationEffect(.degrees(90))
-            .frame(width: 8)
-            .padding(.top, 4)
-            .accessibilityLabel("TODAY")
     }
 }
 

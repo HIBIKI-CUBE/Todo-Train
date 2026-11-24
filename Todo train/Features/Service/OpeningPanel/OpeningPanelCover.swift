@@ -152,7 +152,6 @@ struct OpeningPanelCover: View {
                             panelState.pressConfirm(.tickets)
                         }
                     },
-                    // 段名は格子の OpeningPanelSlotNames が描く。先頭に足す計器はない。
                     ticketsLeading: {
                         let _ = OpeningPanelSlotProbe.mark("ticketsLeading")
                         EmptyView()
@@ -217,26 +216,21 @@ struct OpeningPanelCover: View {
                     loadLit: loadDrawing.lit,
                     loadFrameTop: loadDrawing.frameTop,
                     sequenceLit: panelState.sequenceLampLit,
-                    todayCut: ticketsModel.cut,
-                    todayRows: ticketsModel.rows.count,
-                    todayRailLit: panelState.isPowered
+                    ticketReadout: OpeningPanelTickets.readout(
+                        today: ticketsModel.cut,
+                        total: ticketsModel.rows.count,
+                        freeMinutes: board.load.freeMinutes
+                    ),
+                    ticketReadoutLit: panelState.isPowered
                         && panelState.confirmation(of: .tickets) == .confirmed,
-                    onTodayRail: { y, began in
-                        OpeningPanelTickets.perform(
-                            OpeningPanelTickets.touchRail(
-                                y: y,
-                                began: began,
-                                count: ticketsModel.rows.count,
-                                cut: ticketsModel.cut,
-                                sequencing: panelState.isSequencing,
-                                confirmed: panelState.confirmation(of: .tickets) == .confirmed,
-                                powered: panelState.isPowered,
-                                departed: panelState.hasDeparted
-                            ),
-                            state: panelState,
-                            model: ticketsModel
-                        )
+                    pileKeys: pileKeyStates(for: panelState),
+                    onPileKey: { index in
+                        pressPile(index, state: panelState)
                     },
+                    todayRows: OpeningPanelSequenceMath.visibleSpan(
+                        line: ticketsModel.cut,
+                        total: ticketsModel.rows.count
+                    ).shown,
                     timetableTwentyFour: panelState.timetableTwentyFour,
                     sequenceMode: sequenceHitMode
                 )
@@ -411,6 +405,51 @@ struct OpeningPanelCover: View {
         }
     }
 
+    private func pileKeyStates(for state: OpeningPanelState) -> [OpeningPanelPileKeyState] {
+        guard state.isSequencing, let engine = ticketsModel.engine else {
+            return OpeningPanelPileKeyState.idle
+        }
+        let picture = OpeningPanelSequencePicture.make(
+            engine: engine,
+            title: { id in
+                ticketsModel.rows.first { $0.id == id }?.title ?? ""
+            },
+            calendar: sessionManager.calendar
+        )
+        return OpeningPanelTickets.pileKeys(
+            sequencing: true,
+            powered: state.isPowered,
+            keys: picture.keys
+        )
+    }
+
+    private func pressPile(_ index: Int, state: OpeningPanelState) {
+        guard state.isPowered, state.isSequencing, !state.hasDeparted else {
+            state.rejectTouch()
+            return
+        }
+        switch ticketsModel.sequencePhase {
+        case .sorting:
+            if ticketsModel.chooseSequencePile(index) {
+                state.noteSequenceRow(accepted: true)
+            } else {
+                state.rejectTouch()
+            }
+        case .comparing:
+            guard index < 2 else {
+                state.rejectTouch()
+                return
+            }
+            if ticketsModel.chooseSequenceInsertedFirst(index == 0) {
+                state.noteSequenceRow(accepted: true)
+            } else {
+                state.rejectTouch()
+            }
+        case .result, nil:
+            state.rejectTouch()
+        }
+    }
+
     private func pressSequenceKey(_ state: OpeningPanelState) {
         guard state.isPowered, state.confirmation(of: .tickets) == .confirmed, !state.hasDeparted else {
             state.pressSequence()
@@ -448,9 +487,17 @@ struct OpeningPanelCover: View {
         let tickets = (try? modelContext.fetch(
             FetchDescriptor<Ticket>(sortBy: [SortDescriptor(\.sortOrder)])
         )) ?? []
+        let sessions = (try? modelContext.fetch(FetchDescriptor<WorkSession>())) ?? []
+        let marks = (try? modelContext.fetch(FetchDescriptor<OpeningSequenceBelowDays>())) ?? []
+        var days: [UUID: Int] = [:]
+        for mark in marks where days[mark.ticketID] == nil {
+            days[mark.ticketID] = mark.consecutiveDays
+        }
         ticketsModel.show(
             tickets: tickets,
-            arrivals: ForecastReserveStore.tentativePlaces(in: modelContext, tickets: tickets)
+            arrivals: ForecastReserveStore.tentativePlaces(in: modelContext, tickets: tickets),
+            sessions: sessions,
+            daysBelow: days
         )
     }
 
