@@ -9,21 +9,40 @@ final class CompanionRideOverlayModel {
     var isTucked = false
     var hovering = false
     var edge = OverlayEdge.trailing
-    /// Second step of 延長. Local to the PiP. Nothing is sent until a preset.
-    var extendPicker = false
+    /// Local band. Nil follows the snap: a question shows the first band.
+    var reestimateBand: PipReestimateBand?
+    /// Picked on the progress band before the declare band opens.
+    var reestimateProgress: Double?
+    /// Snap fields for declare captions. Refreshed from the runtime when the snap changes.
+    var positionActiveSeconds: TimeInterval = 0
+    var positionPlannedBudgetSeconds: Int = 0
+    var positionRemainingSeconds: Int = 0
+    var positionNowUnix: Int = 0
+    /// Question already handled by a commit. Same nudge id does not reopen it.
+    var settledNudgeID: UUID?
+    /// Mirrors the runtime. Non-nil shows 取り消し on the ride card.
+    var reestimateUndoUntil: Int?
     /// Edge lamp while the card is tucked. The card stays out.
     var edgeLamp = false
+
+    func activeReestimateBand(showsNudgeChoices: Bool) -> PipReestimateBand? {
+        if reestimateUndoUntil != nil { return nil }
+        if let reestimateBand { return reestimateBand }
+        if showsNudgeChoices, settledNudgeID == nil { return .answers }
+        return nil
+    }
 }
 
 struct CompanionRideOverlayView: View {
     @Bindable var model: CompanionRideOverlayModel
-    var onPause: () -> Void
-    var onResume: () -> Void
+    var onToggleHold: () -> Void
     var onStill: () -> Void
     var onRestore: () -> Void
     var onNudgeChoice: (NudgeChoice) -> Void
-    var onExtendPreset: (Int) -> Void
-    var onCancelExtend: () -> Void
+    var onOpenProgress: () -> Void
+    var onSelectProgress: (Double) -> Void
+    var onCommitReestimate: (MacPipReestimateChoice) -> Void
+    var onUndoReestimate: () -> Void
     var onBoardReserved: () -> Void
     var onCloseGap: () -> Void
     var onPausePrompt: (PausePromptAnswer) -> Void
@@ -66,38 +85,44 @@ struct CompanionRideOverlayView: View {
                 if model.isTucked { onRestore() }
             }
             .accessibilityAction(named: presentation.canResume ? "再乗車" : CabinCopy.pause) {
-                if showsNudgeActions && !model.extendPicker {
+                if activeBand == .answers {
                     onNudgeChoice(.paused)
-                } else if !showsNudgeActions {
+                } else if activeBand == nil {
                     primaryAction()
                 }
             }
             .accessibilityAction(named: CabinCopy.still) {
                 if presentation.cabinPrompt != nil { onStill() }
-                if showsNudgeActions && !model.extendPicker { onNudgeChoice(.stillOnIt) }
+                if activeBand == .answers { onNudgeChoice(.stillOnIt) }
             }
-            .accessibilityAction(named: CabinCopy.extend) {
-                if showsNudgeActions && !model.extendPicker { onNudgeChoice(.willExtend) }
+            .accessibilityAction(named: PipBandCopy.positionCheck) {
+                if activeBand == .answers { onOpenProgress() }
             }
             .accessibilityAction(named: CabinCopy.arrived) {
-                if showsNudgeActions && !model.extendPicker { onNudgeChoice(.alreadyDone) }
+                if activeBand == .answers { onNudgeChoice(.alreadyDone) }
+            }
+            .accessibilityAction(named: PipBandCopy.share30) {
+                if activeBand == .progress { onSelectProgress(0.3) }
+            }
+            .accessibilityAction(named: PipBandCopy.share50) {
+                if activeBand == .progress { onSelectProgress(0.5) }
+            }
+            .accessibilityAction(named: PipBandCopy.share80) {
+                if activeBand == .progress { onSelectProgress(0.8) }
+            }
+            .accessibilityAction(named: PipBandCopy.recovery) {
+                if activeBand == .declare { commitDeclare(.recovery) }
+            }
+            .accessibilityAction(named: PipBandCopy.adjust) {
+                if activeBand == .declare { commitDeclare(.adjust) }
+            }
+            .accessibilityAction(named: PipBandCopy.undo) {
+                if model.reestimateUndoUntil != nil { onUndoReestimate() }
             }
     }
 
     private func pauseAccess<Content: View>(_ content: Content) -> some View {
         content
-            .accessibilityAction(named: CabinCopy.extendFive) {
-                if model.extendPicker { onExtendPreset(300) }
-            }
-            .accessibilityAction(named: CabinCopy.extendTen) {
-                if model.extendPicker { onExtendPreset(600) }
-            }
-            .accessibilityAction(named: CabinCopy.extendFifteen) {
-                if model.extendPicker { onExtendPreset(900) }
-            }
-            .accessibilityAction(named: CabinCopy.back) {
-                if model.extendPicker { onCancelExtend() }
-            }
             .accessibilityAction(named: CabinCopy.board) {
                 if presentation.showsArrivalGap && presentation.canBoardReserved { onBoardReserved() }
             }
@@ -112,8 +137,9 @@ struct CompanionRideOverlayView: View {
             }
     }
 
-    private var showsNudgeActions: Bool {
-        presentation.showsNudgeChoices && !model.isTucked
+    private var activeBand: PipReestimateBand? {
+        guard !model.isTucked else { return nil }
+        return model.activeReestimateBand(showsNudgeChoices: presentation.showsNudgeChoices)
     }
 
     private var card: some View {
@@ -124,8 +150,8 @@ struct CompanionRideOverlayView: View {
                 gapColumn
             } else if presentation.pausePrompt != nil {
                 pausePromptColumn
-            } else if showsNudgeActions || model.extendPicker {
-                nudgeColumn
+            } else if let band = activeBand {
+                reestimateColumn(band)
             } else {
                 classicColumn
             }
@@ -377,24 +403,18 @@ struct CompanionRideOverlayView: View {
         }
     }
 
-    /// Question, instruments, then four equal answers.
-    private var nudgeColumn: some View {
+    /// Heading, instruments, then one quartered band. Nothing in the band starts selected.
+    private func reestimateColumn(_ band: PipReestimateBand) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 8) {
-                Circle()
-                    .fill(presentation.holdLamp ? RideOverlayPalette.approach : Color.white.opacity(0.22))
-                    .frame(width: 8, height: 8)
-                    .accessibilityHidden(true)
-                Text(presentation.nudgePrompt ?? CabinCopy.question(title: presentation.title))
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.55)
-                    .accessibilityHint(CabinCopy.questionHint)
-            }
-            .padding(.horizontal, 12)
-            .padding(.top, 8)
-            .frame(height: 28, alignment: .center)
+            Text(bandHeading(band))
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.55)
+                .padding(.horizontal, 12)
+                .padding(.top, 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(height: 28, alignment: .center)
 
             nudgeInstrument
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -409,8 +429,72 @@ struct CompanionRideOverlayView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            nudgeChoices
+            bandChoices(band)
                 .frame(height: 40)
+        }
+    }
+
+    private func bandHeading(_ band: PipReestimateBand) -> String {
+        switch band {
+        case .answers:
+            presentation.nudgePrompt ?? CabinCopy.question(title: presentation.title)
+        case .progress, .declare:
+            PipBandCopy.positionHeading
+        }
+    }
+
+    private func bandTitles(_ band: PipReestimateBand) -> [String] {
+        switch band {
+        case .answers:
+            return [CabinCopy.still, PipBandCopy.positionCheck, CabinCopy.arrived, CabinCopy.pause]
+        case .progress:
+            return [PipBandCopy.share30, PipBandCopy.share50, PipBandCopy.share80]
+        case .declare:
+            guard let labels = declareLabels else {
+                return [PipBandCopy.adjust]
+            }
+            if labels.showsRecovery {
+                return [PipBandCopy.recovery, PipBandCopy.adjust]
+            }
+            return [PipBandCopy.adjust]
+        }
+    }
+
+    private func bandHint(_ band: PipReestimateBand) -> String {
+        switch band {
+        case .answers:
+            CabinCopy.questionHint
+        case .progress:
+            PipBandCopy.shareHint
+        case .declare:
+            PipBandCopy.declareHint
+        }
+    }
+
+    private var declareLabels: PipPositionDeclareLabels? {
+        guard let progress = model.reestimateProgress else { return nil }
+        let now = Date(timeIntervalSince1970: TimeInterval(model.positionNowUnix))
+        return MacPipReestimate.declareLabels(
+            progress: progress,
+            activeSeconds: model.positionActiveSeconds,
+            plannedBudgetSeconds: model.positionPlannedBudgetSeconds,
+            remainingSeconds: model.positionRemainingSeconds,
+            now: now
+        )
+    }
+
+    private func commitDeclare(_ declaration: PipReestimateDeclaration) {
+        guard let progress = model.reestimateProgress else { return }
+        switch declaration {
+        case .recovery:
+            onCommitReestimate(
+                .recovery(
+                    progress: progress,
+                    committedRemainingSeconds: model.positionRemainingSeconds
+                )
+            )
+        case .adjust:
+            onCommitReestimate(.adjust(progress: progress))
         }
     }
 
@@ -431,20 +515,54 @@ struct CompanionRideOverlayView: View {
         .accessibilityLabel(presentation.instrumentCaption ?? "残り \(presentation.remainingLabel)")
     }
 
-    private var nudgeChoices: some View {
-        equalChoiceRow(
-            model.extendPicker
-                ? [CabinCopy.extendFive, CabinCopy.extendTen, CabinCopy.extendFifteen, CabinCopy.back]
-                : [CabinCopy.still, CabinCopy.extend, CabinCopy.arrived, CabinCopy.pause]
-        )
+    private func bandChoices(_ band: PipReestimateBand) -> some View {
+        Group {
+            if band == .declare, let labels = declareLabels {
+                declareChoiceRow(labels)
+            } else {
+                equalChoiceRow(bandTitles(band))
+            }
+        }
         .opacity(presentation.isSending ? 0.35 : 1)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(
-            model.extendPicker
-                ? "\(CabinCopy.extendFive) \(CabinCopy.extendTen) \(CabinCopy.extendFifteen) \(CabinCopy.back)"
-                : "\(CabinCopy.still) \(CabinCopy.extend) \(CabinCopy.arrived) \(CabinCopy.pause)"
-        )
-        .accessibilityHint(model.extendPicker ? CabinCopy.extendPickerHint : CabinCopy.questionHint)
+        .accessibilityLabel(bandTitles(band).joined(separator: " "))
+        .accessibilityHint(bandHint(band))
+    }
+
+    private func declareChoiceRow(_ labels: PipPositionDeclareLabels) -> some View {
+        HStack(spacing: 0) {
+            if labels.showsRecovery, let recoveryCaption = labels.recoveryCaption {
+                declareCell(title: PipBandCopy.recovery, caption: recoveryCaption)
+                divider
+                declareCell(title: PipBandCopy.adjust, caption: labels.adjustCaption)
+            } else {
+                declareCell(title: PipBandCopy.adjust, caption: labels.adjustCaption)
+            }
+        }
+        .background(Color.black)
+    }
+
+    private var divider: some View {
+        Rectangle()
+            .fill(Color.white.opacity(0.18))
+            .frame(width: 1)
+            .padding(.vertical, 6)
+    }
+
+    private func declareCell(title: String, caption: String) -> some View {
+        VStack(spacing: 2) {
+            Text(title)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.65)
+            Text(caption)
+                .font(.system(size: 9, weight: .medium))
+                .foregroundStyle(.white.opacity(0.68))
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func equalChoiceRow(_ titles: [String]) -> some View {
@@ -510,20 +628,24 @@ struct CompanionRideOverlayView: View {
 
     private var bottomRow: some View {
         ZStack {
-            progressRow
-                .opacity(showsCabinActions || showsAction ? 0 : 1)
-            if showsCabinActions {
-                cabinActionRow
+            if model.reestimateUndoUntil != nil {
+                undoRow
             } else {
-                actionRow
-                    .opacity(showsAction ? 1 : 0)
+                progressRow
+                    .opacity(showsCabinActions || showsAction ? 0 : 1)
+                if showsCabinActions {
+                    cabinActionRow
+                } else {
+                    actionRow
+                        .opacity(showsAction ? 1 : 0)
+                }
             }
         }
         .frame(height: 40)
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.16), value: showsAction || showsCabinActions)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.16), value: showsAction || showsCabinActions || model.reestimateUndoUntil != nil)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(bottomAccessibilityLabel)
-        .accessibilityValue(showsAction || showsCabinActions ? "" : presentation.remainingLabel)
+        .accessibilityValue(showsAction || showsCabinActions || model.reestimateUndoUntil != nil ? "" : presentation.remainingLabel)
     }
 
     private var showsCabinActions: Bool {
@@ -597,6 +719,14 @@ struct CompanionRideOverlayView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
+    private var undoRow: some View {
+        Text(PipBandCopy.undo)
+            .font(.system(size: 15, weight: .semibold))
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color.black)
+    }
+
     private var actionRow: some View {
         HStack(spacing: 8) {
             Image(systemName: presentation.canResume ? "play.fill" : "pause.fill")
@@ -632,6 +762,7 @@ struct CompanionRideOverlayView: View {
     }
 
     private var bottomAccessibilityLabel: String {
+        if model.reestimateUndoUntil != nil { return PipBandCopy.undo }
         if showsCabinActions { return "\(CabinCopy.prompt) \(CabinCopy.still) または 停車" }
         if showsAction { return presentation.canResume ? "再乗車" : "停車" }
         return "残り時間"
@@ -746,11 +877,7 @@ struct CompanionRideOverlayView: View {
 
     private func primaryAction() {
         if presentation.isSending { return }
-        if presentation.canResume {
-            onResume()
-        } else if presentation.canPause {
-            onPause()
-        }
+        onToggleHold()
     }
 }
 
@@ -784,13 +911,47 @@ func ridePreview(_ presentation: RideOverlayPresentation) -> some View {
     model.presentation = presentation
     return CompanionRideOverlayView(
         model: model,
-        onPause: {},
-        onResume: {},
+        onToggleHold: {},
         onStill: {},
         onRestore: {},
         onNudgeChoice: { _ in },
-        onExtendPreset: { _ in },
-        onCancelExtend: {},
+        onOpenProgress: {},
+        onSelectProgress: { _ in },
+        onCommitReestimate: { _ in },
+        onUndoReestimate: {},
+        onBoardReserved: {},
+        onCloseGap: {},
+        onPausePrompt: { _ in },
+        onAcknowledgeRadio: {}
+    )
+}
+
+@MainActor
+func rideReestimatePreview(
+    _ band: PipReestimateBand,
+    title: String = "原稿",
+    progress: Double? = nil
+) -> some View {
+    let model = CompanionRideOverlayModel()
+    model.presentation = rideSnap(title: title)
+    model.reestimateBand = band
+    model.positionActiveSeconds = 21 * 60
+    model.positionPlannedBudgetSeconds = 30 * 60
+    model.positionRemainingSeconds = 9 * 60
+    model.positionNowUnix = 1_768_000_120
+    if let progress {
+        model.reestimateProgress = progress
+    }
+    return CompanionRideOverlayView(
+        model: model,
+        onToggleHold: {},
+        onStill: {},
+        onRestore: {},
+        onNudgeChoice: { _ in },
+        onOpenProgress: {},
+        onSelectProgress: { _ in },
+        onCommitReestimate: { _ in },
+        onUndoReestimate: {},
         onBoardReserved: {},
         onCloseGap: {},
         onPausePrompt: { _ in },
@@ -856,6 +1017,24 @@ func ridePreviewCanvas(_ presentation: RideOverlayPresentation) -> some View {
             startsAt: 1_768_003_780
         )
     )
+}
+
+#Preview("位置確認 一段") {
+    rideReestimatePreview(.answers)
+        .padding(24)
+        .background(Color(white: 0.32))
+}
+
+#Preview("位置確認 二段") {
+    rideReestimatePreview(.progress)
+        .padding(24)
+        .background(Color(white: 0.32))
+}
+
+#Preview("位置確認 三段") {
+    rideReestimatePreview(.declare, progress: 0.5)
+        .padding(24)
+        .background(Color(white: 0.32))
 }
 
 #Preview("いまの占有") {

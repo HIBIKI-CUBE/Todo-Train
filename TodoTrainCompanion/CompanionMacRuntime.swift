@@ -57,8 +57,10 @@ final class CompanionMacRuntime {
     /// Relay contract from hello or hint.
     var relayContract: ContractAnnouncement?
     var sentTimetablePauseAt: Int?
-    /// Extend answer in flight, in minutes. Nil for the other three answers.
-    var pendingExtendMinutes: Int?
+    /// Unix seconds when the PiP stops offering 取り消し. Nil hides it.
+    var reestimateUndoUntil: Int?
+    /// In-flight `reestimate`. Undo may replace this id before its ack arrives.
+    var reestimateUndoCommandID: UUID?
     var answerEstimateBefore: Int?
     var answerNudgeID: UUID?
     var staleWinner = false
@@ -149,7 +151,6 @@ final class CompanionMacRuntime {
             cabinEnabledLocal: cabinAnnouncementsEnabled,
             optimisticFiredCount: optimisticFiredCount,
             optimisticIdleConsumed: optimisticIdleConsumed,
-            sendingExtendMinutes: pendingExtendMinutes,
             nudgeWinnerLine: nudgeWinnerLine,
             transportNotice: transportNotice,
             pausePromptLine: pausePromptLine,

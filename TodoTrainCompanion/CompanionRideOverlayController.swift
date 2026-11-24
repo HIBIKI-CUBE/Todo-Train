@@ -31,13 +31,9 @@ final class CompanionRideOverlayController: NSObject {
         let hosting = PassThroughHostingView(
             rootView:             CompanionRideOverlayView(
                 model: model,
-                onPause: { [weak self] in
+                onToggleHold: { [weak self] in
                     guard let self else { return }
-                    Task { await self.runtime.sendPause() }
-                },
-                onResume: { [weak self] in
-                    guard let self else { return }
-                    Task { await self.runtime.sendResume() }
+                    Task { await self.runtime.sendPauseOrResume() }
                 },
                 onStill: { [weak self] in
                     guard let self else { return }
@@ -47,11 +43,18 @@ final class CompanionRideOverlayController: NSObject {
                 onNudgeChoice: { [weak self] choice in
                     self?.handleNudgeChoice(choice)
                 },
-                onExtendPreset: { [weak self] seconds in
-                    self?.sendExtend(seconds)
+                onOpenProgress: { [weak self] in
+                    self?.model.reestimateBand = .progress
+                    self?.model.reestimateProgress = nil
                 },
-                onCancelExtend: { [weak self] in
-                    self?.model.extendPicker = false
+                onSelectProgress: { [weak self] progress in
+                    self?.selectProgress(progress)
+                },
+                onCommitReestimate: { [weak self] choice in
+                    self?.commitReestimate(choice)
+                },
+                onUndoReestimate: { [weak self] in
+                    self?.undoReestimate()
                 },
                 onBoardReserved: { [weak self] in
                     guard let self else { return }
@@ -148,7 +151,46 @@ final class CompanionRideOverlayController: NSObject {
         lastCabinPrompt = presentation.cabinPrompt
     }
 
+    private func syncReestimateChrome() {
+        let nudgeID = runtime.snap?.nudge?.id
+        if nudgeID != lastNudgeID {
+            lastNudgeID = nudgeID
+            if model.reestimateUndoUntil == nil {
+                model.settledNudgeID = nil
+                model.reestimateBand = nil
+                model.reestimateProgress = nil
+            } else {
+                model.settledNudgeID = nil
+            }
+        }
+        syncPositionCheckContext()
+        let previousUndo = model.reestimateUndoUntil
+        model.reestimateUndoUntil = runtime.reestimateUndoUntil
+        if let previousUndo, runtime.reestimateUndoUntil == nil, runtime.now < previousUndo {
+            if case .failed = runtime.outgoingPause {
+                model.settledNudgeID = nil
+                model.reestimateBand = nil
+                model.reestimateProgress = nil
+            }
+        }
+    }
+
+    private func syncPositionCheckContext() {
+        guard let snap = runtime.snap else {
+            model.positionActiveSeconds = 0
+            model.positionPlannedBudgetSeconds = 0
+            model.positionRemainingSeconds = 0
+            model.positionNowUnix = runtime.now
+            return
+        }
+        model.positionNowUnix = runtime.now
+        model.positionActiveSeconds = TimeInterval(snap.elapsedActiveSeconds(at: runtime.now) ?? 0)
+        model.positionPlannedBudgetSeconds = snap.estimatedSeconds ?? 0
+        model.positionRemainingSeconds = max(0, snap.remainingSeconds(at: runtime.now) ?? 0)
+    }
+
     private func applyPresentation(_ presentation: RideOverlayPresentation) {
+        syncReestimateChrome()
         if runtime.suppressRideOverlay {
             model.presentation = presentation
             panel.orderOut(nil)
@@ -157,11 +199,6 @@ final class CompanionRideOverlayController: NSObject {
             return
         }
         let cabinAppeared = presentation.cabinPrompt != nil && lastCabinPrompt == nil
-        let nudgeID = runtime.snap?.nudge?.id
-        if nudgeID != lastNudgeID {
-            model.extendPicker = false
-            lastNudgeID = nudgeID
-        }
         model.presentation = presentation
         applyLayoutToChrome()
         let ringing: (fresh: [MacNudgeRingCue], seen: Set<String>)
@@ -243,15 +280,13 @@ final class CompanionRideOverlayController: NSObject {
         guard point.y <= Self.actionStripHeight,
               point.x >= Self.handleWidth else { return }
         let presentation = model.presentation
+        if model.reestimateUndoUntil != nil {
+            undoReestimate()
+            return
+        }
         if presentation.isSending { return }
-        if model.extendPicker {
-            switch choiceIndex(at: point) {
-            case 0: sendExtend(300)
-            case 1: sendExtend(600)
-            case 2: sendExtend(900)
-            case 3: model.extendPicker = false
-            default: break
-            }
+        if let band = model.activeReestimateBand(showsNudgeChoices: presentation.showsNudgeChoices) {
+            handleBandClick(band, at: point)
             return
         }
         if presentation.showsArrivalGap {
@@ -280,57 +315,106 @@ final class CompanionRideOverlayController: NSObject {
             }
             return
         }
-        if presentation.showsNudgeChoices {
-            switch choiceIndex(at: point) {
-            case 0: handleNudgeChoice(.stillOnIt)
-            case 1: handleNudgeChoice(.willExtend)
-            case 2: handleNudgeChoice(.alreadyDone)
-            case 3: handleNudgeChoice(.paused)
-            default: break
-            }
-            return
-        }
         if presentation.cabinPrompt != nil {
             let contentWidth = panel.frame.width - Self.handleWidth
             let x = point.x - Self.handleWidth
             if x < contentWidth / 2 {
                 Task { await runtime.sendStill() }
-            } else if presentation.canPause {
-                Task { await runtime.sendPause() }
+            } else {
+                Task { await runtime.sendPauseOrResume() }
             }
             return
         }
         guard model.hovering else { return }
-        if presentation.canResume {
-            Task { await runtime.sendResume() }
-        } else if presentation.canPause {
-            Task { await runtime.sendPause() }
+        Task { await runtime.sendPauseOrResume() }
+    }
+
+    private func handleBandClick(_ band: PipReestimateBand, at point: NSPoint) {
+        switch band {
+        case .answers:
+            switch choiceIndex(at: point) {
+            case 0: handleNudgeChoice(.stillOnIt)
+            case 1: model.reestimateBand = .progress
+            case 2: handleNudgeChoice(.alreadyDone)
+            case 3: handleNudgeChoice(.paused)
+            default: break
+            }
+        case .progress:
+            let ratios = MacPipReestimate.progressAnswers
+            guard let index = choiceIndex(at: point, segments: ratios.count),
+                  ratios.indices.contains(index) else { return }
+            selectProgress(ratios[index])
+        case .declare:
+            guard let progress = model.reestimateProgress,
+                  let labels = MacPipReestimate.declareLabels(
+                    progress: progress,
+                    activeSeconds: model.positionActiveSeconds,
+                    plannedBudgetSeconds: model.positionPlannedBudgetSeconds,
+                    remainingSeconds: model.positionRemainingSeconds,
+                    now: Date(timeIntervalSince1970: TimeInterval(model.positionNowUnix))
+                  ) else { return }
+            let segments = labels.showsRecovery ? 2 : 1
+            guard let index = choiceIndex(at: point, segments: segments) else { return }
+            if labels.showsRecovery {
+                switch index {
+                case 0:
+                    commitReestimate(.recovery(
+                        progress: progress,
+                        committedRemainingSeconds: model.positionRemainingSeconds
+                    ))
+                case 1:
+                    commitReestimate(.adjust(progress: progress))
+                default:
+                    break
+                }
+            } else if index == 0 {
+                commitReestimate(.adjust(progress: progress))
+            }
         }
     }
 
-    private func choiceIndex(at point: NSPoint) -> Int? {
+    private func selectProgress(_ progress: Double) {
+        model.reestimateProgress = progress
+        syncPositionCheckContext()
+        model.reestimateBand = .declare
+    }
+
+    private func commitReestimate(_ choice: MacPipReestimateChoice) {
+        guard !model.presentation.isSending else { return }
+        let nudgeID = runtime.snap?.nudge?.id
+        Task { @MainActor in
+            let sent = await runtime.sendReestimate(choice)
+            guard sent else { return }
+            model.reestimateBand = nil
+            model.reestimateProgress = nil
+            model.settledNudgeID = nudgeID
+            model.reestimateUndoUntil = runtime.reestimateUndoUntil
+        }
+    }
+
+    private func undoReestimate() {
+        model.settledNudgeID = nil
+        model.reestimateBand = nil
+        model.reestimateProgress = nil
+        Task { await runtime.sendUndoReestimate() }
+    }
+
+    private func choiceIndex(at point: NSPoint, segments: Int = 4) -> Int? {
+        guard segments > 0 else { return nil }
         let contentWidth = panel.frame.width - Self.handleWidth
         guard contentWidth > 0 else { return nil }
         let x = point.x - Self.handleWidth
         guard x >= 0 else { return nil }
-        let index = Int(x / (contentWidth / 4))
-        return min(index, 3)
+        let index = Int(x / (contentWidth / CGFloat(segments)))
+        return min(max(index, 0), segments - 1)
     }
 
     private func handleNudgeChoice(_ choice: NudgeChoice) {
+        guard choice == .stillOnIt || choice == .alreadyDone || choice == .paused else { return }
         guard !model.presentation.isSending else { return }
-        if choice == .willExtend {
-            model.extendPicker = true
-            return
-        }
-        model.extendPicker = false
+        model.reestimateBand = nil
+        model.reestimateProgress = nil
         Task { await runtime.sendNudgeAnswer(choice) }
-    }
-
-    private func sendExtend(_ seconds: Int) {
-        guard !model.presentation.isSending else { return }
-        model.extendPicker = false
-        Task { await runtime.sendNudgeAnswer(.willExtend, addSeconds: seconds) }
     }
 
     private func restoreFromPeek() {

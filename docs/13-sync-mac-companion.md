@@ -6,7 +6,7 @@
 
 iPhone の SwiftData + `SessionManager` が本尊。リレーは正本にしないし、復号できない。
 
-運ぶのは **いまの乗務** の暗号スナップショットと、コマンド `pause` / `resume` / `still` / `issueAndBoard`。`issueAndBoard` は Mac の「いまやる」一拍（題名と所要を送り、母艦が発行して発車する）。在庫のみ発行・切符全件レプリカ・CRDT は載せない。`arrive` / `extend` を足さない。成功の中身は ack ではなく後続 snap。
+運ぶのは **いまの乗務** の暗号スナップショットと、コマンド `pause` / `resume` / `still` / `issueAndBoard` / `answer` / `reestimate` / `undoReestimate`。`issueAndBoard` は Mac の「いまやる」一拍（題名と所要を送り、母艦が発行して発車する）。見積もり直しは進捗の割合か残りの分で確定し、取り消しは直前の確定だけを取り消す。在庫のみ発行・切符全件レプリカ・CRDT は載せない。`arrive` / `extend` を足さない。成功の中身は ack ではなく後続 snap。
 
 iOS は前面、または `ScenePhase.active` で送受信する。ロック中に「いまやる」が届くことは、この slice の約束にしない。
 
