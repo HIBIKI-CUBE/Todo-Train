@@ -71,12 +71,15 @@ struct OpeningPanelTicketsTests {
         #expect(full.hatch == 0)
     }
 
-    @Test func todayCut_defaultsUnderTheThirdAndFollowsTheRowOrRail() {
+    @Test func todayCut_defaultsUnderTheThirdAndFollowsTheRow() {
         #expect(OpeningPanelTickets.initialCut(count: 5) == 3)
         #expect(OpeningPanelTickets.initialCut(count: 2) == 2)
         #expect(OpeningPanelTickets.initialCut(count: 0) == 0)
-        #expect(OpeningPanelTickets.numberOpacity(index: 2, cut: 3) == 1)
-        #expect(OpeningPanelTickets.numberOpacity(index: 3, cut: 3) == 0.3)
+        #expect(OpeningPanelTickets.rowOpacity(index: 2, cut: 3) == 1)
+        #expect(OpeningPanelTickets.rowOpacity(index: 3, cut: 3) == 0.55)
+        #expect(OpeningPanelTickets.rankFilled(index: 2, cut: 3, settled: true))
+        #expect(!OpeningPanelTickets.rankFilled(index: 3, cut: 3, settled: true))
+        #expect(!OpeningPanelTickets.rankFilled(index: 0, cut: 3, settled: false))
 
         let ids = (0..<5).map { _ in UUID() }
         let moved = OpeningPanelTickets.touchRow(
@@ -99,37 +102,6 @@ struct OpeningPanelTicketsTests {
             departed: false
         )
         #expect(same == .cutStays)
-        #expect(OpeningPanelTickets.numberDigit(index: 4) == "5")
-        #expect(OpeningPanelTickets.numberDigit(index: 9) == nil)
-
-        #expect(OpeningPanelTickets.cut(atRailY: 2, count: 5) == 0)
-        #expect(OpeningPanelTickets.cut(atRailY: 2 + 21, count: 5) == 1)
-        #expect(OpeningPanelTickets.cut(atRailY: 2 + 21 * 3, count: 5) == 3)
-        #expect(OpeningPanelTickets.cut(atRailY: 2 + 10.5, count: 5) == 1)
-        #expect(OpeningPanelTickets.cut(atRailY: 400, count: 5) == 5)
-
-        let drag = OpeningPanelTickets.touchRail(
-            y: 2 + 21 * 4,
-            began: false,
-            count: 5,
-            cut: 3,
-            sequencing: false,
-            confirmed: true,
-            powered: true,
-            departed: false
-        )
-        #expect(drag == .placeCut(4))
-        let blocked = OpeningPanelTickets.touchRail(
-            y: 20,
-            began: true,
-            count: 5,
-            cut: 3,
-            sequencing: true,
-            confirmed: true,
-            powered: true,
-            departed: false
-        )
-        #expect(blocked == .reject)
         let beforeConfirm = OpeningPanelTickets.touchRow(
             index: 1,
             ids: ids,
@@ -173,11 +145,71 @@ struct OpeningPanelTicketsTests {
         #expect(model.engine == nil)
     }
 
-    @Test func slotNames_runFirstSecondThirdThenNumbers() {
-        #expect(OpeningPanelTickets.slotName(index: 0) == "先発")
-        #expect(OpeningPanelTickets.slotName(index: 1) == "次発")
-        #expect(OpeningPanelTickets.slotName(index: 2) == "次々発")
-        #expect(OpeningPanelTickets.slotName(index: 3) == "4")
-        #expect(OpeningPanelTickets.slotName(index: 5) == "6")
+    @Test func waitingRows_showEstimateOverMedianAndAShortTail() {
+        let few = OpeningPanelTickets.pair(estimate: 20, similarCount: 1, median: 0)
+        #expect(few == OpeningPanelTicketPair(estimate: "20", median: "--"))
+        let enough = OpeningPanelTickets.pair(estimate: 45, similarCount: 6, median: 52)
+        #expect(enough == OpeningPanelTicketPair(estimate: "45", median: "52"))
+        #expect(OpeningPanelTickets.readout(today: 3, total: 16, freeMinutes: 180) == "TODAY 3/16 · 空き3:00")
+        #expect(OpeningPanelTickets.readout(today: 0, total: 4, freeMinutes: 5) == "TODAY 0/4 · 空き0:05")
+
+        #expect(OpeningPanelSequenceMath.visibleSpan(line: 3, total: 16) == (6, 10))
+        #expect(OpeningPanelSequenceMath.visibleSpan(line: 0, total: 5) == (3, 2))
+        #expect(OpeningPanelSequenceMath.visibleSpan(line: 6, total: 6) == (6, 0))
+        #expect(OpeningPanelSequenceMath.visibleSpan(line: 8, total: 10) == (9, 1))
+
+        let idle = OpeningPanelTickets.pileKeys(sequencing: false, powered: true, keys: [])
+        #expect(idle.map(\.title) == ["今日", "できれば", "あとで"])
+        #expect(idle.allSatisfy { !$0.lit && $0.count.isEmpty })
+        let sorting = OpeningPanelTickets.pileKeys(
+            sequencing: true,
+            powered: true,
+            keys: [
+                OpeningPanelSequencePicture.Key(id: 0, title: "今日", count: "2", enabled: true),
+                OpeningPanelSequencePicture.Key(id: 1, title: "できれば", count: "1", enabled: true),
+                OpeningPanelSequencePicture.Key(id: 2, title: "あとで", count: "0", enabled: true),
+            ]
+        )
+        #expect(sorting.map(\.lit) == [true, true, true])
+        #expect(sorting.map(\.count) == ["2", "1", "0"])
+        let comparing = OpeningPanelTickets.pileKeys(
+            sequencing: true,
+            powered: true,
+            keys: [
+                OpeningPanelSequencePicture.Key(id: 0, title: "上が先", count: "", enabled: true),
+                OpeningPanelSequencePicture.Key(id: 1, title: "下が先", count: "", enabled: true),
+                OpeningPanelSequencePicture.Key(id: 2, title: "", count: "", enabled: false),
+            ]
+        )
+        #expect(comparing.map(\.lit) == [true, true, false])
+    }
+
+    @Test func similarRide_staysUnderThreeWhenOnlyOtherTicketsArrived() {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let own = Ticket(title: "報告書", estimatedSeconds: 25 * 60, sortOrder: 0)
+        let other = Ticket(title: "メール", estimatedSeconds: 10 * 60, sortOrder: 1)
+        let sessions = [22, 28, 24].enumerated().map { index, minutes in
+            let started = now.addingTimeInterval(-Double((index + 1) * 86_400))
+            let session = WorkSession(
+                startedAt: started,
+                estimatedSecondsAtStart: 25 * 60,
+                ticket: own
+            )
+            session.endedAt = started.addingTimeInterval(Double(minutes * 60))
+            session.outcome = .arrived
+            session.accumulatedActiveSeconds = Double(minutes * 60)
+            return session
+        }
+        let matched = OpeningPanelTickets.similarRide(ticket: own, sessions: sessions, now: now)
+        #expect(matched.count == 3)
+        #expect(matched.medianMinutes == 24)
+        let unmatched = OpeningPanelTickets.similarRide(ticket: other, sessions: sessions, now: now)
+        #expect(unmatched.count < EstimateHeuristic.minimumSampleCount)
+        let pair = OpeningPanelTickets.pair(
+            estimate: 10,
+            similarCount: unmatched.count,
+            median: unmatched.medianMinutes
+        )
+        #expect(pair.median == "--")
     }
 }

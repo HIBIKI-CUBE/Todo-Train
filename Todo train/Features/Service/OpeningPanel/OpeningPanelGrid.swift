@@ -47,14 +47,14 @@ struct OpeningPanelGrid: View {
     private let loadLit: Bool
     private let loadFrameTop: CGFloat
     private let sequenceLit: Bool
-    private let todayCut: Int
+    private let ticketReadout: String
+    private let ticketReadoutLit: Bool
+    private let pileKeys: [OpeningPanelPileKeyState]
+    private let onPileKey: (Int) -> Void
     private let todayRows: Int
-    private let todayRailLit: Bool
-    private let onTodayRail: ((CGFloat, Bool) -> Void)?
     private let timetableTwentyFour: Bool
     private let sequenceMode: OpeningPanelHitLayout.SequenceMode?
 
-    @State private var todayRailDown = false
     @State private var hitActions = OpeningPanelHitActions()
     @Environment(\.openingPanelHitBounds) private var hitBoundsRequested
 
@@ -97,10 +97,11 @@ struct OpeningPanelGrid: View {
         loadLit: Bool = false,
         loadFrameTop: CGFloat = 0.36,
         sequenceLit: Bool = false,
-        todayCut: Int = 3,
+        ticketReadout: String = "",
+        ticketReadoutLit: Bool = false,
+        pileKeys: [OpeningPanelPileKeyState] = OpeningPanelPileKeyState.idle,
+        onPileKey: @escaping (Int) -> Void = { _ in },
         todayRows: Int = 5,
-        todayRailLit: Bool = false,
-        onTodayRail: ((CGFloat, Bool) -> Void)? = nil,
         timetableTwentyFour: Bool = false,
         sequenceMode: OpeningPanelHitLayout.SequenceMode? = nil
     ) {
@@ -142,10 +143,11 @@ struct OpeningPanelGrid: View {
         self.loadLit = loadLit
         self.loadFrameTop = loadFrameTop
         self.sequenceLit = sequenceLit
-        self.todayCut = todayCut
+        self.ticketReadout = ticketReadout
+        self.ticketReadoutLit = ticketReadoutLit
+        self.pileKeys = pileKeys
+        self.onPileKey = onPileKey
         self.todayRows = todayRows
-        self.todayRailLit = todayRailLit
-        self.onTodayRail = onTodayRail
         self.timetableTwentyFour = timetableTwentyFour
         self.sequenceMode = sequenceMode
     }
@@ -213,20 +215,7 @@ struct OpeningPanelGrid: View {
         )
         .background(OpeningPanelTokens.Palette.grid)
         .overlay {
-            OpeningPanelHitOverlay(
-                targets: targets,
-                actions: hitActions,
-                onRail: { y, began in
-                    guard onTodayRail != nil else { return }
-                    if !began {
-                        todayRailDown = false
-                        return
-                    }
-                    let beganNow = !todayRailDown
-                    todayRailDown = true
-                    onTodayRail?(y, beganNow)
-                }
-            )
+            OpeningPanelHitOverlay(targets: targets, actions: hitActions)
         }
         .overlay {
             if showsHitBounds {
@@ -444,7 +433,21 @@ struct OpeningPanelGrid: View {
             VStack(spacing: 5) {
                 HStack(spacing: 8) {
                     OpeningPanelLegend(text: "TICKETS")
-                    Spacer(minLength: 0)
+                    OpeningPanelWindow {
+                        Text(ticketReadout)
+                            .font(.system(size: 9))
+                            .tracking(0.36)
+                            .foregroundStyle(OpeningPanelTokens.Palette.amber)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+                            .padding(.horizontal, 5)
+                            .opacity(ticketReadoutLit ? 1 : 0)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(height: 18)
+                    .accessibilityLabel("TODAY")
+                    .accessibilityValue(ticketReadoutLit ? ticketReadout : "")
                     ZStack {
                         OpeningPanelSeqKey(lit: sequenceLit)
                             .accessibilityHidden(true)
@@ -460,12 +463,12 @@ struct OpeningPanelGrid: View {
                 }
                 .frame(height: 30)
                 HStack(alignment: .top, spacing: 4) {
-                    OpeningPanelSlotNames(count: todayRows)
                     ticketsLeading
-                    OpeningPanelTodayMark()
-                    todayRail
+                        .frame(width: 0, height: 0)
+                        .accessibilityHidden(true)
                     OpeningPanelWindow(exposesContent: true) { tickets }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    pileColumn
                 }
                 .frame(maxHeight: .infinity, alignment: .top)
             }
@@ -475,14 +478,37 @@ struct OpeningPanelGrid: View {
         .accessibilityLabel("TICKETS")
     }
 
-    private var todayRail: some View {
-        OpeningPanelTodayRail(
-            rows: max(todayRows, 5),
-            cutAfter: todayCut,
-            lit: todayRailLit
-        )
-        .padding(.leading, -2)
-        .allowsHitTesting(false)
+    private var pileColumn: some View {
+        VStack(spacing: OpeningPanelSequenceLayout.keyGap) {
+            ForEach(pileKeys) { key in
+                Button {
+                    onPileKey(key.id)
+                } label: {
+                    OpeningPanelPileKeyFace(title: key.title, count: key.count, lit: key.lit)
+                }
+                .buttonStyle(.plain)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .openingPanelAction(.sequencePile(key.id)) { onPileKey(key.id) }
+                .accessibilityLabel(key.title.isEmpty ? "消灯" : key.title)
+                .accessibilityValue(key.count)
+                .accessibilityHint(pileHint(key))
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(width: OpeningPanelSequenceLayout.keyWidth)
+        .frame(maxHeight: .infinity, alignment: .top)
+    }
+
+    private func pileHint(_ key: OpeningPanelPileKeyState) -> String {
+        guard key.lit else { return "このキーは使えません" }
+        switch key.title {
+        case "上が先":
+            return "上の切符を先にします"
+        case "下が先":
+            return "下の切符を先にします"
+        default:
+            return "この山に入れます"
+        }
     }
 
     private var loadModule: some View {
@@ -939,10 +965,44 @@ private struct OpeningPanelActionSink: View {
     }
 }
 
+private struct OpeningPanelPileKeyFace: View {
+    var title: String
+    var count: String
+    var lit: Bool
+
+    var body: some View {
+        VStack(spacing: 1) {
+            Text(title)
+                .font(.system(size: 10))
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+            if !count.isEmpty {
+                Text(count)
+                    .font(.system(size: 9))
+                    .monospacedDigit()
+                    .opacity(0.85)
+            }
+        }
+        .foregroundStyle(lit ? OpeningPanelTokens.Palette.amber : OpeningPanelTokens.Palette.keySegInk)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(lit ? OpeningPanelTokens.Palette.key(0x4A3A14) : OpeningPanelTokens.Palette.key(0x2F3133))
+        .clipShape(RoundedRectangle(cornerRadius: 1, style: .continuous))
+        .padding(3)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(OpeningPanelTokens.Palette.key(0x2E3033))
+        .clipShape(RoundedRectangle(cornerRadius: 2, style: .continuous))
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(OpeningPanelTokens.Palette.key(0x1D1E20))
+                .frame(height: 2)
+                .offset(y: 2)
+        }
+    }
+}
+
 private struct OpeningPanelHitOverlay: View {
     var targets: [OpeningPanelHitLayout.Target]
     var actions: OpeningPanelHitActions
-    var onRail: (CGFloat, Bool) -> Void
 
     var body: some View {
         ZStack {
@@ -957,33 +1017,13 @@ private struct OpeningPanelHitOverlay: View {
         )
     }
 
-    @ViewBuilder
     private func pad(_ target: OpeningPanelHitLayout.Target) -> some View {
         let rect = target.hit
-        if target.id == .todayRail {
-            Color.clear
-                .frame(width: rect.width, height: rect.height)
-                .contentShape(Rectangle())
-                .gesture(railGesture(hit: rect, visual: target.visual))
-                .position(x: rect.midX, y: rect.midY)
-        } else {
-            Color.clear
-                .frame(width: rect.width, height: rect.height)
-                .contentShape(Rectangle())
-                .onTapGesture { actions.perform(target.id) }
-                .position(x: rect.midX, y: rect.midY)
-        }
-    }
-
-    private func railGesture(hit: CGRect, visual: CGRect) -> some Gesture {
-        DragGesture(minimumDistance: 0, coordinateSpace: .local)
-            .onChanged { value in
-                let local = value.location.y + hit.minY - visual.minY
-                onRail(local, true)
-            }
-            .onEnded { _ in
-                onRail(0, false)
-            }
+        return Color.clear
+            .frame(width: rect.width, height: rect.height)
+            .contentShape(Rectangle())
+            .onTapGesture { actions.perform(target.id) }
+            .position(x: rect.midX, y: rect.midY)
     }
 }
 
@@ -1009,6 +1049,15 @@ private struct OpeningPanelHitBounds: View {
     }
 }
 
+#Preview("確認済み・待機") {
+    WaitingTicketsPreview()
+        .frame(
+            width: OpeningPanelTokens.Phone.width,
+            height: OpeningPanelTokens.Phone.height
+        )
+        .background(Color.black)
+}
+
 #Preview("空の盤面") {
     OpeningPanelGrid()
         .frame(
@@ -1022,4 +1071,84 @@ private struct OpeningPanelHitBounds: View {
     OpeningPanelGrid()
         .frame(width: 320, height: 640)
         .background(Color.black)
+}
+
+/// 確認済みで、仕分けに入る前の TICKETS。番号の枠、切れ目、日数、見積もり/実績、右のキー。
+private struct WaitingTicketsPreview: View {
+    var body: some View {
+        let sample = Sample.make()
+        OpeningPanelGrid(
+            tickets: { TicketsModule(state: sample.state, model: sample.model) },
+            ticketReadout: OpeningPanelTickets.readout(
+                today: sample.model.cut,
+                total: sample.model.rows.count,
+                freeMinutes: sample.freeMinutes
+            ),
+            ticketReadoutLit: sample.state.isPowered
+                && sample.state.confirmation(of: .tickets) == .confirmed,
+            todayRows: OpeningPanelSequenceMath.visibleSpan(
+                line: sample.model.cut,
+                total: sample.model.rows.count
+            ).shown
+        )
+    }
+
+    private struct Sample {
+        var state: OpeningPanelState
+        var model: OpeningPanelTicketsModel
+        var freeMinutes: Int
+
+        @MainActor
+        static func make() -> Sample {
+            let specs: [(title: String, minutes: Int, days: Int, rides: [Int]?)] = [
+                ("報告書", 25, 0, [22, 28, 24]),
+                ("メール", 10, 0, nil),
+                ("図面", 40, 0, [36, 44, 38]),
+                ("会議メモ", 15, 2, nil),
+                ("買い出し", 20, 1, [18, 21, 19]),
+                ("読書", 30, 4, nil),
+                ("掃除", 25, 0, nil),
+                ("返信", 10, 3, nil),
+            ]
+            var tickets: [Ticket] = []
+            var sessions: [WorkSession] = []
+            var days: [UUID: Int] = [:]
+            let now = Date.now
+            for (index, spec) in specs.enumerated() {
+                let ticket = Ticket(
+                    title: spec.title,
+                    estimatedSeconds: spec.minutes * 60,
+                    sortOrder: index
+                )
+                tickets.append(ticket)
+                if spec.days > 0 {
+                    days[ticket.id] = spec.days
+                }
+                for (ride, minutes) in (spec.rides ?? []).enumerated() {
+                    let started = now.addingTimeInterval(-Double((ride + 1) * 86_400))
+                    let session = WorkSession(
+                        startedAt: started,
+                        estimatedSecondsAtStart: spec.minutes * 60,
+                        ticket: ticket
+                    )
+                    session.endedAt = started.addingTimeInterval(Double(minutes * 60))
+                    session.outcome = .arrived
+                    session.accumulatedActiveSeconds = Double(minutes * 60)
+                    sessions.append(session)
+                }
+            }
+            let model = OpeningPanelTicketsModel()
+            model.show(tickets: tickets, arrivals: [:], sessions: sessions, daysBelow: days, now: now)
+            let scheduler = OpeningPanelPreviewScheduler()
+            let state = OpeningPanelState(
+                scheduler: scheduler,
+                feedback: OpeningPanelFeedbackSilent(),
+                ticketCount: model.rows.count,
+                reduceMotion: true
+            )
+            state.pressMaster()
+            scheduler.advance(by: 3)
+            return Sample(state: state, model: model, freeMinutes: 95)
+        }
+    }
 }

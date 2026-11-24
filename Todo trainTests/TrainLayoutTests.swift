@@ -152,14 +152,25 @@ struct TrainLayoutTests {
         let packed: Set<OpeningPanelHitLayout.ID> = [
             .ticketRow(0), .ticketRow(1), .ticketRow(2), .ticketRow(3), .ticketRow(4)
         ]
-        #expect(targets.count == 10 + 5)
+        let packedPiles: Set<OpeningPanelHitLayout.ID> = [
+            .sequencePile(0), .sequencePile(1), .sequencePile(2)
+        ]
+        #expect(targets.count == 9 + 3 + 5)
+        let window = OpeningPanelHitLayout.ticketWindow
         for target in targets {
             #expect(hitContains(target.hit, target.visual), "\(target.id)")
             #expect(target.hit.width >= 44, "\(target.id) width \(target.hit.width)")
-            if packed.contains(target.id) {
+            if packed.contains(target.id) || packedPiles.contains(target.id) {
                 #expect(target.hit.height + 0.5 >= target.visual.height, "\(target.id)")
             } else {
                 #expect(target.hit.height >= 44, "\(target.id) height \(target.hit.height)")
+            }
+            if case .ticketRow = target.id {
+                #expect(target.visual.minX >= window.minX - 0.5)
+                #expect(target.visual.maxX <= window.maxX + 0.5)
+            }
+            if case .sequencePile = target.id {
+                #expect(target.visual.minX >= window.maxX - 0.5)
             }
         }
         assertNoOverlap(targets.map(\.hit))
@@ -204,7 +215,7 @@ struct TrainLayoutTests {
                 #expect(hitContains(target.hit, target.visual))
             case .timetableBand:
                 #expect(hitContains(target.hit, target.visual))
-            case .master, .clockKey, .hourMode, .scaleToggle, .timetableKey, .sequence, .ticketsKey, .commTest, .depart, .todayRail, .ticketRow, .sequencePile, .sequenceUndo, .sequenceCard:
+            case .master, .clockKey, .hourMode, .scaleToggle, .timetableKey, .sequence, .ticketsKey, .commTest, .depart, .ticketRow, .sequencePile, .sequenceUndo, .sequenceCard:
                 break
             }
         }

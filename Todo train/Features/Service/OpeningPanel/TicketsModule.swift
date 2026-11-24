@@ -2,35 +2,33 @@
 //  TicketsModule.swift
 //  Todo train
 //
-//  切符の窓。段名とレールと SEQ のキャップは格子が描く。
-//  行の寸法は参照モックの最終 CSS。並びと TODAY の区切りは盤を落としても残す。
+//  切符の窓。待機中の行は番号の枠・題名・切れ目・日数・見積もり/実績。
+//  右の 3 つのキーと見出しの窓は格子が描く。並びと TODAY の区切りは盤を落としても残す。
 //
 
 import SwiftData
 import SwiftUI
 
 enum OpeningPanelTicketMetrics {
-    static let rowHeight: CGFloat = 21
-    static let rowGap: CGFloat = 6
-    static let titleSize: CGFloat = 12
-    static let durationSize: CGFloat = 11
-    static let durationWidth: CGFloat = 32
-    static let durationOpacity: Double = 0.8
-    /// 計算中の前回の値。確定した所要は `durationOpacity` のまま。
+    /// `.tr` の高さ。枠線を含む。
+    static let rowHeight: CGFloat = 12.2
+    static let rowGap: CGFloat = 4
+    static let titleSize: CGFloat = 10
+    static let pairSize: CGFloat = 9
+    static let rankWidth: CGFloat = 13
+    static let rankHeight: CGFloat = 10
+    /// 計算中の前回の値。先発の行が使う。
     static let staleDurationOpacity: Double = 0.35
     static let contentTop: CGFloat = 2
-    static let contentHorizontal: CGFloat = 6
-    static let bandInset: CGFloat = 2
-    static let digitScale: CGFloat = 0.17
-    static let digitSize = CGSize(width: 9, height: 17)
-    static let cursorGlyphs = 16
-    static let belowNumberOpacity: Double = 0.3
+    static let contentHorizontal: CGFloat = 5
+    static let belowRowOpacity: Double = 0.55
+    static let pairOpacity: Double = 0.8
+    static let slashOpacity: Double = 0.55
+    static let badgeOpacity: Double = 0.9
     static let fullWidthMinutes = 120
     static let defaultCut = 3
-    static let estimateFill = Color(red: 1, green: 176 / 255, blue: 0, opacity: 0.13)
-    static let hatchInk = Color(red: 1, green: 176 / 255, blue: 0, opacity: 0.32)
     static let rowLine = Color(red: 34 / 255, green: 34 / 255, blue: 34 / 255)
-    static let segmentOff = Color(red: 1, green: 176 / 255, blue: 0, opacity: 0.07)
+    static let rankInk = Color(red: 21 / 255, green: 22 / 255, blue: 23 / 255)
     /// SEQ のレンズは `.k` の brightness(1.16) の内側。
     static var sequenceLitInk: Color {
         Color(red: 1, green: min(1, 176 / 255 * 1.16), blue: 0, opacity: 0.85)
@@ -42,7 +40,28 @@ struct OpeningPanelTicketRow: Equatable, Identifiable, Sendable {
     var title: String
     var estimateMinutes: Int
     var actualMinutes: Int
+    var similarCount: Int = 0
+    var similarMedianMinutes: Int = 0
+    var daysBelow: Int = 0
     var arrival: OpeningPanelArrivalPlace = .empty
+}
+
+struct OpeningPanelTicketPair: Equatable, Sendable {
+    var estimate: String
+    var median: String
+}
+
+struct OpeningPanelPileKeyState: Equatable, Identifiable, Sendable {
+    var id: Int
+    var title: String
+    var count: String
+    var lit: Bool
+
+    static let idle: [OpeningPanelPileKeyState] = [
+        OpeningPanelPileKeyState(id: 0, title: "今日", count: "", lit: false),
+        OpeningPanelPileKeyState(id: 1, title: "できれば", count: "", lit: false),
+        OpeningPanelPileKeyState(id: 2, title: "あとで", count: "", lit: false),
+    ]
 }
 
 struct OpeningPanelDurationPresentation: Equatable, Sendable {
@@ -58,15 +77,6 @@ enum OpeningPanelTicketTouch: Equatable {
 }
 
 enum OpeningPanelTickets {
-    static func slotName(index: Int) -> String {
-        switch index {
-        case 0: "先発"
-        case 1: "次発"
-        case 2: "次々発"
-        default: "\(index + 1)"
-        }
-    }
-
     static func rows(
         from tickets: [Ticket],
         sessions: [WorkSession],
@@ -89,11 +99,14 @@ enum OpeningPanelTickets {
                     medianMinutes: snapshot.predictedMinutes,
                     refined: refinedMinutes(ticket)
                 )
+                let similar = similarRide(ticket: ticket, sessions: sessions, now: now, calendar: calendar)
                 return OpeningPanelTicketRow(
                     id: ticket.id,
                     title: ticket.title,
                     estimateMinutes: resolved.estimate,
                     actualMinutes: resolved.actual,
+                    similarCount: similar.count,
+                    similarMedianMinutes: similar.medianMinutes,
                     arrival: .current(resolved.actual)
                 )
             }
@@ -124,7 +137,11 @@ enum OpeningPanelTickets {
 
     static func rows(
         from tickets: [Ticket],
-        arrivals: [UUID: OpeningPanelArrivalPlace]
+        arrivals: [UUID: OpeningPanelArrivalPlace],
+        sessions: [WorkSession] = [],
+        daysBelow: [UUID: Int] = [:],
+        now: Date = .now,
+        calendar: Calendar = .current
     ) -> [OpeningPanelTicketRow] {
         tickets
             .filter(\.isOpen)
@@ -132,11 +149,15 @@ enum OpeningPanelTickets {
             .map { ticket in
                 let estimate = max(ticket.estimatedSeconds / 60, 1)
                 let place = arrivals[ticket.id] ?? .empty
+                let similar = similarRide(ticket: ticket, sessions: sessions, now: now, calendar: calendar)
                 return OpeningPanelTicketRow(
                     id: ticket.id,
                     title: ticket.title,
                     estimateMinutes: estimate,
                     actualMinutes: place.minutes ?? estimate,
+                    similarCount: similar.count,
+                    similarMedianMinutes: similar.medianMinutes,
+                    daysBelow: daysBelow[ticket.id] ?? 0,
                     arrival: place
                 )
             }
@@ -193,20 +214,60 @@ enum OpeningPanelTickets {
         return (fill, hatch)
     }
 
-    static func numberOpacity(index: Int, cut: Int) -> Double {
-        index >= cut ? OpeningPanelTicketMetrics.belowNumberOpacity : 1
+    static func rowOpacity(index: Int, cut: Int) -> Double {
+        index >= cut ? OpeningPanelTicketMetrics.belowRowOpacity : 1
     }
 
-    static func numberDigit(index: Int) -> Character? {
-        let text = String(index + 1)
-        guard text.count == 1 else { return nil }
-        return text.first
+    /// 切れ目より上で、仕分けの結果を出したあとは番号を塗る。
+    static func rankFilled(index: Int, cut: Int, settled: Bool) -> Bool {
+        settled && index < cut
     }
 
-    static func cut(atRailY y: CGFloat, count: Int) -> Int {
-        let steps = ((y - OpeningPanelTicketMetrics.contentTop) / OpeningPanelTicketMetrics.rowHeight).rounded()
-        let raw = Int(steps)
-        return min(max(raw, 0), max(count, 0))
+    /// 似た乗車だけを数える。ほかの切符の到着が足りない行の中央値を埋めない。
+    static func similarRide(
+        ticket: Ticket,
+        sessions: [WorkSession],
+        now: Date = .now,
+        calendar: Calendar = .current
+    ) -> (count: Int, medianMinutes: Int) {
+        let selection = RideSimilarity.select(
+            title: ticket.title,
+            tagIDs: BoardingForecast.tagFilter(for: ticket) ?? [],
+            ticket: ticket,
+            sessions: sessions,
+            now: now,
+            calendar: calendar
+        )
+        let matched = selection.chosen.filter(\.hasContentMatch).map(\.ride.activeSeconds)
+        let median = BoardingForecast.predictedDuration(from: matched)?.minutes ?? 0
+        return (matched.count, median)
+    }
+
+    /// 見積もりと、似た乗車が 3 回以上のときの中央値。足りなければ `--`。
+    static func pair(estimate: Int, similarCount: Int, median: Int) -> OpeningPanelTicketPair {
+        let shown = similarCount >= EstimateHeuristic.minimumSampleCount ? "\(max(median, 0))" : "--"
+        return OpeningPanelTicketPair(estimate: "\(max(estimate, 0))", median: shown)
+    }
+
+    static func readout(today: Int, total: Int, freeMinutes: Int) -> String {
+        let free = durationText(minutes: max(freeMinutes, 0))
+        return "TODAY \(max(today, 0))/\(max(total, 0)) · 空き\(free)"
+    }
+
+    static func pileKeys(
+        sequencing: Bool,
+        powered: Bool,
+        keys: [OpeningPanelSequencePicture.Key]
+    ) -> [OpeningPanelPileKeyState] {
+        guard sequencing, !keys.isEmpty else { return OpeningPanelPileKeyState.idle }
+        return keys.map { key in
+            OpeningPanelPileKeyState(
+                id: key.id,
+                title: key.title,
+                count: key.count,
+                lit: powered && key.enabled
+            )
+        }
     }
 
     static func touchRow(
@@ -249,26 +310,6 @@ enum OpeningPanelTickets {
         return model.engine != nil && state.isSequencing
     }
 
-    static func touchRail(
-        y: CGFloat,
-        began: Bool,
-        count: Int,
-        cut: Int,
-        sequencing: Bool,
-        confirmed: Bool,
-        powered: Bool,
-        departed: Bool
-    ) -> OpeningPanelTicketTouch {
-        guard powered, confirmed, !sequencing, !departed else {
-            return began ? .reject : .ignore
-        }
-        let next = self.cut(atRailY: y, count: count)
-        if next == cut {
-            return began ? .cutStays : .ignore
-        }
-        return .placeCut(next)
-    }
-
     static func perform(
         _ touch: OpeningPanelTicketTouch,
         state: OpeningPanelState,
@@ -294,6 +335,8 @@ enum OpeningPanelTickets {
 final class OpeningPanelTicketsModel {
     private(set) var rows: [OpeningPanelTicketRow] = []
     private(set) var cut: Int = OpeningPanelTicketMetrics.defaultCut
+    /// 仕分けの結果を出したあと、切れ目より上の番号を塗る。
+    private(set) var lineRanksFilled = false
     private(set) var engine: OpeningPanelSequenceEngine?
     private var openTickets: [UUID: Ticket] = [:]
     private var orderSnapshot: [UUID]?
@@ -351,8 +394,25 @@ final class OpeningPanelTicketsModel {
         }
     }
 
-    func show(tickets: [Ticket], arrivals: [UUID: OpeningPanelArrivalPlace]) {
-        adopt(OpeningPanelTickets.rows(from: tickets, arrivals: arrivals), tickets: tickets)
+    func show(
+        tickets: [Ticket],
+        arrivals: [UUID: OpeningPanelArrivalPlace],
+        sessions: [WorkSession] = [],
+        daysBelow: [UUID: Int] = [:],
+        now: Date = .now,
+        calendar: Calendar = .current
+    ) {
+        adopt(
+            OpeningPanelTickets.rows(
+                from: tickets,
+                arrivals: arrivals,
+                sessions: sessions,
+                daysBelow: daysBelow,
+                now: now,
+                calendar: calendar
+            ),
+            tickets: tickets
+        )
     }
 
     func applyArrival(id: UUID, place: OpeningPanelArrivalPlace) {
@@ -398,6 +458,7 @@ final class OpeningPanelTicketsModel {
         ) else { return false }
         orderSnapshot = rows.map(\.id)
         cutSnapshot = cut
+        lineRanksFilled = false
         engine = started
         return true
     }
@@ -436,6 +497,9 @@ final class OpeningPanelTicketsModel {
     }
 
     func abandonSequence() {
+        if engine != nil {
+            lineRanksFilled = false
+        }
         if let orderSnapshot {
             let byID = Dictionary(uniqueKeysWithValues: rows.map { ($0.id, $0) })
             let restored = orderSnapshot.compactMap { byID[$0] }
@@ -468,6 +532,9 @@ final class OpeningPanelTicketsModel {
 
     private func publishIfSettled() {
         guard let engine, engine.phase != .sorting else { return }
+        if engine.phase == .result {
+            lineRanksFilled = true
+        }
         let ids = engine.orderIDs
         let byID = Dictionary(uniqueKeysWithValues: rows.map { ($0.id, $0) })
         let next = ids.compactMap { byID[$0] }
@@ -566,13 +633,6 @@ struct TicketsModule: View {
                     },
                     calendar: calendar
                 ),
-                onPile: { index in
-                    if model.chooseSequencePile(index) {
-                        state.noteSequenceRow(accepted: true)
-                    } else {
-                        state.rejectTouch()
-                    }
-                },
                 onInsertedFirst: { insertedFirst in
                     if model.chooseSequenceInsertedFirst(insertedFirst) {
                         state.noteSequenceRow(accepted: true)
@@ -603,25 +663,38 @@ struct TicketsModule: View {
                         slot: slot,
                         index: index,
                         cut: model.cut,
-                        growthStep: state.ticketGrowthStep
+                        ranksFilled: model.lineRanksFilled
                     )
                 }
                 .buttonStyle(.plain)
                 .contentShape(Rectangle())
                 .openingPanelAction(.ticketRow(index), perform: { touchRow(index) })
             }
-        }
-        .background {
-            ForEach(model.rows.indices, id: \.self) { index in
-                Color.clear
-                    .frame(width: 0, height: 0)
-                    .openingPanelAction(.ticketRow(index), perform: { touchRow(index) })
-                    .accessibilityHidden(true)
+            if let more = moreLabel {
+                Text(more)
+                    .font(.system(size: 9))
+                    .tracking(0.54)
+                    .foregroundStyle(OpeningPanelTokens.Palette.amber)
+                    .opacity(OpeningPanelTicketMetrics.belowRowOpacity)
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.leading, OpeningPanelTicketMetrics.rankWidth + OpeningPanelTicketMetrics.rowGap)
+                    .frame(height: OpeningPanelTicketMetrics.rowHeight)
+                    .accessibilityLabel(more)
             }
         }
         .padding(.top, OpeningPanelTicketMetrics.contentTop)
         .padding(.horizontal, OpeningPanelTicketMetrics.contentHorizontal)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+
+    private var visibleSpan: (shown: Int, hidden: Int) {
+        OpeningPanelSequenceMath.visibleSpan(line: model.cut, total: model.rows.count)
+    }
+
+    private var moreLabel: String? {
+        guard state.ticketsStage != .dark, visibleSpan.hidden > 0 else { return nil }
+        return "ほか \(visibleSpan.hidden) 枚"
     }
 
     private var ticketsConfirmed: Bool {
@@ -645,18 +718,18 @@ struct TicketsModule: View {
     }
 
     private var rowSlots: [OpeningPanelTicketSlot] {
+        let count = visibleSpan.shown
         switch state.ticketsStage {
         case .dark:
             return []
         case .backlight:
-            return Array(repeating: .empty, count: model.rows.count)
+            return Array(repeating: .empty, count: count)
         case .cursor(let rows):
-            let count = max(model.rows.count, rows)
             return (0..<count).map { index in
                 index < rows ? .cursor : .empty
             }
         case .shown(let shown):
-            return model.rows.enumerated().map { index, row in
+            return model.rows.prefix(count).enumerated().map { index, row in
                 index < shown ? .ticket(row) : .empty
             }
         }
@@ -673,16 +746,12 @@ private struct OpeningPanelTicketRowView: View {
     var slot: OpeningPanelTicketSlot
     var index: Int
     var cut: Int
-    var growthStep: Int
+    var ranksFilled: Bool
 
     var body: some View {
         VStack(spacing: 0) {
-            ZStack(alignment: .leading) {
-                band
-                content
-            }
-            .frame(maxWidth: .infinity)
-            .frame(height: OpeningPanelTicketMetrics.rowHeight - 1)
+            content
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
             Rectangle()
                 .fill(index == cut - 1 ? OpeningPanelTokens.Palette.amber : OpeningPanelTicketMetrics.rowLine)
                 .frame(height: 1)
@@ -695,81 +764,78 @@ private struct OpeningPanelTicketRowView: View {
     }
 
     @ViewBuilder
-    private var band: some View {
-        if case .ticket(let row) = slot {
-            GeometryReader { geo in
-                let minutes = OpeningPanelTickets.shownMinutes(
-                    estimate: row.estimateMinutes,
-                    actual: row.actualMinutes,
-                    step: growthStep
-                )
-                let widths = OpeningPanelTickets.bandWidths(
-                    estimate: row.estimateMinutes,
-                    shown: minutes,
-                    rowWidth: geo.size.width
-                )
-                HStack(spacing: 0) {
-                    Rectangle()
-                        .fill(OpeningPanelTicketMetrics.estimateFill)
-                        .frame(width: widths.fill)
-                    OpeningPanelTicketHatch()
-                        .frame(width: widths.hatch)
-                        .opacity(row.arrival.isFaint ? OpeningPanelTicketMetrics.staleDurationOpacity : 1)
-                    Spacer(minLength: 0)
-                }
-                .padding(.vertical, OpeningPanelTicketMetrics.bandInset)
-            }
-            .allowsHitTesting(false)
-        }
-    }
-
-    @ViewBuilder
     private var content: some View {
         switch slot {
         case .empty:
             Color.clear
         case .cursor:
-            Text(String(repeating: "█", count: OpeningPanelTicketMetrics.cursorGlyphs))
-                .font(.system(size: OpeningPanelTicketMetrics.titleSize))
-                .foregroundStyle(OpeningPanelTokens.Palette.amber)
-                .lineLimit(1)
+            RoundedRectangle(cornerRadius: 1, style: .continuous)
+                .fill(OpeningPanelTokens.Palette.amber.opacity(0.6))
+                .frame(height: 8)
                 .frame(maxWidth: .infinity, alignment: .leading)
         case .ticket(let row):
-            let presentation = OpeningPanelTickets.durationPresentation(
-                arrival: row.arrival,
+            let below = index >= cut
+            let fade = OpeningPanelTickets.rowOpacity(index: index, cut: cut)
+            let pair = OpeningPanelTickets.pair(
                 estimate: row.estimateMinutes,
-                growthStep: growthStep
+                similarCount: row.similarCount,
+                median: row.similarMedianMinutes
             )
             HStack(spacing: OpeningPanelTicketMetrics.rowGap) {
-                OpeningPanelTicketDigit(
-                    character: OpeningPanelTickets.numberDigit(index: index),
-                    fallback: numberFallback,
-                    opacity: OpeningPanelTickets.numberOpacity(index: index, cut: cut)
-                )
+                rank
+                    .opacity(fade)
                 Text(row.title)
                     .font(.system(size: OpeningPanelTicketMetrics.titleSize))
-                    .foregroundStyle(OpeningPanelTokens.Palette.amber)
                     .lineLimit(1)
                     .truncationMode(.tail)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                Text(presentation.text)
-                    .font(.system(size: OpeningPanelTicketMetrics.durationSize))
-                    .monospacedDigit()
-                    .foregroundStyle(OpeningPanelTokens.Palette.amber)
-                    .opacity(
-                        presentation.faint
-                            ? OpeningPanelTicketMetrics.staleDurationOpacity
-                            : OpeningPanelTicketMetrics.durationOpacity
-                    )
-                    .frame(width: OpeningPanelTicketMetrics.durationWidth, alignment: .trailing)
-                    .lineLimit(1)
+                    .opacity(fade)
+                if below, row.daysBelow > 0 {
+                    Text("\(row.daysBelow)日")
+                        .font(.system(size: OpeningPanelTicketMetrics.pairSize))
+                        .lineLimit(1)
+                        .padding(.horizontal, 2)
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 1, style: .continuous)
+                                .strokeBorder(OpeningPanelTokens.Palette.amber.opacity(0.35), lineWidth: 1)
+                        }
+                        .opacity(OpeningPanelTicketMetrics.badgeOpacity)
+                }
+                HStack(spacing: 0) {
+                    Text(pair.estimate)
+                    Text("/")
+                        .opacity(OpeningPanelTicketMetrics.slashOpacity)
+                    Text(pair.median)
+                }
+                .font(.system(size: OpeningPanelTicketMetrics.pairSize))
+                .monospacedDigit()
+                .lineLimit(1)
+                .opacity(below ? fade : OpeningPanelTicketMetrics.pairOpacity)
             }
+            .foregroundStyle(OpeningPanelTokens.Palette.amber)
         }
     }
 
-    private var numberFallback: String? {
-        let number = index + 1
-        return number > 9 ? String(number) : nil
+    private var rank: some View {
+        let filled = OpeningPanelTickets.rankFilled(index: index, cut: cut, settled: ranksFilled)
+        return Text("\(index + 1)")
+            .font(.system(size: 9))
+            .lineLimit(1)
+            .minimumScaleFactor(0.6)
+            .foregroundStyle(filled ? OpeningPanelTicketMetrics.rankInk : OpeningPanelTokens.Palette.amber)
+            .frame(width: OpeningPanelTicketMetrics.rankWidth, height: OpeningPanelTicketMetrics.rankHeight)
+            .background {
+                if filled {
+                    RoundedRectangle(cornerRadius: 1, style: .continuous)
+                        .fill(OpeningPanelTokens.Palette.amber)
+                }
+            }
+            .overlay {
+                if !filled {
+                    RoundedRectangle(cornerRadius: 1, style: .continuous)
+                        .strokeBorder(OpeningPanelTokens.Palette.amber, lineWidth: 1)
+                }
+            }
     }
 
     private var accessibilityLabel: String {
@@ -777,17 +843,22 @@ private struct OpeningPanelTicketRowView: View {
         case .empty, .cursor:
             return "起動中"
         case .ticket(let row):
-            return "\(OpeningPanelTickets.slotName(index: index)) \(row.title)"
+            return "\(index + 1) \(row.title)"
         }
     }
 
     private var accessibilityValue: String {
         guard case .ticket(let row) = slot else { return "" }
-        return OpeningPanelTickets.durationPresentation(
-            arrival: row.arrival,
+        let pair = OpeningPanelTickets.pair(
             estimate: row.estimateMinutes,
-            growthStep: growthStep
-        ).text
+            similarCount: row.similarCount,
+            median: row.similarMedianMinutes
+        )
+        var parts = ["\(pair.estimate)/\(pair.median)"]
+        if index >= cut, row.daysBelow > 0 {
+            parts.append("\(row.daysBelow)日")
+        }
+        return parts.joined(separator: " ")
     }
 
     private var hint: String {
@@ -797,62 +868,6 @@ private struct OpeningPanelTicketRowView: View {
         case .ticket:
             return "この行の下へ区切りを移します"
         }
-    }
-}
-
-private struct OpeningPanelTicketDigit: View {
-    var character: Character?
-    var fallback: String?
-    var opacity: Double
-
-    var body: some View {
-        Group {
-            if let fallback {
-                Text(fallback)
-                    .font(.system(size: 8, weight: .medium))
-                    .foregroundStyle(OpeningPanelTokens.Palette.amber)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.5)
-            } else {
-                Canvas { context, _ in
-                    context.scaleBy(
-                        x: OpeningPanelTicketMetrics.digitScale,
-                        y: OpeningPanelTicketMetrics.digitScale
-                    )
-                    let lit = character.map { OpeningPanelClockGlyph.segments(for: $0) } ?? []
-                    for segment in OpeningPanelClockSegment.allCases {
-                        let rect = OpeningPanelClockLayout.localSegment(segment)
-                        let color = lit.contains(segment)
-                            ? OpeningPanelTokens.Palette.amber
-                            : OpeningPanelTicketMetrics.segmentOff
-                        context.fill(Path(rect), with: .color(color))
-                    }
-                }
-            }
-        }
-        .frame(
-            width: OpeningPanelTicketMetrics.digitSize.width,
-            height: OpeningPanelTicketMetrics.digitSize.height
-        )
-        .opacity(opacity)
-        .accessibilityHidden(true)
-    }
-}
-
-private struct OpeningPanelTicketHatch: View {
-    var body: some View {
-        Canvas { context, size in
-            var x = -size.height
-            let limit = size.width + size.height
-            while x < limit {
-                var path = Path()
-                path.move(to: CGPoint(x: x, y: 0))
-                path.addLine(to: CGPoint(x: x + size.height, y: size.height))
-                context.stroke(path, with: .color(OpeningPanelTicketMetrics.hatchInk), lineWidth: 2)
-                x += 5
-            }
-        }
-        .allowsHitTesting(false)
     }
 }
 

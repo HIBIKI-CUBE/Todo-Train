@@ -2,7 +2,7 @@
 //  OpeningPanelSequenceBoard.swift
 //  Todo train
 //
-//  SEQ の仕分け。先頭の 1 枚と、後ろに待つ 3 枚。右の山は今日／できれば／あとで。
+//  SEQ の仕分け。先頭の 1 枚と、後ろに待つ 3 枚。山のキーは窓の右に置く。
 //
 
 import SwiftUI
@@ -157,7 +157,6 @@ struct OpeningPanelSequencePicture: Equatable {
 
 struct OpeningPanelSequenceBoard: View {
     var picture: OpeningPanelSequencePicture
-    var onPile: (Int) -> Void
     var onInsertedFirst: (Bool) -> Void
     var onUndo: () -> Void
 
@@ -184,9 +183,6 @@ struct OpeningPanelSequenceBoard: View {
             }
             if !picture.keys.isEmpty {
                 bar(frames: frames)
-                ForEach(picture.keys) { key in
-                    pileKey(key, frame: frames.keys[key.id])
-                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -233,56 +229,6 @@ struct OpeningPanelSequenceBoard: View {
         }
         .frame(height: 6)
         .accessibilityLabel(picture.status)
-    }
-
-    private func pileKey(_ key: OpeningPanelSequencePicture.Key, frame: CGRect) -> some View {
-        let action = {
-            if picture.bodyIsComparing {
-                guard key.id < 2 else {
-                    onPile(key.id)
-                    return
-                }
-                onInsertedFirst(key.id == 0)
-            } else {
-                onPile(key.id)
-            }
-        }
-        return Button(action: action) {
-            VStack(spacing: 1) {
-                Text(key.title)
-                    .font(.system(size: 10))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.6)
-                if !key.count.isEmpty {
-                    Text(key.count)
-                        .font(.system(size: 9))
-                        .monospacedDigit()
-                }
-            }
-            .foregroundStyle(key.enabled ? OpeningPanelTokens.Palette.amber : OpeningPanelTokens.Palette.amber.opacity(0.35))
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(OpeningPanelTokens.Palette.key(0x2F3133))
-            .overlay {
-                RoundedRectangle(cornerRadius: 1)
-                    .strokeBorder(OpeningPanelTokens.Palette.amber.opacity(key.enabled ? 0.45 : 0.2), lineWidth: 1)
-            }
-        }
-        .buttonStyle(.plain)
-        .frame(width: frame.width, height: frame.height)
-        .offset(x: frame.minX, y: frame.minY)
-        .opacity(key.enabled ? 1 : 0.45)
-        .openingPanelAction(.sequencePile(key.id), perform: action)
-        .accessibilityLabel(key.title.isEmpty ? "消灯" : key.title)
-        .accessibilityValue(key.count)
-        .accessibilityHint(keyHint(key))
-    }
-
-    private func keyHint(_ key: OpeningPanelSequencePicture.Key) -> String {
-        guard key.enabled else { return "このキーは使えません" }
-        if picture.bodyIsComparing {
-            return key.id == 0 ? "上の切符を先にします" : "下の切符を先にします"
-        }
-        return "この山に入れます"
     }
 
     private func sorting(
@@ -464,13 +410,6 @@ struct OpeningPanelSequenceBoard: View {
     }
 }
 
-private extension OpeningPanelSequencePicture {
-    var bodyIsComparing: Bool {
-        if case .comparing = body { return true }
-        return false
-    }
-}
-
 enum OpeningPanelSequenceLayout {
     static let keyWidth: CGFloat = 54
     static let keyGap: CGFloat = 4
@@ -486,30 +425,32 @@ enum OpeningPanelSequenceLayout {
         var lowerCard: CGRect
     }
 
+    /// 仕分けの中身は窓いっぱいに置く。山のキーは窓の外。
     static func frames(in window: CGRect) -> Frames {
-        let keyWidth = min(Self.keyWidth, max(28, window.width * 0.28))
-        let columnWidth = max(0, window.width - keyGap - keyWidth)
-        let column = CGRect(x: 0, y: 0, width: columnWidth, height: window.height)
-        let bar = CGRect(x: 0, y: 0, width: columnWidth, height: barHeight)
+        let column = CGRect(x: 0, y: 0, width: window.width, height: window.height)
+        let bar = CGRect(x: 0, y: 0, width: window.width, height: barHeight)
         let undo = CGRect(
-            x: max(0, columnWidth - undoWidth),
+            x: max(0, window.width - undoWidth),
             y: 1,
-            width: min(undoWidth, columnWidth),
+            width: min(undoWidth, window.width),
             height: max(0, barHeight - 2)
         )
-        let keyHeight = max(0, (window.height - keyGap * 2) / 3)
-        let keys = (0..<3).map { index in
-            CGRect(
-                x: columnWidth + keyGap,
-                y: CGFloat(index) * (keyHeight + keyGap),
-                width: keyWidth,
-                height: keyHeight
-            )
-        }
         let bodyY = bar.maxY
         let bodyHeight = max(0, window.height - bodyY)
-        let upper = CGRect(x: 0, y: bodyY, width: columnWidth, height: bodyHeight / 2)
-        let lower = CGRect(x: 0, y: bodyY + bodyHeight / 2, width: columnWidth, height: bodyHeight / 2)
-        return Frames(column: column, bar: bar, undo: undo, keys: keys, upperCard: upper, lowerCard: lower)
+        let upper = CGRect(x: 0, y: bodyY, width: window.width, height: bodyHeight / 2)
+        let lower = CGRect(x: 0, y: bodyY + bodyHeight / 2, width: window.width, height: bodyHeight / 2)
+        return Frames(column: column, bar: bar, undo: undo, keys: [], upperCard: upper, lowerCard: lower)
+    }
+
+    static func pileFrames(in column: CGRect) -> [CGRect] {
+        let height = max(0, (column.height - keyGap * 2) / 3)
+        return (0..<3).map { index in
+            CGRect(
+                x: column.minX,
+                y: column.minY + CGFloat(index) * (height + keyGap),
+                width: column.width,
+                height: height
+            )
+        }
     }
 }
