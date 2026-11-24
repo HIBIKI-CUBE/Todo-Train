@@ -58,9 +58,9 @@ struct OpeningPanelPileKeyState: Equatable, Identifiable, Sendable {
     var lit: Bool
 
     static let idle: [OpeningPanelPileKeyState] = [
-        OpeningPanelPileKeyState(id: 0, title: "今日", count: "", lit: false),
-        OpeningPanelPileKeyState(id: 1, title: "できれば", count: "", lit: false),
-        OpeningPanelPileKeyState(id: 2, title: "あとで", count: "", lit: false),
+        OpeningPanelPileKeyState(id: 0, title: "TODAY", count: "", lit: false),
+        OpeningPanelPileKeyState(id: 1, title: "MAYBE", count: "", lit: false),
+        OpeningPanelPileKeyState(id: 2, title: "LATER", count: "", lit: false),
     ]
 }
 

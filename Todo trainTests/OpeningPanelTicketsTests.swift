@@ -159,15 +159,15 @@ struct OpeningPanelTicketsTests {
         #expect(OpeningPanelSequenceMath.visibleSpan(line: 8, total: 10) == (9, 1))
 
         let idle = OpeningPanelTickets.pileKeys(sequencing: false, powered: true, keys: [])
-        #expect(idle.map(\.title) == ["今日", "できれば", "あとで"])
+        #expect(idle.map(\.title) == ["TODAY", "MAYBE", "LATER"])
         #expect(idle.allSatisfy { !$0.lit && $0.count.isEmpty })
         let sorting = OpeningPanelTickets.pileKeys(
             sequencing: true,
             powered: true,
             keys: [
-                OpeningPanelSequencePicture.Key(id: 0, title: "今日", count: "2", enabled: true),
-                OpeningPanelSequencePicture.Key(id: 1, title: "できれば", count: "1", enabled: true),
-                OpeningPanelSequencePicture.Key(id: 2, title: "あとで", count: "0", enabled: true),
+                OpeningPanelSequencePicture.Key(id: 0, title: "TODAY", count: "2", enabled: true),
+                OpeningPanelSequencePicture.Key(id: 1, title: "MAYBE", count: "1", enabled: true),
+                OpeningPanelSequencePicture.Key(id: 2, title: "LATER", count: "0", enabled: true),
             ]
         )
         #expect(sorting.map(\.lit) == [true, true, true])

@@ -110,7 +110,7 @@ struct OpeningPanelSequencePicture: Equatable {
         let counts: [String]
         switch engine.phase {
         case .sorting:
-            titles = ["今日", "できれば", "あとで"]
+            titles = ["TODAY", "MAYBE", "LATER"]
             counts = engine.pileCounts.map(String.init)
         case .comparing:
             titles = ["上が先", "下が先", ""]
