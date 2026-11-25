@@ -37,8 +37,6 @@ struct ImaYaruStagePicture: Equatable {
     var reduceMotion: Bool
     var stageSize: CGSize
 
-    static let cardWidth: CGFloat = 300
-    static let cardHeight: CGFloat = 168
 }
 
 struct ImaYaruStageView: View {
@@ -132,8 +130,9 @@ struct ImaYaruStageView: View {
     }
 
     private var machine: some View {
-        let width = ImaYaruStagePicture.cardWidth
-        let ticketHeight = picture.ticketSize.height
+        let metrics = ImaYaruMachineMetrics.fitted(ticket: picture.ticketSize)
+        let width = ImaYaruMachineMetrics.mockWidth
+        let mouth = ImaYaruMachineMetrics.mockHeight * ImaYaruMachineMetrics.mouthFraction
         let departPush: CGFloat = picture.arm == .depart && !picture.reduceMotion ? ImaYaruFlight.slotPush : 0
         let savePush: CGFloat = picture.arm == .save && !picture.reduceMotion ? -ImaYaruFlight.slotPush : 0
         let rubber = picture.arm == .blocked && !picture.reduceMotion ? picture.shake * 5 : 0
@@ -141,41 +140,47 @@ struct ImaYaruStageView: View {
             card
             ImaYaruSlit(
                 kind: .save,
-                height: ticketHeight,
+                height: mouth,
                 charge: picture.arm == .save ? 1 : picture.saveCharge,
                 lit: picture.arm == .save,
                 dimmed: false,
                 lamp: picture.arm == .save ? picture.lamp : 0.35,
                 on: picture.slotOn || picture.arm != .save
             )
-            .offset(x: -width / 2 + 7 + savePush)
+            .offset(x: -width / 2 + ImaYaruMachineMetrics.mockSlotWidth / 2 + savePush)
             .gesture(machineDrag)
             .accessibilityLabel("保存")
             .accessibilityHint("切符を発行します")
 
             ImaYaruSlit(
                 kind: .depart,
-                height: ticketHeight,
+                height: mouth,
                 charge: picture.gate.departEnabled ? (picture.arm == .depart ? 1 : picture.departCharge) : 0,
                 lit: picture.arm == .depart && picture.gate.departEnabled,
                 dimmed: !picture.gate.departEnabled,
                 lamp: picture.gate.departEnabled ? (picture.arm == .depart ? picture.lamp : 0.35) : 0.28,
                 on: picture.slotOn || picture.arm != .depart
             )
-            .offset(x: width / 2 - 7 + departPush + rubber)
+            .offset(x: width / 2 - ImaYaruMachineMetrics.mockSlotWidth / 2 + departPush + rubber)
             .gesture(machineDrag)
             .accessibilityLabel(picture.gate.departLabel)
             .accessibilityHint(departHint)
 
-            ImaYaruOutlinedText(text: "保存", color: ImaYaruInk.signalAmber.opacity(picture.arm == .save ? 1 : 0.7))
-                .offset(x: -width / 2 - 48)
-            ImaYaruOutlinedText(
-                text: picture.gate.departLabel,
-                color: departLabelColor
-            )
-            .offset(x: width / 2 + 56 + rubber)
+            if picture.arm == .save {
+                ImaYaruOutlinedText(text: "保存", color: ImaYaruInk.signalAmber)
+                    .offset(x: -width / 2 - 48)
+            }
+            if picture.arm == .depart || picture.arm == .blocked {
+                ImaYaruOutlinedText(
+                    text: picture.gate.departLabel,
+                    color: departLabelColor
+                )
+                .offset(x: width / 2 + 56 + rubber)
+            }
         }
-        .frame(width: width + 200, height: ticketHeight)
+        .frame(width: width + 220, height: ImaYaruMachineMetrics.mockHeight)
+        .scaleEffect(metrics.scale)
+        .frame(width: (width + 220) * metrics.scale, height: metrics.body.height)
     }
 
     private var departHint: String {
@@ -190,7 +195,7 @@ struct ImaYaruStageView: View {
     }
 
     private var departLabelColor: Color {
-        if !picture.gate.departEnabled { return Color.white.opacity(0.55) }
+        if !picture.gate.departEnabled { return ImaYaruInk.rail }
         if picture.arm == .depart { return ImaYaruInk.signalGreen }
         return ImaYaruInk.rail
     }
@@ -220,10 +225,10 @@ struct ImaYaruStageView: View {
             .accessibilityElement(children: .combine)
             .accessibilityLabel("所要 \(picture.minutes) 分")
         }
-        .frame(width: ImaYaruStagePicture.cardWidth, height: ImaYaruStagePicture.cardHeight)
-        .background(ImaYaruInk.sheet, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .frame(width: ImaYaruMachineMetrics.mockWidth, height: ImaYaruMachineMetrics.mockHeight)
+        .background(ImaYaruInk.sheet, in: RoundedRectangle(cornerRadius: ImaYaruMachineMetrics.mockRadius, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
+            RoundedRectangle(cornerRadius: ImaYaruMachineMetrics.mockRadius, style: .continuous)
                 .strokeBorder(ImaYaruInk.sheetEdge, lineWidth: 1)
         )
         .environment(\.colorScheme, .dark)
@@ -297,20 +302,36 @@ private struct ImaYaruSlit: View {
         let ink = color
         let bar = max(0, min(1, charge)) * (height - 12)
         return ZStack {
-            Capsule()
-                .fill(ink.opacity(dimmed ? 0.16 : 0.14))
-                .frame(width: 3)
-                .padding(.vertical, 6)
-            Capsule()
-                .fill(ink.opacity(on ? 1 : 0.22))
-                .frame(width: 3, height: max(3, bar))
-            glyph(ink.opacity(dimmed ? 0.45 : 0.9))
+            if dimmed {
+                hatch
+            } else {
+                Capsule()
+                    .fill(ink.opacity(0.14))
+                    .frame(width: 3)
+                    .padding(.vertical, 6)
+                Capsule()
+                    .fill(ink.opacity(on ? 1 : 0.22))
+                    .frame(width: 3, height: max(3, bar))
+                glyph(ink.opacity(0.9))
+            }
         }
-        .frame(width: 14, height: height)
+        .frame(width: ImaYaruMachineMetrics.mockSlotWidth, height: height)
         .background(ImaYaruInk.sheet)
         .clipShape(slitShape)
-        .overlay(slitShape.stroke(ink.opacity(0.35 + 0.65 * lamp), lineWidth: 1.5))
-        .opacity(dimmed ? 0.55 : 1)
+        .overlay(slitShape.stroke(ink.opacity(dimmed ? 0.85 : 0.35 + 0.65 * lamp), lineWidth: 1.5))
+    }
+
+    /// Closed mouth. Horizontal rail stripes, the mock's hatch, in rail rather than gray.
+    private var hatch: some View {
+        Canvas { context, size in
+            let shade = GraphicsContext.Shading.color(ImaYaruInk.rail)
+            var y: CGFloat = 0
+            while y < size.height {
+                let band = Path(CGRect(x: 0, y: y, width: size.width, height: 2))
+                context.fill(band, with: shade)
+                y += 5
+            }
+        }
     }
 
     private var color: Color {
@@ -323,11 +344,14 @@ private struct ImaYaruSlit: View {
     }
 
     private var slitShape: UnevenRoundedRectangle {
+        if dimmed {
+            return UnevenRoundedRectangle(topLeadingRadius: 3, bottomLeadingRadius: 3, bottomTrailingRadius: 3, topTrailingRadius: 3)
+        }
         switch kind {
         case .depart:
-            UnevenRoundedRectangle(topLeadingRadius: 4, bottomLeadingRadius: 4, bottomTrailingRadius: 1, topTrailingRadius: 1)
+            return UnevenRoundedRectangle(topLeadingRadius: 4, bottomLeadingRadius: 4, bottomTrailingRadius: 1, topTrailingRadius: 1)
         case .save:
-            UnevenRoundedRectangle(topLeadingRadius: 1, bottomLeadingRadius: 1, bottomTrailingRadius: 4, topTrailingRadius: 4)
+            return UnevenRoundedRectangle(topLeadingRadius: 1, bottomLeadingRadius: 1, bottomTrailingRadius: 4, topTrailingRadius: 4)
         }
     }
 

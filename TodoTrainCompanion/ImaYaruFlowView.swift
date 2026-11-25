@@ -243,7 +243,7 @@ struct ImaYaruFormView: View {
         let charging = arm == .depart || departCharge > 0.04
         guard launching || charging else { return nil }
         let mouth = mouthX(direction: 1, shift: reduceMotion ? 0 : (flightFrame?.machineShift ?? 0))
-        let length = max(80, (stageSize.width - mouth - 8) * 1.4)
+        let length = ImaYaruFlight.railLength(stageWidth: stageSize.width, mouthX: mouth)
         let frame = flightFrame
         return ImaYaruCatapultPicture(
             length: length,
@@ -251,13 +251,20 @@ struct ImaYaruFormView: View {
             retract: reduceMotion ? 0 : (frame?.catapultRetract ?? 0),
             phase: catapultPhase,
             armed: arm == .depart || launching,
-            launching: launching && (frame?.stage ?? 0) >= 1,
-            tip: frame?.tip ?? 0
+            launching: launching && (frame?.stage ?? 0) >= 3,
+            tip: lightTip(frame: frame, mouth: mouth, length: length)
         )
     }
 
+    /// Depart light sits on the ticket's leading edge, as a fraction of the rail.
+    private func lightTip(frame: ImaYaruFlightFrame?, mouth: CGFloat, length: CGFloat) -> CGFloat {
+        guard let frame, frame.stage >= 3, length > 1 else { return 0 }
+        let leading = frame.ticketCenter.x + ticketSize.width / 2
+        return min(1, max(0, (leading - mouth) / length))
+    }
+
     private func mouthX(direction: CGFloat, shift: CGFloat) -> CGFloat {
-        let half = ImaYaruStagePicture.cardWidth / 2
+        let half = ImaYaruMachineMetrics.fitted(ticket: ticketSize).body.width / 2
         if direction < 0 {
             return anchor.x + shift - half
         }
@@ -482,11 +489,12 @@ struct ImaYaruFormView: View {
         } else {
             destination = CGPoint(x: menuAnchor.x, y: -ticketSize.height / 2 - 6)
         }
+        let half = ImaYaruMachineMetrics.fitted(ticket: ticketSize).body.width / 2
         let clearance: CGFloat
         if direction > 0 {
-            clearance = anchor.x + ImaYaruStagePicture.cardWidth / 2 + 16
+            clearance = anchor.x + half + 16
         } else {
-            clearance = stageSize.width - (anchor.x - ImaYaruStagePicture.cardWidth / 2) + 16
+            clearance = stageSize.width - (anchor.x - half) + 16
         }
         let geometry = ImaYaruFlightGeometry(
             ticketSize: ticketSize,

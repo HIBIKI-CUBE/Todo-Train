@@ -243,6 +243,46 @@ enum ImaYaruFlick {
     }
 }
 
+/// The f20 machine, scaled so the mouth is the real ticket.
+/// In the mock the mouth is 80% of the body and the body is 300×158,
+/// so the body stays a little taller than the ticket and the ports sit inside it.
+struct ImaYaruMachineMetrics: Equatable, Sendable {
+    static let mockWidth: CGFloat = 300
+    static let mockHeight: CGFloat = 158
+    static let mouthFraction: CGFloat = 0.8
+    static let mockRadius: CGFloat = 20
+    static let mockSlotWidth: CGFloat = 14
+    /// Mock stage the screenshots are framed in, before the machine grows to the ticket.
+    static let mockStage = CGSize(width: 860, height: 520)
+
+    var body: CGSize
+    var corner: CGFloat
+    var slotWidth: CGFloat
+    var slotHeight: CGFloat
+    var scale: CGFloat
+
+    static func fitted(ticket: CGSize) -> ImaYaruMachineMetrics {
+        let bodyHeight = ticket.height / mouthFraction
+        let scale = bodyHeight / mockHeight
+        return ImaYaruMachineMetrics(
+            body: CGSize(width: mockWidth * scale, height: bodyHeight),
+            corner: mockRadius * scale,
+            slotWidth: mockSlotWidth * scale,
+            slotHeight: ticket.height,
+            scale: scale
+        )
+    }
+
+    /// Same framing as the mock stage, after the machine has been scaled to `ticket`.
+    static func stage(ticket: CGSize) -> CGSize {
+        let fitted = fitted(ticket: ticket)
+        return CGSize(
+            width: fitted.body.width * mockStage.width / mockWidth,
+            height: fitted.body.height * mockStage.height / mockHeight
+        )
+    }
+}
+
 /// Physical Mars face. 14-inch fallback matches the mock (425×288pt).
 enum ImaYaruTicketMetrics {
     static let widthMM: CGFloat = MarsTicketSpec.aspectWidth
@@ -295,6 +335,11 @@ enum ImaYaruFlight {
     static let chevronCount: Int = 16
     static let chevronPitch: CGFloat = 9
     static let slotPush: CGFloat = 6
+
+    /// Guide rail. 1.4× the room past the mouth, same as the mock. Never capped.
+    static func railLength(stageWidth: CGFloat, mouthX: CGFloat) -> CGFloat {
+        max(80, (stageWidth - mouthX - 8) * 1.4)
+    }
     static let lightSeconds: Double = 0.12
 
     static var presentEndMs: Double { feedMs + presentDwellMs }

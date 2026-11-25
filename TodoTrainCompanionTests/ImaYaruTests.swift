@@ -247,6 +247,16 @@ struct ImaYaruTests {
         #expect(ImaYaruRelease.keyboard(commandReturn: false, gate: .open, canIssue: true) == .save)
     }
 
+    @Test func machineGrowsToTheTicket() {
+        let ticket = ImaYaruTicketMetrics.reference
+        let fitted = ImaYaruMachineMetrics.fitted(ticket: ticket)
+        #expect(abs(fitted.slotHeight - ticket.height) < 0.5)
+        #expect(fitted.body.height > fitted.slotHeight)
+        #expect(fitted.body.height < ticket.height * 1.4)
+        #expect(fitted.slotWidth / fitted.body.width < 14.0 / 300.0 + 0.001)
+        #expect(fitted.corner / fitted.body.height > 0.1)
+    }
+
     @Test func flightTimelineMatchesTheF20Clock() {
         #expect(ImaYaruFlight.feedMs == 300)
         #expect(ImaYaruFlight.machineMs == 520)
@@ -300,8 +310,8 @@ struct ImaYaruTests {
         let canWrite = FileManager.default.createFile(atPath: probe.path, contents: Data())
         if canWrite { try? FileManager.default.removeItem(at: probe) }
         var carried: [String] = []
-        let stage = CGSize(width: 860, height: 520)
         let ticket = ImaYaruTicketMetrics.reference
+        let stage = ImaYaruMachineMetrics.stage(ticket: ticket)
         let center = CGPoint(x: stage.width / 2, y: stage.height / 2 + 8)
         func render(_ name: String, _ picture: ImaYaruStagePicture) throws {
             let host = ImaYaruSnapshotHost(picture: picture, title: picture.ticketTitle)
@@ -327,7 +337,7 @@ struct ImaYaruTests {
             stage: stage, ticket: ticket, center: center, title: "資料の下書き", gate: .aboardCalendar, arm: .none
         ))
 
-        let mouth = center.x + ImaYaruStagePicture.cardWidth / 2
+        let mouth = center.x + ImaYaruMachineMetrics.fitted(ticket: ticket).body.width / 2
         let geometry = ImaYaruFlightGeometry(
             ticketSize: ticket,
             origin: CGPoint(x: mouth - ticket.width / 2, y: center.y),
@@ -392,8 +402,8 @@ private struct ImaYaruSnapshotHost: View {
         arm: ImaYaruArm,
         catapult: Bool = false
     ) -> ImaYaruStagePicture {
-        let mouth = center.x + ImaYaruStagePicture.cardWidth / 2
-        let length = min(340, max(80, stage.width - mouth - 24))
+        let mouth = center.x + ImaYaruMachineMetrics.fitted(ticket: ticket).body.width / 2
+        let length = ImaYaruFlight.railLength(stageWidth: stage.width, mouthX: mouth)
         return ImaYaruStagePicture(
             ticketTitle: title,
             minutes: 30,
@@ -437,8 +447,10 @@ private struct ImaYaruSnapshotHost: View {
     ) -> ImaYaruStagePicture {
         let shift = frame.machineShift
         let machine = CGPoint(x: center.x + shift, y: center.y)
-        let mouth = machine.x + ImaYaruStagePicture.cardWidth / 2
-        let length = min(340, max(80, stage.width - mouth - 8))
+        let mouth = machine.x + ImaYaruMachineMetrics.fitted(ticket: ticket).body.width / 2
+        let length = ImaYaruFlight.railLength(stageWidth: stage.width, mouthX: mouth)
+        let leading = frame.ticketCenter.x + ticket.width / 2
+        let tip = frame.stage >= 3 ? min(1, max(0, (leading - mouth) / length)) : 0
         return ImaYaruStagePicture(
             ticketTitle: title,
             minutes: 30,
@@ -464,7 +476,7 @@ private struct ImaYaruSnapshotHost: View {
                 phase: 0.42 + Double(frame.tip),
                 armed: true,
                 launching: frame.stage >= 3,
-                tip: frame.tip
+                tip: tip
             ),
             notice: nil,
             reduceMotion: true,
