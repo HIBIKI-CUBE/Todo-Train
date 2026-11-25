@@ -39,6 +39,10 @@ struct ImaYaruStagePicture: Equatable {
     var reduceMotion: Bool
     var stageSize: CGSize
     var machineOpacity: CGFloat = 1
+    /// 0…1 gauge fill. The number stays on a stop; the fill stretches inside the well.
+    var gaugeFill: CGFloat = 0.5
+    /// Signed fraction of the armed slot travel. + depart, − save. The lip sits below 1.
+    var slotTravel: CGFloat = 0
 }
 
 struct ImaYaruStageView: View {
@@ -143,8 +147,9 @@ struct ImaYaruStageView: View {
         let metrics = ImaYaruMachineMetrics.fitted(ticket: picture.ticketSize)
         let width = metrics.body.width
         let mouth = metrics.slotHeight
-        let departPush: CGFloat = picture.arm == .depart && !picture.reduceMotion ? metrics.pt(ImaYaruFlight.slotPush) : 0
-        let savePush: CGFloat = picture.arm == .save && !picture.reduceMotion ? -metrics.pt(ImaYaruFlight.slotPush) : 0
+        let nudge = metrics.flickShift(picture.slotTravel)
+        let departPush = max(0, nudge)
+        let savePush = min(0, nudge)
         let rubber = picture.arm == .blocked && !picture.reduceMotion ? picture.shake * metrics.pt(5) : 0
         return ZStack {
             card(metrics)
@@ -299,7 +304,7 @@ struct ImaYaruStageView: View {
             Capsule().fill(Color.white.opacity(0.2))
             Capsule()
                 .fill(ImaYaruInk.gauge)
-                .frame(height: max(metrics.pt(8), CGFloat(picture.minutes) / 60 * metrics.pt(56)))
+                .frame(height: max(metrics.pt(8), min(max(picture.gaugeFill, 0), 1) * metrics.pt(56)))
         }
         .frame(width: metrics.pt(10), height: metrics.pt(56))
         .accessibilityHidden(true)

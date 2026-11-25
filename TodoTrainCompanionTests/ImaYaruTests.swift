@@ -222,6 +222,140 @@ struct ImaYaruTests {
         #expect(ImaYaruSectorHit.choice(dx: 30, dy: 80) == .neutral)
     }
 
+    @Test func verticalStrokePullsTheFillIntoTheWellThenSlips() {
+        let pad: CGFloat = 200
+        let anchor = 30
+        let anchorFill = EstimateSnapMapping.fraction(minutes: anchor)
+
+        let held = ImaYaruMinutesStroke.reading(anchor: anchor, dy: -12, padHeight: pad)
+        let heldFinger = ImaYaruMinutesStroke.fingerFraction(anchorMinutes: anchor, dy: -12, padHeight: pad)
+        let heldScrub = EstimateSnapMapping.stickyScrub(
+            fingerFraction: heldFinger,
+            anchoredMinutes: anchor
+        )
+        #expect(held.minutes == anchor)
+        #expect(heldScrub.didEscape == false)
+        #expect(held.fill > anchorFill)
+        #expect(held.fill < heldFinger)
+        #expect(abs(held.fill - heldScrub.displayFraction) < 0.000_1)
+        #expect(abs(held.fill - anchorFill) < abs(heldFinger - anchorFill))
+
+        let lowered = ImaYaruMinutesStroke.reading(anchor: anchor, dy: 10, padHeight: pad)
+        let loweredFinger = ImaYaruMinutesStroke.fingerFraction(anchorMinutes: anchor, dy: 10, padHeight: pad)
+        #expect(lowered.minutes == anchor)
+        #expect(lowered.fill < anchorFill)
+        #expect(lowered.fill > loweredFinger)
+        #expect(abs(lowered.fill - anchorFill) < abs(loweredFinger - anchorFill))
+
+        let slipped = ImaYaruMinutesStroke.reading(anchor: anchor, dy: -22, padHeight: pad)
+        let slippedFinger = ImaYaruMinutesStroke.fingerFraction(anchorMinutes: anchor, dy: -22, padHeight: pad)
+        let slippedFill = EstimateSnapMapping.fraction(minutes: slipped.minutes)
+        #expect(slipped.minutes == 45)
+        #expect(ImaYaruMinutesStroke.hops(from: anchor, to: slipped.minutes) == 1)
+        #expect(abs(slipped.fill - slippedFill) < abs(slippedFinger - slippedFill))
+        #expect(slipped.fill > anchorFill)
+    }
+
+    @Test func flickApproachResistsThenJumpsTheThreshold() {
+        let steps = (0...8).map { ImaYaruFlick.approach(progress: CGFloat($0) / 8) }
+        for index in 1..<steps.count {
+            #expect(steps[index] > steps[index - 1])
+        }
+        let slopes = zip(steps, steps.dropFirst()).map { $1 - $0 }
+        for index in 1..<slopes.count {
+            #expect(slopes[index] < slopes[index - 1])
+        }
+        #expect(ImaYaruFlick.approach(progress: 0) == 0)
+        #expect(ImaYaruFlick.approach(progress: 0.5) < 0.5)
+        let lip = ImaYaruFlick.approach(progress: 1)
+        #expect(lip < 1)
+        #expect(lip > 0.4)
+        let mid = ImaYaruFlick.approach(progress: 0.5)
+        let chord = (ImaYaruFlick.approach(progress: 0.25) + ImaYaruFlick.approach(progress: 0.75)) / 2
+        #expect(mid > chord)
+
+        let threshold = ImaYaruFlick.threshold
+        let beforeArm = ImaYaruFlick.arm(
+            dx: threshold - 1, dy: 0, current: .none, departEnabled: true, canIssue: true
+        )
+        let atArm = ImaYaruFlick.arm(
+            dx: threshold, dy: 0, current: .none, departEnabled: true, canIssue: true
+        )
+        let before = ImaYaruFlick.push(dx: threshold - 1, dy: 0, arm: beforeArm)
+        let after = ImaYaruFlick.push(dx: threshold, dy: 0, arm: atArm)
+        #expect(beforeArm == .none)
+        #expect(atArm == .depart)
+        #expect(before > 0)
+        #expect(before < 1)
+        #expect(after == 1)
+        #expect(after - before > 0.3)
+
+        let saveBeforeArm = ImaYaruFlick.arm(
+            dx: -(threshold - 1), dy: 0, current: .none, departEnabled: true, canIssue: true
+        )
+        let saveAtArm = ImaYaruFlick.arm(
+            dx: -threshold, dy: 0, current: .none, departEnabled: true, canIssue: true
+        )
+        let saveBefore = ImaYaruFlick.push(dx: -(threshold - 1), dy: 0, arm: saveBeforeArm)
+        let saveAfter = ImaYaruFlick.push(dx: -threshold, dy: 0, arm: saveAtArm)
+        #expect(saveBeforeArm == .none)
+        #expect(saveAtArm == .save)
+        #expect(saveBefore < 0)
+        #expect(saveAfter == -1)
+        #expect(abs(saveAfter) - abs(saveBefore) > 0.3)
+
+        let heldDx = threshold * ImaYaruFlick.hysteresis
+        let heldArm = ImaYaruFlick.arm(
+            dx: heldDx, dy: 0, current: .depart, departEnabled: true, canIssue: true
+        )
+        let droppedArm = ImaYaruFlick.arm(
+            dx: heldDx - 1, dy: 0, current: .depart, departEnabled: true, canIssue: true
+        )
+        let held = ImaYaruFlick.push(dx: heldDx, dy: 0, arm: heldArm)
+        let dropped = ImaYaruFlick.push(dx: heldDx - 1, dy: 0, arm: droppedArm)
+        #expect(heldArm == .depart)
+        #expect(droppedArm == .none)
+        #expect(held == 1)
+        #expect(dropped > 0)
+        #expect(dropped < held)
+        #expect(held - dropped > 0.3)
+
+        let blocked = ImaYaruFlick.arm(
+            dx: threshold, dy: 0, current: .none, departEnabled: false, canIssue: true
+        )
+        let blockedPush = ImaYaruFlick.push(dx: threshold, dy: 0, arm: blocked)
+        #expect(blocked == .blocked)
+        #expect(blockedPush == lip)
+        #expect(blockedPush < 1)
+    }
+
+    @Test func mouseDragUsesTheFlickResistanceCurve() {
+        let limit: CGFloat = 12
+        func width(_ distance: CGFloat) -> CGFloat {
+            ImaYaruFlick.resistedTranslation(CGSize(width: distance, height: 0), limit: limit).width
+        }
+        let near = width(3)
+        let mid = width(6)
+        let far = width(9)
+        let at = width(limit)
+        let past = width(limit * 2)
+        #expect(near > 0)
+        #expect(near < 3)
+        #expect(mid > near)
+        #expect(far > mid)
+        #expect(at > far)
+        #expect(at < limit)
+        #expect(past > at)
+        #expect(past < limit)
+        let earlySlope = (mid - near) / 3
+        let lateSlope = (at - far) / 3
+        #expect(lateSlope < earlySlope)
+        let diagonal = ImaYaruFlick.resistedTranslation(CGSize(width: 6, height: 8), limit: limit)
+        #expect(diagonal.width > 0)
+        #expect(diagonal.height > 0)
+        #expect(hypot(diagonal.width, diagonal.height) < hypot(6, 8))
+    }
+
     @Test func verticalStrokeMapsMinutesUpAndDownTheStops() {
         let pad: CGFloat = 200
         #expect(ImaYaruMinutesStroke.minutes(anchor: 30, dy: 0, padHeight: pad) == 30)
@@ -451,6 +585,101 @@ struct ImaYaruTests {
             board.setString(carried.joined(separator: "\n"), forType: .string)
         }
     }
+
+    @Test(.enabled(if: FileManager.default.fileExists(atPath: "/tmp/imayaru-feel-dir")))
+    @MainActor
+    func writeF20FeelFrames() throws {
+        let root = (try? String(contentsOfFile: "/tmp/imayaru-feel-dir", encoding: .utf8))?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let directory = URL(fileURLWithPath: root, isDirectory: true)
+        let probe = directory.appendingPathComponent(".probe")
+        let canWrite = FileManager.default.createFile(atPath: probe.path, contents: Data())
+        if canWrite { try? FileManager.default.removeItem(at: probe) }
+        var carried: [String] = []
+        let ticket = ImaYaruTicketMetrics.size
+        let stage = ImaYaruMachineMetrics.stage(ticket: ticket)
+        let center = CGPoint(x: stage.width / 2, y: stage.height / 2 + 8)
+        let metrics = ImaYaruMachineMetrics.fitted(ticket: ticket)
+        func render(_ name: String, _ image: NSImage) throws {
+            guard let data = ImaYaruSnapshotHost.pngData(image) else {
+                Issue.record(Comment(rawValue: name))
+                return
+            }
+            if canWrite {
+                try data.write(to: directory.appendingPathComponent(name))
+            } else {
+                carried.append(name)
+                carried.append(data.base64EncodedString())
+            }
+        }
+        func stageImage(_ picture: ImaYaruStagePicture) throws -> NSImage {
+            let host = ImaYaruSnapshotHost(picture: picture, title: picture.ticketTitle)
+                .frame(width: stage.width, height: stage.height)
+            return try ImaYaruSnapshotHost.image(host, size: stage)
+        }
+
+        let pad: CGFloat = 160
+        let stuck = ImaYaruMinutesStroke.reading(anchor: 30, dy: 0, padHeight: pad)
+        let pulled = ImaYaruMinutesStroke.reading(anchor: 30, dy: -15, padHeight: pad)
+        let slipped = ImaYaruMinutesStroke.reading(anchor: 30, dy: -22, padHeight: pad)
+        let gaugeFrames: [(String, ImaYaruMinutesStroke.Reading)] = [
+            ("stick-30.png", stuck),
+            ("stick-pulled.png", pulled),
+            ("slip-45.png", slipped)
+        ]
+        var gaugeImages: [NSImage] = []
+        let machine = CGRect(
+            x: center.x - metrics.body.width / 2 - 48,
+            y: center.y - metrics.body.height / 2 - 36,
+            width: metrics.body.width + 96,
+            height: metrics.body.height + 72
+        )
+        for (name, reading) in gaugeFrames {
+            let picture = ImaYaruSnapshotHost.feelPicture(
+                stage: stage, ticket: ticket, center: center, minutes: reading.minutes, fill: reading.fill, travel: 0, arm: .none
+            )
+            let image = try stageImage(picture)
+            let cropped = ImaYaruSnapshotHost.crop(image, unitRect: machine, captureScale: ImaYaruSnapshotHost.captureScale) ?? image
+            try render(name, cropped)
+            gaugeImages.append(cropped)
+        }
+        try render("stick-slip-strip.png", ImaYaruSnapshotHost.strip(gaugeImages))
+
+        let rest = ImaYaruFlick.push(dx: 0, dy: 0, arm: .none)
+        let resist = ImaYaruFlick.push(dx: ImaYaruFlick.threshold * 0.45, dy: 0, arm: .none)
+        let lip = ImaYaruFlick.push(dx: ImaYaruFlick.threshold - 1, dy: 0, arm: .none)
+        let jumped = ImaYaruFlick.push(dx: ImaYaruFlick.threshold, dy: 0, arm: .depart)
+        let flickFrames: [(String, CGFloat, ImaYaruArm, CGFloat)] = [
+            ("flick-rest.png", rest, .none, 0),
+            ("flick-resist.png", resist, .none, 0.45),
+            ("flick-lip.png", lip, .none, (ImaYaruFlick.threshold - 1) / ImaYaruFlick.threshold),
+            ("flick-jump.png", jumped, .depart, 1)
+        ]
+        var flickImages: [NSImage] = []
+        let slot = CGRect(
+            x: center.x + metrics.body.width / 2 - 36,
+            y: center.y - ticket.height / 2 - 24,
+            width: 120,
+            height: ticket.height + 48
+        )
+        for (name, travel, arm, charge) in flickFrames {
+            let picture = ImaYaruSnapshotHost.feelPicture(
+                stage: stage, ticket: ticket, center: center, minutes: 30, fill: 0.5, travel: travel, arm: arm, charge: charge
+            )
+            let image = try stageImage(picture)
+            let cropped = ImaYaruSnapshotHost.crop(image, unitRect: slot, captureScale: ImaYaruSnapshotHost.captureScale) ?? image
+            let magnified = ImaYaruSnapshotHost.magnify(cropped, factor: 3)
+            try render(name, magnified)
+            flickImages.append(magnified)
+        }
+        try render("flick-jump-strip.png", ImaYaruSnapshotHost.strip(flickImages))
+
+        if !canWrite {
+            let board = NSPasteboard.general
+            board.clearContents()
+            board.setString(carried.joined(separator: "\n"), forType: .string)
+        }
+    }
 }
 
 @MainActor
@@ -514,7 +743,9 @@ private struct ImaYaruSnapshotHost: View {
             ) : nil,
             notice: nil,
             reduceMotion: true,
-            stageSize: stage
+            stageSize: stage,
+            gaugeFill: EstimateSnapMapping.fraction(minutes: 30),
+            slotTravel: arm == .depart ? 1 : (arm == .save ? -1 : 0)
         )
     }
 
@@ -562,7 +793,9 @@ private struct ImaYaruSnapshotHost: View {
             notice: nil,
             reduceMotion: true,
             stageSize: stage,
-            machineOpacity: frame.machineOpacity
+            machineOpacity: frame.machineOpacity,
+            gaugeFill: EstimateSnapMapping.fraction(minutes: 30),
+            slotTravel: 1
         )
     }
 
@@ -576,6 +809,75 @@ private struct ImaYaruSnapshotHost: View {
 
     /// Point size stays the stage. Pixels are 2× so the type is not a softened 1× raster.
     static let captureScale: CGFloat = 2
+
+    static func feelPicture(
+        stage: CGSize,
+        ticket: CGSize,
+        center: CGPoint,
+        minutes: Int,
+        fill: CGFloat,
+        travel: CGFloat,
+        arm: ImaYaruArm,
+        charge: CGFloat = 0
+    ) -> ImaYaruStagePicture {
+        let metrics = ImaYaruMachineMetrics.fitted(ticket: ticket)
+        let direction: CGFloat = travel < -0.02 ? -1 : 1
+        let mouth = direction < 0 ? center.x - metrics.body.width / 2 : center.x + metrics.body.width / 2
+        let tuckedX = direction < 0 ? mouth + ticket.width / 2 : mouth - ticket.width / 2
+        let show = abs(travel) > 0.02 || arm == .depart || arm == .save
+        return ImaYaruStagePicture(
+            ticketTitle: "資料の下書き",
+            minutes: minutes,
+            gate: .open,
+            arm: arm,
+            departCharge: arm == .depart ? 1 : max(0, charge),
+            saveCharge: arm == .save ? 1 : max(0, -charge),
+            lamp: arm == .depart || arm == .save ? 1 : 0.35,
+            slotOn: true,
+            shake: 0,
+            ticketSize: ticket,
+            showTicket: show,
+            ticketCenter: CGPoint(x: tuckedX + metrics.flickShift(travel), y: center.y),
+            printReveal: 0,
+            tilt: 0,
+            machineCenter: center,
+            mouthX: mouth,
+            flightDirection: show ? direction : 0,
+            catapult: nil,
+            notice: nil,
+            reduceMotion: true,
+            stageSize: stage,
+            gaugeFill: fill,
+            slotTravel: travel
+        )
+    }
+
+    /// `unitRect` is stage points, origin at the top-left. The capture image is top-left as well.
+    static func crop(_ image: NSImage, unitRect: CGRect, captureScale: CGFloat) -> NSImage? {
+        guard let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
+        let rect = CGRect(
+            x: unitRect.minX * captureScale,
+            y: unitRect.minY * captureScale,
+            width: unitRect.width * captureScale,
+            height: unitRect.height * captureScale
+        ).integral
+        let bounds = CGRect(x: 0, y: 0, width: cg.width, height: cg.height)
+        let bounded = rect.intersection(bounds)
+        guard bounded.width > 1, bounded.height > 1, let part = cg.cropping(to: bounded) else { return nil }
+        let cropped = NSImage(size: NSSize(width: part.width, height: part.height))
+        cropped.addRepresentation(NSBitmapImageRep(cgImage: part))
+        return cropped
+    }
+
+    static func magnify(_ image: NSImage, factor: CGFloat) -> NSImage {
+        let size = NSSize(width: image.size.width * factor, height: image.size.height * factor)
+        let magnified = NSImage(size: size)
+        magnified.lockFocus()
+        NSGraphicsContext.current?.imageInterpolation = .none
+        image.draw(in: NSRect(origin: .zero, size: size))
+        magnified.unlockFocus()
+        return magnified
+    }
 
     static func image<V: View>(_ view: V, size: CGSize) throws -> NSImage {
         let renderer = ImageRenderer(content: view)

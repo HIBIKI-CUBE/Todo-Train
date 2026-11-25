@@ -174,6 +174,16 @@ enum ImaYaruDismissal {
 enum ImaYaruMinutesStroke {
     static let scale: CGFloat = 1.6
 
+    /// Short spring that seats the gauge on the stop when the fingers lift.
+    static var settle: Animation { .spring(response: 0.2, dampingFraction: 0.78) }
+
+    struct Reading: Equatable {
+        /// Stop the value has landed on.
+        var minutes: Int
+        /// Gauge fill. Inside a well this is pulled toward `minutes`; on escape it slips to the next stop.
+        var fill: CGFloat
+    }
+
     static func fingerFraction(
         anchorMinutes: Int,
         dy: CGFloat,
@@ -185,23 +195,44 @@ enum ImaYaruMinutesStroke {
     }
 
     /// Walks the sticky wells so one stroke can cross more than one stop.
+    /// The fill is the last well's display fraction: stretched toward the finger, held by the stop.
+    static func reading(
+        anchor: Int,
+        dy: CGFloat,
+        padHeight: CGFloat,
+        scale: CGFloat = ImaYaruMinutesStroke.scale
+    ) -> Reading {
+        let finger = fingerFraction(anchorMinutes: anchor, dy: dy, padHeight: padHeight, scale: scale)
+        var current = anchor
+        var fill = EstimateSnapMapping.fraction(minutes: anchor)
+        for _ in EstimateSnapMapping.stops {
+            let scrub = EstimateSnapMapping.stickyScrub(
+                fingerFraction: finger,
+                anchoredMinutes: current
+            )
+            fill = scrub.displayFraction
+            if scrub.anchoredMinutes == current { break }
+            current = scrub.anchoredMinutes
+        }
+        return Reading(minutes: current, fill: fill)
+    }
+
     static func minutes(
         anchor: Int,
         dy: CGFloat,
         padHeight: CGFloat,
         scale: CGFloat = ImaYaruMinutesStroke.scale
     ) -> Int {
-        let finger = fingerFraction(anchorMinutes: anchor, dy: dy, padHeight: padHeight, scale: scale)
-        var current = anchor
-        for _ in EstimateSnapMapping.stops {
-            let scrub = EstimateSnapMapping.stickyScrub(
-                fingerFraction: finger,
-                anchoredMinutes: current
-            )
-            if scrub.anchoredMinutes == current { break }
-            current = scrub.anchoredMinutes
+        reading(anchor: anchor, dy: dy, padHeight: padHeight, scale: scale).minutes
+    }
+
+    /// How many stops a landing crossed. One haptic each.
+    static func hops(from: Int, to: Int) -> Int {
+        let stops = EstimateSnapMapping.stops
+        guard let start = stops.firstIndex(of: from), let end = stops.firstIndex(of: to) else {
+            return from == to ? 0 : 1
         }
-        return current
+        return abs(end - start)
     }
 }
 
@@ -223,6 +254,50 @@ enum ImaYaruFlick {
     static let hysteresis: CGFloat = 0.85
     static let ratioOn: CGFloat = 2
     static let ratioOff: CGFloat = 1.6
+
+    /// Approach stiffness. `t / (1 + resistance * t)` is monotonic and concave, and stays below 1 at the threshold.
+    static let resistance: CGFloat = 0.85
+
+    /// Quick spring that carries the slot and ticket over the lip into the armed pose.
+    static var jump: Animation { .spring(response: 0.15, dampingFraction: 0.7) }
+
+    /// Spring back to rest when the flick is released short of the threshold.
+    static var release: Animation { .spring(response: ImaYaruFollow.response, dampingFraction: ImaYaruFollow.damping) }
+
+    /// Visual travel before the arm, as a fraction of the armed pose.
+    /// 0 at rest. At progress 1 this is strictly below 1, so arming is a jump.
+    static func approach(progress: CGFloat) -> CGFloat {
+        let t = max(progress, 0)
+        return t / (1 + resistance * t)
+    }
+
+    /// Signed slot/ticket travel. +1 is the armed depart pose, −1 is save.
+    /// Below the threshold, and while blocked, the stroke rides `approach` and stops at the lip.
+    /// Blocked never takes the armed pose; the shake is the refusal.
+    static func push(dx: CGFloat, dy: CGFloat, arm: ImaYaruArm) -> CGFloat {
+        switch arm {
+        case .depart:
+            return 1
+        case .save:
+            return -1
+        case .blocked, .none:
+            let ax = abs(dx)
+            let ay = abs(dy)
+            let heading = ax >= ratioOff * ay || ax >= threshold
+            guard heading else { return 0 }
+            let sign: CGFloat = dx >= 0 ? 1 : -1
+            return sign * approach(progress: min(ax / threshold, 1))
+        }
+    }
+
+    /// Pointer drag. Same curve as the flick: travel grows slower as the stroke lengthens.
+    static func resistedTranslation(_ translation: CGSize, limit: CGFloat) -> CGSize {
+        let length = hypot(translation.width, translation.height)
+        guard length > 0, limit > 0 else { return .zero }
+        let visual = limit * approach(progress: length / limit)
+        let scale = visual / length
+        return CGSize(width: translation.width * scale, height: translation.height * scale)
+    }
 
     static func arm(
         dx: CGFloat,
@@ -295,6 +370,11 @@ struct ImaYaruMachineMetrics: Equatable, Sendable {
 
     /// Mock points, in the size the machine is actually drawn.
     func pt(_ mock: CGFloat) -> CGFloat { mock * scale }
+
+    /// Signed shift of the arming slot and the ticket. + depart, − save. 1 is the armed pose.
+    func flickShift(_ travel: CGFloat) -> CGFloat {
+        travel * pt(ImaYaruFlight.slotPush)
+    }
 
     /// Same framing as the mock stage, after the machine has been scaled to `ticket`.
     static func stage(ticket: CGSize) -> CGSize {
