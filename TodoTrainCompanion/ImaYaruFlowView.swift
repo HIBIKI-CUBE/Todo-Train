@@ -22,6 +22,8 @@ struct ImaYaruFormView: View {
 
     @State private var title = ""
     @State private var minutes = 30
+    @State private var gaugeFill: CGFloat = 0.5
+    @State private var slotTravel: CGFloat = 0
     @State private var phase: FormPhase = .editing
     @State private var notice: String?
     @State private var sendID = 0
@@ -111,6 +113,7 @@ struct ImaYaruFormView: View {
             reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
             if title.isEmpty {
                 minutes = EstimateSnapMapping.snap(rawMinutes: Double(seededMinutes))
+                gaugeFill = EstimateSnapMapping.fraction(minutes: minutes)
                 if !seededTitle.isEmpty {
                     title = seededTitle
                     sentTitle = seededTitle
@@ -203,7 +206,7 @@ struct ImaYaruFormView: View {
         let flying = flight != nil
         let direction = flight?.geometry.direction ?? aimDirection
         let mouth = mouthX(direction: direction == 0 ? 1 : direction, shift: shift)
-        let showTicket = flying || arm == .depart || arm == .save
+        let showTicket = flying || arm == .depart || arm == .save || abs(slotTravel) > 0.02
         let ticketCenter: CGPoint
         let reveal: CGFloat
         if let frame = flightFrame, flying {
@@ -216,12 +219,14 @@ struct ImaYaruFormView: View {
             }
         } else {
             let tucked = tuckedOrigin(direction: direction == 0 ? 1 : direction)
-            ticketCenter = CGPoint(x: tucked.x + follow.width, y: tucked.y + follow.height)
+            let peek = ImaYaruMachineMetrics.fitted(ticket: ticketSize).flickShift(slotTravel)
+            ticketCenter = CGPoint(x: tucked.x + follow.width + peek, y: tucked.y + follow.height)
             reveal = 0
         }
+        let shownMinutes = flying ? (flight?.minutes ?? minutes) : minutes
         return ImaYaruStagePicture(
             ticketTitle: flying ? (flight?.title ?? title) : title,
-            minutes: flying ? (flight?.minutes ?? minutes) : minutes,
+            minutes: shownMinutes,
             gate: gate,
             needsTitle: !canIssue && flight == nil,
             arm: arm,
@@ -242,15 +247,24 @@ struct ImaYaruFormView: View {
             notice: notice,
             reduceMotion: reduceMotion,
             stageSize: stageSize,
-            machineOpacity: reduceMotion ? 1 : (flightFrame?.machineOpacity ?? 1)
+            machineOpacity: reduceMotion ? 1 : (flightFrame?.machineOpacity ?? 1),
+            gaugeFill: flying
+                ? EstimateSnapMapping.fraction(minutes: shownMinutes)
+                : gaugeFill,
+            slotTravel: slotTravel
         )
     }
 
     private var aimDirection: CGFloat {
         switch arm {
-        case .depart: 1
-        case .save: -1
-        case .blocked, .none: 0
+        case .depart:
+            return 1
+        case .save:
+            return -1
+        case .blocked, .none:
+            if slotTravel > 0.02 { return 1 }
+            if slotTravel < -0.02 { return -1 }
+            return 0
         }
     }
 
@@ -325,26 +339,19 @@ struct ImaYaruFormView: View {
             preview(choice)
             return
         }
-        let action = ImaYaruRelease.resolve(choice: choice, gate: gate, canIssue: canIssue)
-        follow = .zero
         tilt = 0
+        let action = ImaYaruRelease.resolve(choice: choice, gate: gate, canIssue: canIssue)
+        if action == .depart || action == .save {
+            assignWithoutAnimation { follow = .zero }
+        }
         perform(action)
     }
 
     private func followTarget(_ translation: CGSize, velocityX: CGFloat) {
         let limit = ImaYaruTicketMetrics.pt(12)
-        let length = hypot(translation.width, translation.height)
-        let scale = length > limit && length > 0 ? limit / length : 1
-        let next = CGSize(width: translation.width * scale, height: translation.height * scale)
-        if reduceMotion {
-            follow = next
-            tilt = 0
-        } else {
-            withAnimation(.spring(response: ImaYaruFollow.response, dampingFraction: ImaYaruFollow.damping)) {
-                follow = next
-            }
-            tilt = ImaYaruFollow.tilt(velocityX: velocityX, reduceMotion: false)
-        }
+        let next = ImaYaruFlick.resistedTranslation(translation, limit: limit)
+        assignWithoutAnimation { follow = next }
+        tilt = ImaYaruFollow.tilt(velocityX: velocityX, reduceMotion: reduceMotion)
     }
 
     private func preview(_ choice: ImaYaruChoice) {
@@ -365,10 +372,7 @@ struct ImaYaruFormView: View {
             }
         case .neutral, .click:
             if arm != .none {
-                arm = .none
-                departCharge = 0
-                saveCharge = 0
-                lamp = 0.35
+                setArm(.none, departCharge: 0, saveCharge: 0)
             }
         }
     }
@@ -386,6 +390,12 @@ struct ImaYaruFormView: View {
         if eventPhase.contains(.ended) || eventPhase.contains(.cancelled) {
             if strokeAxis == .horizontal {
                 perform(ImaYaruRelease.resolve(arm: arm, gate: gate, canIssue: canIssue))
+            } else if strokeAxis == .vertical {
+                settleGauge()
+                if arm != .depart && arm != .save {
+                    departCharge = 0
+                    saveCharge = 0
+                }
             } else if arm != .depart && arm != .save {
                 departCharge = 0
                 saveCharge = 0
@@ -403,11 +413,19 @@ struct ImaYaruFormView: View {
         guard let strokeAxis else { return }
         switch strokeAxis {
         case .vertical:
-            minutes = ImaYaruMinutesStroke.minutes(
+            let reading = ImaYaruMinutesStroke.reading(
                 anchor: strokeAnchor,
                 dy: strokeY,
                 padHeight: Self.strokePadHeight
             )
+            if reading.minutes != minutes {
+                let hops = ImaYaruMinutesStroke.hops(from: minutes, to: reading.minutes)
+                for _ in 0..<max(hops, 1) {
+                    ImaYaruHaptics.alignment()
+                }
+                minutes = reading.minutes
+            }
+            assignWithoutAnimation { gaugeFill = reading.fill }
         case .horizontal:
             let next = ImaYaruFlick.arm(
                 dx: strokeX,
@@ -417,10 +435,11 @@ struct ImaYaruFormView: View {
                 canIssue: canIssue
             )
             let amount = ImaYaruFlick.charge(dx: strokeX, dy: strokeY)
+            let approach = ImaYaruFlick.push(dx: strokeX, dy: strokeY, arm: .none)
             if strokeX >= 0 {
-                setArm(next, departCharge: amount, saveCharge: 0)
+                setArm(next, departCharge: amount, saveCharge: 0, approach: approach)
             } else {
-                setArm(next, departCharge: 0, saveCharge: amount)
+                setArm(next, departCharge: 0, saveCharge: amount, approach: approach)
             }
             if next == .blocked {
                 shake = max(shake, 0.65)
@@ -428,12 +447,29 @@ struct ImaYaruFormView: View {
         }
     }
 
-    private func setArm(_ next: ImaYaruArm, departCharge: CGFloat, saveCharge: CGFloat) {
-        if next != arm {
+    private func settleGauge() {
+        let target = EstimateSnapMapping.fraction(minutes: minutes)
+        if reduceMotion {
+            gaugeFill = target
+        } else {
+            withAnimation(ImaYaruMinutesStroke.settle) {
+                gaugeFill = target
+            }
+        }
+    }
+
+    private func setArm(
+        _ next: ImaYaruArm,
+        departCharge: CGFloat,
+        saveCharge: CGFloat,
+        approach: CGFloat = 0
+    ) {
+        let previous = arm
+        if next != previous {
             switch next {
             case .depart, .save:
-                ImaYaruHaptics.alignment()
-                withAnimation(.easeOut(duration: ImaYaruFlight.lightSeconds)) {
+                ImaYaruHaptics.levelChange()
+                withAnimation(reduceMotion ? nil : .easeOut(duration: ImaYaruFlight.lightSeconds)) {
                     lamp = 1
                 }
             case .blocked:
@@ -446,6 +482,40 @@ struct ImaYaruFormView: View {
         }
         self.departCharge = departCharge
         self.saveCharge = saveCharge
+        let travel: CGFloat
+        let spring: Bool
+        switch next {
+        case .depart:
+            travel = 1
+            spring = previous != .depart
+        case .save:
+            travel = -1
+            spring = previous != .save
+        case .blocked:
+            travel = approach
+            spring = false
+        case .none:
+            travel = approach
+            spring = previous == .depart || previous == .save
+        }
+        applyTravel(travel, spring: spring && !reduceMotion)
+    }
+
+    private func applyTravel(_ travel: CGFloat, spring: Bool) {
+        if abs(travel - slotTravel) < 0.000_5 { return }
+        if spring {
+            withAnimation(ImaYaruFlick.jump) {
+                slotTravel = travel
+            }
+        } else {
+            assignWithoutAnimation { slotTravel = travel }
+        }
+    }
+
+    private func assignWithoutAnimation(_ body: () -> Void) {
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction, body)
     }
 
     private func perform(_ action: ImaYaruReleaseAction) {
@@ -453,10 +523,10 @@ struct ImaYaruFormView: View {
         case .close:
             onClose()
         case .none:
-            clearAim()
+            clearAim(animated: true)
         case .deny:
             shake = 1
-            clearAim()
+            clearAim(animated: true)
         case .save:
             issueOnly()
         case .depart:
@@ -464,13 +534,21 @@ struct ImaYaruFormView: View {
         }
     }
 
-    private func clearAim() {
+    private func clearAim(animated: Bool = false) {
         arm = .none
         departCharge = 0
         saveCharge = 0
         lamp = 0.35
-        follow = .zero
         tilt = 0
+        if animated, !reduceMotion {
+            withAnimation(ImaYaruFlick.release) {
+                slotTravel = 0
+                follow = .zero
+            }
+        } else {
+            slotTravel = 0
+            follow = .zero
+        }
     }
 
     private func issueOnly() {
@@ -526,6 +604,7 @@ struct ImaYaruFormView: View {
             direction: direction
         )
         arm = kind == .depart ? .depart : .save
+        slotTravel = direction
         lamp = 1
         flightFrame = ImaYaruFlight.frame(tauMs: 0, geometry: geometry)
         flight = Flight(kind: kind, started: Date(), geometry: geometry, title: title, minutes: minutes)
