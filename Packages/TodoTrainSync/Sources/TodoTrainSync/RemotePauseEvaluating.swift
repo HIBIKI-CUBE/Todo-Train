@@ -63,6 +63,9 @@ public enum RemotePauseEvaluating {
         case .issueAndBoard:
             // Host applies this op itself. Never treat it as pause/resume/still.
             return .noActiveService
+        case .issue:
+            // Host applies this op itself. A pause evaluator must not save a ticket.
+            return .unsupportedOp
         case .pauseInputReport, .answer, .boardReserved, .presence, .reestimate, .undoReestimate, .unknown:
             // #106 applies answer and boardReserved. Until then they are not a pause.
             return .unsupportedOp

@@ -159,7 +159,7 @@ extension CompanionMacRuntime {
             guard presentation.canResume, !presentation.isSending else { return }
         case .still:
             guard !presentation.isSending else { return }
-        case .issueAndBoard, .answer, .boardReserved, .presence, .pauseInputReport, .reestimate, .undoReestimate, .unknown:
+        case .issue, .issueAndBoard, .answer, .boardReserved, .presence, .pauseInputReport, .reestimate, .undoReestimate, .unknown:
             return
         }
         let sessionId: UUID?
@@ -169,7 +169,7 @@ extension CompanionMacRuntime {
             sessionId = id
         case .still:
             sessionId = snap?.sessionId
-        case .issueAndBoard, .answer, .boardReserved, .presence, .pauseInputReport, .reestimate, .undoReestimate, .unknown:
+        case .issue, .issueAndBoard, .answer, .boardReserved, .presence, .pauseInputReport, .reestimate, .undoReestimate, .unknown:
             return
         }
         let cmdId = UUID()
@@ -293,6 +293,50 @@ extension CompanionMacRuntime {
         }
     }
 
+    func sendIssue(title: String, estimatedSeconds: Int) async {
+        if let blocked = ContractCompat.commandBlock(peer: peerContract, relay: relayContract, side: .mac) {
+            issueOnlyFailure = blocked
+            return
+        }
+        if let introduced = WireOp.issue.introducedIn,
+           let peer = peerContract,
+           peer.contract < introduced {
+            issueOnlyFailure = ContractCopy.iphoneOlder
+            return
+        }
+        let trimmed = IssueAndBoardEvaluating.trimmedTitle(title)
+        guard IssueAndBoardEvaluating.isValid(title: trimmed, estimatedSeconds: estimatedSeconds) else {
+            issueOnlyFailure = MenuBarPresentation.failureCopy(.invalidPayload)
+            return
+        }
+        let cmdId = UUID()
+        pendingIssueIDs.insert(cmdId)
+        issueOnlyFailure = nil
+        do {
+            let command = CommandPlaintext(
+                id: cmdId,
+                op: .issue,
+                sessionId: nil,
+                at: now,
+                title: trimmed,
+                estimatedSeconds: estimatedSeconds,
+                build: LocalWireBuild.current,
+                contract: ContractVersion.contract,
+                minReadable: ContractVersion.minReadable
+            )
+            try await post(command)
+        } catch {
+            pendingIssueIDs.remove(cmdId)
+            issueOnlyFailure = userFacing(error)
+        }
+    }
+
+    func noteIssueAck(_ ack: AckPlaintext) {
+        guard pendingIssueIDs.remove(ack.cmdId) != nil else { return }
+        guard !ack.ok else { return }
+        issueOnlyFailure = MenuBarPresentation.failureCopy(ack.error ?? .decryptFailed)
+    }
+
     func sendIssueAndBoard(title: String, estimatedSeconds: Int) async {
         if let blocked = ContractCompat.commandBlock(peer: peerContract, relay: relayContract, side: .mac) {
             lastStatus = blocked
@@ -303,7 +347,12 @@ extension CompanionMacRuntime {
             issueBoardTrack = .failed(.invalidPayload)
             return
         }
-        guard ImaYaruOffer.isAvailable(isPaired: isPaired, serviceActive: snap?.serviceActive) else {
+        guard isPaired,
+              ImaYaruOffer.canIssueAndBoard(
+                serviceActive: snap?.serviceActive == true,
+                timetableRide: ImaYaruOffer.isTimetableRide(snap)
+              )
+        else {
             issueBoardTrack = .failed(.noActiveService)
             return
         }

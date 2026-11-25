@@ -12,6 +12,8 @@ describe("op support", () => {
     expect(opAck("pauseInputReport", CONTRACT)).toBe("ok");
     expect(opAck("reestimate", CONTRACT)).toBe("ok");
     expect(opAck("undoReestimate", CONTRACT)).toBe("ok");
+    expect(opAck("issue", CONTRACT)).toBe("ok");
+    expect(opAck("issue", 16)).toBe("unsupportedOp");
   });
 
   it("returns unsupportedOp when the receiver contract predates the op", () => {

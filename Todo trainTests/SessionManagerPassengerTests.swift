@@ -6,6 +6,7 @@
 import Foundation
 import SwiftData
 import Testing
+import TodoTrainSync
 @testable import Todo_train
 
 @MainActor
@@ -276,6 +277,35 @@ struct SessionManagerPassengerTests {
         #expect(manager.activeSession?.startedFrom == .passengerAlight)
         #expect(manager.phase == .running)
         #expect(manager.punctualityMoment == nil)
+    }
+
+    @Test func issueWhileAboardSavesATicketAndLeavesThePassengerRide() throws {
+        let (manager, context, _, _) = try SessionManagerFixtures.makeHarness(now: start)
+        try manager.startService()
+        _ = insertBlock(context, duration: 1800)
+        manager.boardPassenger()
+        let rideID = manager.fetchOpenPassengerRide()?.id
+
+        let ack = try CompanionCommandApplying.apply(
+            CommandPlaintext(
+                id: UUID(),
+                op: .issue,
+                sessionId: nil,
+                at: 1,
+                title: "  メモ  ",
+                estimatedSeconds: 600
+            ),
+            sessionManager: manager
+        )
+        #expect(ack.ok)
+        #expect(manager.fetchOpenPassengerRide()?.id == rideID)
+        #expect(manager.activeSession == nil)
+        let open = try context.fetch(FetchDescriptor<Ticket>()).filter(\.isOpen)
+        #expect(open.map(\.title) == ["メモ"])
+
+        let snap = RideWireSnap.make(sessionManager: manager, settings: manager.settings, rev: 1, now: start)
+        #expect(snap.passengerAboard == true)
+        #expect(snap.phase == .idle)
     }
 
     private func clockAdvancePastDoor(_ manager: SessionManager) {

@@ -46,6 +46,9 @@ final class CompanionMacRuntime {
     var connection: ConnectionStatus = .disconnected
     var outgoingPause: OutgoingPauseState = .idle
     var issueBoardTrack: IssueBoardTrack = .idle
+    /// In-flight `issue` commands. A failure ack lands on `issueOnlyFailure`.
+    var pendingIssueIDs: Set<UUID> = []
+    var issueOnlyFailure: String?
     /// Hide the ride PiP while いまやる is in flight, so it appears under the dispensed ticket.
     var suppressRideOverlay = false
     var now = Int(Date().timeIntervalSince1970)
@@ -165,7 +168,7 @@ final class CompanionMacRuntime {
     }
 
     var canOfferImaYaru: Bool {
-        ImaYaruOffer.isAvailable(isPaired: isPaired, serviceActive: snap?.serviceActive)
+        ImaYaruOffer.isAvailable(isPaired: isPaired)
     }
 
     func openImaYaru() {

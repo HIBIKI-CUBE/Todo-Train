@@ -33,7 +33,8 @@ enum RideWireSnap {
             nudge: nudge.nudge,
             nudgePlan: nudge.plan,
             reserved: nudge.reserved,
-            openPendingCabin: nudge.pendingCabin
+            openPendingCabin: nudge.pendingCabin,
+            passengerAboard: sessionManager.fetchOpenPassengerRide() != nil
         )
         plaintext.build = LocalWireBuild.current
         plaintext.contract = ContractVersion.contract

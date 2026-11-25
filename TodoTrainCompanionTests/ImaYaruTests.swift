@@ -8,11 +8,66 @@ import TodoTrainTicketUI
 @testable import TodoTrainCompanion
 
 struct ImaYaruTests {
-    @Test func offerRequiresPairAndService() {
-        #expect(ImaYaruOffer.isAvailable(isPaired: true, serviceActive: true))
-        #expect(!ImaYaruOffer.isAvailable(isPaired: true, serviceActive: false))
-        #expect(!ImaYaruOffer.isAvailable(isPaired: true, serviceActive: nil))
-        #expect(!ImaYaruOffer.isAvailable(isPaired: false, serviceActive: true))
+    @Test func offerOpensWheneverPaired() {
+        #expect(ImaYaruOffer.isAvailable(isPaired: true))
+        #expect(!ImaYaruOffer.isAvailable(isPaired: false))
+    }
+
+    @Test func departNeedsServiceAndIsOffDuringATimetableRide() {
+        #expect(ImaYaruOffer.canIssueAndBoard(serviceActive: true, timetableRide: false))
+        #expect(!ImaYaruOffer.canIssueAndBoard(serviceActive: false, timetableRide: false))
+        #expect(!ImaYaruOffer.canIssueAndBoard(serviceActive: true, timetableRide: true))
+        #expect(ImaYaruOffer.isTimetableRide(nil) == false)
+
+        let passenger = SnapPlaintext(
+            rev: 1,
+            sessionId: nil,
+            ticketId: nil,
+            title: nil,
+            phase: .idle,
+            startedAt: nil,
+            estimatedSeconds: nil,
+            pausedAccumulated: nil,
+            pausedAt: nil,
+            boardedDeviceID: nil,
+            serviceActive: true,
+            passengerAboard: true
+        )
+        #expect(ImaYaruOffer.isTimetableRide(passenger))
+        #expect(!ImaYaruOffer.canIssueAndBoard(serviceActive: true, timetableRide: ImaYaruOffer.isTimetableRide(passenger)))
+
+        let held = SnapPlaintext(
+            rev: 2,
+            sessionId: UUID(),
+            ticketId: UUID(),
+            title: "会議",
+            phase: .paused,
+            startedAt: 1,
+            estimatedSeconds: 600,
+            pausedAccumulated: 0,
+            pausedAt: 2,
+            boardedDeviceID: nil,
+            serviceActive: true,
+            pauseHeldBy: .passenger
+        )
+        #expect(ImaYaruOffer.isTimetableRide(held))
+
+        let timetablePause = SnapPlaintext(
+            rev: 3,
+            sessionId: UUID(),
+            ticketId: UUID(),
+            title: "下書き",
+            phase: .paused,
+            startedAt: 1,
+            estimatedSeconds: 600,
+            pausedAccumulated: 0,
+            pausedAt: 2,
+            boardedDeviceID: nil,
+            serviceActive: true,
+            pauseHeldBy: .timetable
+        )
+        #expect(!ImaYaruOffer.isTimetableRide(timetablePause))
+        #expect(ImaYaruOffer.canIssueAndBoard(serviceActive: true, timetableRide: ImaYaruOffer.isTimetableRide(timetablePause)))
     }
 
     @Test func idleSnapDoesNotNameARide() {

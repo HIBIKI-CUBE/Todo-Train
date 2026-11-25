@@ -402,6 +402,79 @@ struct SessionManagerBoardingTests {
         #expect(parked.pauses.first?.heldByInferred == false)
     }
 
+    @Test func issue_appendsAnOpenTicketAndLeavesTheRide() throws {
+        let (manager, context, clock, _) = try SessionManagerFixtures.makeHarness()
+        let beforeService = try CompanionCommandApplying.apply(
+            issueCommand(title: "運行前", seconds: 600),
+            sessionManager: manager
+        )
+        #expect(beforeService.ok)
+        #expect(manager.phase == .idle)
+        #expect(manager.activeSession == nil)
+
+        try manager.startService()
+        let riding = try SessionManagerFixtures.makeTicket(context, title: "いま", seconds: 1500)
+        let reserved = try SessionManagerFixtures.makeTicket(context, title: "予約", seconds: 900)
+        try manager.board(ticket: riding)
+        try manager.reserveNextRide(ticket: reserved, via: .arrivalScreen)
+        let rideID = manager.activeSession?.id
+        let reservedAt = reserved.reservedAt
+        clock.advance(by: 30)
+
+        let ack = try CompanionCommandApplying.apply(
+            issueCommand(title: "  あとで  ", seconds: 1500),
+            sessionManager: manager
+        )
+        #expect(ack.ok)
+        #expect(ack.error == nil)
+        #expect(manager.phase == .running)
+        #expect(manager.activeSession?.id == rideID)
+        #expect(manager.activeSession?.ticket?.id == riding.id)
+        #expect(riding.reservedAt == nil)
+        #expect(reserved.reservedAt == reservedAt)
+        #expect(manager.reservedNextTicket()?.id == reserved.id)
+
+        let open = try context.fetch(FetchDescriptor<Ticket>(sortBy: [SortDescriptor(\.sortOrder)]))
+            .filter(\.isOpen)
+        let saved = try #require(open.last)
+        #expect(saved.title == "あとで")
+        #expect(saved.estimatedSeconds == 1500)
+        #expect(saved.id != riding.id)
+        #expect(saved.sortOrder > riding.sortOrder)
+        #expect(open.map(\.title).contains("運行前"))
+    }
+
+    @Test func issue_rejectsInvalidPayloadWithoutWriting() throws {
+        let (manager, context, _, _) = try SessionManagerFixtures.makeHarness()
+        try manager.startService()
+        let riding = try SessionManagerFixtures.makeTicket(context, title: "いま")
+        try manager.board(ticket: riding)
+        let before = try context.fetch(FetchDescriptor<Ticket>()).count
+
+        let blank = try CompanionCommandApplying.apply(
+            issueCommand(title: "   ", seconds: 600),
+            sessionManager: manager
+        )
+        #expect(blank.ok == false)
+        #expect(blank.error == .invalidPayload)
+
+        let short = try CompanionCommandApplying.apply(
+            issueCommand(title: "短い", seconds: 59),
+            sessionManager: manager
+        )
+        #expect(short.error == .invalidPayload)
+
+        let withSession = try CompanionCommandApplying.apply(
+            issueCommand(title: "乗務", seconds: 600, sessionId: manager.activeSession?.id),
+            sessionManager: manager
+        )
+        #expect(withSession.error == .invalidPayload)
+
+        #expect(try context.fetch(FetchDescriptor<Ticket>()).count == before)
+        #expect(manager.phase == .running)
+        #expect(manager.activeSession?.ticket?.id == riding.id)
+    }
+
     @Test func issueAndBoard_refusesWithoutService() throws {
         let (manager, _, _, _) = try SessionManagerFixtures.makeHarness()
         #expect(throws: SessionError.noActiveService) {
@@ -610,5 +683,16 @@ struct SessionManagerBoardingTests {
         #expect(ack.ok == true)
         #expect(manager.phase == .running)
         #expect(manager.activeSession?.ticket?.id == first.id)
+    }
+
+    private func issueCommand(title: String, seconds: Int, sessionId: UUID? = nil) -> CommandPlaintext {
+        CommandPlaintext(
+            id: UUID(),
+            op: .issue,
+            sessionId: sessionId,
+            at: 1,
+            title: title,
+            estimatedSeconds: seconds
+        )
     }
 }

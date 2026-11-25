@@ -49,6 +49,7 @@ final class ImaYaruPanelController {
         dispensing = false
         stopSlide()
         runtime.issueBoardTrack = .idle
+        runtime.issueOnlyFailure = nil
         runtime.suppressRideOverlay = false
         ticketPanel.orderOut(nil)
         showForm(notice: nil)

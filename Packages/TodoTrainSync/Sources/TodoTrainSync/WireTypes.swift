@@ -27,6 +27,8 @@ public enum WireOp: Sendable, Equatable {
     case still
     /// Issue a ticket and board it in one beat. Not arrive/extend.
     case issueAndBoard
+    /// Save a ticket and do not board. `sessionId` is null.
+    case issue
     /// Reply to the nudge on the snap. Not arrive/extend.
     case answer
     /// Board the ticket in `snap.reserved`. `sessionId` is null.
@@ -48,6 +50,7 @@ public enum WireOp: Sendable, Equatable {
         case .answer, .boardReserved, .presence: 5
         case .pauseInputReport: 12
         case .reestimate, .undoReestimate: 15
+        case .issue: 17
         case .unknown: nil
         }
     }
@@ -58,6 +61,7 @@ public enum WireOp: Sendable, Equatable {
         case .resume: "resume"
         case .still: "still"
         case .issueAndBoard: "issueAndBoard"
+        case .issue: "issue"
         case .answer: "answer"
         case .boardReserved: "boardReserved"
         case .presence: "presence"
@@ -74,6 +78,7 @@ public enum WireOp: Sendable, Equatable {
         case "resume": self = .resume
         case "still": self = .still
         case "issueAndBoard": self = .issueAndBoard
+        case "issue": self = .issue
         case "answer": self = .answer
         case "boardReserved": self = .boardReserved
         case "presence": self = .presence
@@ -103,7 +108,7 @@ public enum WireError: String, Codable, Sendable, Equatable {
     case sessionMismatch
     case decryptFailed
     case notPaused
-    /// Empty title, estimatedSeconds outside 60...3600, `addSeconds` outside the extend presets, or `pause.heldBy` other than `user` or `timetable`.
+    /// Empty title, estimatedSeconds outside 60...3600, `issue` with a sessionId, `addSeconds` outside the extend presets, or `pause.heldBy` other than `user` or `timetable`.
     case invalidPayload
     /// The receiver does not implement this `op`, or its contract predates the op.
     case unsupportedOp

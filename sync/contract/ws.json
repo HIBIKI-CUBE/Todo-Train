@@ -33,7 +33,7 @@
   "hello": {
     "client": { "t": "hello", "contract": 4, "minReadable": 3 },
     "clientWithRole": { "t": "hello", "contract": 16, "minReadable": 3, "role": "iphone" },
-    "relay": { "t": "hello", "contract": 16, "minReadable": 3 },
+    "relay": { "t": "hello", "contract": 17, "minReadable": 3 },
     "role": ["iphone", "mac"]
   },
   "control": {

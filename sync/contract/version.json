@@ -1,7 +1,7 @@
 {
-  "contract": 16,
+  "contract": 17,
   "minReadable": 3,
-  "fingerprint": "99e83e1c256842d0a96fb3d3fe51508a4150a7d14e12a1f82f472918fd06de20",
+  "fingerprint": "f336c654552287d474041f58d003dfef732949c8103e1b27b2b82d4cf1f61bab",
   "history": [
     {
       "contract": 3,
@@ -72,6 +72,11 @@
       "contract": 16,
       "date": "2026-11-19",
       "note": "WebSocket の ping・pong・echo と hello の role を足す"
+    },
+    {
+      "contract": 17,
+      "date": "2026-11-25",
+      "note": "発券だけの op issue を足す"
     }
   ]
 }

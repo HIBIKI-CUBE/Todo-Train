@@ -61,3 +61,45 @@ public enum IssueAndBoardEvaluating {
         return AckPlaintext(cmdId: commandId, ok: false, error: decision.wireError)
     }
 }
+
+public enum IssueDecision: Equatable, Sendable {
+    case save
+    case invalidPayload
+    case unsupportedOp
+
+    public var wireError: WireError? {
+        switch self {
+        case .save: nil
+        case .invalidPayload: .invalidPayload
+        case .unsupportedOp: .unsupportedOp
+        }
+    }
+}
+
+/// Pure gate for `op: issue`. Saves a ticket and does not board.
+public enum IssueEvaluating {
+    public static func evaluate(
+        command: CommandPlaintext,
+        receiverContract: Int = ContractVersion.contract
+    ) -> IssueDecision {
+        guard command.op == .issue else { return .invalidPayload }
+        if NudgeCommandEvaluating.versionGate(op: command.op, receiverContract: receiverContract) != nil {
+            return .unsupportedOp
+        }
+        guard command.sessionId == nil else { return .invalidPayload }
+        guard let title = command.title,
+              let seconds = command.estimatedSeconds,
+              IssueAndBoardEvaluating.isValid(title: title, estimatedSeconds: seconds)
+        else {
+            return .invalidPayload
+        }
+        return .save
+    }
+
+    public static func ack(decision: IssueDecision, commandId: UUID) -> AckPlaintext {
+        if decision == .save {
+            return AckPlaintext(cmdId: commandId, ok: true)
+        }
+        return AckPlaintext(cmdId: commandId, ok: false, error: decision.wireError)
+    }
+}
