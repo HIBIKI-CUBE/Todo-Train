@@ -86,7 +86,9 @@ struct CompanionRideOverlayView: View {
     private var rideDigitAreaHeight: CGFloat {
         switch pipColumnLayout {
         case .classicExpanded:
-            Self.classicExpandedInstrumentHeight
+            showsRideBand
+                ? Self.classicExpandedInstrumentHeight - Self.bottomBandHeight
+                : Self.classicExpandedInstrumentHeight
         case .classicCompact:
             Self.bottomBandHeight
         case .reestimate:
@@ -106,11 +108,13 @@ struct CompanionRideOverlayView: View {
         pipColumnLayout == .classicExpanded ? Self.classicTitleBandHeight : 44
     }
 
+    /// Hover and the five-second undo keep the normal ride. The band sits under the digits.
     private var usesClassicExpandedLayout: Bool {
-        presentation.cabinPrompt == nil
-            && model.reestimateUndoUntil == nil
-            && !showsCabinActions
-            && !showsAction
+        presentation.cabinPrompt == nil && !showsCabinActions
+    }
+
+    private var showsRideBand: Bool {
+        activeBand == nil && (model.reestimateUndoUntil != nil || showsAction)
     }
 
     private var pipMotionAnimation: Animation? {
@@ -339,8 +343,25 @@ struct CompanionRideOverlayView: View {
             classicFailureLine
             rideProgressInstrument(digitAreaHeight: rideDigitAreaHeight)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+            if showsRideBand {
+                rideBand
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .animation(pipMotionAnimation, value: showsRideBand)
+    }
+
+    private var rideBand: some View {
+        Group {
+            if model.reestimateUndoUntil != nil {
+                undoRow
+            } else {
+                actionRow
+            }
+        }
+        .frame(height: Self.bottomBandHeight)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(bottomAccessibilityLabel)
     }
 
     private var classicCompactColumn: some View {
