@@ -247,6 +247,30 @@ struct ImaYaruTests {
         #expect(ImaYaruRelease.keyboard(commandReturn: false, gate: .open, canIssue: true) == .save)
     }
 
+    @Test func emptyTitleRefusesBothMouthsAndSaveCloses() {
+        #expect(ImaYaruRelease.resolve(choice: .save, gate: .open, canIssue: false) == .deny)
+        #expect(ImaYaruRelease.resolve(choice: .depart, gate: .open, canIssue: false) == .deny)
+        #expect(ImaYaruRelease.resolve(choice: .depart, gate: .aboardCalendar, canIssue: false) == .deny)
+        #expect(ImaYaruRelease.resolve(choice: .neutral, gate: .open, canIssue: false) == .none)
+        #expect(ImaYaruRelease.resolve(choice: .click, gate: .open, canIssue: false) == .close)
+        #expect(ImaYaruRelease.resolve(arm: .save, gate: .open, canIssue: false) == .deny)
+        #expect(ImaYaruRelease.resolve(arm: .depart, gate: .open, canIssue: false) == .deny)
+        #expect(ImaYaruRelease.resolve(arm: .blocked, gate: .open, canIssue: false) == .deny)
+        #expect(ImaYaruRelease.keyboard(commandReturn: false, gate: .open, canIssue: false) == .deny)
+        #expect(ImaYaruRelease.keyboard(commandReturn: true, gate: .open, canIssue: false) == .deny)
+        #expect(ImaYaruRelease.keyboard(commandReturn: true, gate: .beforeService, canIssue: false) == .deny)
+        #expect(ImaYaruFlick.arm(dx: 90, dy: 0, current: .none, departEnabled: true, canIssue: false) == .blocked)
+        #expect(ImaYaruFlick.arm(dx: -90, dy: 0, current: .none, departEnabled: true, canIssue: false) == .blocked)
+        #expect(ImaYaruFlick.arm(dx: 90, dy: 0, current: .none, departEnabled: true, canIssue: true) == .depart)
+        #expect(ImaYaruFlick.arm(dx: -90, dy: 0, current: .none, departEnabled: false, canIssue: true) == .save)
+        #expect(ImaYaruCopy.needsTitle == "題名を入れてください")
+        #expect(ImaYaruDismissal.closeAfterSaveFlight(failure: nil))
+        #expect(!ImaYaruDismissal.closeAfterSaveFlight(failure: "届きませんでした"))
+        let fitted = ImaYaruMachineMetrics.fitted(ticket: ImaYaruTicketMetrics.size)
+        #expect(abs(fitted.pt(ImaYaruMachineMetrics.mockWidth) - fitted.body.width) < 0.01)
+        #expect(fitted.pt(17) > 17)
+    }
+
     @Test func machineGrowsToTheTicket() {
         let ticket = ImaYaruTicketMetrics.size
         #expect(ticket.width == ImaYaruTicketMetrics.width)
@@ -344,6 +368,9 @@ struct ImaYaruTests {
         try render("depart-disabled-calendar.png", ImaYaruSnapshotHost.picture(
             stage: stage, ticket: ticket, center: center, title: "資料の下書き", gate: .aboardCalendar, arm: .none
         ))
+        try render("depart-empty-title.png", ImaYaruSnapshotHost.picture(
+            stage: stage, ticket: ticket, center: center, title: "", gate: .open, arm: .none, needsTitle: true
+        ))
 
         let mouth = center.x + ImaYaruMachineMetrics.fitted(ticket: ticket).body.width / 2
         let geometry = ImaYaruFlightGeometry(
@@ -408,7 +435,8 @@ private struct ImaYaruSnapshotHost: View {
         title: String,
         gate: ImaYaruDepartGate,
         arm: ImaYaruArm,
-        catapult: Bool = false
+        catapult: Bool = false,
+        needsTitle: Bool = false
     ) -> ImaYaruStagePicture {
         let mouth = center.x + ImaYaruMachineMetrics.fitted(ticket: ticket).body.width / 2
         let length = ImaYaruFlight.railLength(stageWidth: stage.width, mouthX: mouth)
@@ -416,6 +444,7 @@ private struct ImaYaruSnapshotHost: View {
             ticketTitle: title,
             minutes: 30,
             gate: gate,
+            needsTitle: needsTitle,
             arm: arm,
             departCharge: arm == .depart ? 1 : 0,
             saveCharge: arm == .save ? 1 : 0,
@@ -501,13 +530,19 @@ private struct ImaYaruSnapshotHost: View {
         return data
     }
 
+    /// Point size stays the stage. Pixels are 2× so the type is not a softened 1× raster.
+    static let captureScale: CGFloat = 2
+
     static func image<V: View>(_ view: V, size: CGSize) throws -> NSImage {
         let renderer = ImageRenderer(content: view)
-        renderer.scale = 1
+        renderer.scale = captureScale
         renderer.proposedSize = ProposedViewSize(width: size.width, height: size.height)
-        guard let image = renderer.nsImage else {
+        guard let cgImage = renderer.cgImage else {
             throw CocoaError(.fileWriteUnknown)
         }
+        let rep = NSBitmapImageRep(cgImage: cgImage)
+        let image = NSImage(size: NSSize(width: cgImage.width, height: cgImage.height))
+        image.addRepresentation(rep)
         return image
     }
 

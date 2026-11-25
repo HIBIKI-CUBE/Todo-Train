@@ -16,6 +16,7 @@ struct ImaYaruFormView: View {
     var ticketSize: CGSize
     var menuAnchor: CGPoint
     var scrollBridge: ImaYaruScrollBridge
+    var focusBridge: ImaYaruFocusBridge
     var onDispense: (_ title: String, _ minutes: Int, _ priorSessionId: UUID?) -> Void
     var onClose: () -> Void
 
@@ -86,7 +87,8 @@ struct ImaYaruFormView: View {
     }
 
     var body: some View {
-        ImaYaruStageView(
+        let focusToken = focusBridge.token
+        return ImaYaruStageView(
             title: $title,
             picture: picture,
             interactive: phase == .editing && flight == nil,
@@ -119,7 +121,7 @@ struct ImaYaruFormView: View {
             if notice == nil {
                 notice = initialNotice
             }
-            titleFocused = true
+            focusTitle()
             scrollBridge.onScroll = { dx, dy, phase in
                 ingestScroll(dx: dx, dy: dy, phase: phase)
             }
@@ -134,8 +136,16 @@ struct ImaYaruFormView: View {
         .onChange(of: runtime.snap) { _, _ in
             noteProgress()
         }
+        .onChange(of: focusToken) { _, _ in
+            focusTitle()
+        }
         .onChange(of: runtime.issueOnlyFailure) { _, failure in
-            guard phase == .editing, flight == nil, let failure else { return }
+            guard let failure else { return }
+            if flight?.kind == .save {
+                abortSave(notice: failure)
+                return
+            }
+            guard phase == .editing, flight == nil else { return }
             notice = failure
         }
         .onReceive(NotificationCenter.default.publisher(for: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification)) { _ in
@@ -144,12 +154,17 @@ struct ImaYaruFormView: View {
         .onExitCommand(perform: onClose)
         .onKeyPress(.leftArrow) {
             guard phase == .editing, flight == nil, !titleFocused else { return .ignored }
-            setArm(.save, departCharge: 0, saveCharge: 1)
+            if canIssue {
+                setArm(.save, departCharge: 0, saveCharge: 1)
+            } else {
+                setArm(.blocked, departCharge: 0, saveCharge: 0)
+                shake = 1
+            }
             return .handled
         }
         .onKeyPress(.rightArrow) {
             guard phase == .editing, flight == nil, !titleFocused else { return .ignored }
-            if gate.departEnabled {
+            if canDepart {
                 setArm(.depart, departCharge: 1, saveCharge: 0)
             } else {
                 setArm(.blocked, departCharge: 0, saveCharge: 0)
@@ -208,6 +223,7 @@ struct ImaYaruFormView: View {
             ticketTitle: flying ? (flight?.title ?? title) : title,
             minutes: flying ? (flight?.minutes ?? minutes) : minutes,
             gate: gate,
+            needsTitle: !canIssue && flight == nil,
             arm: arm,
             departCharge: departCharge,
             saveCharge: saveCharge,
@@ -222,7 +238,7 @@ struct ImaYaruFormView: View {
             machineCenter: center,
             mouthX: mouth,
             flightDirection: showTicket ? (direction == 0 ? 1 : direction) : 0,
-            catapult: catapult(mouthIsLive: gate.departEnabled),
+            catapult: catapult(mouthIsLive: canDepart),
             notice: notice,
             reduceMotion: reduceMotion,
             stageSize: stageSize,
@@ -334,14 +350,19 @@ struct ImaYaruFormView: View {
     private func preview(_ choice: ImaYaruChoice) {
         switch choice {
         case .depart:
-            if gate.departEnabled {
+            if canDepart {
                 setArm(.depart, departCharge: 1, saveCharge: 0)
             } else if arm != .blocked {
                 setArm(.blocked, departCharge: 0, saveCharge: 0)
                 shake = 1
             }
         case .save:
-            setArm(.save, departCharge: 0, saveCharge: 1)
+            if canIssue {
+                setArm(.save, departCharge: 0, saveCharge: 1)
+            } else if arm != .blocked {
+                setArm(.blocked, departCharge: 0, saveCharge: 0)
+                shake = 1
+            }
         case .neutral, .click:
             if arm != .none {
                 arm = .none
@@ -392,7 +413,8 @@ struct ImaYaruFormView: View {
                 dx: strokeX,
                 dy: strokeY,
                 current: arm,
-                departEnabled: gate.departEnabled
+                departEnabled: gate.departEnabled,
+                canIssue: canIssue
             )
             let amount = ImaYaruFlick.charge(dx: strokeX, dy: strokeY)
             if strokeX >= 0 {
@@ -456,9 +478,7 @@ struct ImaYaruFormView: View {
         let trimmed = trimmedTitle
         let issuedMinutes = minutes
         let seconds = issuedMinutes * 60
-        title = ""
         notice = nil
-        titleFocused = true
         beginFlight(.save, title: trimmed, minutes: issuedMinutes)
         Task { await runtime.sendIssue(title: trimmed, estimatedSeconds: seconds) }
     }
@@ -527,15 +547,43 @@ struct ImaYaruFormView: View {
         if frame.finished, !flightDone {
             flightDone = true
             if flight.kind == .save {
-                self.flight = nil
-                flightFrame = nil
-                flightDone = false
-                clearAim()
-                titleFocused = true
+                finishSaveFlight()
             } else {
                 finishDepartIfReady()
             }
         }
+    }
+
+    /// Title field, once the panel is key. Present re-applies this on the next turn.
+    private func focusTitle() {
+        guard phase == .editing, flight == nil else { return }
+        let focused = $titleFocused
+        focused.wrappedValue = false
+        DispatchQueue.main.async {
+            focused.wrappedValue = true
+            DispatchQueue.main.async {
+                guard let window = NSApp.keyWindow as? ImaYaruFormPanel else { return }
+                guard let field = ImaYaruFocus.editableField(in: window.contentView) else { return }
+                window.makeFirstResponder(field)
+            }
+        }
+    }
+
+    private func finishSaveFlight() {
+        if ImaYaruDismissal.closeAfterSaveFlight(failure: runtime.issueOnlyFailure) {
+            onClose()
+        } else if let failure = runtime.issueOnlyFailure {
+            abortSave(notice: failure)
+        }
+    }
+
+    private func abortSave(notice failure: String) {
+        flight = nil
+        flightFrame = nil
+        flightDone = false
+        clearAim()
+        notice = failure
+        focusTitle()
     }
 
     private func noteProgress() {

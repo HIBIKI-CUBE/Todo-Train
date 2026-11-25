@@ -12,6 +12,7 @@ final class ImaYaruPanelController {
     private let revealRide: () -> Void
     private let formPanel: NSPanel
     private let scrollBridge = ImaYaruScrollBridge()
+    private let focusBridge = ImaYaruFocusBridge()
     private var scrollMonitor: Any?
     private var alive = false
 
@@ -62,6 +63,7 @@ final class ImaYaruPanelController {
             ticketSize: ticket,
             menuAnchor: menuAnchor(on: screen),
             scrollBridge: scrollBridge,
+            focusBridge: focusBridge,
             onDispense: { [weak self] _, _, _ in
                 self?.completeDepart()
             },
@@ -76,6 +78,12 @@ final class ImaYaruPanelController {
         NSApp.activate(ignoringOtherApps: true)
         formPanel.orderFrontRegardless()
         formPanel.makeKey()
+        // Activation and makeKey settle on the next turn. Focus after that, every present.
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.alive, self.formPanel.isVisible else { return }
+            self.formPanel.makeKey()
+            self.focusBridge.reapply()
+        }
     }
 
     private func completeDepart() {
@@ -173,4 +181,28 @@ final class ImaYaruPanelController {
 final class ImaYaruFormPanel: NSPanel {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
+}
+
+@MainActor
+@Observable
+final class ImaYaruFocusBridge {
+    private(set) var token = 0
+
+    /// Bump on every present so the title field takes focus again.
+    func reapply() {
+        token &+= 1
+    }
+}
+
+enum ImaYaruFocus {
+    static func editableField(in view: NSView?) -> NSTextField? {
+        guard let view else { return nil }
+        if let field = view as? NSTextField, field.isEditable, !field.isHidden {
+            return field
+        }
+        for subview in view.subviews {
+            if let found = editableField(in: subview) { return found }
+        }
+        return nil
+    }
 }

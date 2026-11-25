@@ -101,15 +101,15 @@ enum ImaYaruRelease {
             if gate == .aboardCalendar, canIssue { return .save }
             return .none
         case .save:
-            return canIssue ? .save : .none
+            return canIssue ? .save : .deny
         case .depart:
             switch gate {
             case .open:
-                return canIssue ? .depart : .none
+                return canIssue ? .depart : .deny
             case .beforeService:
                 return .deny
             case .aboardCalendar:
-                return canIssue ? .save : .none
+                return canIssue ? .save : .deny
             }
         }
     }
@@ -124,36 +124,49 @@ enum ImaYaruRelease {
         case .none:
             return .none
         case .save:
-            return canIssue ? .save : .none
+            return canIssue ? .save : .deny
         case .blocked:
             return .deny
         case .depart:
             switch gate {
             case .open:
-                return canIssue ? .depart : .none
+                return canIssue ? .depart : .deny
             case .beforeService:
                 return .deny
             case .aboardCalendar:
-                return canIssue ? .save : .none
+                return canIssue ? .save : .deny
             }
         }
     }
 
     /// Return saves. ⌘Return departs, and saves when the right slit is closed.
+    /// An empty title refuses both, the same as a closed depart slit.
     static func keyboard(
         commandReturn: Bool,
         gate: ImaYaruDepartGate,
         canIssue: Bool
     ) -> ImaYaruReleaseAction {
-        guard canIssue else {
-            if commandReturn, gate == .beforeService { return .deny }
-            return .none
-        }
+        guard canIssue else { return .deny }
         if !commandReturn { return .save }
         switch gate {
         case .open: return .depart
         case .beforeService, .aboardCalendar: return .save
         }
+    }
+}
+
+enum ImaYaruCopy {
+    /// Same words as the iPhone empty-title error.
+    static let needsTitle = "題名を入れてください"
+    static let needsTitleToDepart = "題名を入れると発車できます"
+    static let needsTitleToIssue = "題名を入れると発行できます"
+}
+
+enum ImaYaruDismissal {
+    /// A save that got out closes the panel once its flight has played.
+    /// A failure keeps the form open.
+    static func closeAfterSaveFlight(failure: String?) -> Bool {
+        failure == nil
     }
 }
 
@@ -215,7 +228,8 @@ enum ImaYaruFlick {
         dx: CGFloat,
         dy: CGFloat,
         current: ImaYaruArm,
-        departEnabled: Bool
+        departEnabled: Bool,
+        canIssue: Bool
     ) -> ImaYaruArm {
         let ax = abs(dx)
         let ay = abs(dy)
@@ -234,7 +248,8 @@ enum ImaYaruFlick {
         if want == .none, ax >= threshold, ax >= ratioOn * ay {
             want = dir > 0 ? .depart : .save
         }
-        if want == .depart, !departEnabled { return .blocked }
+        if want == .depart, !departEnabled || !canIssue { return .blocked }
+        if want == .save, !canIssue { return .blocked }
         return want
     }
 
@@ -250,6 +265,7 @@ enum ImaYaruFlick {
 /// The f20 machine, scaled so the mouth matches the ticket.
 /// In the mock the mouth is 80% of the body and the body is 300×158,
 /// so the body stays a little taller than the ticket and the ports sit inside it.
+/// `pt` is a mock length at final size. Draw with it. A scaleEffect upscales the raster.
 struct ImaYaruMachineMetrics: Equatable, Sendable {
     static let mockWidth: CGFloat = 300
     static let mockHeight: CGFloat = 158
@@ -276,6 +292,9 @@ struct ImaYaruMachineMetrics: Equatable, Sendable {
             scale: scale
         )
     }
+
+    /// Mock points, in the size the machine is actually drawn.
+    func pt(_ mock: CGFloat) -> CGFloat { mock * scale }
 
     /// Same framing as the mock stage, after the machine has been scaled to `ticket`.
     static func stage(ticket: CGSize) -> CGSize {
