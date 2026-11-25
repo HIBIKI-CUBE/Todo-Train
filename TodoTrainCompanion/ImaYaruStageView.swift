@@ -71,14 +71,14 @@ struct ImaYaruStageView: View {
             }
             if let notice = picture.notice {
                 Text(notice)
-                    .font(.callout)
+                    .font(.system(size: ImaYaruTicketMetrics.pt(16)))
                     .foregroundStyle(.white)
-                    .outlined()
+                    .outlined(weight: ImaYaruTicketMetrics.pt(1))
                     .multilineTextAlignment(.center)
-                    .frame(width: 360)
+                    .frame(width: ImaYaruTicketMetrics.pt(360))
                     .position(
                         x: picture.machineCenter.x,
-                        y: picture.machineCenter.y + picture.ticketSize.height / 2 + 36
+                        y: picture.machineCenter.y + picture.ticketSize.height / 2 + ImaYaruTicketMetrics.pt(36)
                     )
                     .allowsHitTesting(false)
             }
@@ -90,16 +90,18 @@ struct ImaYaruStageView: View {
     private var ticket: some View {
         let size = picture.ticketSize
         let reveal = picture.printReveal
+        let corner = ImaYaruTicketMetrics.pt(MarsTicketSpec.cornerRadius)
         return ZStack(alignment: .top) {
-            RoundedRectangle(cornerRadius: MarsTicketSpec.cornerRadius, style: .continuous)
+            RoundedRectangle(cornerRadius: corner, style: .continuous)
                 .fill(MarsTicketSpec.paper)
                 .overlay(
-                    RoundedRectangle(cornerRadius: MarsTicketSpec.cornerRadius, style: .continuous)
-                        .strokeBorder(MarsTicketSpec.printInk.opacity(0.18), lineWidth: 0.5)
+                    RoundedRectangle(cornerRadius: corner, style: .continuous)
+                        .strokeBorder(MarsTicketSpec.printInk.opacity(0.18), lineWidth: ImaYaruTicketMetrics.pt(0.5))
                 )
             MarsTicketView(
                 content: MarsTicketContent(title: picture.ticketTitle, minutes: max(picture.minutes, 1)),
-                titleReveal: 1
+                titleReveal: 1,
+                metricsScale: ImaYaruTicketMetrics.assemblyScale
             )
             .frame(width: size.width, height: size.height)
             .mask(alignment: .top) {
@@ -446,6 +448,9 @@ struct ImaYaruCatapultCanvas: View {
     var body: some View {
         let gap = ImaYaruFlight.railGap
         let height = ticketHeight + gap * 2
+        let railWeight = ImaYaruTicketMetrics.pt(2)
+        let scanWeight = ImaYaruTicketMetrics.pt(1)
+        let overlap = ImaYaruTicketMetrics.pt(0.6)
         Canvas { context, _ in
             let length = picture.length
             let count = ImaYaruFlight.railSegments
@@ -464,13 +469,14 @@ struct ImaYaruCatapultCanvas: View {
                 )
                 guard alpha > 0.01 else { continue }
                 let x = CGFloat(index) * segment
-                let rail = Path(CGRect(x: x, y: 0, width: segment + 0.6, height: 2))
-                let lower = Path(CGRect(x: x, y: height - 2, width: segment + 0.6, height: 2))
+                let rail = Path(CGRect(x: x, y: 0, width: segment + overlap, height: railWeight))
+                let lower = Path(CGRect(x: x, y: height - railWeight, width: segment + overlap, height: railWeight))
                 context.fill(rail, with: .color(ink.opacity(alpha)))
                 context.fill(lower, with: .color(ink.opacity(alpha)))
                 if index % 2 == 0 {
-                    let scan = Path(CGRect(x: x, y: 4, width: segment, height: 1))
-                    let scanLower = Path(CGRect(x: x, y: height - 5, width: segment, height: 1))
+                    let scanY = ImaYaruTicketMetrics.pt(4)
+                    let scan = Path(CGRect(x: x, y: scanY, width: segment, height: scanWeight))
+                    let scanLower = Path(CGRect(x: x, y: height - scanY - scanWeight, width: segment, height: scanWeight))
                     context.fill(scan, with: .color(ink.opacity(alpha * 0.35)))
                     context.fill(scanLower, with: .color(ink.opacity(alpha * 0.35)))
                 }
@@ -480,9 +486,11 @@ struct ImaYaruCatapultCanvas: View {
             let head = chevronHeight * 0.3
             let pitch = thickness * 1.8
             let midY = height / 2
+            let chevronInset = ImaYaruTicketMetrics.pt(14)
+            let chevronEnd = ImaYaruTicketMetrics.pt(4)
             for index in 0..<ImaYaruFlight.chevronCount {
-                let origin = 14 + CGFloat(index) * pitch
-                guard origin + thickness + head <= length - 4 else { continue }
+                let origin = chevronInset + CGFloat(index) * pitch
+                guard origin + thickness + head <= length - chevronEnd else { continue }
                 let alpha = ImaYaruCatapult.chevronOpacity(
                     index: index,
                     charge: picture.charge,

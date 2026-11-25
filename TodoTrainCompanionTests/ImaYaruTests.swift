@@ -271,6 +271,23 @@ struct ImaYaruTests {
         #expect(fitted.pt(17) > 17)
     }
 
+    @Test func assemblyIsEightyPercentOfThePreviousTicket() {
+        #expect(ImaYaruTicketMetrics.width == 208)
+        let previous = CGSize(width: 260, height: MarsTicketSpec.height(forWidth: 260))
+        let fitted = ImaYaruMachineMetrics.fitted(ticket: ImaYaruTicketMetrics.size)
+        let full = ImaYaruMachineMetrics.fitted(ticket: previous)
+        #expect(abs(fitted.body.width / full.body.width - 0.8) < 0.001)
+        #expect(abs(fitted.body.height / full.body.height - 0.8) < 0.001)
+        #expect(abs(fitted.scale / full.scale - 0.8) < 0.001)
+        #expect(abs(fitted.pt(17) / full.pt(17) - 0.8) < 0.001)
+        let stage = ImaYaruMachineMetrics.stage(ticket: ImaYaruTicketMetrics.size)
+        let fullStage = ImaYaruMachineMetrics.stage(ticket: previous)
+        #expect(abs(stage.width / fullStage.width - 0.8) < 0.001)
+        #expect(abs(stage.height / fullStage.height - 0.8) < 0.001)
+        #expect(abs(ImaYaruFlight.railGap / 5 - 0.8) < 0.001)
+        #expect(abs(ImaYaruFlight.waveSpacing / 110 - 0.8) < 0.001)
+    }
+
     @Test func machineGrowsToTheTicket() {
         let ticket = ImaYaruTicketMetrics.size
         #expect(ticket.width == ImaYaruTicketMetrics.width)
@@ -376,8 +393,8 @@ struct ImaYaruTests {
         let geometry = ImaYaruFlightGeometry(
             ticketSize: ticket,
             origin: CGPoint(x: mouth - ticket.width / 2, y: center.y),
-            destination: CGPoint(x: stage.width + ticket.width / 2 + 16, y: center.y),
-            machineClearance: mouth + 16,
+            destination: CGPoint(x: stage.width + ticket.width / 2 + ImaYaruTicketMetrics.pt(16), y: center.y),
+            machineClearance: mouth + ImaYaruTicketMetrics.pt(16),
             direction: 1
         )
         let times: [Double] = [80, 240, 420, 680]

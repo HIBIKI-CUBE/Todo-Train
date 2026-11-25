@@ -308,11 +308,21 @@ struct ImaYaruMachineMetrics: Equatable, Sendable {
 
 /// One laptop size for the ticket, the machine, and the rails.
 /// Width is the constant. Height follows the Mars face, and the machine follows the mock.
+/// 208pt is 0.8 of the previous 260pt assembly. Stage-space lengths use `pt` so they follow the width.
 enum ImaYaruTicketMetrics {
-    static let width: CGFloat = 260
+    static let width: CGFloat = 208
+    private static let referenceWidth: CGFloat = 260
 
     static var size: CGSize {
         CGSize(width: width, height: MarsTicketSpec.height(forWidth: width))
+    }
+
+    /// 1 at the old 260pt ticket. The face, rails, and flight pads use this.
+    static var assemblyScale: CGFloat { width / referenceWidth }
+
+    /// A length tuned when the ticket was 260pt, at the current width.
+    static func pt(_ reference: CGFloat) -> CGFloat {
+        reference * assemblyScale
     }
 }
 
@@ -340,16 +350,19 @@ enum ImaYaruFlight {
     static let machineDrift: Double = 0.15
     static let blinkHalfMs: Double = 70
     static let machineInMs: Double = 300
-    static let waveSpacing: CGFloat = 110
-    static let railGap: CGFloat = 5
+    static var waveSpacing: CGFloat { ImaYaruTicketMetrics.pt(110) }
+    static var railGap: CGFloat { ImaYaruTicketMetrics.pt(5) }
     static let railSegments: Int = 64
     static let chevronCount: Int = 16
-    static let chevronPitch: CGFloat = 9
+    static var chevronPitch: CGFloat { ImaYaruTicketMetrics.pt(9) }
+    /// Mock points. The slit offset multiplies this by the machine scale.
     static let slotPush: CGFloat = 6
 
     /// Guide rail. 1.4× the room past the mouth, same as the mock. Never capped.
     static func railLength(stageWidth: CGFloat, mouthX: CGFloat) -> CGFloat {
-        max(80, (stageWidth - mouthX - 8) * 1.4)
+        let margin = ImaYaruTicketMetrics.pt(8)
+        let floor = ImaYaruTicketMetrics.pt(80)
+        return max(floor, (stageWidth - mouthX - margin) * 1.4)
     }
     static let lightSeconds: Double = 0.12
 
@@ -413,9 +426,9 @@ extension ImaYaruFlight {
         let tau = max(0, tauMs)
         let direction = geometry.direction >= 0 ? 1.0 : -1.0
         let width = Double(geometry.ticketSize.width)
-        let depth = width + 20
+        let depth = width + Double(ImaYaruTicketMetrics.pt(20))
         let drift = min(0.5, max(0, machineDrift))
-        let head = depth * (1 - drift) + 4
+        let head = depth * (1 - drift) + Double(ImaYaruTicketMetrics.pt(4))
         let present = presentAmount(tau)
         let leave = exitAmount(tau, power: exitPower)
         let leaveX = direction > 0 ? leave : exitAmount(tau, power: exitPower + 2)

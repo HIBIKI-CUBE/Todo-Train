@@ -332,7 +332,7 @@ struct ImaYaruFormView: View {
     }
 
     private func followTarget(_ translation: CGSize, velocityX: CGFloat) {
-        let limit: CGFloat = 12
+        let limit = ImaYaruTicketMetrics.pt(12)
         let length = hypot(translation.width, translation.height)
         let scale = length > limit && length > 0 ? limit / length : 1
         let next = CGSize(width: translation.width * scale, height: translation.height * scale)
@@ -505,23 +505,24 @@ struct ImaYaruFormView: View {
         let direction: CGFloat = kind == .depart ? 1 : -1
         let origin = tuckedOrigin(direction: direction)
         let destination: CGPoint
+        let edge = ImaYaruTicketMetrics.pt(16)
         if kind == .depart {
-            destination = CGPoint(x: stageSize.width + ticketSize.width / 2 + 16, y: anchor.y)
+            destination = CGPoint(x: stageSize.width + ticketSize.width / 2 + edge, y: anchor.y)
         } else {
-            destination = CGPoint(x: menuAnchor.x, y: -ticketSize.height / 2 - 6)
+            destination = CGPoint(x: menuAnchor.x, y: -ticketSize.height / 2 - ImaYaruTicketMetrics.pt(6))
         }
         let half = ImaYaruMachineMetrics.fitted(ticket: ticketSize).body.width / 2
         let clearance: CGFloat
         if direction > 0 {
-            clearance = anchor.x + half + 16
+            clearance = anchor.x + half + edge
         } else {
-            clearance = stageSize.width - (anchor.x - half) + 16
+            clearance = stageSize.width - (anchor.x - half) + edge
         }
         let geometry = ImaYaruFlightGeometry(
             ticketSize: ticketSize,
             origin: origin,
             destination: destination,
-            machineClearance: max(clearance, ticketSize.width + 40),
+            machineClearance: max(clearance, ticketSize.width + ImaYaruTicketMetrics.pt(40)),
             direction: direction
         )
         arm = kind == .depart ? .depart : .save

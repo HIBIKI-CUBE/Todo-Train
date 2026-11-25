@@ -130,7 +130,7 @@ final class ImaYaruPanelController {
     }
 
     private func clamped(_ anchor: CGPoint, on screen: NSScreen, ticket: CGSize) -> CGPoint {
-        let margin: CGFloat = 24
+        let margin = ImaYaruTicketMetrics.pt(24)
         let halfCard = ImaYaruMachineMetrics.fitted(ticket: ticket).body.width / 2 + margin
         let halfTicket = ticket.height / 2 + margin
         let size = screen.frame.size
