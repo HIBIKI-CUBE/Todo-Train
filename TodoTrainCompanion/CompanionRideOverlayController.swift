@@ -255,12 +255,14 @@ final class CompanionRideOverlayController: NSObject {
     }
 
     private func dragEnded() {
+        let velocity = panel.releaseVelocity()
         dragStart = nil
         let screens = NSScreen.screens
         guard !screens.isEmpty else { return }
         let overlayScreens = screens.map(OverlayScreen.init)
         let placement = RideOverlayGeometry.layout(
             afterDrag: OverlayRect(panel.frame),
+            velocity: velocity,
             screens: overlayScreens
         )
         let index = min(max(placement.screenIndex, 0), screens.count - 1)
@@ -269,7 +271,7 @@ final class CompanionRideOverlayController: NSObject {
         persist()
         applyLayoutToChrome()
         model.hovering = false
-        applyFrame(animated: true)
+        applyFrame(animated: true, velocity: velocity)
     }
 
     private func handleClick(at point: NSPoint) {
@@ -445,7 +447,7 @@ final class CompanionRideOverlayController: NSObject {
         applyFrame(animated: true)
     }
 
-    private func applyFrame(animated: Bool) {
+    private func applyFrame(animated: Bool, velocity: OverlayVelocity? = nil) {
         guard let screen = targetScreen() else { return }
         let rect = RideOverlayGeometry.frame(
             for: layout,
@@ -454,9 +456,26 @@ final class CompanionRideOverlayController: NSObject {
         let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         panel.hasShadow = !layout.isTucked
         if animated, !reduceMotion {
+            let glide = velocity.map {
+                RideOverlayGeometry.glide(
+                    from: OverlayRect(panel.frame),
+                    to: OverlayRect(rect),
+                    velocity: $0
+                )
+            }
             NSAnimationContext.runAnimationGroup { context in
-                context.duration = 0.22
-                context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                if let glide {
+                    context.duration = glide.duration
+                    context.timingFunction = CAMediaTimingFunction(
+                        controlPoints: Float(glide.x1),
+                        Float(glide.y1),
+                        Float(glide.x2),
+                        Float(glide.y2)
+                    )
+                } else {
+                    context.duration = 0.22
+                    context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                }
                 panel.animator().setFrame(rect, display: true)
             }
         } else {
