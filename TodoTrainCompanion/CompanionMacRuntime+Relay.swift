@@ -490,6 +490,7 @@ extension CompanionMacRuntime {
         if ack.cmdId == reestimateUndoCommandID, !ack.ok {
             reestimateUndoUntil = nil
             reestimateUndoCommandID = nil
+            reestimateUndoChoice = nil
         }
         if ack.ok {
             staleWinner = false
@@ -515,6 +516,7 @@ extension CompanionMacRuntime {
             outgoingPause = .idle
             reestimateUndoUntil = nil
             reestimateUndoCommandID = nil
+            reestimateUndoChoice = nil
             transportNotice = SyncCopy.fifoFull
             lastStatus = SyncCopy.fifoFull
             return

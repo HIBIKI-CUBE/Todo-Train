@@ -20,8 +20,10 @@ final class CompanionRideOverlayModel {
     var positionNowUnix: Int = 0
     /// Question already handled by a commit. Same nudge id does not reopen it.
     var settledNudgeID: UUID?
-    /// Mirrors the runtime. Non-nil shows 取り消し on the ride card.
+    /// Mirrors the runtime. Non-nil shows the undo line on the ride card.
     var reestimateUndoUntil: Int?
+    /// Commit named by that line. Nil keeps the bare 取り消す.
+    var reestimateUndoChoice: MacPipReestimateChoice?
     /// Edge lamp while the card is tucked. The card stays out.
     var edgeLamp = false
 
@@ -86,7 +88,9 @@ struct CompanionRideOverlayView: View {
     private var rideDigitAreaHeight: CGFloat {
         switch pipColumnLayout {
         case .classicExpanded:
-            Self.classicExpandedInstrumentHeight
+            showsRideBand
+                ? Self.classicExpandedInstrumentHeight - Self.bottomBandHeight
+                : Self.classicExpandedInstrumentHeight
         case .classicCompact:
             Self.bottomBandHeight
         case .reestimate:
@@ -106,11 +110,13 @@ struct CompanionRideOverlayView: View {
         pipColumnLayout == .classicExpanded ? Self.classicTitleBandHeight : 44
     }
 
+    /// Hover and the five-second undo keep the normal ride. The band sits under the digits.
     private var usesClassicExpandedLayout: Bool {
-        presentation.cabinPrompt == nil
-            && model.reestimateUndoUntil == nil
-            && !showsCabinActions
-            && !showsAction
+        presentation.cabinPrompt == nil && !showsCabinActions
+    }
+
+    private var showsRideBand: Bool {
+        activeBand == nil && (model.reestimateUndoUntil != nil || showsAction)
     }
 
     private var pipMotionAnimation: Animation? {
@@ -148,7 +154,7 @@ struct CompanionRideOverlayView: View {
             .accessibilityAction(named: "出す") {
                 if model.isTucked { onRestore() }
             }
-            .accessibilityAction(named: presentation.canResume ? "再乗車" : CabinCopy.pause) {
+            .accessibilityAction(named: presentation.canResume ? PauseInputCopy.resume : CabinCopy.pause) {
                 if activeBand == .answers {
                     onNudgeChoice(.paused)
                 } else if activeBand == nil {
@@ -160,7 +166,9 @@ struct CompanionRideOverlayView: View {
                 if activeBand == .answers { onNudgeChoice(.stillOnIt) }
             }
             .accessibilityAction(named: PipBandCopy.positionCheck) {
-                if activeBand == .answers { onOpenProgress() }
+                if activeBand == .answers || (activeBand == nil && showsHoverRideActions) {
+                    onOpenProgress()
+                }
             }
             .accessibilityAction(named: CabinCopy.arrived) {
                 if activeBand == .answers { onNudgeChoice(.alreadyDone) }
@@ -180,7 +188,7 @@ struct CompanionRideOverlayView: View {
             .accessibilityAction(named: PipBandCopy.adjust) {
                 if activeBand == .declare { commitDeclare(.adjust) }
             }
-            .accessibilityAction(named: PipBandCopy.undo) {
+            .accessibilityAction(named: undoLine) {
                 if model.reestimateUndoUntil != nil { onUndoReestimate() }
             }
     }
@@ -337,8 +345,25 @@ struct CompanionRideOverlayView: View {
             classicFailureLine
             rideProgressInstrument(digitAreaHeight: rideDigitAreaHeight)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+            if showsRideBand {
+                rideBand
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .animation(pipMotionAnimation, value: showsRideBand)
+    }
+
+    private var rideBand: some View {
+        Group {
+            if model.reestimateUndoUntil != nil {
+                undoRow
+            } else {
+                actionRow
+            }
+        }
+        .frame(height: Self.bottomBandHeight)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(bottomAccessibilityLabel)
     }
 
     private var classicCompactColumn: some View {
@@ -751,12 +776,18 @@ struct CompanionRideOverlayView: View {
         presentation.cabinPrompt != nil && !model.isTucked
     }
 
-    private var showsAction: Bool {
-        model.hovering
-            && !model.isTucked
+    /// 位置確認と停車（または再乗車）を出せる乗務。ホバーそのものは含まない。
+    private var showsHoverRideActions: Bool {
+        !model.isTucked
             && presentation.cabinPrompt == nil
             && presentation.pausePrompt == nil
+            && model.reestimateUndoUntil == nil
+            && !presentation.showsArrivalGap
             && (presentation.canPause || presentation.canResume)
+    }
+
+    private var showsAction: Bool {
+        model.hovering && showsHoverRideActions && activeBand == nil
     }
 
     private var progressFillWidth: CGFloat {
@@ -832,23 +863,48 @@ struct CompanionRideOverlayView: View {
         }
     }
 
+    private var undoLine: String {
+        if let choice = model.reestimateUndoChoice, let line = PipBandCopy.undoLine(choice) {
+            return line
+        }
+        return PipBandCopy.undo
+    }
+
     private var undoRow: some View {
-        Text(PipBandCopy.undo)
+        Text(undoLine)
             .font(.system(size: 15, weight: .semibold))
             .foregroundStyle(.white)
+            .lineLimit(1)
+            .minimumScaleFactor(0.5)
+            .padding(.horizontal, 8)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Color.black)
     }
 
     private var actionRow: some View {
-        HStack(spacing: 8) {
-            Image(systemName: presentation.canResume ? "play.fill" : "pause.fill")
-                .font(.system(size: 13, weight: .semibold))
-            Text(presentation.canResume ? "再乗車" : "停車")
-                .font(.system(size: 15, weight: .semibold))
+        let titles = PipHoverStrip.titles(canResume: presentation.canResume)
+        return HStack(spacing: 0) {
+            Text(titles[0])
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            Rectangle()
+                .fill(.white.opacity(0.18))
+                .frame(width: 1)
+                .padding(.vertical, 8)
+            HStack(spacing: 6) {
+                Image(systemName: presentation.canResume ? "play.fill" : "pause.fill")
+                    .font(.system(size: 12, weight: .semibold))
+                Text(titles[1])
+                    .font(.system(size: 14, weight: .semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+            }
+            .foregroundStyle(actionColor)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .foregroundStyle(actionColor)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.black)
     }
 
@@ -875,9 +931,11 @@ struct CompanionRideOverlayView: View {
     }
 
     private var bottomAccessibilityLabel: String {
-        if model.reestimateUndoUntil != nil { return PipBandCopy.undo }
+        if model.reestimateUndoUntil != nil { return undoLine }
         if showsCabinActions { return "\(CabinCopy.prompt) \(CabinCopy.still) または 停車" }
-        if showsAction { return presentation.canResume ? "再乗車" : "停車" }
+        if showsAction {
+            return PipHoverStrip.titles(canResume: presentation.canResume).joined(separator: " ")
+        }
         return "残り時間"
     }
 
@@ -1161,6 +1219,51 @@ func rideSnap(
 }
 
 @MainActor
+func rideHoverPreview(title: String = "原稿") -> some View {
+    let model = CompanionRideOverlayModel()
+    model.presentation = rideSnap(title: title, now: 1_768_000_600)
+    model.hovering = true
+    return CompanionRideOverlayView(
+        model: model,
+        onToggleHold: {},
+        onStill: {},
+        onRestore: {},
+        onNudgeChoice: { _ in },
+        onOpenProgress: {},
+        onSelectProgress: { _ in },
+        onCommitReestimate: { _ in },
+        onUndoReestimate: {},
+        onBoardReserved: {},
+        onCloseGap: {},
+        onPausePrompt: { _ in },
+        onAcknowledgeRadio: {}
+    )
+}
+
+@MainActor
+func rideUndoPreview(title: String = "原稿") -> some View {
+    let model = CompanionRideOverlayModel()
+    model.presentation = rideSnap(title: title, now: 1_768_000_600)
+    model.reestimateUndoUntil = 1_768_000_605
+    model.reestimateUndoChoice = .recovery(progress: 0.5, committedRemainingSeconds: 900)
+    return CompanionRideOverlayView(
+        model: model,
+        onToggleHold: {},
+        onStill: {},
+        onRestore: {},
+        onNudgeChoice: { _ in },
+        onOpenProgress: {},
+        onSelectProgress: { _ in },
+        onCommitReestimate: { _ in },
+        onUndoReestimate: {},
+        onBoardReserved: {},
+        onCloseGap: {},
+        onPausePrompt: { _ in },
+        onAcknowledgeRadio: {}
+    )
+}
+
+@MainActor
 func ridePreviewCanvas(_ presentation: RideOverlayPresentation) -> some View {
     ridePreview(presentation)
         .padding(24)
@@ -1185,6 +1288,18 @@ func ridePreviewCanvas(_ presentation: RideOverlayPresentation) -> some View {
             startsAt: 1_768_003_780
         )
     )
+}
+
+#Preview("ホバー 位置確認と停車") {
+    rideHoverPreview()
+        .padding(24)
+        .background(Color(white: 0.32))
+}
+
+#Preview("位置確認 取り消す") {
+    rideUndoPreview()
+        .padding(24)
+        .background(Color(white: 0.32))
 }
 
 #Preview("位置確認 一段") {

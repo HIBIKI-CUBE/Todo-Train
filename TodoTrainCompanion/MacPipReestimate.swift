@@ -18,6 +18,27 @@ enum MacPipReestimateChoice: Equatable, Sendable {
     case adjust(progress: Double)
 }
 
+enum PipHoverStripAction: Equatable, Sendable {
+    case positionCheck
+    case pauseOrResume
+    case undo
+}
+
+/// Hover band under a normal ride. Left is 位置確認. Right is 停車 or 再乗車.
+/// After a commit, one line names that commit for five seconds.
+enum PipHoverStrip {
+    static func titles(canResume: Bool) -> [String] {
+        [PipBandCopy.positionCheck, canResume ? PauseInputCopy.resume : CabinCopy.pause]
+    }
+
+    static func action(x: CGFloat, contentWidth: CGFloat, undoVisible: Bool) -> PipHoverStripAction? {
+        guard contentWidth > 0, x >= 0 else { return nil }
+        if undoVisible { return .undo }
+        let index = Int(x / (contentWidth / 2))
+        return min(max(index, 0), 1) == 0 ? .positionCheck : .pauseOrResume
+    }
+}
+
 enum PipBandCopy {
     static let positionCheck = "位置確認"
     static let share30 = "3割"
@@ -27,6 +48,33 @@ enum PipBandCopy {
     static let adjust = "運転調整"
     static let undo = "取り消す"
     static let positionHeading = "位置確認"
+
+    /// 「5割・回復運転を取り消す」。未知の割合は出さない。
+    static func undoLine(_ choice: MacPipReestimateChoice) -> String? {
+        let progress: Double
+        let kind: String
+        switch choice {
+        case .recovery(let value, _):
+            progress = value
+            kind = recovery
+        case .adjust(let value):
+            progress = value
+            kind = adjust
+        }
+        guard let share = shareLabel(progress) else { return nil }
+        return "\(share)・\(kind)を\(undo)"
+    }
+
+    private static func shareLabel(_ progress: Double) -> String? {
+        let shares = [share30, share50, share80]
+        guard let index = MacPipReestimate.progressAnswers.firstIndex(where: {
+            abs($0 - progress) < 0.000_1
+        }) else {
+            return nil
+        }
+        return shares[index]
+    }
+
     static let positionCheckHint = "進捗の割合を選びます。"
     static let shareHint = "その割合で次の選択へ進みます。"
     static let declareHint = "回復運転か運転調整を選びます。"

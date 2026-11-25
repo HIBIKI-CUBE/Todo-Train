@@ -59,6 +59,8 @@ final class CompanionMacRuntime {
     var sentTimetablePauseAt: Int?
     /// Unix seconds when the PiP stops offering 取り消し. Nil hides it.
     var reestimateUndoUntil: Int?
+    /// The commit named on that band. Cleared with `reestimateUndoUntil`.
+    var reestimateUndoChoice: MacPipReestimateChoice?
     /// In-flight `reestimate`. Undo may replace this id before its ack arrives.
     var reestimateUndoCommandID: UUID?
     var answerEstimateBefore: Int?

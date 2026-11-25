@@ -44,8 +44,7 @@ final class CompanionRideOverlayController: NSObject {
                     self?.handleNudgeChoice(choice)
                 },
                 onOpenProgress: { [weak self] in
-                    self?.model.reestimateBand = .progress
-                    self?.model.reestimateProgress = nil
+                    self?.openProgressBand()
                 },
                 onSelectProgress: { [weak self] progress in
                     self?.selectProgress(progress)
@@ -166,6 +165,7 @@ final class CompanionRideOverlayController: NSObject {
         syncPositionCheckContext()
         let previousUndo = model.reestimateUndoUntil
         model.reestimateUndoUntil = runtime.reestimateUndoUntil
+        model.reestimateUndoChoice = runtime.reestimateUndoChoice
         if let previousUndo, runtime.reestimateUndoUntil == nil, runtime.now < previousUndo {
             if case .failed = runtime.outgoingPause {
                 model.settledNudgeID = nil
@@ -281,7 +281,11 @@ final class CompanionRideOverlayController: NSObject {
               point.x >= Self.handleWidth else { return }
         let presentation = model.presentation
         if model.reestimateUndoUntil != nil {
-            undoReestimate()
+            let contentWidth = panel.frame.width - Self.handleWidth
+            let x = point.x - Self.handleWidth
+            if PipHoverStrip.action(x: x, contentWidth: contentWidth, undoVisible: true) == .undo {
+                undoReestimate()
+            }
             return
         }
         if presentation.isSending { return }
@@ -325,8 +329,23 @@ final class CompanionRideOverlayController: NSObject {
             }
             return
         }
-        guard model.hovering else { return }
-        Task { await runtime.sendPauseOrResume() }
+        guard model.hovering, presentation.canPause || presentation.canResume else { return }
+        let contentWidth = panel.frame.width - Self.handleWidth
+        let x = point.x - Self.handleWidth
+        switch PipHoverStrip.action(x: x, contentWidth: contentWidth, undoVisible: false) {
+        case .positionCheck:
+            openProgressBand()
+        case .pauseOrResume:
+            Task { await runtime.sendPauseOrResume() }
+        case .undo, nil:
+            break
+        }
+    }
+
+    /// Hover の「位置確認」。声掛けの四択は経由しない。
+    private func openProgressBand() {
+        model.reestimateBand = .progress
+        model.reestimateProgress = nil
     }
 
     private func handleBandClick(_ band: PipReestimateBand, at point: NSPoint) {
@@ -334,7 +353,7 @@ final class CompanionRideOverlayController: NSObject {
         case .answers:
             switch choiceIndex(at: point) {
             case 0: handleNudgeChoice(.stillOnIt)
-            case 1: model.reestimateBand = .progress
+            case 1: openProgressBand()
             case 2: handleNudgeChoice(.alreadyDone)
             case 3: handleNudgeChoice(.paused)
             default: break
@@ -389,6 +408,7 @@ final class CompanionRideOverlayController: NSObject {
             model.reestimateProgress = nil
             model.settledNudgeID = nudgeID
             model.reestimateUndoUntil = runtime.reestimateUndoUntil
+            model.reestimateUndoChoice = runtime.reestimateUndoChoice
         }
     }
 

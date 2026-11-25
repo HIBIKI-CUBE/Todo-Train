@@ -295,6 +295,7 @@ struct SessionManagerBoardingTests {
         #expect(manager.phase == .running)
         #expect(manager.activeSession?.ticket?.id == ticket.id)
         #expect(manager.pausedTicketCount == 0)
+        #expect(manager.reservedNextTicket() == nil)
     }
 
     @Test func arrive_closesSessionAndTicket() throws {
@@ -406,5 +407,208 @@ struct SessionManagerBoardingTests {
         #expect(throws: SessionError.noActiveService) {
             try manager.issueAndBoard(title: "下書き", estimatedSeconds: 600)
         }
+    }
+
+    /// Focus の割り込みも `switchBoard` を通る。停車した切符が次の予約になる。
+    @Test func switchBoard_reservesTheParkedTicketViaRiding() throws {
+        let (manager, context, clock, _) = try SessionManagerFixtures.makeHarness()
+        try manager.startService()
+        let current = try SessionManagerFixtures.makeTicket(context, title: "いま", seconds: 1500)
+        let next = try SessionManagerFixtures.makeTicket(context, title: "次", seconds: 600)
+        try manager.board(ticket: current)
+        clock.advance(by: 90)
+
+        try manager.switchBoard(ticket: next)
+
+        let rideID = try #require(manager.activeSession?.id)
+        #expect(manager.phase == .running)
+        #expect(manager.activeSession?.ticket?.id == next.id)
+        #expect(current.reservedAt == clock.now)
+        #expect(current.reservedFromRideId == rideID)
+        #expect(current.reservedVia == .riding)
+        #expect(manager.reservedNextTicket()?.id == current.id)
+        #expect(next.reservedAt == nil)
+        let snap = manager.nudgeSnapFields(now: clock.now)
+        #expect(snap.reserved?.ticketId == current.id)
+        #expect(snap.reserved?.title == "いま")
+    }
+
+    @Test func issueAndBoard_interruptReservesTheParkedTicketOnTheSnap() throws {
+        let (manager, context, clock, _) = try SessionManagerFixtures.makeHarness()
+        try manager.startService()
+        let current = try SessionManagerFixtures.makeTicket(context, title: "いま", seconds: 1500)
+        try manager.board(ticket: current)
+        clock.advance(by: 90)
+
+        try manager.issueAndBoard(title: "割り込み", estimatedSeconds: 600)
+
+        let ride = try #require(manager.activeSession)
+        #expect(ride.ticket?.title == "割り込み")
+        #expect(manager.phase == .running)
+        #expect(current.isOpen)
+        #expect(current.reservedVia == .riding)
+        #expect(current.reservedFromRideId == ride.id)
+        #expect(manager.pausedSessions.contains { $0.ticket?.id == current.id })
+        let snap = RideWireSnap.make(
+            sessionManager: manager,
+            settings: manager.settings,
+            rev: 1,
+            now: clock.now
+        )
+        #expect(snap.reserved?.ticketId == current.id)
+        #expect(snap.reserved?.title == "いま")
+        #expect(snap.reserved?.estimatedSeconds == 1500)
+        #expect(snap.sessionId == ride.id)
+    }
+
+    @Test func switchBoard_replacesThePreviousReservation() throws {
+        let (manager, context, clock, _) = try SessionManagerFixtures.makeHarness()
+        try manager.startService()
+        let riding = try SessionManagerFixtures.makeTicket(context, title: "いま")
+        let earlier = try SessionManagerFixtures.makeTicket(context, title: "先の予約")
+        let next = try SessionManagerFixtures.makeTicket(context, title: "割り込み")
+        try manager.board(ticket: riding)
+        try manager.reserveNextRide(ticket: earlier, via: .arrivalScreen)
+        clock.advance(by: 45)
+
+        try manager.switchBoard(ticket: next)
+
+        #expect(earlier.reservedAt == nil)
+        #expect(earlier.reservedFromRideId == nil)
+        #expect(earlier.reservedVia == nil)
+        #expect(riding.reservedVia == .riding)
+        #expect(riding.reservedFromRideId == manager.activeSession?.id)
+        #expect(manager.reservedNextTicket()?.id == riding.id)
+        #expect(next.reservedAt == nil)
+    }
+
+    @Test func switchBoard_atPauseLimit_leavesTheReservation() throws {
+        let (manager, context, _, _) = try SessionManagerFixtures.makeHarness()
+        try manager.startService()
+        let a = try SessionManagerFixtures.makeTicket(context, title: "A")
+        let b = try SessionManagerFixtures.makeTicket(context, title: "B")
+        let c = try SessionManagerFixtures.makeTicket(context, title: "C")
+        let reserved = try SessionManagerFixtures.makeTicket(context, title: "予約")
+        let incoming = try SessionManagerFixtures.makeTicket(context, title: "D")
+        try manager.board(ticket: a)
+        try manager.pause()
+        try manager.board(ticket: b)
+        try manager.switchBoard(ticket: c)
+        try manager.reserveNextRide(ticket: reserved, via: .arrivalScreen)
+        let reservedAt = reserved.reservedAt
+
+        #expect(throws: SessionError.pauseLimitReached) {
+            try manager.switchBoard(ticket: incoming)
+        }
+        #expect(manager.phase == .running)
+        #expect(manager.activeSession?.ticket?.id == c.id)
+        #expect(manager.reservedNextTicket()?.id == reserved.id)
+        #expect(reserved.reservedAt == reservedAt)
+        #expect(reserved.reservedVia == .arrivalScreen)
+        #expect(c.reservedAt == nil)
+        #expect(incoming.reservedAt == nil)
+    }
+
+    @Test func board_doesNotReserve() throws {
+        let (manager, context, _, _) = try SessionManagerFixtures.makeHarness()
+        try manager.startService()
+        let ticket = try SessionManagerFixtures.makeTicket(context, title: "通常")
+        let other = try SessionManagerFixtures.makeTicket(context, title: "在庫")
+        try manager.board(ticket: ticket)
+        #expect(manager.reservedNextTicket() == nil)
+        #expect(ticket.reservedAt == nil)
+        #expect(other.reservedAt == nil)
+    }
+
+    @Test func issueAndBoard_withoutARide_doesNotReserve() throws {
+        let (manager, context, _, _) = try SessionManagerFixtures.makeHarness()
+        try manager.startService()
+        let stock = try SessionManagerFixtures.makeTicket(context, title: "在庫")
+        try manager.issueAndBoard(title: "新規", estimatedSeconds: 600)
+        #expect(manager.phase == .running)
+        #expect(manager.reservedNextTicket() == nil)
+        #expect(stock.reservedAt == nil)
+        #expect(manager.activeSession?.ticket?.reservedAt == nil)
+    }
+
+    @Test func issueAndBoard_whilePaused_reservesThePausedTicket() throws {
+        let (manager, context, clock, _) = try SessionManagerFixtures.makeHarness()
+        try manager.startService()
+        let paused = try SessionManagerFixtures.makeTicket(context, title: "停車中", seconds: 1200)
+        try manager.board(ticket: paused)
+        try manager.pause()
+        clock.advance(by: 20)
+
+        try manager.issueAndBoard(title: "割り込み", estimatedSeconds: 600)
+
+        #expect(manager.phase == .running)
+        #expect(manager.activeSession?.ticket?.title == "割り込み")
+        #expect(paused.reservedVia == .riding)
+        #expect(paused.reservedFromRideId == manager.activeSession?.id)
+        #expect(manager.reservedNextTicket()?.id == paused.id)
+        #expect(manager.pausedSessions.contains { $0.ticket?.id == paused.id })
+    }
+
+    @Test func switchBoard_toPausedTicket_reservesTheTicketJustParked() throws {
+        let (manager, context, clock, _) = try SessionManagerFixtures.makeHarness()
+        try manager.startService()
+        let paused = try SessionManagerFixtures.makeTicket(context, title: "停車")
+        let riding = try SessionManagerFixtures.makeTicket(context, title: "走行")
+        try manager.board(ticket: paused)
+        try manager.pause()
+        try manager.board(ticket: riding)
+        clock.advance(by: 30)
+
+        try manager.switchBoard(ticket: paused)
+
+        #expect(manager.phase == .running)
+        #expect(manager.activeSession?.ticket?.id == paused.id)
+        #expect(riding.reservedVia == .riding)
+        #expect(manager.reservedNextTicket()?.id == riding.id)
+        #expect(paused.reservedAt == nil)
+    }
+
+    @Test func interruptThenArrive_exposesTheParkedTicketForBoardReserved() throws {
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let (manager, context, clock, _) = try SessionManagerFixtures.makeHarness(now: start)
+        try manager.startService()
+        let first = try SessionManagerFixtures.makeTicket(context, title: "いま", seconds: 1500)
+        try manager.board(ticket: first)
+        clock.advance(by: 90)
+        try manager.issueAndBoard(title: "割り込み", estimatedSeconds: 600)
+        let interruptID = try #require(manager.activeSession?.id)
+
+        try manager.arrive()
+        clock.advance(by: 5)
+        try manager.recordArrivalStamp(sessionID: interruptID, action: .nextRide)
+        manager.iphoneHubVisible = true
+        manager.macPipVisible = true
+        manager.macAttending = true
+        clock.advance(by: 3 * 60)
+        manager.reconcile()
+
+        #expect(manager.reservedNextTicket()?.id == first.id)
+        #expect(manager.arrivalGapBanner?.prompt == CabinCopy.readyToBoard(title: "いま"))
+        let snap = RideWireSnap.make(
+            sessionManager: manager,
+            settings: manager.settings,
+            rev: 2,
+            now: clock.now
+        )
+        #expect(snap.reserved?.ticketId == first.id)
+        #expect(snap.reserved?.title == "いま")
+
+        let ack = manager.applyNudgeCommand(
+            CommandPlaintext(
+                id: UUID(),
+                op: .boardReserved,
+                sessionId: nil,
+                at: Int(clock.now.timeIntervalSince1970),
+                ticketId: first.id
+            )
+        )
+        #expect(ack.ok == true)
+        #expect(manager.phase == .running)
+        #expect(manager.activeSession?.ticket?.id == first.id)
     }
 }
