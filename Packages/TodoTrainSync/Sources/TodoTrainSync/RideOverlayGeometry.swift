@@ -76,6 +76,64 @@ public enum OverlayEdge: String, Equatable, Sendable, Codable {
     case trailing
 }
 
+/// Points per second, in AppKit coordinates (x right, y up).
+public struct OverlayVelocity: Equatable, Sendable {
+    public var x: Double
+    public var y: Double
+
+    public init(x: Double, y: Double) {
+        self.x = x
+        self.y = y
+    }
+
+    public var speed: Double { hypot(x, y) }
+
+    public static let zero = OverlayVelocity(x: 0, y: 0)
+}
+
+/// One drag sample. `time` is seconds on the same clock as the other samples.
+public struct OverlayDragSample: Equatable, Sendable {
+    public var time: Double
+    public var x: Double
+    public var y: Double
+
+    public init(time: Double, x: Double, y: Double) {
+        self.time = time
+        self.x = x
+        self.y = y
+    }
+}
+
+/// Ease-out glide. `initialSlope` is dy/dx of normalized progress at the start.
+/// Slope 2 is a quadratic ease-out: it leaves at twice the average speed and arrives at rest,
+/// without passing the corner.
+public struct OverlayGlide: Equatable, Sendable {
+    public var duration: Double
+    public var initialSlope: Double
+
+    public init(duration: Double, initialSlope: Double) {
+        self.duration = duration
+        self.initialSlope = initialSlope
+    }
+
+    public var x1: Double { 1.0 / 3.0 }
+    public var y1: Double { initialSlope / 3.0 }
+    public var x2: Double { 2.0 / 3.0 }
+    public var y2: Double { 1 }
+
+    public func progress(at time: Double) -> Double {
+        let t = min(1, max(0, time))
+        let m = initialSlope
+        return ((m - 2) * t * t * t) + ((3 - 2 * m) * t * t) + (m * t)
+    }
+
+    /// Speed along the straight path at the first instant, in points per second.
+    public func initialSpeed(distance: Double) -> Double {
+        guard duration > 0 else { return 0 }
+        return distance * initialSlope / duration
+    }
+}
+
 public struct OverlayLayoutState: Equatable, Sendable, Codable {
     public var corner: OverlayCorner
     public var isTucked: Bool
@@ -114,6 +172,16 @@ public enum RideOverlayGeometry {
     public static let tuckThreshold: Double = 120
     public static let cornerRadius: Double = 16
     public static let neighborProbe: Double = 8
+    /// A release at or above this speed (points per second) is a flick.
+    public static let flickThreshold: Double = 150
+    /// Lookahead used to choose the display a flick is heading toward.
+    public static let flickProjection: Double = 0.3
+    /// Release speed is the drag over this many seconds. Inside the 80–100ms band.
+    public static let flickVelocityWindow: Double = 0.09
+    /// An axis slower than this keeps the side of the release position.
+    public static let flickAxisDeadzone: Double = 40
+    public static let glideMinimumDuration: Double = 0.18
+    public static let glideMaximumDuration: Double = 0.7
     /// Visible sliver so a just-started ride still shows elapsed paint.
     public static let minimumFill: Double = 4
 
@@ -245,6 +313,121 @@ public enum RideOverlayGeometry {
             screens: [OverlayScreen(screen)],
             tuckThreshold: tuckThreshold
         ).state
+    }
+
+    /// Flick-aware snap. Below `flickThreshold`, identical to `layout(afterDrag:screens:)`.
+    /// At or above it, the corner follows the signs of `velocity` and the card is never tucked.
+    /// The display is the one under `release + velocity * flickProjection`.
+    /// Tuck itself still looks only at `frame`, and only when the release is not a flick.
+    public static func layout(
+        afterDrag frame: OverlayRect,
+        velocity: OverlayVelocity,
+        screens: [OverlayScreen],
+        tuckThreshold: Double = tuckThreshold
+    ) -> OverlayPlacement {
+        let placed = layout(afterDrag: frame, screens: screens, tuckThreshold: tuckThreshold)
+        guard velocity.speed >= flickThreshold, !screens.isEmpty else { return placed }
+        let projected = OverlayRect(
+            x: frame.x + velocity.x * flickProjection,
+            y: frame.y + velocity.y * flickProjection,
+            width: frame.width,
+            height: frame.height
+        )
+        let index = pickScreen(for: projected, screens: screens)
+        let releaseIndex = pickScreen(for: frame, screens: screens)
+        let corner = flickedCorner(
+            velocity: velocity,
+            release: frame,
+            screen: screens[releaseIndex].visible
+        )
+        return OverlayPlacement(
+            state: OverlayLayoutState(corner: corner, isTucked: false),
+            screenIndex: index
+        )
+    }
+
+    public static func layout(
+        afterDrag frame: OverlayRect,
+        velocity: OverlayVelocity,
+        screen: OverlayRect,
+        tuckThreshold: Double = tuckThreshold
+    ) -> OverlayLayoutState {
+        layout(
+            afterDrag: frame,
+            velocity: velocity,
+            screens: [OverlayScreen(screen)],
+            tuckThreshold: tuckThreshold
+        ).state
+    }
+
+    /// Speed from drag positions in the last `window` seconds. Older samples are ignored.
+    public static func velocity(
+        samples: [OverlayDragSample],
+        window: Double = flickVelocityWindow
+    ) -> OverlayVelocity {
+        guard window > 0, let last = samples.max(by: { $0.time < $1.time }) else { return .zero }
+        let start = last.time - window
+        let spanned = samples.filter { $0.time >= start && $0.time <= last.time }
+        guard let first = spanned.min(by: { $0.time < $1.time }) else { return .zero }
+        let dt = last.time - first.time
+        guard dt > 0, dt.isFinite else { return .zero }
+        let vx = (last.x - first.x) / dt
+        let vy = (last.y - first.y) / dt
+        guard vx.isFinite, vy.isFinite else { return .zero }
+        return OverlayVelocity(x: vx, y: vy)
+    }
+
+    /// Corner a flick is heading toward. Positive x is trailing, positive y is up.
+    /// An axis inside `axisDeadzone` keeps the side of `release` on `screen`.
+    public static func flickedCorner(
+        velocity: OverlayVelocity,
+        release frame: OverlayRect,
+        screen: OverlayRect,
+        axisDeadzone: Double = flickAxisDeadzone
+    ) -> OverlayCorner {
+        let current = nearestCorner(of: frame, screen: screen)
+        let leading: Bool
+        if abs(velocity.x) < axisDeadzone {
+            switch current {
+            case .topLeading, .bottomLeading: leading = true
+            case .topTrailing, .bottomTrailing: leading = false
+            }
+        } else {
+            leading = velocity.x < 0
+        }
+        let top: Bool
+        if abs(velocity.y) < axisDeadzone {
+            switch current {
+            case .topLeading, .topTrailing: top = true
+            case .bottomLeading, .bottomTrailing: top = false
+            }
+        } else {
+            top = velocity.y > 0
+        }
+        switch (leading, top) {
+        case (true, true): return .topLeading
+        case (false, true): return .topTrailing
+        case (true, false): return .bottomLeading
+        case (false, false): return .bottomTrailing
+        }
+    }
+
+    /// Ease-out whose initial speed matches `velocity` when the duration fits in range.
+    /// The curve ends at rest. Control points stay inside the unit square, so the card does not pass the corner.
+    /// A very slow or very fast release clamps the duration; the slope then stays in 1.5...3.
+    public static func glide(
+        from release: OverlayRect,
+        to parked: OverlayRect,
+        velocity: OverlayVelocity
+    ) -> OverlayGlide {
+        let distance = hypot(parked.x - release.x, parked.y - release.y)
+        let speed = velocity.speed
+        let neutral = OverlayGlide(duration: 0.22, initialSlope: 2)
+        guard distance > 0.5, speed > 1, speed.isFinite else { return neutral }
+        let matched = 2 * distance / speed
+        let duration = min(glideMaximumDuration, max(glideMinimumDuration, matched))
+        let slope = min(3, max(1.5, speed * duration / distance))
+        return OverlayGlide(duration: duration, initialSlope: slope)
     }
 
     public static func nearestCorner(of frame: OverlayRect, screen: OverlayRect) -> OverlayCorner {

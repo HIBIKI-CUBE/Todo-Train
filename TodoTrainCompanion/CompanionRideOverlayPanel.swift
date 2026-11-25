@@ -3,6 +3,8 @@ import SwiftUI
 import TodoTrainSync
 
 final class CompanionRideOverlayPanel: NSPanel {
+    private var dragSamples: [OverlayDragSample] = []
+
     init() {
         let size = RideOverlayGeometry.cardSize.nsSize
         super.init(
@@ -49,6 +51,27 @@ final class CompanionRideOverlayPanel: NSPanel {
         var rect = frameRect
         rect.size = RideOverlayGeometry.cardSize.nsSize
         return rect
+    }
+
+    func beginDragTracking() {
+        dragSamples.removeAll(keepingCapacity: true)
+    }
+
+    /// Card origin in screen coordinates. Samples older than the velocity window are dropped.
+    func recordDrag(origin: NSPoint, time: TimeInterval) {
+        dragSamples.append(
+            OverlayDragSample(time: time, x: Double(origin.x), y: Double(origin.y))
+        )
+        let cutoff = time - RideOverlayGeometry.flickVelocityWindow
+        if let keep = dragSamples.firstIndex(where: { $0.time >= cutoff }), keep > 0 {
+            dragSamples.removeFirst(keep)
+        }
+    }
+
+    func releaseVelocity() -> OverlayVelocity {
+        let velocity = RideOverlayGeometry.velocity(samples: dragSamples)
+        dragSamples.removeAll(keepingCapacity: true)
+        return velocity
     }
 }
 
@@ -139,6 +162,8 @@ final class OverlayRootView: NSView {
         dragStartMouse = NSEvent.mouseLocation
         dragStartFrame = window?.frame
         isDragging = false
+        (window as? CompanionRideOverlayPanel)?.beginDragTracking()
+        trackDrag(at: event.timestamp)
     }
 
     override func mouseDragged(with event: NSEvent) {
@@ -152,6 +177,12 @@ final class OverlayRootView: NSView {
             onHover?(false)
         }
         onDragChanged?(mouse, startFrame, startMouse)
+        trackDrag(at: event.timestamp)
+    }
+
+    private func trackDrag(at time: TimeInterval) {
+        guard let panel = window as? CompanionRideOverlayPanel else { return }
+        panel.recordDrag(origin: panel.frame.origin, time: time)
     }
 
     override func mouseUp(with event: NSEvent) {
@@ -173,9 +204,11 @@ final class OverlayRootView: NSView {
         dragStartMouse = nil
         dragStartFrame = nil
         if dragged {
+            trackDrag(at: event.timestamp)
             onDragEnded?(mouse)
             return
         }
+        (window as? CompanionRideOverlayPanel)?.beginDragTracking()
         onClick?(convert(event.locationInWindow, from: nil))
     }
 
