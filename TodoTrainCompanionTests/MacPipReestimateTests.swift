@@ -125,6 +125,19 @@ struct MacPipReestimateTests {
         #expect(object["progressAnswer"] == nil)
     }
 
+    @Test func hoverStripSplitsPositionCheckAndPause() {
+        let width: CGFloat = 298
+        #expect(PipHoverStrip.titles(canResume: false) == [PipBandCopy.positionCheck, CabinCopy.pause])
+        #expect(PipHoverStrip.titles(canResume: true) == [PipBandCopy.positionCheck, PauseInputCopy.resume])
+        #expect(PipHoverStrip.action(x: -1, contentWidth: width, undoVisible: false) == nil)
+        #expect(PipHoverStrip.action(x: 0, contentWidth: width, undoVisible: false) == .positionCheck)
+        #expect(PipHoverStrip.action(x: width / 2 - 0.01, contentWidth: width, undoVisible: false) == .positionCheck)
+        #expect(PipHoverStrip.action(x: width / 2, contentWidth: width, undoVisible: false) == .pauseOrResume)
+        #expect(PipHoverStrip.action(x: width - 1, contentWidth: width, undoVisible: false) == .pauseOrResume)
+        #expect(PipHoverStrip.action(x: 0, contentWidth: width, undoVisible: true) == .undo)
+        #expect(PipHoverStrip.action(x: width - 1, contentWidth: width, undoVisible: true) == .undo)
+    }
+
     @Test func triggerTable() {
         #expect(MacPipReestimate.trigger(for: .checkIn) == .checkIn)
         #expect(MacPipReestimate.trigger(for: .estimate) == .planEnd)
@@ -144,6 +157,8 @@ struct MacPipReestimateTests {
             ("pip-band-answers", AnyView(rideReestimatePreview(.answers))),
             ("pip-band-progress", AnyView(rideReestimatePreview(.progress))),
             ("pip-band-declare", AnyView(rideReestimatePreview(.declare, progress: 0.5))),
+            ("pip-hover-position-and-pause", AnyView(rideHoverPreview())),
+            ("pip-reestimate-undo", AnyView(rideUndoPreview())),
         ]
         for (name, content) in shots {
             let renderer = ImageRenderer(content: content)

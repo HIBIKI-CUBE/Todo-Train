@@ -154,7 +154,16 @@ extension SessionManager {
     private func gapAnchorSession(now: Date) -> WorkSession? {
         _ = now
         guard activeServiceDay?.isOpen == true else { return nil }
-        guard !hasOpenRide(), fetchOpenPassengerRide() == nil else { return nil }
+        // The paused ticket an interrupt just reserved is the next face, not a ride in progress.
+        // Any other open ride still holds the blank.
+        guard fetchRunningSession() == nil else { return nil }
+        if let active = activeSession, active.isOpen { return nil }
+        guard fetchOpenPassengerRide() == nil else { return nil }
+        let paused = openPausedSessions()
+        if !paused.isEmpty {
+            guard let reservedID = reservedNextTicket()?.id else { return nil }
+            guard paused.allSatisfy({ $0.ticket?.id == reservedID }) else { return nil }
+        }
         guard let anchor = latestStampedArrival(), let stamp = anchor.arrivalStampedAt else { return nil }
         if rideStarted(after: stamp, otherThan: anchor.id) { return nil }
         return anchor

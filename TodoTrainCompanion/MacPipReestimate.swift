@@ -18,6 +18,27 @@ enum MacPipReestimateChoice: Equatable, Sendable {
     case adjust(progress: Double)
 }
 
+enum PipHoverStripAction: Equatable, Sendable {
+    case positionCheck
+    case pauseOrResume
+    case undo
+}
+
+/// Hover band under a normal ride. Left is 位置確認. Right is 停車 or 再乗車.
+/// 取り消す covers the whole band for five seconds after a commit.
+enum PipHoverStrip {
+    static func titles(canResume: Bool) -> [String] {
+        [PipBandCopy.positionCheck, canResume ? PauseInputCopy.resume : CabinCopy.pause]
+    }
+
+    static func action(x: CGFloat, contentWidth: CGFloat, undoVisible: Bool) -> PipHoverStripAction? {
+        guard contentWidth > 0, x >= 0 else { return nil }
+        if undoVisible { return .undo }
+        let index = Int(x / (contentWidth / 2))
+        return min(max(index, 0), 1) == 0 ? .positionCheck : .pauseOrResume
+    }
+}
+
 enum PipBandCopy {
     static let positionCheck = "位置確認"
     static let share30 = "3割"

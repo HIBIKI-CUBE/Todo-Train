@@ -40,7 +40,8 @@ extension SessionManager {
             into: modelContext
         )
         do {
-            if fetchRunningSession() != nil {
+            // An open ride, including a paused one, interrupts through switchBoard.
+            if activeSession?.isOpen == true, phase != .idle {
                 try switchBoard(ticket: ticket, now: now)
             } else {
                 try board(ticket: ticket, now: now)
@@ -104,9 +105,11 @@ extension SessionManager {
             }
 
             if let paused = openPausedSessions().first(where: { $0.ticket?.id == ticket.id }) {
+                let parkedTicket = running.ticket
                 try parkRunningSessionForSwitch(running, now: now)
                 activeSession = paused
                 try resume(now: now)
+                try reserveStoppedTicket(parkedTicket, now: now)
                 return
             }
 
@@ -118,12 +121,28 @@ extension SessionManager {
                 throw SessionError.pauseLimitReached
             }
 
+            let parkedTicket = running.ticket
             try parkRunningSessionForSwitch(running, now: now)
             try startNewSession(ticket: ticket, now: now)
+            try reserveStoppedTicket(parkedTicket, now: now)
+            return
+        }
+
+        // Already stopped. Board the new ticket, then reserve the one we left.
+        if let paused = activeSession, paused.isOpen, paused.isPaused,
+           let parkedTicket = paused.ticket, parkedTicket.id != ticket.id {
+            try board(ticket: ticket, now: now)
+            try reserveStoppedTicket(parkedTicket, now: now)
             return
         }
 
         try board(ticket: ticket, now: now)
+    }
+
+    /// The ticket just left behind becomes the next reservation. A plain `board` does not call this.
+    private func reserveStoppedTicket(_ ticket: Ticket?, now: Date) throws {
+        guard let ticket else { return }
+        try reserveNextRide(ticket: ticket, via: .riding, now: now)
     }
 
     func startNewSession(
