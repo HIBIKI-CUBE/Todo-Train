@@ -125,6 +125,22 @@ struct MacPipReestimateTests {
         #expect(object["progressAnswer"] == nil)
     }
 
+    @Test func undoLineNamesTheShareAndTheDeclaration() {
+        #expect(
+            PipBandCopy.undoLine(.recovery(progress: 0.5, committedRemainingSeconds: 1))
+                == "\(PipBandCopy.share50)・\(PipBandCopy.recovery)を\(PipBandCopy.undo)"
+        )
+        #expect(
+            PipBandCopy.undoLine(.adjust(progress: 0.8))
+                == "\(PipBandCopy.share80)・\(PipBandCopy.adjust)を\(PipBandCopy.undo)"
+        )
+        #expect(
+            PipBandCopy.undoLine(.adjust(progress: 0.3))
+                == "\(PipBandCopy.share30)・\(PipBandCopy.adjust)を\(PipBandCopy.undo)"
+        )
+        #expect(PipBandCopy.undoLine(.adjust(progress: 0.4)) == nil)
+    }
+
     @Test func hoverStripSplitsPositionCheckAndPause() {
         let width: CGFloat = 298
         #expect(PipHoverStrip.titles(canResume: false) == [PipBandCopy.positionCheck, CabinCopy.pause])

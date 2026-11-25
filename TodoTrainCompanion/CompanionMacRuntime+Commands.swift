@@ -24,6 +24,7 @@ extension CompanionMacRuntime {
         guard let until = reestimateUndoUntil, now >= until else { return }
         reestimateUndoUntil = nil
         reestimateUndoCommandID = nil
+        reestimateUndoChoice = nil
     }
 
     /// 見積もり直しを送る。届いたあと 5 秒だけ取り消しを出す。
@@ -56,6 +57,7 @@ extension CompanionMacRuntime {
             try await post(command)
             reestimateUndoCommandID = cmdId
             reestimateUndoUntil = now + MacPipReestimate.undoSeconds
+            reestimateUndoChoice = choice
             return true
         } catch {
             noteCommandTransportFailure(error)
@@ -76,6 +78,7 @@ extension CompanionMacRuntime {
         }
         let keptUntil = reestimateUndoUntil
         let keptID = reestimateUndoCommandID
+        let keptChoice = reestimateUndoChoice
         let cmdId = UUID()
         let command = MacPipReestimate.undoCommand(
             id: cmdId,
@@ -88,6 +91,7 @@ extension CompanionMacRuntime {
         outgoingPause = .sending(cmdId: cmdId)
         reestimateUndoUntil = nil
         reestimateUndoCommandID = nil
+        reestimateUndoChoice = nil
         transportNotice = nil
         do {
             try await post(command)
@@ -97,6 +101,7 @@ extension CompanionMacRuntime {
             if reestimateUndoUntil == nil {
                 reestimateUndoUntil = keptUntil
                 reestimateUndoCommandID = keptID
+                reestimateUndoChoice = keptChoice
             }
             return false
         }

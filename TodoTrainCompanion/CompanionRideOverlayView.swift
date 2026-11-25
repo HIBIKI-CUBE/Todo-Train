@@ -20,8 +20,10 @@ final class CompanionRideOverlayModel {
     var positionNowUnix: Int = 0
     /// Question already handled by a commit. Same nudge id does not reopen it.
     var settledNudgeID: UUID?
-    /// Mirrors the runtime. Non-nil shows 取り消し on the ride card.
+    /// Mirrors the runtime. Non-nil shows the undo line on the ride card.
     var reestimateUndoUntil: Int?
+    /// Commit named by that line. Nil keeps the bare 取り消す.
+    var reestimateUndoChoice: MacPipReestimateChoice?
     /// Edge lamp while the card is tucked. The card stays out.
     var edgeLamp = false
 
@@ -186,7 +188,7 @@ struct CompanionRideOverlayView: View {
             .accessibilityAction(named: PipBandCopy.adjust) {
                 if activeBand == .declare { commitDeclare(.adjust) }
             }
-            .accessibilityAction(named: PipBandCopy.undo) {
+            .accessibilityAction(named: undoLine) {
                 if model.reestimateUndoUntil != nil { onUndoReestimate() }
             }
     }
@@ -861,10 +863,20 @@ struct CompanionRideOverlayView: View {
         }
     }
 
+    private var undoLine: String {
+        if let choice = model.reestimateUndoChoice, let line = PipBandCopy.undoLine(choice) {
+            return line
+        }
+        return PipBandCopy.undo
+    }
+
     private var undoRow: some View {
-        Text(PipBandCopy.undo)
+        Text(undoLine)
             .font(.system(size: 15, weight: .semibold))
             .foregroundStyle(.white)
+            .lineLimit(1)
+            .minimumScaleFactor(0.5)
+            .padding(.horizontal, 8)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Color.black)
     }
@@ -919,7 +931,7 @@ struct CompanionRideOverlayView: View {
     }
 
     private var bottomAccessibilityLabel: String {
-        if model.reestimateUndoUntil != nil { return PipBandCopy.undo }
+        if model.reestimateUndoUntil != nil { return undoLine }
         if showsCabinActions { return "\(CabinCopy.prompt) \(CabinCopy.still) または 停車" }
         if showsAction {
             return PipHoverStrip.titles(canResume: presentation.canResume).joined(separator: " ")
@@ -1233,6 +1245,7 @@ func rideUndoPreview(title: String = "原稿") -> some View {
     let model = CompanionRideOverlayModel()
     model.presentation = rideSnap(title: title, now: 1_768_000_600)
     model.reestimateUndoUntil = 1_768_000_605
+    model.reestimateUndoChoice = .recovery(progress: 0.5, committedRemainingSeconds: 900)
     return CompanionRideOverlayView(
         model: model,
         onToggleHold: {},

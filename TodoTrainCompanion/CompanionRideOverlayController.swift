@@ -165,6 +165,7 @@ final class CompanionRideOverlayController: NSObject {
         syncPositionCheckContext()
         let previousUndo = model.reestimateUndoUntil
         model.reestimateUndoUntil = runtime.reestimateUndoUntil
+        model.reestimateUndoChoice = runtime.reestimateUndoChoice
         if let previousUndo, runtime.reestimateUndoUntil == nil, runtime.now < previousUndo {
             if case .failed = runtime.outgoingPause {
                 model.settledNudgeID = nil
@@ -407,6 +408,7 @@ final class CompanionRideOverlayController: NSObject {
             model.reestimateProgress = nil
             model.settledNudgeID = nudgeID
             model.reestimateUndoUntil = runtime.reestimateUndoUntil
+            model.reestimateUndoChoice = runtime.reestimateUndoChoice
         }
     }
 
