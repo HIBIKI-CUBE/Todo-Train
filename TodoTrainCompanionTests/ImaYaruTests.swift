@@ -288,6 +288,33 @@ struct ImaYaruTests {
         #expect(abs(ImaYaruFlight.waveSpacing / 110 - 0.8) < 0.001)
     }
 
+    @Test func assemblyAnchorsToTheCenterOfThePointerScreen() {
+        let main = CGRect(x: 0, y: 0, width: 1440, height: 900)
+        let side = CGRect(x: 1440, y: -200, width: 1920, height: 1080)
+        let mouse = CGPoint(x: 1500, y: 40)
+        #expect(side.contains(mouse))
+        #expect(!main.contains(mouse))
+        let anchor = ImaYaruPlacement.anchor(on: side)
+        #expect(anchor.x == 960)
+        #expect(anchor.y == 540)
+        let cursor = ImaYaruPlacement.cursorPoint(anchor: anchor, on: side, primaryHeight: main.height)
+        #expect(cursor.x == 2400)
+        #expect(cursor.y == 560)
+
+        let corner = CGPoint(x: 12, y: 12)
+        #expect(main.contains(corner))
+        let home = ImaYaruPlacement.anchor(on: main)
+        #expect(home.x == 720)
+        #expect(home.y == 450)
+        let homeCursor = ImaYaruPlacement.cursorPoint(anchor: home, on: main, primaryHeight: main.height)
+        #expect(homeCursor.x == 720)
+        #expect(homeCursor.y == 450)
+
+        let shifted = ImaYaruPlacement.cursorPoint(anchor: CGPoint(x: 100, y: 40), on: side, primaryHeight: main.height)
+        #expect(shifted.x == 1540)
+        #expect(shifted.y == 60)
+    }
+
     @Test func machineGrowsToTheTicket() {
         let ticket = ImaYaruTicketMetrics.size
         #expect(ticket.width == ImaYaruTicketMetrics.width)

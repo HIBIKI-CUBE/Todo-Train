@@ -3,7 +3,7 @@ import SwiftUI
 import TodoTrainSync
 import TodoTrainTicketUI
 
-/// Frameless f20 machine on the pointer's screen. Confirm and wait stay with the snap.
+/// Frameless f20 machine, centered on the screen that holds the pointer. Confirm and wait stay with the snap.
 struct ImaYaruFormView: View {
     @Environment(CompanionMacRuntime.self) private var runtime
 
