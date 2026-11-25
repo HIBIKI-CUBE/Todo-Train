@@ -225,7 +225,8 @@ struct ImaYaruFormView: View {
             catapult: catapult(mouthIsLive: gate.departEnabled),
             notice: notice,
             reduceMotion: reduceMotion,
-            stageSize: stageSize
+            stageSize: stageSize,
+            machineOpacity: reduceMotion ? 1 : (flightFrame?.machineOpacity ?? 1)
         )
     }
 

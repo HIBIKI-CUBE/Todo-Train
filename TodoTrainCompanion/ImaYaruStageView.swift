@@ -36,7 +36,7 @@ struct ImaYaruStagePicture: Equatable {
     var notice: String?
     var reduceMotion: Bool
     var stageSize: CGSize
-
+    var machineOpacity: CGFloat = 1
 }
 
 struct ImaYaruStageView: View {
@@ -55,6 +55,7 @@ struct ImaYaruStageView: View {
                 .contentShape(Rectangle())
                 .gesture(backgroundDrag)
             machine
+                .opacity(picture.machineOpacity)
                 .position(picture.machineCenter)
             if let catapult = picture.catapult, picture.gate.departEnabled {
                 ImaYaruCatapultCanvas(picture: catapult, ticketHeight: picture.ticketSize.height)
@@ -226,7 +227,7 @@ struct ImaYaruStageView: View {
             .accessibilityLabel("所要 \(picture.minutes) 分")
         }
         .frame(width: ImaYaruMachineMetrics.mockWidth, height: ImaYaruMachineMetrics.mockHeight)
-        .background(ImaYaruInk.sheet, in: RoundedRectangle(cornerRadius: ImaYaruMachineMetrics.mockRadius, style: .continuous))
+        .background(ImaYaruInk.body, in: RoundedRectangle(cornerRadius: ImaYaruMachineMetrics.mockRadius, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: ImaYaruMachineMetrics.mockRadius, style: .continuous)
                 .strokeBorder(ImaYaruInk.sheetEdge, lineWidth: 1)
@@ -259,7 +260,7 @@ struct ImaYaruStageView: View {
         ZStack(alignment: .bottom) {
             Capsule().fill(Color.white.opacity(0.2))
             Capsule()
-                .fill(ImaYaruInk.rail)
+                .fill(ImaYaruInk.gauge)
                 .frame(height: max(8, CGFloat(picture.minutes) / 60 * 56))
         }
         .frame(width: 10, height: 56)

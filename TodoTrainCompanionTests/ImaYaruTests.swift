@@ -283,8 +283,14 @@ struct ImaYaruTests {
         let gone = ImaYaruFlight.frame(tauMs: ImaYaruFlight.machineDoneMs, geometry: geometry)
         #expect(gone.finished)
         #expect(gone.machineShift < -400)
+        #expect(gone.machineOpacity < 0.05)
         #expect(gone.catapultRetract > 0.95)
         #expect(gone.ticketCenter.x > presented.ticketCenter.x)
+        let feeding = ImaYaruFlight.frame(tauMs: 240, geometry: geometry)
+        #expect(feeding.machineOpacity > 0.95)
+        let leaving = ImaYaruFlight.frame(tauMs: 680, geometry: geometry)
+        #expect(leaving.machineShift < feeding.machineShift - 200)
+        #expect(leaving.machineOpacity < 0.5)
     }
 
     @Test func shortcutRoundTripsAndDropsABareKey() {
@@ -482,7 +488,8 @@ private struct ImaYaruSnapshotHost: View {
             ),
             notice: nil,
             reduceMotion: true,
-            stageSize: stage
+            stageSize: stage,
+            machineOpacity: frame.machineOpacity
         )
     }
 

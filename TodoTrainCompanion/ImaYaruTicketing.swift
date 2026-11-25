@@ -9,9 +9,13 @@ enum ImaYaruInk {
     static let rail = Color(red: 115.0 / 255, green: 158.0 / 255, blue: 199.0 / 255)
     static let signalGreen = Color(red: 89.0 / 255, green: 199.0 / 255, blue: 133.0 / 255)
     static let signalAmber = Color(red: 255.0 / 255, green: 184.0 / 255, blue: 71.0 / 255)
+    /// Machine body. The mock's panels are this gray; the shell is not pure black.
+    static let body = Color(red: 28.0 / 255, green: 28.0 / 255, blue: 30.0 / 255)
     static let sheet = Color.black
     static let sheetEdge = Color(red: 44.0 / 255, green: 44.0 / 255, blue: 46.0 / 255)
-    static let well = Color(red: 28.0 / 255, green: 28.0 / 255, blue: 30.0 / 255)
+    static let well = Color(red: 44.0 / 255, green: 44.0 / 255, blue: 46.0 / 255)
+    /// Minutes fill. The mock uses this blue, brighter than rail.
+    static let gauge = Color(red: 10.0 / 255, green: 108.0 / 255, blue: 240.0 / 255)
 
     static let railNS = NSColor(srgbRed: 115.0 / 255, green: 158.0 / 255, blue: 199.0 / 255, alpha: 1)
     static let signalGreenNS = NSColor(srgbRed: 89.0 / 255, green: 199.0 / 255, blue: 133.0 / 255, alpha: 1)
@@ -377,6 +381,8 @@ struct ImaYaruFlightFrame: Equatable, Sendable {
     var catapultRetract: CGFloat
     /// 0…1 along the rail. The depart light rides with the ticket tip.
     var tip: CGFloat
+    /// 1 while the ticket feeds. Falls to 0 as the machine leaves.
+    var machineOpacity: CGFloat
     /// 1 feeding, 2 the short hold, 3 the ticket is leaving.
     var stage: Int
     var slotOn: Bool
@@ -401,12 +407,13 @@ extension ImaYaruFlight {
         let ticketY = originY + (Double(geometry.destination.y) - originY) * leave
         let clearance = Double(max(geometry.machineClearance, 1))
         let driftDistance = drift * depth
+        let exitSpan = max(machineDoneMs - presentEndMs, 1)
+        let exitEase = smoother(clampUnit((tau - presentEndMs) / exitSpan))
         let machine: Double
         if tau >= machineDoneMs {
             machine = clearance
         } else {
-            let late = pow(clampUnit((tau - feedMs) / (machineDoneMs - feedMs)), machinePower)
-            machine = driftDistance * smoother(tau / presentEndMs) + (clearance - driftDistance) * late
+            machine = driftDistance * smoother(min(1, tau / presentEndMs)) + (clearance - driftDistance) * exitEase
         }
         let traveled = max(0, direction * (ticketX - originX))
         let reveal = min(1, max(0, (machine + traveled) / depth))
@@ -432,6 +439,7 @@ extension ImaYaruFlight {
             printReveal: reveal,
             catapultRetract: retract,
             tip: tip,
+            machineOpacity: CGFloat(1 - exitEase),
             stage: stage,
             slotOn: slotLamp(onAt: tau),
             finished: tau >= endMs(direction: direction)
