@@ -485,6 +485,7 @@ extension CompanionMacRuntime {
         if case .sending(let id) = outgoingPause { inFlight = id } else { inFlight = nil }
         outgoingPause = OutgoingPauseApplying.applyAck(ack, current: outgoingPause)
         issueBoardTrack = IssueBoardTracking.applyAck(ack, current: issueBoardTrack)
+        noteIssueAck(ack)
         guard ack.cmdId == inFlight else { return }
         transportNotice = nil
         if ack.cmdId == reestimateUndoCommandID, !ack.ok {

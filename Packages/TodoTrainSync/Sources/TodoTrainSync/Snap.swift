@@ -52,6 +52,8 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
     public var notifyFireAt: Int?
     /// Home band, signal, judged estimate, and seal sample. Present only while riding.
     public var home: WireHome?
+    /// True only while a calendar-event ride is open. Omitted otherwise.
+    public var passengerAboard: Bool?
 
     public init(
         rev: Int,
@@ -85,7 +87,8 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
         notifyOn: NotifyOn? = nil,
         notifyTurn: Int? = nil,
         notifyFireAt: Int? = nil,
-        home: WireHome? = nil
+        home: WireHome? = nil,
+        passengerAboard: Bool? = nil
     ) {
         self.rev = rev
         self.sessionId = sessionId
@@ -120,6 +123,7 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
         self.notifyTurn = notifyTurn
         self.notifyFireAt = notifyFireAt
         self.home = Self.riding(phase) ? home : nil
+        self.passengerAboard = passengerAboard == true ? true : nil
     }
 
     public var announcement: ContractAnnouncement {
@@ -136,6 +140,7 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
         case macSampledSeconds, macActiveSeconds
         case notifyOn, notifyTurn, notifyFireAt
         case home
+        case passengerAboard
     }
 
     public init(from decoder: Decoder) throws {
@@ -191,6 +196,7 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
         notifyFireAt = try container.decodeIfPresent(Int.self, forKey: .notifyFireAt)
         let decodedHome = Self.lenient(WireHome.self, from: container, forKey: .home)
         home = Self.riding(phase) ? decodedHome : nil
+        passengerAboard = Self.lenient(Bool.self, from: container, forKey: .passengerAboard) == true ? true : nil
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -230,6 +236,9 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
         try container.encodeIfPresent(notifyFireAt, forKey: .notifyFireAt)
         if Self.riding(phase) {
             try container.encodeIfPresent(home, forKey: .home)
+        }
+        if passengerAboard == true {
+            try container.encode(true, forKey: .passengerAboard)
         }
     }
 

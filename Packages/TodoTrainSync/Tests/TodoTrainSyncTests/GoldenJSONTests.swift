@@ -139,6 +139,56 @@ struct GoldenJSONTests {
         #expect(object.keys.sorted() == ["at", "estimatedSeconds", "id", "op", "sessionId", "title"])
     }
 
+    @Test func cmdIssueRoundTripOmitsSessionAndKeepsTitle() throws {
+        let data = try ContractFixtures.data("fixtures/cmd-issue.json")
+        let decoded = try WireJSON.decoder().decode(CommandPlaintext.self, from: data)
+        #expect(decoded.op == .issue)
+        #expect(decoded.sessionId == nil)
+        #expect(decoded.title == "週次レビューの下書き")
+        #expect(decoded.estimatedSeconds == 1500)
+
+        let encoded = try WireJSON.encoder().encode(decoded)
+        let object = try JSONSerialization.jsonObject(with: encoded) as! [String: Any]
+        #expect(object["op"] as? String == "issue")
+        #expect(object["title"] as? String == "週次レビューの下書き")
+        #expect(object["estimatedSeconds"] as? Int == 1500)
+        #expect(object["sessionId"] is NSNull)
+        #expect(object.keys.sorted() == ["at", "estimatedSeconds", "id", "op", "sessionId", "title"])
+
+        let again = CommandPlaintext(
+            id: decoded.id,
+            op: .issue,
+            sessionId: nil,
+            at: decoded.at,
+            title: decoded.title,
+            estimatedSeconds: decoded.estimatedSeconds
+        )
+        let rebuilt = try JSONSerialization.jsonObject(with: try WireJSON.encoder().encode(again)) as! [String: Any]
+        #expect(rebuilt["op"] as? String == "issue")
+        #expect(rebuilt["sessionId"] is NSNull)
+    }
+
+    @Test func passengerAboardEncodesOnlyWhenTrue() throws {
+        var snap = try WireJSON.decoder().decode(
+            SnapPlaintext.self,
+            from: ContractFixtures.data("fixtures/snap-idle.json")
+        )
+        #expect(snap.passengerAboard == nil)
+        let omitted = try JSONSerialization.jsonObject(with: try WireJSON.encoder().encode(snap)) as! [String: Any]
+        #expect(omitted["passengerAboard"] == nil)
+
+        snap.passengerAboard = true
+        let encoded = try JSONSerialization.jsonObject(with: try WireJSON.encoder().encode(snap)) as! [String: Any]
+        #expect(encoded["passengerAboard"] as? Bool == true)
+        let again = try WireJSON.decoder().decode(SnapPlaintext.self, from: try WireJSON.encoder().encode(snap))
+        #expect(again.passengerAboard == true)
+
+        let broken = #"{"rev":1,"sessionId":null,"ticketId":null,"title":null,"phase":"idle","startedAt":null,"estimatedSeconds":null,"pausedAccumulated":null,"pausedAt":null,"boardedDeviceID":null,"passengerAboard":"yes"}"#
+        let dropped = try WireJSON.decoder().decode(SnapPlaintext.self, from: Data(broken.utf8))
+        #expect(dropped.passengerAboard == nil)
+        #expect(dropped.phase == .idle)
+    }
+
     @Test func cmdIssueAndBoardInterruptKeepsSession() throws {
         let data = try ContractFixtures.data("fixtures/cmd-issueAndBoard-interrupt.json")
         let decoded = try WireJSON.decoder().decode(CommandPlaintext.self, from: data)
@@ -352,7 +402,7 @@ struct GoldenJSONTests {
         #expect(json["kind"] as? [String] == ["snap", "cmd", "ack"])
         #expect(json["op"] as? [String] == [
             "pause", "resume", "still", "issueAndBoard", "answer", "boardReserved", "presence",
-            "pauseInputReport", "reestimate", "undoReestimate",
+            "pauseInputReport", "reestimate", "undoReestimate", "issue",
         ])
         #expect(json["pendingCabin"] as? [String] == ["progress", "away", "idle", "overrun", "gap"])
         #expect(json["nudgeKind"] as? [String] == NudgeKind.knownRawValues)
@@ -372,11 +422,12 @@ struct GoldenJSONTests {
         #expect(json["homeSignal"] as? [String] == WireHomeSignal.knownRawValues)
         #expect(json["judgedEstimateKind"] as? [String] == WireJudgedEstimateKind.knownRawValues)
         let introduced = try #require(json["opIntroduced"] as? [String: Int])
-        for op in ["pause", "resume", "still", "issueAndBoard", "answer", "boardReserved", "presence", "pauseInputReport", "reestimate", "undoReestimate"] {
+        for op in ["pause", "resume", "still", "issueAndBoard", "answer", "boardReserved", "presence", "pauseInputReport", "reestimate", "undoReestimate", "issue"] {
             #expect(introduced[op] == WireOp(rawValue: op).introducedIn)
         }
         #expect(WireOp.reestimate.introducedIn == 15)
         #expect(WireOp.undoReestimate.introducedIn == 15)
+        #expect(WireOp.issue.introducedIn == 17)
         #expect(json["error"] as? [String] == [
             "pauseLimitReached", "noActiveService", "sessionMismatch", "decryptFailed", "notPaused",
             "invalidPayload", "unsupportedOp", "nudgeStale", "noReservation", "reservationChanged",

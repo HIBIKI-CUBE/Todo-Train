@@ -13,6 +13,9 @@ enum CompanionCommandApplying {
         _ command: CommandPlaintext,
         sessionManager: SessionManager
     ) throws -> AckPlaintext {
+        if command.op == .issue {
+            return issueAck(command, sessionManager: sessionManager)
+        }
         if command.op == .issueAndBoard {
             return issueAndBoardAck(command, sessionManager: sessionManager)
         }
@@ -47,11 +50,33 @@ enum CompanionCommandApplying {
                 try sessionManager.resume()
             case .still:
                 sessionManager.acknowledgeCabinStill()
-            case .issueAndBoard, .answer, .boardReserved, .presence, .pauseInputReport, .reestimate, .undoReestimate, .unknown:
+            case .issue, .issueAndBoard, .answer, .boardReserved, .presence, .pauseInputReport, .reestimate, .undoReestimate, .unknown:
                 break
             }
         }
         return RemotePauseEvaluating.ack(decision: decision, commandId: command.id)
+    }
+
+    private static func issueAck(
+        _ command: CommandPlaintext,
+        sessionManager: SessionManager
+    ) -> AckPlaintext {
+        let decision = IssueEvaluating.evaluate(command: command)
+        guard decision == .save else {
+            return IssueEvaluating.ack(decision: decision, commandId: command.id)
+        }
+        let title = IssueAndBoardEvaluating.trimmedTitle(command.title ?? "")
+        do {
+            _ = try TicketIssuer.issue(
+                title: title,
+                estimatedSeconds: command.estimatedSeconds ?? 0,
+                createdAt: sessionManager.clock.now,
+                into: sessionManager.modelContext
+            )
+            return IssueEvaluating.ack(decision: .save, commandId: command.id)
+        } catch {
+            return AckPlaintext(cmdId: command.id, ok: false, error: .invalidPayload)
+        }
     }
 
     private static func issueAndBoardAck(

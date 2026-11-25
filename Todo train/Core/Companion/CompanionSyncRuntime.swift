@@ -400,14 +400,15 @@ final class CompanionSyncRuntime {
             rev: envelope.rev,
             encKey: encKey
         )
-        // issueAndBoard has already boarded. A debounced snap push re-pulls cmds
-        // during putAck; applying twice acks sessionMismatch and the Mac drops the ride.
-        if command.op == .issueAndBoard {
+        // issue and issueAndBoard have already written. A debounced snap push re-pulls
+        // cmds during putAck; applying issue twice would mint a second ticket, and
+        // applying issueAndBoard twice acks sessionMismatch and the Mac drops the ride.
+        if command.op == .issue || command.op == .issueAndBoard {
             processedCommandIDs.insert(command.id)
             persistProcessed()
         }
         _ = try await client.putAck(ackEnvelope)
-        if command.op != .issueAndBoard {
+        if command.op != .issue && command.op != .issueAndBoard {
             processedCommandIDs.insert(command.id)
             persistProcessed()
         }

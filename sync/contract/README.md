@@ -1,12 +1,12 @@
 # sync/contract — ワイヤ契約の正本
 
-最終更新: 2026-11-18。散文の背景は [docs/13-sync-mac-companion.md](../../docs/13-sync-mac-companion.md)。
+最終更新: 2026-11-25。散文の背景は [docs/13-sync-mac-companion.md](../../docs/13-sync-mac-companion.md)。
 
 **Swift（SYNC-2）も Worker（SYNC-1）も、ワイヤ形式の正はここだけ。** 実装ディレクトリに別のスキーマや「本当の」エンベロープを書かない。テストはこのディレクトリの JSON / 例を fixture として読む。
 
 Worker は `ct` を JSON.parse しない。平文フィクスチャと AES-GCM ベクトルはクライアント側の round-trip 用。復号鍵を Worker テストに持たない。
 
-新しい HTTP 経路も `arrive` / `extend` の `op` も、ここから足さない。`resume` は 2026-09-12、`still`（車内放送の消費）は 2026-09-12 に追加。`issueAndBoard`（発行＋発車の一拍。在庫のみは無し）は 2026-10-07 に追加。`answer`（声掛けへの返事）・`boardReserved`（予約の切符の発車）・`presence`（Mac の在席。変化したときだけ）は 2026-10-12 に追加。`pause` の任意 `heldBy` と snap の任意 `pauseHeldBy` は 2026-10-12 に追加。2026-10-13 の版 8 と版 9 は車内放送の文言だけを足し、ワイヤの形は版 7 のまま。版 10 はその凍結を足すだけで、ワイヤの形は変えない。版 11 は画面の外の通知先 `notifyOn` を任意で足す。版 12 は停車中の入力 `pauseInputReport` と snap の任意 `pauseId` を足す。版 13 は停車中の snap に測った秒を足し、その秒は下げない。版 14 は、予定の時刻で停車しない。`timetablePauseAt` は出さない。理由の無い停車は `user` と推定し、保護境界の前後では理由を変えない。ワイヤの形は変えない。版 13 のフォルダは無い。版 13 で足した停車中の測った秒は、形を変えていない版 14 の凍結に含まれる。版 15 は見積もり直し `reestimate` と、直前の確定の取り消し `undoReestimate`、乗車中の snap の `home` を足す。版 16 は WebSocket の `ping`・`pong`・`echo` と、hello の任意 `role`（`iphone` / `mac`）を足す。制御フレームは保存も記録もしない。`minReadable` は 3 のまま。`cmd-answer-extend` は最新から外し、版 5 から版 14 の凍結に残す。切符全件レプリカは載せない。`GET /v1/hint/:pairingId` だけ例外（平文 rev。暗号文は載せない）。
+新しい HTTP 経路も `arrive` / `extend` の `op` も、ここから足さない。`resume` は 2026-09-12、`still`（車内放送の消費）は 2026-09-12 に追加。`issueAndBoard`（発行＋発車の一拍。在庫のみは無し）は 2026-10-07 に追加。`answer`（声掛けへの返事）・`boardReserved`（予約の切符の発車）・`presence`（Mac の在席。変化したときだけ）は 2026-10-12 に追加。`pause` の任意 `heldBy` と snap の任意 `pauseHeldBy` は 2026-10-12 に追加。2026-10-13 の版 8 と版 9 は車内放送の文言だけを足し、ワイヤの形は版 7 のまま。版 10 はその凍結を足すだけで、ワイヤの形は変えない。版 11 は画面の外の通知先 `notifyOn` を任意で足す。版 12 は停車中の入力 `pauseInputReport` と snap の任意 `pauseId` を足す。版 13 は停車中の snap に測った秒を足し、その秒は下げない。版 14 は、予定の時刻で停車しない。`timetablePauseAt` は出さない。理由の無い停車は `user` と推定し、保護境界の前後では理由を変えない。ワイヤの形は変えない。版 13 のフォルダは無い。版 13 で足した停車中の測った秒は、形を変えていない版 14 の凍結に含まれる。版 15 は見積もり直し `reestimate` と、直前の確定の取り消し `undoReestimate`、乗車中の snap の `home` を足す。版 16 は WebSocket の `ping`・`pong`・`echo` と、hello の任意 `role`（`iphone` / `mac`）を足す。制御フレームは保存も記録もしない。版 17 は発券だけの `issue` を足す。`sessionId` は `null`。運行前でも乗車中でも受ける。成功 ack は `ok: true` のみで、結果は後続 snap。任意の snap `passengerAboard` は予定に乗車中だけ出す。`minReadable` は 3 のまま。`cmd-answer-extend` は最新から外し、版 5 から版 14 の凍結に残す。切符全件レプリカは載せない。`GET /v1/hint/:pairingId` だけ例外（平文 rev。暗号文は載せない）。
 
 ## ファイル一覧
 
@@ -28,6 +28,7 @@ Worker は `ct` を JSON.parse しない。平文フィクスチャと AES-GCM �
 | [fixtures/cmd-still.json](fixtures/cmd-still.json) | `op: still` 平文 |
 | [fixtures/cmd-still-nosession.json](fixtures/cmd-still-nosession.json) | `op: still`、乗務なし（`sessionId` null） |
 | [fixtures/cmd-issueAndBoard.json](fixtures/cmd-issueAndBoard.json) | `op: issueAndBoard`、非乗務（`sessionId` null） |
+| [fixtures/cmd-issue.json](fixtures/cmd-issue.json) | `op: issue`、発券だけ（`sessionId` null） |
 | [fixtures/cmd-issueAndBoard-interrupt.json](fixtures/cmd-issueAndBoard-interrupt.json) | `op: issueAndBoard`、乗務中割り込み |
 | [fixtures/ack-ok.json](fixtures/ack-ok.json) | 成功 ack 平文 |
 | [fixtures/ack-unsupportedOp.json](fixtures/ack-unsupportedOp.json) | 未知の op を実行しなかった ack |

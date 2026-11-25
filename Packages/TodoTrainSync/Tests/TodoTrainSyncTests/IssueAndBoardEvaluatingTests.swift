@@ -113,3 +113,50 @@ struct IssueAndBoardEvaluatingTests {
         #expect(!decision.shouldApply)
     }
 }
+
+@Suite("issue gate")
+struct IssueEvaluatingTests {
+    private let cmdID = UUID(uuidString: "88888888-8888-4888-8888-888888888888")!
+
+    private func command(
+        sessionId: UUID? = nil,
+        title: String? = "週次レビューの下書き",
+        estimatedSeconds: Int? = 1500,
+        op: WireOp = .issue
+    ) -> CommandPlaintext {
+        CommandPlaintext(
+            id: cmdID,
+            op: op,
+            sessionId: sessionId,
+            at: 1_768_000_120,
+            title: title,
+            estimatedSeconds: estimatedSeconds
+        )
+    }
+
+    @Test func savesWithoutServiceOrARide() {
+        let decision = IssueEvaluating.evaluate(command: command(), receiverContract: 17)
+        #expect(decision == .save)
+        let ack = IssueEvaluating.ack(decision: decision, commandId: cmdID)
+        #expect(ack.ok)
+        #expect(ack.error == nil)
+    }
+
+    @Test func olderReceiverIsUnsupported() {
+        let decision = IssueEvaluating.evaluate(command: command(), receiverContract: 16)
+        #expect(decision == .unsupportedOp)
+        #expect(IssueEvaluating.ack(decision: decision, commandId: cmdID).error == .unsupportedOp)
+    }
+
+    @Test func rejectsASessionIdAndABadPayload() {
+        let session = UUID(uuidString: "11111111-1111-4111-8111-111111111111")!
+        #expect(IssueEvaluating.evaluate(command: command(sessionId: session)) == .invalidPayload)
+        #expect(IssueEvaluating.evaluate(command: command(title: "  ")) == .invalidPayload)
+        #expect(IssueEvaluating.evaluate(command: command(estimatedSeconds: 59)) == .invalidPayload)
+        #expect(IssueEvaluating.evaluate(command: command(estimatedSeconds: 3601)) == .invalidPayload)
+        #expect(IssueEvaluating.evaluate(command: command(title: nil)) == .invalidPayload)
+        #expect(IssueEvaluating.evaluate(command: command(op: .issueAndBoard)) == .invalidPayload)
+        #expect(IssueEvaluating.evaluate(command: command(estimatedSeconds: 60)) == .save)
+        #expect(IssueEvaluating.evaluate(command: command(estimatedSeconds: 3600)) == .save)
+    }
+}

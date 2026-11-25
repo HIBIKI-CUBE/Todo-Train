@@ -5,9 +5,9 @@ public struct CommandPlaintext: Codable, Equatable, Sendable {
     public var op: WireOp
     public var sessionId: UUID?
     public var at: Int
-    /// Present only for `issueAndBoard`. Other ops omit the key.
+    /// Present only for `issue` and `issueAndBoard`. Other ops omit the key.
     public var title: String?
-    /// Present only for `issueAndBoard`. Seconds, not minutes. Other ops omit the key.
+    /// Present only for `issue` and `issueAndBoard`. Seconds, not minutes. Other ops omit the key.
     public var estimatedSeconds: Int?
     /// Mac build. Commands are written by the Mac. Absent on older peers.
     public var build: WireBuildInfo?
@@ -116,7 +116,7 @@ public struct CommandPlaintext: Codable, Equatable, Sendable {
         self.surface = nil
         self.input = nil
         switch op {
-        case .issueAndBoard:
+        case .issue, .issueAndBoard:
             self.title = title
             self.estimatedSeconds = estimatedSeconds
         case .answer:
@@ -198,7 +198,7 @@ public struct CommandPlaintext: Codable, Equatable, Sendable {
         surface = nil
         input = nil
         switch op {
-        case .issueAndBoard:
+        case .issue, .issueAndBoard:
             title = try container.decodeIfPresent(String.self, forKey: .title)
             estimatedSeconds = try container.decodeIfPresent(Int.self, forKey: .estimatedSeconds)
         case .answer:
@@ -243,7 +243,7 @@ public struct CommandPlaintext: Codable, Equatable, Sendable {
         try container.encodeLowercaseUUID(sessionId, forKey: .sessionId)
         try container.encode(at, forKey: .at)
         switch op {
-        case .issueAndBoard:
+        case .issue, .issueAndBoard:
             try container.encode(title ?? "", forKey: .title)
             try container.encode(estimatedSeconds ?? 0, forKey: .estimatedSeconds)
         case .answer:

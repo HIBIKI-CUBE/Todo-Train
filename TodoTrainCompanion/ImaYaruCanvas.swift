@@ -4,8 +4,21 @@ import TodoTrainSync
 import TodoTrainTicketUI
 
 enum ImaYaruOffer {
-    static func isAvailable(isPaired: Bool, serviceActive: Bool?) -> Bool {
-        isPaired && serviceActive == true
+    /// The panel opens whenever the Mac is paired. Service is not required.
+    static func isAvailable(isPaired: Bool) -> Bool {
+        isPaired
+    }
+
+    /// 「発券して発車」. Off before service starts, and while a calendar event is the ride.
+    static func canIssueAndBoard(serviceActive: Bool, timetableRide: Bool) -> Bool {
+        serviceActive && !timetableRide
+    }
+
+    /// A passenger ride of a calendar event. A timetable pause of a ticket is not this.
+    static func isTimetableRide(_ snap: SnapPlaintext?) -> Bool {
+        guard let snap else { return false }
+        if snap.passengerAboard == true { return true }
+        return snap.pauseHeldBy == .passenger
     }
 
     /// Session the next interrupt must name. Idle snaps do not count, even with a leftover id.

@@ -36,7 +36,7 @@ enum TicketIssuer {
     }
 
     /// `estimatedSeconds` is stored as given after clamping to 1...`Ticket.maxEstimatedSeconds`.
-    /// Remote `issueAndBoard` validates 60...3600 before calling this.
+    /// Remote `issue` and `issueAndBoard` validate 60...3600 before calling this.
     @discardableResult
     static func issue(
         title: String,

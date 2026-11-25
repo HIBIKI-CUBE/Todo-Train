@@ -27,8 +27,10 @@ enum CompanionSnapBuilding {
         nudge: WireNudge? = nil,
         nudgePlan: [WireNudgePlanItem]? = nil,
         reserved: WireReservedTicket? = nil,
-        openPendingCabin: CabinKind? = nil
+        openPendingCabin: CabinKind? = nil,
+        passengerAboard: Bool = false
     ) -> SnapPlaintext {
+        let aboard: Bool? = passengerAboard ? true : nil
         guard let session, session.isOpen, phase != .idle else {
             return idle(
                 rev: rev,
@@ -37,7 +39,8 @@ enum CompanionSnapBuilding {
                 pendingCabin: openPendingCabin ?? pendingCabin,
                 nudge: nudge,
                 nudgePlan: nudgePlan,
-                reserved: reserved
+                reserved: reserved,
+                passengerAboard: aboard
             )
         }
         let open = Self.openPause(session: session, phase: phase)
@@ -82,7 +85,8 @@ enum CompanionSnapBuilding {
             pauseId: open?.id,
             macSampledSeconds: samples?.sampled,
             macActiveSeconds: samples?.active,
-            home: home
+            home: home,
+            passengerAboard: aboard
         )
     }
 
@@ -152,7 +156,8 @@ enum CompanionSnapBuilding {
         pendingCabin: CabinKind? = nil,
         nudge: WireNudge? = nil,
         nudgePlan: [WireNudgePlanItem]? = nil,
-        reserved: WireReservedTicket? = nil
+        reserved: WireReservedTicket? = nil,
+        passengerAboard: Bool? = nil
     ) -> SnapPlaintext {
         SnapPlaintext(
             rev: rev,
@@ -171,7 +176,8 @@ enum CompanionSnapBuilding {
             pendingCabin: pendingCabin,
             nudge: nudge,
             nudgePlan: nudgePlan,
-            reserved: reserved
+            reserved: reserved,
+            passengerAboard: passengerAboard
         )
     }
 }

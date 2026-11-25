@@ -37,12 +37,19 @@ struct ImaYaruFormView: View {
         IssueAndBoardEvaluating.isValid(title: trimmedTitle, estimatedSeconds: minutes * 60)
     }
 
+    private var canDepart: Bool {
+        canIssue && ImaYaruOffer.canIssueAndBoard(
+            serviceActive: runtime.snap?.serviceActive == true,
+            timetableRide: ImaYaruOffer.isTimetableRide(runtime.snap)
+        )
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             TextField("題名", text: $title)
                 .textFieldStyle(.roundedBorder)
                 .focused($titleFocused)
-                .onSubmit(commit)
+                .onSubmit(issueOnly)
                 .disabled(phase != .editing)
 
             VStack(alignment: .leading, spacing: 8) {
@@ -70,12 +77,15 @@ struct ImaYaruFormView: View {
                 Spacer()
                 Button("キャンセル", action: onClose)
                     .keyboardShortcut(.cancelAction)
-                Button(phase == .sending ? "送っています…" : "発車") {
-                    commit()
-                }
-                .keyboardShortcut(.defaultAction)
-                .buttonStyle(.borderedProminent)
-                .disabled(phase != .editing || !canIssue)
+                Button("発券", action: issueOnly)
+                    .keyboardShortcut(.defaultAction)
+                    .buttonStyle(.borderedProminent)
+                    .disabled(phase != .editing || !canIssue)
+                    .accessibilityHint("切符を発行します")
+                Button(phase == .sending ? "送っています…" : "発券して発車", action: depart)
+                    .keyboardShortcut(.return, modifiers: .command)
+                    .disabled(phase != .editing || !canDepart)
+                    .accessibilityHint("切符を発行して発車します")
             }
         }
         .padding(20)
@@ -104,6 +114,11 @@ struct ImaYaruFormView: View {
         .onChange(of: runtime.snap) { _, _ in
             noteProgress()
         }
+        .onChange(of: runtime.issueOnlyFailure) { _, failure in
+            guard phase == .editing, let failure else { return }
+            notice = failure
+            noticeIsFailure = true
+        }
         .onExitCommand(perform: onClose)
         .task(id: sendID) {
             guard phase == .sending else { return }
@@ -130,8 +145,19 @@ struct ImaYaruFormView: View {
         )
     }
 
-    private func commit() {
+    private func issueOnly() {
         guard phase == .editing, canIssue else { return }
+        let trimmed = trimmedTitle
+        let seconds = minutes * 60
+        title = ""
+        notice = nil
+        noticeIsFailure = false
+        titleFocused = true
+        Task { await runtime.sendIssue(title: trimmed, estimatedSeconds: seconds) }
+    }
+
+    private func depart() {
+        guard phase == .editing, canDepart else { return }
         let trimmed = trimmedTitle
         sentTitle = trimmed
         sentMinutes = minutes

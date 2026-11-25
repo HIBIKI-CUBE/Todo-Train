@@ -247,6 +247,8 @@ struct NudgeWireTests {
         ) == .unsupportedOp)
         #expect(NudgeCommandEvaluating.versionGate(op: .presence, receiverContract: 4) == .unsupportedOp)
         #expect(NudgeCommandEvaluating.versionGate(op: .answer, receiverContract: 5) == nil)
+        #expect(NudgeCommandEvaluating.versionGate(op: .issue, receiverContract: 16) == .unsupportedOp)
+        #expect(NudgeCommandEvaluating.versionGate(op: .issue, receiverContract: 17) == nil)
         #expect(NudgeCommandEvaluating.versionGate(op: .unknown("arrive"), receiverContract: 5) == .unsupportedOp)
     }
 
