@@ -1,8 +1,9 @@
+import AppKit
 import SwiftUI
 import TodoTrainSync
 import TodoTrainTicketUI
 
-/// Mac panel: title, duration, and a button. The Mars face is not in this window.
+/// Frameless f20 machine on the pointer's screen. Confirm and wait stay with the snap.
 struct ImaYaruFormView: View {
     @Environment(CompanionMacRuntime.self) private var runtime
 
@@ -10,6 +11,11 @@ struct ImaYaruFormView: View {
     var seededTitle: String = ""
     var seededMinutes: Int = 30
     var seededPrior: UUID?
+    var anchor: CGPoint
+    var stageSize: CGSize
+    var ticketSize: CGSize
+    var menuAnchor: CGPoint
+    var scrollBridge: ImaYaruScrollBridge
     var onDispense: (_ title: String, _ minutes: Int, _ priorSessionId: UUID?) -> Void
     var onClose: () -> Void
 
@@ -17,17 +23,48 @@ struct ImaYaruFormView: View {
     @State private var minutes = 30
     @State private var phase: FormPhase = .editing
     @State private var notice: String?
-    @State private var noticeIsFailure = false
     @State private var sendID = 0
     @State private var sentTitle = ""
     @State private var sentMinutes = 30
     @State private var sentPrior: UUID?
+    @State private var arm: ImaYaruArm = .none
+    @State private var departCharge: CGFloat = 0
+    @State private var saveCharge: CGFloat = 0
+    @State private var lamp: CGFloat = 0.35
+    @State private var shake: CGFloat = 0
+    @State private var slotOn = true
+    @State private var flight: Flight?
+    @State private var flightFrame: ImaYaruFlightFrame?
+    @State private var departReady = false
+    @State private var flightDone = false
+    @State private var reduceMotion = false
+    @State private var strokeX: CGFloat = 0
+    @State private var strokeY: CGFloat = 0
+    @State private var strokeAxis: ImaYaruStrokeAxis?
+    @State private var strokeAnchor = 30
+    @State private var catapultPhase: Double = 0
+    @State private var follow = CGSize.zero
+    @State private var tilt: Double = 0
+    @State private var lastPointer = CGSize.zero
+    @State private var lastPointerTime = Date()
     @FocusState private var titleFocused: Bool
 
     private enum FormPhase {
         case editing
         case sending
     }
+
+    private struct Flight {
+        enum Kind { case depart, save }
+        var kind: Kind
+        var started: Date
+        var geometry: ImaYaruFlightGeometry
+        var title: String
+        var minutes: Int
+    }
+
+    /// Reference height for a two-finger stroke, in the same points as scrolling deltas.
+    private static let strokePadHeight: CGFloat = 160
 
     private var trimmedTitle: String {
         IssueAndBoardEvaluating.trimmedTitle(title)
@@ -37,61 +74,39 @@ struct ImaYaruFormView: View {
         IssueAndBoardEvaluating.isValid(title: trimmedTitle, estimatedSeconds: minutes * 60)
     }
 
-    private var canDepart: Bool {
-        canIssue && ImaYaruOffer.canIssueAndBoard(
+    private var gate: ImaYaruDepartGate {
+        ImaYaruDepartGate.resolve(
             serviceActive: runtime.snap?.serviceActive == true,
             timetableRide: ImaYaruOffer.isTimetableRide(runtime.snap)
         )
     }
 
+    private var canDepart: Bool {
+        canIssue && gate.departEnabled
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            TextField("題名", text: $title)
-                .textFieldStyle(.roundedBorder)
-                .focused($titleFocused)
-                .onSubmit(issueOnly)
-                .disabled(phase != .editing)
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text("所要（分）")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                Picker("所要", selection: $minutes) {
-                    ForEach(EstimateSnapMapping.stops, id: \.self) { stop in
-                        Text("\(stop)").tag(stop)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .disabled(phase != .editing)
+        ImaYaruStageView(
+            title: $title,
+            picture: picture,
+            interactive: phase == .editing && flight == nil,
+            titleFocused: $titleFocused,
+            onSubmitTitle: submitTitle,
+            onMachineDrag: { translation, ended in
+                pointer(translation, ended: ended)
+            },
+            onBackgroundDrag: { translation, ended in
+                pointer(translation, ended: ended)
             }
-
-            if let notice {
-                Text(notice)
-                    .font(.callout)
-                    .foregroundStyle(noticeIsFailure ? Color.red : Color.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            HStack {
-                Spacer()
-                Button("キャンセル", action: onClose)
-                    .keyboardShortcut(.cancelAction)
-                Button("発券", action: issueOnly)
-                    .keyboardShortcut(.defaultAction)
-                    .buttonStyle(.borderedProminent)
-                    .disabled(phase != .editing || !canIssue)
-                    .accessibilityHint("切符を発行します")
-                Button(phase == .sending ? "送っています…" : "発券して発車", action: depart)
-                    .keyboardShortcut(.return, modifiers: .command)
-                    .disabled(phase != .editing || !canDepart)
-                    .accessibilityHint("切符を発行して発車します")
+        )
+        .task {
+            while !Task.isCancelled {
+                tick(Date())
+                try? await Task.sleep(for: .milliseconds(33))
             }
         }
-        .padding(20)
-        .frame(width: 400, alignment: .topLeading)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .onAppear {
+            reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
             if title.isEmpty {
                 minutes = EstimateSnapMapping.snap(rawMinutes: Double(seededMinutes))
                 if !seededTitle.isEmpty {
@@ -103,10 +118,15 @@ struct ImaYaruFormView: View {
             }
             if notice == nil {
                 notice = initialNotice
-                noticeIsFailure = initialNotice != nil
             }
             titleFocused = true
+            scrollBridge.onScroll = { dx, dy, phase in
+                ingestScroll(dx: dx, dy: dy, phase: phase)
+            }
             noteProgress()
+        }
+        .onDisappear {
+            scrollBridge.onScroll = nil
         }
         .onChange(of: runtime.issueBoardTrack) { _, _ in
             noteProgress()
@@ -115,25 +135,139 @@ struct ImaYaruFormView: View {
             noteProgress()
         }
         .onChange(of: runtime.issueOnlyFailure) { _, failure in
-            guard phase == .editing, let failure else { return }
+            guard phase == .editing, flight == nil, let failure else { return }
             notice = failure
-            noticeIsFailure = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification)) { _ in
+            reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         }
         .onExitCommand(perform: onClose)
+        .onKeyPress(.leftArrow) {
+            guard phase == .editing, flight == nil, !titleFocused else { return .ignored }
+            setArm(.save, departCharge: 0, saveCharge: 1)
+            return .handled
+        }
+        .onKeyPress(.rightArrow) {
+            guard phase == .editing, flight == nil, !titleFocused else { return .ignored }
+            if gate.departEnabled {
+                setArm(.depart, departCharge: 1, saveCharge: 0)
+            } else {
+                setArm(.blocked, departCharge: 0, saveCharge: 0)
+                shake = 1
+            }
+            return .handled
+        }
+        .background {
+            Button(action: commandReturn) { EmptyView() }
+                .keyboardShortcut(.return, modifiers: .command)
+                .frame(width: 0, height: 0)
+                .opacity(0)
+                .accessibilityHidden(true)
+        }
         .task(id: sendID) {
             guard phase == .sending else { return }
             try? await Task.sleep(for: .seconds(ImaYaruWait.captionAfter))
             guard phase == .sending else { return }
             notice = SyncCopy.waitingForIPhone
-            noticeIsFailure = false
             let rest = ImaYaruWait.limit - ImaYaruWait.captionAfter
             try? await Task.sleep(for: .seconds(rest))
             guard phase == .sending else { return }
             runtime.suppressRideOverlay = false
             phase = .editing
+            flight = nil
+            flightFrame = nil
+            flightDone = false
+            departReady = false
             notice = SyncCopy.iphoneNoReply
-            noticeIsFailure = true
         }
+    }
+
+    private var picture: ImaYaruStagePicture {
+        let shift = reduceMotion ? 0 : (flightFrame?.machineShift ?? 0)
+        let center = CGPoint(x: anchor.x + shift, y: anchor.y)
+        let flying = flight != nil
+        let direction = flight?.geometry.direction ?? aimDirection
+        let mouth = mouthX(direction: direction == 0 ? 1 : direction, shift: shift)
+        let showTicket = flying || arm == .depart || arm == .save
+        let ticketCenter: CGPoint
+        let reveal: CGFloat
+        if let frame = flightFrame, flying {
+            if reduceMotion {
+                ticketCenter = flight?.geometry.origin ?? center
+                reveal = frame.printReveal
+            } else {
+                ticketCenter = frame.ticketCenter
+                reveal = frame.printReveal
+            }
+        } else {
+            let tucked = tuckedOrigin(direction: direction == 0 ? 1 : direction)
+            ticketCenter = CGPoint(x: tucked.x + follow.width, y: tucked.y + follow.height)
+            reveal = 0
+        }
+        return ImaYaruStagePicture(
+            ticketTitle: flying ? (flight?.title ?? title) : title,
+            minutes: flying ? (flight?.minutes ?? minutes) : minutes,
+            gate: gate,
+            arm: arm,
+            departCharge: departCharge,
+            saveCharge: saveCharge,
+            lamp: lamp,
+            slotOn: flightFrame?.slotOn ?? slotOn,
+            shake: reduceMotion ? 0 : shake,
+            ticketSize: ticketSize,
+            showTicket: showTicket && direction != 0,
+            ticketCenter: ticketCenter,
+            printReveal: reveal,
+            tilt: flying || reduceMotion ? 0 : tilt,
+            machineCenter: center,
+            mouthX: mouth,
+            flightDirection: showTicket ? (direction == 0 ? 1 : direction) : 0,
+            catapult: catapult(mouthIsLive: gate.departEnabled),
+            notice: notice,
+            reduceMotion: reduceMotion,
+            stageSize: stageSize
+        )
+    }
+
+    private var aimDirection: CGFloat {
+        switch arm {
+        case .depart: 1
+        case .save: -1
+        case .blocked, .none: 0
+        }
+    }
+
+    private func catapult(mouthIsLive: Bool) -> ImaYaruCatapultPicture? {
+        guard mouthIsLive else { return nil }
+        let launching = flight?.kind == .depart
+        let charging = arm == .depart || departCharge > 0.04
+        guard launching || charging else { return nil }
+        let mouth = mouthX(direction: 1, shift: reduceMotion ? 0 : (flightFrame?.machineShift ?? 0))
+        let length = max(80, (stageSize.width - mouth - 8) * 1.4)
+        let frame = flightFrame
+        return ImaYaruCatapultPicture(
+            length: length,
+            charge: launching ? 1 : max(departCharge, arm == .depart ? 1 : 0),
+            retract: reduceMotion ? 0 : (frame?.catapultRetract ?? 0),
+            phase: catapultPhase,
+            armed: arm == .depart || launching,
+            launching: launching && (frame?.stage ?? 0) >= 1,
+            tip: frame?.tip ?? 0
+        )
+    }
+
+    private func mouthX(direction: CGFloat, shift: CGFloat) -> CGFloat {
+        let half = ImaYaruStagePicture.cardWidth / 2
+        if direction < 0 {
+            return anchor.x + shift - half
+        }
+        return anchor.x + shift + half
+    }
+
+    private func tuckedOrigin(direction: CGFloat) -> CGPoint {
+        let mouth = mouthX(direction: direction, shift: 0)
+        let x = direction < 0 ? mouth + ticketSize.width / 2 : mouth - ticketSize.width / 2
+        return CGPoint(x: x, y: anchor.y)
     }
 
     private var rideConfirmed: Bool {
@@ -145,30 +279,254 @@ struct ImaYaruFormView: View {
         )
     }
 
+    private func submitTitle() {
+        perform(ImaYaruRelease.keyboard(commandReturn: false, gate: gate, canIssue: canIssue))
+    }
+
+    private func commandReturn() {
+        guard phase == .editing, flight == nil else { return }
+        perform(ImaYaruRelease.keyboard(commandReturn: true, gate: gate, canIssue: canIssue))
+    }
+
+    private func pointer(_ translation: CGSize, ended: Bool) {
+        guard phase == .editing, flight == nil else { return }
+        let now = Date()
+        let dt = max(0.001, now.timeIntervalSince(lastPointerTime))
+        let velocity = (translation.width - lastPointer.width) / dt
+        lastPointer = translation
+        lastPointerTime = now
+        let choice = ImaYaruSectorHit.choice(dx: translation.width, dy: translation.height)
+        if !ended {
+            followTarget(translation, velocityX: velocity)
+            preview(choice)
+            return
+        }
+        let action = ImaYaruRelease.resolve(choice: choice, gate: gate, canIssue: canIssue)
+        follow = .zero
+        tilt = 0
+        perform(action)
+    }
+
+    private func followTarget(_ translation: CGSize, velocityX: CGFloat) {
+        let limit: CGFloat = 12
+        let length = hypot(translation.width, translation.height)
+        let scale = length > limit && length > 0 ? limit / length : 1
+        let next = CGSize(width: translation.width * scale, height: translation.height * scale)
+        if reduceMotion {
+            follow = next
+            tilt = 0
+        } else {
+            withAnimation(.spring(response: ImaYaruFollow.response, dampingFraction: ImaYaruFollow.damping)) {
+                follow = next
+            }
+            tilt = ImaYaruFollow.tilt(velocityX: velocityX, reduceMotion: false)
+        }
+    }
+
+    private func preview(_ choice: ImaYaruChoice) {
+        switch choice {
+        case .depart:
+            if gate.departEnabled {
+                setArm(.depart, departCharge: 1, saveCharge: 0)
+            } else if arm != .blocked {
+                setArm(.blocked, departCharge: 0, saveCharge: 0)
+                shake = 1
+            }
+        case .save:
+            setArm(.save, departCharge: 0, saveCharge: 1)
+        case .neutral, .click:
+            if arm != .none {
+                arm = .none
+                departCharge = 0
+                saveCharge = 0
+                lamp = 0.35
+            }
+        }
+    }
+
+    private func ingestScroll(dx: CGFloat, dy: CGFloat, phase eventPhase: NSEvent.Phase) {
+        guard phase == .editing, flight == nil else { return }
+        if eventPhase.contains(.began) || eventPhase.contains(.mayBegin) {
+            strokeX = 0
+            strokeY = 0
+            strokeAxis = nil
+            strokeAnchor = minutes
+            if arm != .none { clearAim() }
+            return
+        }
+        if eventPhase.contains(.ended) || eventPhase.contains(.cancelled) {
+            if strokeAxis == .horizontal {
+                perform(ImaYaruRelease.resolve(arm: arm, gate: gate, canIssue: canIssue))
+            } else if arm != .depart && arm != .save {
+                departCharge = 0
+                saveCharge = 0
+            }
+            strokeX = 0
+            strokeY = 0
+            strokeAxis = nil
+            return
+        }
+        strokeX += dx
+        strokeY += dy
+        if strokeAxis == nil {
+            strokeAxis = ImaYaruStrokeAxis.lock(dx: strokeX, dy: strokeY)
+        }
+        guard let strokeAxis else { return }
+        switch strokeAxis {
+        case .vertical:
+            minutes = ImaYaruMinutesStroke.minutes(
+                anchor: strokeAnchor,
+                dy: strokeY,
+                padHeight: Self.strokePadHeight
+            )
+        case .horizontal:
+            let next = ImaYaruFlick.arm(
+                dx: strokeX,
+                dy: strokeY,
+                current: arm,
+                departEnabled: gate.departEnabled
+            )
+            let amount = ImaYaruFlick.charge(dx: strokeX, dy: strokeY)
+            if strokeX >= 0 {
+                setArm(next, departCharge: amount, saveCharge: 0)
+            } else {
+                setArm(next, departCharge: 0, saveCharge: amount)
+            }
+            if next == .blocked {
+                shake = max(shake, 0.65)
+            }
+        }
+    }
+
+    private func setArm(_ next: ImaYaruArm, departCharge: CGFloat, saveCharge: CGFloat) {
+        if next != arm {
+            switch next {
+            case .depart, .save:
+                ImaYaruHaptics.alignment()
+                withAnimation(.easeOut(duration: ImaYaruFlight.lightSeconds)) {
+                    lamp = 1
+                }
+            case .blocked:
+                shake = 1
+                lamp = 0.28
+            case .none:
+                lamp = 0.35
+            }
+            arm = next
+        }
+        self.departCharge = departCharge
+        self.saveCharge = saveCharge
+    }
+
+    private func perform(_ action: ImaYaruReleaseAction) {
+        switch action {
+        case .close:
+            onClose()
+        case .none:
+            clearAim()
+        case .deny:
+            shake = 1
+            clearAim()
+        case .save:
+            issueOnly()
+        case .depart:
+            depart()
+        }
+    }
+
+    private func clearAim() {
+        arm = .none
+        departCharge = 0
+        saveCharge = 0
+        lamp = 0.35
+        follow = .zero
+        tilt = 0
+    }
+
     private func issueOnly() {
-        guard phase == .editing, canIssue else { return }
+        guard phase == .editing, flight == nil, canIssue else { return }
         let trimmed = trimmedTitle
-        let seconds = minutes * 60
+        let issuedMinutes = minutes
+        let seconds = issuedMinutes * 60
         title = ""
         notice = nil
-        noticeIsFailure = false
         titleFocused = true
+        beginFlight(.save, title: trimmed, minutes: issuedMinutes)
         Task { await runtime.sendIssue(title: trimmed, estimatedSeconds: seconds) }
     }
 
     private func depart() {
-        guard phase == .editing, canDepart else { return }
+        guard phase == .editing, flight == nil, canDepart else { return }
         let trimmed = trimmedTitle
         sentTitle = trimmed
         sentMinutes = minutes
         sentPrior = ImaYaruOffer.ridingSessionID(runtime.snap)
         notice = SyncCopy.sentToIPhone
-        noticeIsFailure = false
         phase = .sending
+        departReady = false
+        flightDone = false
         runtime.suppressRideOverlay = true
         sendID += 1
+        beginFlight(.depart, title: trimmed, minutes: minutes)
         let seconds = minutes * 60
         Task { await runtime.sendIssueAndBoard(title: trimmed, estimatedSeconds: seconds) }
+    }
+
+    private func beginFlight(_ kind: Flight.Kind, title: String, minutes: Int) {
+        ImaYaruHaptics.levelChange()
+        let direction: CGFloat = kind == .depart ? 1 : -1
+        let origin = tuckedOrigin(direction: direction)
+        let destination: CGPoint
+        if kind == .depart {
+            destination = CGPoint(x: stageSize.width + ticketSize.width / 2 + 16, y: anchor.y)
+        } else {
+            destination = CGPoint(x: menuAnchor.x, y: -ticketSize.height / 2 - 6)
+        }
+        let clearance: CGFloat
+        if direction > 0 {
+            clearance = anchor.x + ImaYaruStagePicture.cardWidth / 2 + 16
+        } else {
+            clearance = stageSize.width - (anchor.x - ImaYaruStagePicture.cardWidth / 2) + 16
+        }
+        let geometry = ImaYaruFlightGeometry(
+            ticketSize: ticketSize,
+            origin: origin,
+            destination: destination,
+            machineClearance: max(clearance, ticketSize.width + 40),
+            direction: direction
+        )
+        arm = kind == .depart ? .depart : .save
+        lamp = 1
+        flightFrame = ImaYaruFlight.frame(tauMs: 0, geometry: geometry)
+        flight = Flight(kind: kind, started: Date(), geometry: geometry, title: title, minutes: minutes)
+    }
+
+    private func tick(_ now: Date) {
+        if shake > 0 {
+            shake = max(0, shake - 1.0 / 30.0 / 0.26)
+        }
+        let hot = max(departCharge, saveCharge)
+        if hot > 0.04 || arm == .depart || flight?.kind == .depart {
+            let unit = min(1, max(0, (Double(hot) - 0.1) / 0.75))
+            let omega = 0.9 + 3.1 * unit * unit * (3 - 2 * unit)
+            catapultPhase += omega / 30
+        }
+        guard let flight else { return }
+        let tau = now.timeIntervalSince(flight.started) * 1000
+        let frame = ImaYaruFlight.frame(tauMs: tau, geometry: flight.geometry)
+        flightFrame = frame
+        if frame.finished, !flightDone {
+            flightDone = true
+            if flight.kind == .save {
+                self.flight = nil
+                flightFrame = nil
+                flightDone = false
+                clearAim()
+                titleFocused = true
+            } else {
+                finishDepartIfReady()
+            }
+        }
     }
 
     private func noteProgress() {
@@ -183,15 +541,23 @@ struct ImaYaruFormView: View {
         case .wait:
             break
         case .dispense:
-            phase = .editing
-            sendID += 1
-            onDispense(sentTitle, sentMinutes, sentPrior)
+            departReady = true
+            finishDepartIfReady()
         case .fail(let error):
             runtime.suppressRideOverlay = false
             phase = .editing
+            flight = nil
+            flightFrame = nil
+            flightDone = false
+            departReady = false
+            clearAim()
             notice = MenuBarPresentation.failureCopy(error)
-            noticeIsFailure = true
         }
+    }
+
+    private func finishDepartIfReady() {
+        guard phase == .sending, departReady, flightDone else { return }
+        onDispense(sentTitle, sentMinutes, sentPrior)
     }
 
     private var snapMatchesSent: Bool {
@@ -199,100 +565,12 @@ struct ImaYaruFormView: View {
     }
 }
 
-@MainActor
-@Observable
-final class ImaYaruDispenseModel {
-    var seated = false
-    var handingOff = false
-    var showsWait = false
-    var gaveUp = false
-}
-
-/// Mars ticket only. The window itself slides in from off-screen.
-struct ImaYaruDispenseView: View {
-    @Environment(CompanionMacRuntime.self) private var runtime
-    @Bindable var model: ImaYaruDispenseModel
-    @State private var armedReveal = false
-
-    var title: String
-    var minutes: Int
-    var ticketSize: CGSize
-    var priorSessionId: UUID?
-    var onReveal: () -> Void
-    var onGiveUp: () -> Void
-    var onClose: () -> Void
-
-    var body: some View {
-        ZStack(alignment: .bottom) {
-            MarsTicketView(
-                content: MarsTicketContent(title: title, minutes: minutes)
-            )
-            .frame(width: ticketSize.width, height: ticketSize.height)
-            .scaleEffect(model.handingOff ? 0.94 : 1)
-            .opacity(model.handingOff ? 0 : 1)
-
-            if model.gaveUp {
-                caption(SyncCopy.iphoneNoReply, failure: true)
-            } else if model.showsWait && !model.handingOff {
-                caption(SyncCopy.waitingForIPhone, failure: false)
-            }
-        }
-        .animation(.easeInOut(duration: 0.28), value: model.handingOff)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("発券、\(title)、\(minutes)分")
-        .onAppear {
-            tryReveal()
-        }
-        .onChange(of: model.seated) { _, _ in
-            tryReveal()
-        }
-        .onChange(of: runtime.snap) { _, _ in
-            tryReveal()
-        }
-        .onExitCommand(perform: onClose)
-        .task(id: armedReveal) {
-            guard armedReveal else { return }
-            try? await Task.sleep(for: .seconds(ImaYaruWait.ticketHold))
-            guard !Task.isCancelled, model.seated, !model.handingOff else { return }
-            guard ImaYaruSnap.confirms(snap: runtime.snap, title: title, priorSessionId: priorSessionId) else {
-                armedReveal = false
-                return
-            }
-            model.showsWait = false
-            model.gaveUp = false
-            model.handingOff = true
-            onReveal()
-        }
-        .task {
-            try? await Task.sleep(for: .seconds(ImaYaruWait.captionAfter))
-            guard !model.handingOff, !model.gaveUp else { return }
-            model.showsWait = true
-            let rest = ImaYaruWait.limit - ImaYaruWait.captionAfter
-            try? await Task.sleep(for: .seconds(rest))
-            guard !model.handingOff, !model.gaveUp else { return }
-            model.showsWait = false
-            model.gaveUp = true
-            try? await Task.sleep(for: .seconds(1.4))
-            guard !model.handingOff else { return }
-            onGiveUp()
-        }
+enum ImaYaruHaptics {
+    static func alignment() {
+        NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
     }
 
-    private func caption(_ text: String, failure: Bool) -> some View {
-        Text(text)
-            .font(.caption)
-            .foregroundStyle(failure ? Color.red : Color.primary)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(.regularMaterial, in: Capsule())
-            .padding(.bottom, 8)
-    }
-
-    private func tryReveal() {
-        guard model.seated, !model.handingOff, !armedReveal else { return }
-        guard ImaYaruSnap.confirms(snap: runtime.snap, title: title, priorSessionId: priorSessionId) else {
-            return
-        }
-        armedReveal = true
+    static func levelChange() {
+        NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: .now)
     }
 }
