@@ -84,25 +84,35 @@ public struct MarsTicketView: View, Equatable {
     nonisolated public let titleReveal: CGFloat
     /// Hub peek/deck only. Printed occupancy on the 60-minute scale.
     nonisolated public let occupancyMarks: [MarsOccupancyMark]
+    /// Face metrics. 1 is the shared ticket. Mac draws the same face smaller.
+    nonisolated public let metricsScale: CGFloat
 
     public init(
         content: MarsTicketContent,
         density: MarsTicketSpec.Density = .celebration,
         titleReveal: CGFloat = 1,
-        occupancyMarks: [MarsOccupancyMark] = []
+        occupancyMarks: [MarsOccupancyMark] = [],
+        metricsScale: CGFloat = 1
     ) {
         self.content = content
         self.density = density
         self.titleReveal = titleReveal
         self.occupancyMarks = occupancyMarks
+        self.metricsScale = metricsScale
+    }
+
+    private func pt(_ value: CGFloat) -> CGFloat { value * metricsScale }
+
+    private func faceFont(_ size: CGFloat, weight: Font.Weight) -> Font {
+        .system(size: pt(size), weight: weight, design: .default)
     }
 
     private var pad: CGFloat {
-        density == .hub ? MarsTicketSpec.hubContentPad : MarsTicketSpec.contentPad
+        pt(density == .hub ? MarsTicketSpec.hubContentPad : MarsTicketSpec.contentPad)
     }
 
     private var columnSpacing: CGFloat {
-        density == .hub ? 4 : 6
+        pt(density == .hub ? 4 : 6)
     }
 
     private var stock: TicketStockColor.Stock {
@@ -126,16 +136,16 @@ public struct MarsTicketView: View, Equatable {
                         .padding(pad)
 
                     verticalSerial
-                        .frame(width: MarsTicketSpec.verticalSerialWidth)
+                        .frame(width: pt(MarsTicketSpec.verticalSerialWidth))
                         .padding(.vertical, pad)
-                        .padding(.trailing, 4)
+                        .padding(.trailing, pt(4))
                 }
             }
             .frame(width: w, height: h)
-            .clipShape(RoundedRectangle(cornerRadius: MarsTicketSpec.cornerRadius, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: pt(MarsTicketSpec.cornerRadius), style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: MarsTicketSpec.cornerRadius, style: .continuous)
-                    .strokeBorder(MarsTicketSpec.printInk.opacity(0.18), lineWidth: 0.5)
+                RoundedRectangle(cornerRadius: pt(MarsTicketSpec.cornerRadius), style: .continuous)
+                    .strokeBorder(MarsTicketSpec.printInk.opacity(0.18), lineWidth: pt(0.5))
             )
         }
         .aspectRatio(MarsTicketSpec.aspectRatio, contentMode: .fit)
@@ -155,7 +165,7 @@ public struct MarsTicketView: View, Equatable {
     private var paperBackground: some View {
         ZStack {
             stock.paper.color
-            MarsTicketGroundPattern()
+            MarsTicketGroundPattern(scale: metricsScale)
                 .opacity(MarsTicketSpec.groundPatternOpacity)
                 .foregroundStyle(MarsTicketSpec.printInk)
         }
@@ -165,7 +175,7 @@ public struct MarsTicketView: View, Equatable {
         VStack(alignment: .leading, spacing: columnSpacing) {
             durationTrack
 
-            HStack(alignment: .top, spacing: 8) {
+            HStack(alignment: .top, spacing: pt(8)) {
                 VStack(alignment: .leading, spacing: columnSpacing) {
                     titleRow
 
@@ -191,7 +201,7 @@ public struct MarsTicketView: View, Equatable {
     private var durationTrack: some View {
         let fill = TicketDurationScale.filled(minutes: content.minutes)
         return ZStack(alignment: .leading) {
-            HStack(spacing: MarsTicketSpec.durationTrackGap) {
+            HStack(spacing: pt(MarsTicketSpec.durationTrackGap)) {
                 ForEach(0..<TicketDurationScale.cellCount, id: \.self) { index in
                     durationCell(amount: TicketDurationScale.cellFillAmount(index: index, fill: fill))
                 }
@@ -200,7 +210,7 @@ public struct MarsTicketView: View, Equatable {
                 occupancyPrint(fillMinutes: content.minutes)
             }
         }
-        .frame(height: MarsTicketSpec.durationTrackHeight)
+        .frame(height: pt(MarsTicketSpec.durationTrackHeight))
         .accessibilityHidden(true)
     }
 
@@ -254,9 +264,9 @@ public struct MarsTicketView: View, Equatable {
 
     private func durationCell(amount: Double) -> some View {
         let ink = MarsTicketSpec.printInk
-        let shape = RoundedRectangle(cornerRadius: 0.7, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: pt(0.7), style: .continuous)
         return ZStack(alignment: .leading) {
-            shape.strokeBorder(ink.opacity(MarsTicketSpec.durationTrackEmptyOpacity), lineWidth: 0.5)
+            shape.strokeBorder(ink.opacity(MarsTicketSpec.durationTrackEmptyOpacity), lineWidth: pt(0.5))
             if amount >= 1 {
                 shape.fill(ink)
             } else if amount > 0 {
@@ -274,7 +284,7 @@ public struct MarsTicketView: View, Equatable {
         Text(density == .celebration
              ? "経由：" + content.tagNames.joined(separator: "・")
              : content.tagNames.joined(separator: "・"))
-            .font(MarsTicketSpec.viaFont())
+            .font(faceFont(MarsTicketSpec.viaPointSize, weight: .medium))
             .foregroundStyle(MarsTicketSpec.printInk.opacity(density == .hub ? 0.85 : 1))
             .lineLimit(1)
     }
@@ -283,11 +293,11 @@ public struct MarsTicketView: View, Equatable {
         HStack(alignment: .firstTextBaseline, spacing: 0) {
             Text("\(content.issuedMonth)月")
             Text("\(content.issuedDay)")
-                .font(MarsTicketSpec.validityDayFont())
+                .font(faceFont(MarsTicketSpec.validityDayPointSize, weight: .bold))
                 .monospacedDigit()
             Text("日から \(content.minutes)分間有効")
         }
-        .font(MarsTicketSpec.metaFont())
+        .font(faceFont(MarsTicketSpec.metaPointSize, weight: .medium))
         .foregroundStyle(MarsTicketSpec.printInk)
         .lineLimit(1)
         .minimumScaleFactor(0.85)
@@ -296,11 +306,11 @@ public struct MarsTicketView: View, Equatable {
     private var fareColumn: some View {
         HStack(alignment: .lastTextBaseline, spacing: 1) {
             Text("\(content.minutes)")
-                .font(MarsTicketSpec.fareFont())
+                .font(faceFont(MarsTicketSpec.farePointSize, weight: .bold))
                 .monospacedDigit()
-                .tracking(-0.6)
+                .tracking(pt(-0.6))
             Text("分")
-                .font(MarsTicketSpec.fareUnitFont())
+                .font(faceFont(MarsTicketSpec.fareUnitPointSize, weight: .semibold))
         }
         .foregroundStyle(MarsTicketSpec.printInk)
         .fixedSize()
@@ -311,14 +321,14 @@ public struct MarsTicketView: View, Equatable {
         Group {
             if density == .celebration {
                 Text("Todo train発行  \(content.terminalDate)  \(content.serial)")
-                    .font(MarsTicketSpec.terminalFont())
+                    .font(faceFont(MarsTicketSpec.terminalPointSize, weight: .regular))
                     .foregroundStyle(MarsTicketSpec.printInk.opacity(0.85))
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
                     .monospacedDigit()
             } else {
                 Text(content.terminalDate)
-                    .font(MarsTicketSpec.terminalFont())
+                    .font(faceFont(MarsTicketSpec.terminalPointSize, weight: .regular))
                     .foregroundStyle(MarsTicketSpec.printInk.opacity(0.75))
                     .monospacedDigit()
             }
@@ -327,7 +337,7 @@ public struct MarsTicketView: View, Equatable {
 
     private var titleRow: some View {
         Text(content.title)
-            .font(MarsTicketSpec.titleFont())
+            .font(faceFont(MarsTicketSpec.titlePointSize, weight: .bold))
             .foregroundStyle(MarsTicketSpec.printInk)
             .lineLimit(2)
             .minimumScaleFactor(0.7)
@@ -342,7 +352,7 @@ public struct MarsTicketView: View, Equatable {
 
     private var verticalSerial: some View {
         Text(content.serial + " " + content.verticalDate)
-            .font(MarsTicketSpec.serialFont())
+            .font(faceFont(MarsTicketSpec.serialPointSize, weight: .semibold))
             .foregroundStyle(MarsTicketSpec.serialInk)
             .monospacedDigit()
             .lineLimit(1)
@@ -368,17 +378,19 @@ private struct HubTicketRasterization: ViewModifier {
 
 /// Soft circle lattice — not a JR logo monogram.
 private struct MarsTicketGroundPattern: View {
+    var scale: CGFloat = 1
+
     var body: some View {
         Canvas { context, size in
-            let step: CGFloat = 14
-            let radius: CGFloat = 3.2
+            let step: CGFloat = 14 * scale
+            let radius: CGFloat = 3.2 * scale
             var y: CGFloat = step * 0.5
             var row = 0
             while y < size.height + step {
                 var x: CGFloat = row.isMultiple(of: 2) ? step * 0.5 : step
                 while x < size.width + step {
                     let rect = CGRect(x: x - radius, y: y - radius, width: radius * 2, height: radius * 2)
-                    context.stroke(Path(ellipseIn: rect), with: .foreground, lineWidth: 0.6)
+                    context.stroke(Path(ellipseIn: rect), with: .foreground, lineWidth: 0.6 * scale)
                     x += step
                 }
                 y += step * 0.85

@@ -101,15 +101,15 @@ enum ImaYaruRelease {
             if gate == .aboardCalendar, canIssue { return .save }
             return .none
         case .save:
-            return canIssue ? .save : .none
+            return canIssue ? .save : .deny
         case .depart:
             switch gate {
             case .open:
-                return canIssue ? .depart : .none
+                return canIssue ? .depart : .deny
             case .beforeService:
                 return .deny
             case .aboardCalendar:
-                return canIssue ? .save : .none
+                return canIssue ? .save : .deny
             }
         }
     }
@@ -124,36 +124,49 @@ enum ImaYaruRelease {
         case .none:
             return .none
         case .save:
-            return canIssue ? .save : .none
+            return canIssue ? .save : .deny
         case .blocked:
             return .deny
         case .depart:
             switch gate {
             case .open:
-                return canIssue ? .depart : .none
+                return canIssue ? .depart : .deny
             case .beforeService:
                 return .deny
             case .aboardCalendar:
-                return canIssue ? .save : .none
+                return canIssue ? .save : .deny
             }
         }
     }
 
     /// Return saves. ⌘Return departs, and saves when the right slit is closed.
+    /// An empty title refuses both, the same as a closed depart slit.
     static func keyboard(
         commandReturn: Bool,
         gate: ImaYaruDepartGate,
         canIssue: Bool
     ) -> ImaYaruReleaseAction {
-        guard canIssue else {
-            if commandReturn, gate == .beforeService { return .deny }
-            return .none
-        }
+        guard canIssue else { return .deny }
         if !commandReturn { return .save }
         switch gate {
         case .open: return .depart
         case .beforeService, .aboardCalendar: return .save
         }
+    }
+}
+
+enum ImaYaruCopy {
+    /// Same words as the iPhone empty-title error.
+    static let needsTitle = "題名を入れてください"
+    static let needsTitleToDepart = "題名を入れると発車できます"
+    static let needsTitleToIssue = "題名を入れると発行できます"
+}
+
+enum ImaYaruDismissal {
+    /// A save that got out closes the panel once its flight has played.
+    /// A failure keeps the form open.
+    static func closeAfterSaveFlight(failure: String?) -> Bool {
+        failure == nil
     }
 }
 
@@ -215,7 +228,8 @@ enum ImaYaruFlick {
         dx: CGFloat,
         dy: CGFloat,
         current: ImaYaruArm,
-        departEnabled: Bool
+        departEnabled: Bool,
+        canIssue: Bool
     ) -> ImaYaruArm {
         let ax = abs(dx)
         let ay = abs(dy)
@@ -234,7 +248,8 @@ enum ImaYaruFlick {
         if want == .none, ax >= threshold, ax >= ratioOn * ay {
             want = dir > 0 ? .depart : .save
         }
-        if want == .depart, !departEnabled { return .blocked }
+        if want == .depart, !departEnabled || !canIssue { return .blocked }
+        if want == .save, !canIssue { return .blocked }
         return want
     }
 
@@ -250,6 +265,7 @@ enum ImaYaruFlick {
 /// The f20 machine, scaled so the mouth matches the ticket.
 /// In the mock the mouth is 80% of the body and the body is 300×158,
 /// so the body stays a little taller than the ticket and the ports sit inside it.
+/// `pt` is a mock length at final size. Draw with it. A scaleEffect upscales the raster.
 struct ImaYaruMachineMetrics: Equatable, Sendable {
     static let mockWidth: CGFloat = 300
     static let mockHeight: CGFloat = 158
@@ -277,6 +293,9 @@ struct ImaYaruMachineMetrics: Equatable, Sendable {
         )
     }
 
+    /// Mock points, in the size the machine is actually drawn.
+    func pt(_ mock: CGFloat) -> CGFloat { mock * scale }
+
     /// Same framing as the mock stage, after the machine has been scaled to `ticket`.
     static func stage(ticket: CGSize) -> CGSize {
         let fitted = fitted(ticket: ticket)
@@ -289,11 +308,21 @@ struct ImaYaruMachineMetrics: Equatable, Sendable {
 
 /// One laptop size for the ticket, the machine, and the rails.
 /// Width is the constant. Height follows the Mars face, and the machine follows the mock.
+/// 208pt is 0.8 of the previous 260pt assembly. Stage-space lengths use `pt` so they follow the width.
 enum ImaYaruTicketMetrics {
-    static let width: CGFloat = 260
+    static let width: CGFloat = 208
+    private static let referenceWidth: CGFloat = 260
 
     static var size: CGSize {
         CGSize(width: width, height: MarsTicketSpec.height(forWidth: width))
+    }
+
+    /// 1 at the old 260pt ticket. The face, rails, and flight pads use this.
+    static var assemblyScale: CGFloat { width / referenceWidth }
+
+    /// A length tuned when the ticket was 260pt, at the current width.
+    static func pt(_ reference: CGFloat) -> CGFloat {
+        reference * assemblyScale
     }
 }
 
@@ -321,16 +350,19 @@ enum ImaYaruFlight {
     static let machineDrift: Double = 0.15
     static let blinkHalfMs: Double = 70
     static let machineInMs: Double = 300
-    static let waveSpacing: CGFloat = 110
-    static let railGap: CGFloat = 5
+    static var waveSpacing: CGFloat { ImaYaruTicketMetrics.pt(110) }
+    static var railGap: CGFloat { ImaYaruTicketMetrics.pt(5) }
     static let railSegments: Int = 64
     static let chevronCount: Int = 16
-    static let chevronPitch: CGFloat = 9
+    static var chevronPitch: CGFloat { ImaYaruTicketMetrics.pt(9) }
+    /// Mock points. The slit offset multiplies this by the machine scale.
     static let slotPush: CGFloat = 6
 
     /// Guide rail. 1.4× the room past the mouth, same as the mock. Never capped.
     static func railLength(stageWidth: CGFloat, mouthX: CGFloat) -> CGFloat {
-        max(80, (stageWidth - mouthX - 8) * 1.4)
+        let margin = ImaYaruTicketMetrics.pt(8)
+        let floor = ImaYaruTicketMetrics.pt(80)
+        return max(floor, (stageWidth - mouthX - margin) * 1.4)
     }
     static let lightSeconds: Double = 0.12
 
@@ -394,9 +426,9 @@ extension ImaYaruFlight {
         let tau = max(0, tauMs)
         let direction = geometry.direction >= 0 ? 1.0 : -1.0
         let width = Double(geometry.ticketSize.width)
-        let depth = width + 20
+        let depth = width + Double(ImaYaruTicketMetrics.pt(20))
         let drift = min(0.5, max(0, machineDrift))
-        let head = depth * (1 - drift) + 4
+        let head = depth * (1 - drift) + Double(ImaYaruTicketMetrics.pt(4))
         let present = presentAmount(tau)
         let leave = exitAmount(tau, power: exitPower)
         let leaveX = direction > 0 ? leave : exitAmount(tau, power: exitPower + 2)

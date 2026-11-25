@@ -6,12 +6,29 @@ enum ImaYaruOpener {
     static var present: (() -> Void)?
 }
 
+/// Where the assembly sits. The screen is the one under the pointer; the anchor is that screen's center.
+enum ImaYaruPlacement {
+    /// Panel space: origin at the top-left of `screen`, y down.
+    static func anchor(on screen: CGRect) -> CGPoint {
+        CGPoint(x: screen.width / 2, y: screen.height / 2)
+    }
+
+    /// `CGWarpMouseCursorPosition` space: origin at the top-left of the menu-bar display, y down.
+    static func cursorPoint(anchor: CGPoint, on screen: CGRect, primaryHeight: CGFloat) -> CGPoint {
+        CGPoint(
+            x: screen.minX + anchor.x,
+            y: primaryHeight - screen.maxY + anchor.y
+        )
+    }
+}
+
 @MainActor
 final class ImaYaruPanelController {
     private let runtime: CompanionMacRuntime
     private let revealRide: () -> Void
     private let formPanel: NSPanel
     private let scrollBridge = ImaYaruScrollBridge()
+    private let focusBridge = ImaYaruFocusBridge()
     private var scrollMonitor: Any?
     private var alive = false
 
@@ -35,7 +52,7 @@ final class ImaYaruPanelController {
         let mouse = NSEvent.mouseLocation
         let screen = NSScreen.screens.first(where: { $0.frame.contains(mouse) }) ?? NSScreen.main ?? NSScreen.screens.first
         guard let screen else { return }
-        showForm(on: screen, mouse: mouse, notice: nil)
+        showForm(on: screen, notice: nil)
     }
 
     func close() {
@@ -46,22 +63,20 @@ final class ImaYaruPanelController {
         formPanel.orderOut(nil)
     }
 
-    private func showForm(on screen: NSScreen, mouse: NSPoint, notice: String?, title: String = "", minutes: Int = 30, prior: UUID? = nil) {
+    private func showForm(on screen: NSScreen, notice: String?, title: String = "", minutes: Int = 30, prior: UUID? = nil) {
         let ticket = ImaYaruTicketMetrics.size
-        let anchor = CGPoint(
-            x: mouse.x - screen.frame.minX,
-            y: screen.frame.maxY - mouse.y
-        )
+        let anchor = clamped(ImaYaruPlacement.anchor(on: screen.frame), on: screen, ticket: ticket)
         let root = ImaYaruFormView(
             initialNotice: notice,
             seededTitle: title,
             seededMinutes: minutes,
             seededPrior: prior,
-            anchor: clamped(anchor, on: screen, ticket: ticket),
+            anchor: anchor,
             stageSize: screen.frame.size,
             ticketSize: ticket,
             menuAnchor: menuAnchor(on: screen),
             scrollBridge: scrollBridge,
+            focusBridge: focusBridge,
             onDispense: { [weak self] _, _, _ in
                 self?.completeDepart()
             },
@@ -76,6 +91,25 @@ final class ImaYaruPanelController {
         NSApp.activate(ignoringOtherApps: true)
         formPanel.orderFrontRegardless()
         formPanel.makeKey()
+        // Activation and makeKey settle on the next turn. Focus after that, every present.
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.alive, self.formPanel.isVisible else { return }
+            self.formPanel.makeKey()
+            self.focusBridge.reapply()
+        }
+        warpCursor(to: anchor, on: screen)
+    }
+
+    /// Quartz global coordinates: origin at the top-left of the menu-bar display, y down.
+    private func warpCursor(to anchor: CGPoint, on screen: NSScreen) {
+        let primary = NSScreen.screens.first { $0.frame.origin == .zero } ?? screen
+        let point = ImaYaruPlacement.cursorPoint(
+            anchor: anchor,
+            on: screen.frame,
+            primaryHeight: primary.frame.height
+        )
+        CGWarpMouseCursorPosition(point)
+        CGAssociateMouseAndMouseCursorPosition(1)
     }
 
     private func completeDepart() {
@@ -122,7 +156,7 @@ final class ImaYaruPanelController {
     }
 
     private func clamped(_ anchor: CGPoint, on screen: NSScreen, ticket: CGSize) -> CGPoint {
-        let margin: CGFloat = 24
+        let margin = ImaYaruTicketMetrics.pt(24)
         let halfCard = ImaYaruMachineMetrics.fitted(ticket: ticket).body.width / 2 + margin
         let halfTicket = ticket.height / 2 + margin
         let size = screen.frame.size
@@ -173,4 +207,28 @@ final class ImaYaruPanelController {
 final class ImaYaruFormPanel: NSPanel {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
+}
+
+@MainActor
+@Observable
+final class ImaYaruFocusBridge {
+    private(set) var token = 0
+
+    /// Bump on every present so the title field takes focus again.
+    func reapply() {
+        token &+= 1
+    }
+}
+
+enum ImaYaruFocus {
+    static func editableField(in view: NSView?) -> NSTextField? {
+        guard let view else { return nil }
+        if let field = view as? NSTextField, field.isEditable, !field.isHidden {
+            return field
+        }
+        for subview in view.subviews {
+            if let found = editableField(in: subview) { return found }
+        }
+        return nil
+    }
 }

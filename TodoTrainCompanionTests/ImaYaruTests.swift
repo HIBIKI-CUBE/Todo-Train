@@ -247,6 +247,74 @@ struct ImaYaruTests {
         #expect(ImaYaruRelease.keyboard(commandReturn: false, gate: .open, canIssue: true) == .save)
     }
 
+    @Test func emptyTitleRefusesBothMouthsAndSaveCloses() {
+        #expect(ImaYaruRelease.resolve(choice: .save, gate: .open, canIssue: false) == .deny)
+        #expect(ImaYaruRelease.resolve(choice: .depart, gate: .open, canIssue: false) == .deny)
+        #expect(ImaYaruRelease.resolve(choice: .depart, gate: .aboardCalendar, canIssue: false) == .deny)
+        #expect(ImaYaruRelease.resolve(choice: .neutral, gate: .open, canIssue: false) == .none)
+        #expect(ImaYaruRelease.resolve(choice: .click, gate: .open, canIssue: false) == .close)
+        #expect(ImaYaruRelease.resolve(arm: .save, gate: .open, canIssue: false) == .deny)
+        #expect(ImaYaruRelease.resolve(arm: .depart, gate: .open, canIssue: false) == .deny)
+        #expect(ImaYaruRelease.resolve(arm: .blocked, gate: .open, canIssue: false) == .deny)
+        #expect(ImaYaruRelease.keyboard(commandReturn: false, gate: .open, canIssue: false) == .deny)
+        #expect(ImaYaruRelease.keyboard(commandReturn: true, gate: .open, canIssue: false) == .deny)
+        #expect(ImaYaruRelease.keyboard(commandReturn: true, gate: .beforeService, canIssue: false) == .deny)
+        #expect(ImaYaruFlick.arm(dx: 90, dy: 0, current: .none, departEnabled: true, canIssue: false) == .blocked)
+        #expect(ImaYaruFlick.arm(dx: -90, dy: 0, current: .none, departEnabled: true, canIssue: false) == .blocked)
+        #expect(ImaYaruFlick.arm(dx: 90, dy: 0, current: .none, departEnabled: true, canIssue: true) == .depart)
+        #expect(ImaYaruFlick.arm(dx: -90, dy: 0, current: .none, departEnabled: false, canIssue: true) == .save)
+        #expect(ImaYaruCopy.needsTitle == "題名を入れてください")
+        #expect(ImaYaruDismissal.closeAfterSaveFlight(failure: nil))
+        #expect(!ImaYaruDismissal.closeAfterSaveFlight(failure: "届きませんでした"))
+        let fitted = ImaYaruMachineMetrics.fitted(ticket: ImaYaruTicketMetrics.size)
+        #expect(abs(fitted.pt(ImaYaruMachineMetrics.mockWidth) - fitted.body.width) < 0.01)
+        #expect(fitted.pt(17) > 17)
+    }
+
+    @Test func assemblyIsEightyPercentOfThePreviousTicket() {
+        #expect(ImaYaruTicketMetrics.width == 208)
+        let previous = CGSize(width: 260, height: MarsTicketSpec.height(forWidth: 260))
+        let fitted = ImaYaruMachineMetrics.fitted(ticket: ImaYaruTicketMetrics.size)
+        let full = ImaYaruMachineMetrics.fitted(ticket: previous)
+        #expect(abs(fitted.body.width / full.body.width - 0.8) < 0.001)
+        #expect(abs(fitted.body.height / full.body.height - 0.8) < 0.001)
+        #expect(abs(fitted.scale / full.scale - 0.8) < 0.001)
+        #expect(abs(fitted.pt(17) / full.pt(17) - 0.8) < 0.001)
+        let stage = ImaYaruMachineMetrics.stage(ticket: ImaYaruTicketMetrics.size)
+        let fullStage = ImaYaruMachineMetrics.stage(ticket: previous)
+        #expect(abs(stage.width / fullStage.width - 0.8) < 0.001)
+        #expect(abs(stage.height / fullStage.height - 0.8) < 0.001)
+        #expect(abs(ImaYaruFlight.railGap / 5 - 0.8) < 0.001)
+        #expect(abs(ImaYaruFlight.waveSpacing / 110 - 0.8) < 0.001)
+    }
+
+    @Test func assemblyAnchorsToTheCenterOfThePointerScreen() {
+        let main = CGRect(x: 0, y: 0, width: 1440, height: 900)
+        let side = CGRect(x: 1440, y: -200, width: 1920, height: 1080)
+        let mouse = CGPoint(x: 1500, y: 40)
+        #expect(side.contains(mouse))
+        #expect(!main.contains(mouse))
+        let anchor = ImaYaruPlacement.anchor(on: side)
+        #expect(anchor.x == 960)
+        #expect(anchor.y == 540)
+        let cursor = ImaYaruPlacement.cursorPoint(anchor: anchor, on: side, primaryHeight: main.height)
+        #expect(cursor.x == 2400)
+        #expect(cursor.y == 560)
+
+        let corner = CGPoint(x: 12, y: 12)
+        #expect(main.contains(corner))
+        let home = ImaYaruPlacement.anchor(on: main)
+        #expect(home.x == 720)
+        #expect(home.y == 450)
+        let homeCursor = ImaYaruPlacement.cursorPoint(anchor: home, on: main, primaryHeight: main.height)
+        #expect(homeCursor.x == 720)
+        #expect(homeCursor.y == 450)
+
+        let shifted = ImaYaruPlacement.cursorPoint(anchor: CGPoint(x: 100, y: 40), on: side, primaryHeight: main.height)
+        #expect(shifted.x == 1540)
+        #expect(shifted.y == 60)
+    }
+
     @Test func machineGrowsToTheTicket() {
         let ticket = ImaYaruTicketMetrics.size
         #expect(ticket.width == ImaYaruTicketMetrics.width)
@@ -344,13 +412,16 @@ struct ImaYaruTests {
         try render("depart-disabled-calendar.png", ImaYaruSnapshotHost.picture(
             stage: stage, ticket: ticket, center: center, title: "資料の下書き", gate: .aboardCalendar, arm: .none
         ))
+        try render("depart-empty-title.png", ImaYaruSnapshotHost.picture(
+            stage: stage, ticket: ticket, center: center, title: "", gate: .open, arm: .none, needsTitle: true
+        ))
 
         let mouth = center.x + ImaYaruMachineMetrics.fitted(ticket: ticket).body.width / 2
         let geometry = ImaYaruFlightGeometry(
             ticketSize: ticket,
             origin: CGPoint(x: mouth - ticket.width / 2, y: center.y),
-            destination: CGPoint(x: stage.width + ticket.width / 2 + 16, y: center.y),
-            machineClearance: mouth + 16,
+            destination: CGPoint(x: stage.width + ticket.width / 2 + ImaYaruTicketMetrics.pt(16), y: center.y),
+            machineClearance: mouth + ImaYaruTicketMetrics.pt(16),
             direction: 1
         )
         let times: [Double] = [80, 240, 420, 680]
@@ -408,7 +479,8 @@ private struct ImaYaruSnapshotHost: View {
         title: String,
         gate: ImaYaruDepartGate,
         arm: ImaYaruArm,
-        catapult: Bool = false
+        catapult: Bool = false,
+        needsTitle: Bool = false
     ) -> ImaYaruStagePicture {
         let mouth = center.x + ImaYaruMachineMetrics.fitted(ticket: ticket).body.width / 2
         let length = ImaYaruFlight.railLength(stageWidth: stage.width, mouthX: mouth)
@@ -416,6 +488,7 @@ private struct ImaYaruSnapshotHost: View {
             ticketTitle: title,
             minutes: 30,
             gate: gate,
+            needsTitle: needsTitle,
             arm: arm,
             departCharge: arm == .depart ? 1 : 0,
             saveCharge: arm == .save ? 1 : 0,
@@ -501,13 +574,19 @@ private struct ImaYaruSnapshotHost: View {
         return data
     }
 
+    /// Point size stays the stage. Pixels are 2× so the type is not a softened 1× raster.
+    static let captureScale: CGFloat = 2
+
     static func image<V: View>(_ view: V, size: CGSize) throws -> NSImage {
         let renderer = ImageRenderer(content: view)
-        renderer.scale = 1
+        renderer.scale = captureScale
         renderer.proposedSize = ProposedViewSize(width: size.width, height: size.height)
-        guard let image = renderer.nsImage else {
+        guard let cgImage = renderer.cgImage else {
             throw CocoaError(.fileWriteUnknown)
         }
+        let rep = NSBitmapImageRep(cgImage: cgImage)
+        let image = NSImage(size: NSSize(width: cgImage.width, height: cgImage.height))
+        image.addRepresentation(rep)
         return image
     }
 
