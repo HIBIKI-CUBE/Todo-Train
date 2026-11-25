@@ -47,7 +47,7 @@ final class ImaYaruPanelController {
     }
 
     private func showForm(on screen: NSScreen, mouse: NSPoint, notice: String?, title: String = "", minutes: Int = 30, prior: UUID? = nil) {
-        let ticket = ImaYaruTicketMetrics.points(on: screen)
+        let ticket = ImaYaruTicketMetrics.size
         let anchor = CGPoint(
             x: mouse.x - screen.frame.minX,
             y: screen.frame.maxY - mouse.y

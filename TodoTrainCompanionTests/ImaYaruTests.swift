@@ -248,7 +248,9 @@ struct ImaYaruTests {
     }
 
     @Test func machineGrowsToTheTicket() {
-        let ticket = ImaYaruTicketMetrics.reference
+        let ticket = ImaYaruTicketMetrics.size
+        #expect(ticket.width == ImaYaruTicketMetrics.width)
+        #expect(abs(ticket.height - MarsTicketSpec.height(forWidth: ticket.width)) < 0.01)
         let fitted = ImaYaruMachineMetrics.fitted(ticket: ticket)
         #expect(abs(fitted.slotHeight - ticket.height) < 0.5)
         #expect(fitted.body.height > fitted.slotHeight)
@@ -264,7 +266,7 @@ struct ImaYaruTests {
         #expect(ImaYaruFlight.presentDwellMs == 100)
         #expect(ImaYaruFlight.machineDoneMs == 820)
         let geometry = ImaYaruFlightGeometry(
-            ticketSize: CGSize(width: 425, height: 288),
+            ticketSize: ImaYaruTicketMetrics.size,
             origin: CGPoint(x: 200, y: 300),
             destination: CGPoint(x: 1400, y: 300),
             machineClearance: 500,
@@ -310,7 +312,7 @@ struct ImaYaruTests {
         let canWrite = FileManager.default.createFile(atPath: probe.path, contents: Data())
         if canWrite { try? FileManager.default.removeItem(at: probe) }
         var carried: [String] = []
-        let ticket = ImaYaruTicketMetrics.reference
+        let ticket = ImaYaruTicketMetrics.size
         let stage = ImaYaruMachineMetrics.stage(ticket: ticket)
         let center = CGPoint(x: stage.width / 2, y: stage.height / 2 + 8)
         func render(_ name: String, _ picture: ImaYaruStagePicture) throws {

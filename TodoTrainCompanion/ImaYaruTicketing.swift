@@ -243,7 +243,7 @@ enum ImaYaruFlick {
     }
 }
 
-/// The f20 machine, scaled so the mouth is the real ticket.
+/// The f20 machine, scaled so the mouth matches the ticket.
 /// In the mock the mouth is 80% of the body and the body is 300×158,
 /// so the body stays a little taller than the ticket and the ports sit inside it.
 struct ImaYaruMachineMetrics: Equatable, Sendable {
@@ -283,25 +283,13 @@ struct ImaYaruMachineMetrics: Equatable, Sendable {
     }
 }
 
-/// Physical Mars face. 14-inch fallback matches the mock (425×288pt).
+/// One laptop size for the ticket, the machine, and the rails.
+/// Width is the constant. Height follows the Mars face, and the machine follows the mock.
 enum ImaYaruTicketMetrics {
-    static let widthMM: CGFloat = MarsTicketSpec.aspectWidth
-    static let heightMM: CGFloat = MarsTicketSpec.aspectHeight
-    static let reference = CGSize(width: 425, height: 288)
+    static let width: CGFloat = 260
 
-    static func points(displayMillimeters: CGSize, displayPoints: CGSize) -> CGSize {
-        guard displayMillimeters.width > 1, displayPoints.width > 1 else { return reference }
-        let ptPerMM = displayPoints.width / displayMillimeters.width
-        let width = widthMM * ptPerMM
-        return CGSize(width: width, height: width * heightMM / widthMM)
-    }
-
-    static func points(on screen: NSScreen) -> CGSize {
-        let millimeters = CGDisplayScreenSize(screen.overlayDisplayID)
-        return points(
-            displayMillimeters: CGSize(width: millimeters.width, height: millimeters.height),
-            displayPoints: screen.frame.size
-        )
+    static var size: CGSize {
+        CGSize(width: width, height: MarsTicketSpec.height(forWidth: width))
     }
 }
 
