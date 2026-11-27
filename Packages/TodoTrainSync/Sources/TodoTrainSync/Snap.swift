@@ -295,16 +295,14 @@ public struct SnapPlaintext: Codable, Equatable, Sendable {
         return UUID(uuidString: raw)
     }
 
-    /// Remaining seconds using the contract formula, then the shared countdown ceiling.
-    /// Whole-second inputs already land on an integer, so the ceiling leaves them unchanged.
-    /// Idle / missing fields → nil.
+    /// Remaining seconds using the contract formula. Idle / missing fields → nil.
     public func remainingSeconds(at now: Int) -> Int? {
         guard let startedAt, let estimatedSeconds else { return nil }
         let pausedTotal =
             (pausedAccumulated ?? 0)
             + (pausedAt.map { now - $0 } ?? 0)
         let elapsedActive = now - startedAt - pausedTotal
-        return WholeSecond.countdownSeconds(TimeInterval(estimatedSeconds - elapsedActive))
+        return estimatedSeconds - elapsedActive
     }
 
     /// Active elapsed seconds. Idle / missing fields → nil.
