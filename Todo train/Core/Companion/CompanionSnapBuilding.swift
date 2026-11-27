@@ -46,17 +46,17 @@ enum CompanionSnapBuilding {
         let open = Self.openPause(session: session, phase: phase)
         let samples = Self.openPauseSamples(session: session, phase: phase)
         let home = Self.home(session: session, now: now)
-        let started = Int(session.startedAt.timeIntervalSince1970)
-        let elapsedActive = Int(session.elapsedSeconds(at: now).rounded(.towardZero))
+        let started = WholeSecond.unix(session.startedAt)
+        let elapsedActive = max(0, WholeSecond.seconds(session.elapsedSeconds(at: now)))
         let pausedAtUnix: Int?
         let pausedAccumulated: Int
         if let pausedAt = session.pausedAt {
-            let pausedUnix = Int(pausedAt.timeIntervalSince1970)
+            let pausedUnix = WholeSecond.unix(pausedAt)
             pausedAtUnix = pausedUnix
             pausedAccumulated = max(0, (pausedUnix - started) - elapsedActive)
         } else {
             pausedAtUnix = nil
-            let nowUnix = Int(now.timeIntervalSince1970)
+            let nowUnix = WholeSecond.unix(now)
             pausedAccumulated = max(0, (nowUnix - started) - elapsedActive)
         }
         return SnapPlaintext(

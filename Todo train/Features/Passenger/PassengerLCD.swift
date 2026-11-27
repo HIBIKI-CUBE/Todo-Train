@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import TodoTrainSync
 
 enum PassengerLCDPalette {
     /// 次はの情報面。切符の紙ではなく、冷たい白。
@@ -211,7 +212,7 @@ struct PassengerCabinScreen: View {
     private var compact: Bool { verticalSizeClass == .compact }
 
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 1)) { context in
+        TimelineView(.periodic(from: WholeSecond.scheduleStart(), by: 1)) { context in
             GeometryReader { geo in
                 lcdShell(now: context.date, size: geo.size)
             }

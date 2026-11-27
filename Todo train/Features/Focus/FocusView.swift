@@ -214,7 +214,7 @@ struct FocusView: View {
     }
 
     private var timerPanel: some View {
-        TimelineView(.periodic(from: .now, by: 1)) { context in
+        TimelineView(.periodic(from: WholeSecond.scheduleStart(), by: 1)) { context in
             let remaining = sessionManager.remainingSeconds
             let phase = instrumentPhase(remaining: remaining)
 
@@ -248,7 +248,7 @@ struct FocusView: View {
     }
 
     private var telemetryStrip: some View {
-        TimelineView(.periodic(from: .now, by: 1)) { context in
+        TimelineView(.periodic(from: WholeSecond.scheduleStart(), by: 1)) { context in
             let remaining = sessionManager.remainingSeconds
             let phase = timerPhase(remaining: remaining)
             let occupancy = occupancyInstrument(now: context.date)

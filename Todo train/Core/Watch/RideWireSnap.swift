@@ -26,8 +26,8 @@ enum RideWireSnap {
             cabinEnabled: settings.cabinAnnouncementsEnabled,
             pendingCabin: sessionManager.activeServiceDay?.pendingCabin?.cabin,
             nextBlockTitle: visible?.title,
-            nextBlockStartsAt: visible.map { Int($0.startsAt.timeIntervalSince1970) },
-            nextBlockEndsAt: visible.map { Int($0.endsAt.timeIntervalSince1970) },
+            nextBlockStartsAt: visible.map { WholeSecond.unix($0.startsAt) },
+            nextBlockEndsAt: visible.map { WholeSecond.unix($0.endsAt) },
             // Older Macs paused when this field arrived. Overlap does not publish a pause time.
             timetablePauseAt: nil,
             nudge: nudge.nudge,

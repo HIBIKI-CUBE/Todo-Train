@@ -265,6 +265,7 @@ extension SessionManager {
         pausedOn: PauseOrigin,
         heldByInferred: Bool
     ) {
+        let now = WholeSecond.floor(now)
         session.closeActiveSegment(at: now)
         session.pausedAt = now
         beginPauseRecord(
@@ -288,6 +289,7 @@ extension SessionManager {
         pausedOn: PauseOrigin,
         heldByInferred: Bool
     ) {
+        let now = WholeSecond.floor(now)
         if session.pauses.contains(where: { $0.endedAt == nil }) { return }
         let record = SessionPause(startedAt: now, session: session)
         record.heldBy = heldBy
@@ -297,6 +299,7 @@ extension SessionManager {
     }
 
     func endOpenPauseRecord(on session: WorkSession, now: Date) {
+        let now = WholeSecond.floor(now)
         for pause in session.pauses where pause.endedAt == nil {
             pause.endedAt = now
         }
@@ -364,6 +367,7 @@ extension SessionManager {
     }
 
     func reopenPausedSession(_ session: WorkSession, now: Date) {
+        let now = WholeSecond.floor(now)
         endOpenPauseRecord(on: session, now: now)
         session.pausedAt = nil
         session.segmentStartedAt = now

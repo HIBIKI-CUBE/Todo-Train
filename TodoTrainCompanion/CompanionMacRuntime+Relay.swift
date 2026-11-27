@@ -6,7 +6,8 @@ extension CompanionMacRuntime {
         tickTask?.cancel()
         tickTask = Task { [weak self] in
             while !Task.isCancelled {
-                self?.now = Int(Date().timeIntervalSince1970)
+                let sampled = Date()
+                self?.now = WholeSecond.unix(sampled)
                 self?.expireReestimateUndo()
                 self?.notePauseInputClock()
                 self?.confirmSnapWhileConnected()
@@ -14,7 +15,9 @@ extension CompanionMacRuntime {
                 self?.syncCabinNotification()
                 self?.maybeSendTimetablePause()
                 self?.refreshMacPresence()
-                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                let after = Date()
+                if WholeSecond.unix(after) != WholeSecond.unix(sampled) { continue }
+                try? await Task.sleep(nanoseconds: WholeSecond.nanosecondsUntilNextBoundary(after: after))
             }
         }
     }

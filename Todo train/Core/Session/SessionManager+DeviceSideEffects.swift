@@ -93,9 +93,10 @@ extension SessionManager {
             liveActivityManager.end()
             return
         }
-        let remaining = session.remainingSeconds(at: now)
+        let tick = WholeSecond.floor(now)
+        let remaining = session.remainingSeconds(at: tick)
         let title = session.ticket?.title ?? "切符"
-        let deadline = now.addingTimeInterval(remaining)
+        let deadline = tick.addingTimeInterval(remaining)
         let instrument = nudgeInstrument(for: session, now: now, remaining: remaining)
         liveActivityManager.startOrUpdate(
             LiveActivitySessionContent(

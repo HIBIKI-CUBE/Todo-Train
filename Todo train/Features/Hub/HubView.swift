@@ -765,9 +765,9 @@ struct HubView: View {
                         .foregroundStyle(TrainTheme.signalAmber)
                         .monospacedDigit()
                     if scenePhase == .active, let pausedAt = session.pausedAt {
-                        TimelineView(.periodic(from: .now, by: 1)) { timeline in
+                        TimelineView(.periodic(from: WholeSecond.scheduleStart(), by: 1)) { timeline in
                             if let label = PauseInputCopy.gauge(
-                                elapsed: timeline.date.timeIntervalSince(pausedAt)
+                                elapsed: timeline.date.timeIntervalSince(WholeSecond.floor(pausedAt))
                             ) {
                                 Text(label)
                                     .font(TrainTheme.TypeScale.meta())
@@ -838,7 +838,7 @@ struct HubView: View {
     }
 
     private func formatRemaining(_ session: WorkSession) -> String {
-        let remaining = Int(session.remainingSeconds(at: .now).rounded())
+        let remaining = WholeSecond.countdownSeconds(session.remainingSeconds(at: .now))
         let prefix = remaining < 0 ? "超過 " : ""
         return prefix + ClockTime.mmss(remaining)
     }

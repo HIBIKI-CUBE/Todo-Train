@@ -13,6 +13,7 @@
 
 import CoreGraphics
 import Foundation
+import TodoTrainSync
 
 /// Where a cockpit instrument is rendered.
 nonisolated enum CockpitSurface: Equatable, Sendable {
@@ -139,7 +140,7 @@ nonisolated enum CockpitLayoutPolicy {
 
     /// Hidden width template for compact `Text(timerInterval:)` (max digit shape).
     static func islandTimerWidthTemplate(remaining: TimeInterval) -> String {
-        let total = max(0, Int(remaining.rounded()))
+        let total = max(0, WholeSecond.countdownSeconds(remaining))
         if total >= 3600 { return "0:00:00" }
         if total >= 10 * 60 { return "00:00" }
         return "0:00"
