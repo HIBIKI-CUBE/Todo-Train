@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import TodoTrainSync
 
 /// Width of the compact trailing timer. `Text(timerInterval:)` reports the widest
 /// string it might draw and then left-aligns inside that width, so a hidden template
@@ -24,7 +25,7 @@ enum CockpitCompactTimerWidth {
     /// `showsHours: false`, so an hour still draws as five characters (`75:00`),
     /// and one hundred minutes as six (`100:00`).
     static func template(remaining: TimeInterval, limitedWidth: Bool) -> String {
-        let total = max(0, Int(remaining.rounded()))
+        let total = max(0, WholeSecond.countdownSeconds(remaining))
         if limitedWidth, total >= 10 * 60 {
             return total >= 100 * 60 ? "000分" : "00分"
         }

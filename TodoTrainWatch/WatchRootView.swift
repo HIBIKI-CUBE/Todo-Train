@@ -39,8 +39,8 @@ private struct WatchRidingBody: View {
     var session: WatchPhoneSession
 
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 1)) { context in
-            ride(at: Int(context.date.timeIntervalSince1970))
+        TimelineView(.periodic(from: WholeSecond.scheduleStart(), by: 1)) { context in
+            ride(at: WholeSecond.unix(context.date))
         }
     }
 

@@ -5,6 +5,7 @@
 
 import Foundation
 import SwiftData
+import TodoTrainSync
 
 @Model
 final class WorkSession {
@@ -108,6 +109,7 @@ final class WorkSession {
         ticket: Ticket? = nil,
         boardedDeviceID: String? = nil
     ) {
+        let startedAt = WholeSecond.floor(startedAt)
         self.id = id
         self.startedAt = startedAt
         self.endedAt = nil
@@ -184,19 +186,24 @@ final class WorkSession {
     }
 
     func elapsedSeconds(at now: Date) -> TimeInterval {
+        let accumulated = WholeSecond.floor(accumulatedActiveSeconds)
         if pausedAt != nil {
-            return accumulatedActiveSeconds
+            return accumulated
         }
         guard let segmentStartedAt else {
-            return accumulatedActiveSeconds
+            return accumulated
         }
-        return accumulatedActiveSeconds + now.timeIntervalSince(segmentStartedAt)
+        return accumulated + now.timeIntervalSince(WholeSecond.floor(segmentStartedAt))
     }
 
     func closeActiveSegment(at now: Date) {
         if let segmentStartedAt {
-            accumulatedActiveSeconds += now.timeIntervalSince(segmentStartedAt)
+            let delta = WholeSecond.floor(now).timeIntervalSince(WholeSecond.floor(segmentStartedAt))
+            if delta > 0 {
+                accumulatedActiveSeconds += delta
+            }
         }
+        accumulatedActiveSeconds = WholeSecond.floor(accumulatedActiveSeconds)
         segmentStartedAt = nil
     }
 

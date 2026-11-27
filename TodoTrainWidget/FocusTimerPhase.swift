@@ -121,12 +121,12 @@ nonisolated enum CockpitTimerInterval {
 
 nonisolated enum CockpitFormat {
     static func timerLabel(remaining: TimeInterval) -> String {
-        ClockTime.mmss(Int(remaining.rounded()))
+        ClockTime.mmss(WholeSecond.countdownSeconds(remaining))
     }
 
     /// Compact / width-limited Dynamic Island — drop seconds below 10 minutes when needed.
     static func shortTimerLabel(remaining: TimeInterval, limitedWidth: Bool) -> String {
-        let total = max(0, Int(remaining.rounded()))
+        let total = max(0, WholeSecond.countdownSeconds(remaining))
         let minutes = total / 60
         let seconds = total % 60
         if limitedWidth, minutes >= 10 {
@@ -156,7 +156,7 @@ nonisolated enum CockpitFormat {
     static func accessibilityTimerValue(remaining: TimeInterval, isStale: Bool, isOvertime: Bool) -> String {
         if isStale { return "表示の更新を待っています" }
         if isOvertime || remaining < 0 { return "予定の時刻を過ぎています" }
-        let total = max(0, Int(remaining.rounded()))
+        let total = max(0, WholeSecond.countdownSeconds(remaining))
         return "残り\(total / 60)分\(total % 60)秒"
     }
 }
